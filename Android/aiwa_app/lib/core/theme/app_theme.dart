@@ -1,0 +1,232 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'app_colors.dart';
+import 'app_text_styles.dart';
+
+class AppTheme {
+  AppTheme._();
+
+  static const double radiusXs = 4;
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 18;
+  static const double radiusXl = 24;
+  static const double radiusPill = 999;
+
+  static const double s1 = 4;
+  static const double s2 = 8;
+  static const double s3 = 12;
+  static const double s4 = 16;
+  static const double s5 = 20;
+  static const double s6 = 24;
+  static const double s7 = 32;
+  static const double s8 = 40;
+  static const double s9 = 56;
+  static const double s10 = 72;
+
+  static const double gutter = 22;
+
+  /// "Soft door" easing from the design tokens.
+  static const Curve easeSoft = Cubic(.32, .72, 0, 1);
+  static const Duration dur2 = Duration(milliseconds: 200);
+  static const Duration dur3 = Duration(milliseconds: 320);
+
+  static BoxDecoration get cardDecoration => BoxDecoration(
+    color: AppColors.paper,
+    borderRadius: BorderRadius.circular(radiusLg),
+    border: Border.all(color: AppColors.divider, width: 1),
+  );
+
+  static BoxDecoration get sheetDecoration => BoxDecoration(
+    color: AppColors.bone,
+    borderRadius: const BorderRadius.vertical(top: Radius.circular(radiusXl)),
+    boxShadow: [
+      BoxShadow(
+        color: AppColors.plum700.withOpacity(0.14),
+        blurRadius: 32,
+        offset: const Offset(0, -12),
+      ),
+    ],
+  );
+
+  /// Hero gradient used on splash, profile header, provider cover, etc.
+  static LinearGradient get heroGradient => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [AppColors.plum700, AppColors.plum900],
+  );
+
+  static List<BoxShadow> get shadow1 => [
+    BoxShadow(
+      color: AppColors.plum700.withOpacity(0.06),
+      blurRadius: 2,
+      offset: const Offset(0, 1),
+    ),
+    BoxShadow(
+      color: AppColors.ink.withOpacity(0.04),
+      blurRadius: 1,
+      offset: const Offset(0, 1),
+    ),
+  ];
+
+  static List<BoxShadow> get shadow2 => [
+    BoxShadow(
+      color: AppColors.plum700.withOpacity(0.08),
+      blurRadius: 14,
+      offset: const Offset(0, 4),
+    ),
+    BoxShadow(
+      color: AppColors.ink.withOpacity(0.04),
+      blurRadius: 4,
+      offset: const Offset(0, 2),
+    ),
+  ];
+
+  static List<BoxShadow> get shadow3 => [
+    BoxShadow(
+      color: AppColors.plum700.withOpacity(0.18),
+      blurRadius: 32,
+      offset: const Offset(0, 12),
+    ),
+  ];
+
+  static OutlineInputBorder inputBorder(Color color) => OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: BorderSide(color: color, width: 1.5),
+  );
+
+  static ThemeData get light {
+    final base = ThemeData.light(useMaterial3: true);
+    return base.copyWith(
+      scaffoldBackgroundColor: AppColors.bone,
+      canvasColor: AppColors.bone,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: AppColors.plum700,
+        primary: AppColors.plum700,
+        onPrimary: AppColors.paper,
+        secondary: AppColors.rose500,
+        onSecondary: AppColors.plum900,
+        surface: AppColors.paper,
+        onSurface: AppColors.ink,
+        error: AppColors.danger500,
+        onError: AppColors.paper,
+        brightness: Brightness.light,
+      ),
+      textTheme:
+          (aiwaUseGoogleFonts
+                  ? GoogleFonts.plusJakartaSansTextTheme(base.textTheme)
+                  : base.textTheme)
+              .copyWith(
+                displayLarge: AppTextStyles.display,
+                headlineLarge: AppTextStyles.h1,
+                headlineMedium: AppTextStyles.h2,
+                headlineSmall: AppTextStyles.h3,
+                titleLarge: AppTextStyles.h4,
+                bodyLarge: AppTextStyles.bodyLg,
+                bodyMedium: AppTextStyles.body,
+                bodySmall: AppTextStyles.bodySm,
+                labelLarge: AppTextStyles.label,
+                labelMedium: AppTextStyles.labelSm,
+                labelSmall: AppTextStyles.eyebrow,
+              ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.bone,
+        foregroundColor: AppColors.plum900,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarBrightness: Brightness.light,
+          statusBarIconBrightness: Brightness.dark,
+        ),
+        titleTextStyle: AppTextStyles.h3,
+        iconTheme: IconThemeData(color: AppColors.plum700),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.plum700,
+          foregroundColor: AppColors.paper,
+          elevation: 0,
+          shape: const StadiumBorder(),
+          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 15),
+          textStyle: AppTextStyles.button,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.plum700,
+          side: BorderSide(color: AppColors.plum700, width: 1.5),
+          shape: const StadiumBorder(),
+          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 15),
+          textStyle: AppTextStyles.button.copyWith(color: AppColors.plum700),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.plum700,
+          textStyle: AppTextStyles.label,
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.paper,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        border: inputBorder(AppColors.divider),
+        enabledBorder: inputBorder(AppColors.divider),
+        focusedBorder: inputBorder(AppColors.plum700),
+        errorBorder: inputBorder(AppColors.danger500),
+        focusedErrorBorder: inputBorder(AppColors.danger500),
+        hintStyle: AppTextStyles.body.copyWith(color: AppColors.ink4),
+        labelStyle: AppTextStyles.label,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.plum900.withOpacity(0.96),
+        contentTextStyle: AppTextStyles.bodySm.copyWith(
+          color: AppColors.bone,
+          fontWeight: FontWeight.w500,
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: AppColors.bone,
+        modalBackgroundColor: AppColors.bone,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(radiusXl)),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.bone,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusXl),
+        ),
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: AppColors.plum700,
+        inactiveTrackColor: AppColors.divider,
+        thumbColor: AppColors.plum700,
+        overlayColor: AppColors.plum700.withOpacity(0.12),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: AppColors.plum700,
+      ),
+      dividerTheme: DividerThemeData(
+        color: AppColors.divider,
+        thickness: 1,
+        space: 1,
+      ),
+      cardTheme: CardThemeData(
+        color: AppColors.paper,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusLg),
+          side: BorderSide(color: AppColors.divider, width: 1),
+        ),
+        margin: EdgeInsets.zero,
+      ),
+    );
+  }
+}

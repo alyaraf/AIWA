@@ -1,0 +1,3 @@
+-- Baseline migration for production databases.
+-- For an existing AIWA database, Flyway will create its schema history table when
+-- baseline-on-migrate is enabled. Add future schema changes as V2__, V3__, etc.

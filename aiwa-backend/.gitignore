@@ -1,0 +1,7 @@
+target/
+.env
+*.env
+application-prod-local.yml
+uploads/
+logs/
+.idea/
