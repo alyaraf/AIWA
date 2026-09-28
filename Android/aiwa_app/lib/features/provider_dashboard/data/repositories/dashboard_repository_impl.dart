@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/network/api_response.dart';
+import '../../../../core/telemetry.dart';
 import '../../../bookings/domain/entities/booking_entity.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import '../datasources/dashboard_remote_datasource.dart';
@@ -34,8 +35,14 @@ class DashboardRepositoryImpl implements DashboardRepository {
   );
 
   @override
+  // ponytail: funnel steps live here, not in a bloc — the provider pages
+  // call this repository directly and every accept/complete goes through it.
   Future<Either<Failure, BookingEntity>> acceptBooking(String bookingId) =>
-      _guard(() => _remote.acceptBooking(bookingId));
+      _guard(() async {
+        final b = await _remote.acceptBooking(bookingId);
+        trackFunnel('accept', bookingId: bookingId);
+        return b;
+      });
 
   @override
   Future<Either<Failure, BookingEntity>> rejectBooking(
@@ -47,9 +54,14 @@ class DashboardRepositoryImpl implements DashboardRepository {
   Future<Either<Failure, BookingEntity>> completeBooking(
     String bookingId, {
     bool cashCollected = true,
-  }) => _guard(
-    () => _remote.completeBooking(bookingId, cashCollected: cashCollected),
-  );
+  }) => _guard(() async {
+    final b = await _remote.completeBooking(
+      bookingId,
+      cashCollected: cashCollected,
+    );
+    trackFunnel('complete', bookingId: bookingId);
+    return b;
+  });
 
   @override
   Future<Either<Failure, BookingEntity>> bookingOnTheWay(String bookingId) =>

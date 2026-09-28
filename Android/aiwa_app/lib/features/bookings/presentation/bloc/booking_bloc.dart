@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/telemetry.dart';
 import '../../domain/usecases/cancel_booking_usecase.dart';
 import '../../domain/usecases/create_booking_usecase.dart';
 import '../../domain/usecases/get_my_bookings_usecase.dart';
@@ -44,7 +45,10 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     );
     result.fold(
       (f) => emit(BookingError(f.message, slotTaken: isSlotTaken(f))),
-      (booking) => emit(BookingCreated(booking)),
+      (booking) {
+        trackFunnel('book', bookingId: booking.id);
+        emit(BookingCreated(booking));
+      },
     );
   }
 

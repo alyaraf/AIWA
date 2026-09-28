@@ -72,6 +72,9 @@ dependencies:
   # ponytail: unused (0 imports in lib/), delete once no native plugin config needs it
   cupertino_icons: ^1.0.8
 
+  # Crash reporting + funnel breadcrumbs (off unless SENTRY_DSN is set)
+  sentry_flutter: ^8.14.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/telemetry.dart';
 import '../../domain/usecases/get_nearby_providers_usecase.dart';
 import '../../domain/usecases/search_providers_usecase.dart';
 import 'home_event.dart';
@@ -121,6 +122,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   Future<void> _onSearch(HomeSearchEvent event, Emitter<HomeState> emit) async {
     emit(HomeLoading());
+    trackFunnel('search'); // not the query: it can hold names
     final result = await searchProviders(query: event.query);
     result.fold(
       (failure) => emit(HomeError(failure.message)),

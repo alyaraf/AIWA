@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../domain/usecases/get_current_user_usecase.dart';
 import '../../domain/usecases/login_usecase.dart';
@@ -35,6 +36,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLogoutEvent>(_safe(_onLogout, AuthUnauthenticated()));
     on<AuthGetCurrentUserEvent>(_safe(_onGetCurrentUser));
     on<AuthUpdateProfileEvent>(_safe(_onUpdateProfile));
+  }
+
+  /// Tags crash reports with the signed-in user's id (no PII) — every path
+  /// in or out (login, register, session restore, logout, expiry) lands
+  /// here. No-op without SENTRY_DSN.
+  @override
+  void onChange(Change<AuthState> change) {
+    super.onChange(change);
+    final next = change.nextState;
+    if (next is AuthAuthenticated) {
+      Sentry.configureScope(
+        (s) => s.setUser(SentryUser(id: '${next.user.id}')),
+      );
+    } else if (next is AuthUnauthenticated) {
+      Sentry.configureScope((s) => s.setUser(null));
+    }
   }
 
   /// An unexpected throw (bad payload, 2FA response without tokens…) must
