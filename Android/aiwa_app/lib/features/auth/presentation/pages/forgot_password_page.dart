@@ -133,16 +133,18 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         ),
         const SizedBox(height: 18),
         if (_step == 1) ...[
-          IdentifierModeToggle(
-            mode: _mode,
-            shadow: false,
-            onChanged: (m) => setState(() {
-              _mode = m;
-              _value.clear();
-              _error = null;
-            }),
-          ),
-          const SizedBox(height: 14),
+          if (kEmailOtpEnabled) ...[
+            IdentifierModeToggle(
+              mode: _mode,
+              shadow: false,
+              onChanged: (m) => setState(() {
+                _mode = m;
+                _value.clear();
+                _error = null;
+              }),
+            ),
+            const SizedBox(height: 14),
+          ],
           AiwaTextField(
             key: ValueKey(_mode),
             controller: _value,

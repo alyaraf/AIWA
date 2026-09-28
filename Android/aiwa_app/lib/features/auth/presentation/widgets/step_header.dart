@@ -138,6 +138,10 @@ class AuthStepScaffold extends StatelessWidget {
 }
 
 /// Phone / Email segmented toggle used on sign-in and phone entry.
+/// Sign-up and forgot-password only offer email once the backend can send
+/// email codes; /auth/send-otp is SMS-only today. Sign-in keeps its toggle.
+const kEmailOtpEnabled = false; // flip when BE-10 ships
+
 class IdentifierModeToggle extends StatelessWidget {
   final String mode;
   final ValueChanged<String> onChanged;

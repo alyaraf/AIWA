@@ -48,8 +48,7 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
         ? '+20${_phoneCtrl.text.replaceAll(RegExp(r'\D'), '')}'
         : _emailCtrl.text.trim();
 
-    // Email too: the repository fails clearly until the backend can send
-    // email codes, rather than skipping verification.
+    // Email only reachable when kEmailOtpEnabled (BE-10).
     context.read<AuthBloc>().add(AuthSendOtpEvent(phone: value));
   }
 
@@ -97,11 +96,13 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
             onBack: () => context.pop(),
           ),
           const SizedBox(height: 22),
-          IdentifierModeToggle(
-            mode: _mode,
-            onChanged: (m) => setState(() => _mode = m),
-          ),
-          const SizedBox(height: 18),
+          if (kEmailOtpEnabled) ...[
+            IdentifierModeToggle(
+              mode: _mode,
+              onChanged: (m) => setState(() => _mode = m),
+            ),
+            const SizedBox(height: 18),
+          ],
           if (_mode == 'phone')
             EgyptPhoneField(
               controller: _phoneCtrl,
