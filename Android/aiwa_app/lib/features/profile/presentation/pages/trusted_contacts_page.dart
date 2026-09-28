@@ -177,6 +177,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
                               ? l.tcNameError
                               : null,
                           builder: (e) => AiwaTextField(
+                            validated: true,
                             label: l.svcName,
                             controller: _name,
                             icon: Icons.person_outline_rounded,
@@ -190,6 +191,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
                         ValidatedField(
                           error: _digits < 9 ? l.tcPhoneError : null,
                           builder: (e) => AiwaTextField(
+                            validated: true,
                             label: l.editMobile,
                             controller: _phone,
                             icon: Icons.phone_outlined,
@@ -201,6 +203,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
                         ),
                         const SizedBox(height: 14),
                         AiwaTextField(
+                          validated: true,
                           label: l.tcRelationship,
                           controller: _rel,
                           icon: Icons.favorite_border_rounded,

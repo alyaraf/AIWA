@@ -454,9 +454,6 @@ class AppLocalizationsAr extends AppLocalizations {
       'نستخدم هذه الإعدادات لاختيار مقدّمي الخدمة الذين نعرضهم لك. يمكنك تغييرها في أي وقت من ملفك الشخصي.';
 
   @override
-  String get prefsYourArea => 'منطقتك';
-
-  @override
   String get commonUseGps => 'حدّد موقعي';
 
   @override
@@ -795,7 +792,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get bookingViewMine => 'عرض حجوزاتي';
 
   @override
-  String get commonBackHome => 'العودة إلى الرئيسية';
+  String get bookingAddToCalendar => 'أضف إلى التقويم';
 
   @override
   String get bookingTypeEyebrow => 'كيف تريد الحجز؟';
@@ -1535,9 +1532,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String providerShareText(String name) {
     return '$name على AIWA';
   }
-
-  @override
-  String get providerCopied => 'تم النسخ — الصقه في أي مكان لمشاركته.';
 
   @override
   String get providerStartsAt => 'يبدأ من';

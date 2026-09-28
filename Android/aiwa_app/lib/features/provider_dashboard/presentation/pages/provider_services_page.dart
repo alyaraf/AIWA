@@ -64,56 +64,60 @@ class _ProviderServicesPageState extends State<ProviderServicesPage> {
     final l = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.bone,
-      body: RefreshIndicator(
-        onRefresh: _load,
-        color: AppColors.plum700,
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 100),
-          children: [
-            PageTitle(
-              eyebrow: l.svcEyebrow,
-              title: l.tabServices,
-              trailing: AiwaButton(
-                label: l.svcNew,
-                icon: Icons.add_rounded,
-                size: AiwaButtonSize.sm,
-                onPressed: () => _edit(),
-              ),
+      body: CustomScrollView(
+        physics: AiwaRefresh.physics,
+        slivers: [
+          AiwaRefresh(onRefresh: _load),
+          SliverPadding(
+            padding: const EdgeInsets.only(bottom: 100),
+            sliver: SliverList.list(
+              children: [
+                PageTitle(
+                  eyebrow: l.svcEyebrow,
+                  title: l.tabServices,
+                  trailing: AiwaButton(
+                    label: l.svcNew,
+                    icon: Icons.add_rounded,
+                    size: AiwaButtonSize.sm,
+                    onPressed: () => _edit(),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppTheme.gutter,
+                    14,
+                    AppTheme.gutter,
+                    0,
+                  ),
+                  child: items == null
+                      ? (_error != null
+                            ? ErrorState(
+                                body: _error!,
+                                onRetry: _load,
+                                compact: true,
+                              )
+                            : const SkeletonList())
+                      : items.isEmpty
+                      ? EmptyState(
+                          icon: Icons.list_rounded,
+                          title: l.svcEmpty,
+                          subtitle: l.svcEmptyBody,
+                          actionLabel: l.svcNew,
+                          onAction: () => _edit(),
+                          compact: true,
+                        )
+                      : Column(
+                          spacing: 10,
+                          children: [
+                            for (final s in items)
+                              _ServiceRow(s: s, onEdit: () => _edit(s)),
+                          ],
+                        ),
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppTheme.gutter,
-                14,
-                AppTheme.gutter,
-                0,
-              ),
-              child: items == null
-                  ? (_error != null
-                        ? ErrorState(
-                            body: _error!,
-                            onRetry: _load,
-                            compact: true,
-                          )
-                        : const SkeletonList())
-                  : items.isEmpty
-                  ? EmptyState(
-                      icon: Icons.list_rounded,
-                      title: l.svcEmpty,
-                      subtitle: l.svcEmptyBody,
-                      actionLabel: l.svcNew,
-                      onAction: () => _edit(),
-                      compact: true,
-                    )
-                  : Column(
-                      spacing: 10,
-                      children: [
-                        for (final s in items)
-                          _ServiceRow(s: s, onEdit: () => _edit(s)),
-                      ],
-                    ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

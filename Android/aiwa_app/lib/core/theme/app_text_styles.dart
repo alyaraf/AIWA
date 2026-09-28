@@ -5,6 +5,14 @@ import 'app_colors.dart';
 class AppTextStyles {
   AppTextStyles._();
 
+  // Line-height and tracking tokens (tokens/colors_and_type.css:114-122).
+  // Tracking is in em: multiply by the font size.
+  static const double lhTight = 1.1;
+  static const double lhSnug = 1.25;
+  static const double lhBase = 1.5;
+  static const double lhLoose = 1.65;
+  static const double trackingWide = 0.08;
+
   // Display serif — DM Serif Display
   static TextStyle get display => _serif(
     fontSize: 48,
@@ -37,9 +45,30 @@ class AppTextStyles {
   static TextStyle get h4 =>
       _serif(fontSize: 18, color: AppColors.plum900, height: 1.2);
 
+  // ponytail: h3/h4 above match the rendered JSX titles (DM Serif); the CSS
+  // token classes .h3/.h4 are sans and live here under their own names.
+  static TextStyle get h3Sans => _sans(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    color: AppColors.plum900,
+    height: lhSnug,
+    letterSpacing: -0.005 * 20,
+  );
+
+  static TextStyle get h4Sans => _sans(
+    fontSize: 17,
+    fontWeight: FontWeight.w600,
+    color: AppColors.plum900,
+    height: lhSnug,
+  );
+
   // Body — Plus Jakarta Sans
   static TextStyle get bodyLg =>
-      _sans(fontSize: 16, color: AppColors.ink, height: 1.5);
+      _sans(fontSize: 16, color: AppColors.ink, height: lhBase);
+
+  /// Paragraph copy — CSS `p` / `.body` (16 / --lh-loose).
+  static TextStyle get bodyLoose =>
+      _sans(fontSize: 16, color: AppColors.ink, height: lhLoose);
 
   static TextStyle get body =>
       _sans(fontSize: 15, color: AppColors.ink, height: 1.5);
@@ -62,9 +91,10 @@ class AppTextStyles {
   ).copyWith(fontFeatures: const [FontFeature.enable('smcp')]);
 
   static TextStyle get price => _serif(
-    fontSize: 22,
+    fontSize: 20,
     color: AppColors.plum900,
     height: 1,
+    letterSpacing: -0.02 * 20,
     fontFeatures: [const FontFeature.tabularFigures()],
   );
 
@@ -96,9 +126,24 @@ class AppTextStyles {
     height: 1,
   );
 
-  // Mono
+  // Mono — CSS `code` is plum700 (colors_and_type.css:268-275).
   static TextStyle get mono =>
-      _mono(fontSize: 13, color: AppColors.ink, height: 1.4);
+      _mono(fontSize: 13, color: AppColors.plum700, height: 1.4);
+
+  /// Inline `code` chip: cream fill, .1em/.3em padding, radius 4.
+  static Widget monoChip(String text, {double fontSize = 13}) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AppColors.cream,
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: .3 * fontSize,
+        vertical: .1 * fontSize,
+      ),
+      child: Text(text, style: mono.copyWith(fontSize: fontSize)),
+    ),
+  );
 }
 
 /// Test seam: widget tests set this to `false` so text styles use plain

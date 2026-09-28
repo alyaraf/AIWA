@@ -612,6 +612,7 @@ class _AltRow extends StatelessWidget {
                         context,
                       ).distance(p.distanceKm),
                       openNow: p.openNow,
+                      gap: 8,
                     ),
                   ),
                 ],

@@ -188,7 +188,6 @@
   "prefsLastStep": "Last step",
   "prefsTitle": "Where should we\nlook for providers?",
   "prefsSubtitle": "We use these to tune the providers we show you. Change them any time from Profile.",
-  "prefsYourArea": "Your area",
   "commonUseGps": "Use GPS",
   "prefsSearchRadius": "Search radius",
   "prefsRadiusRange": "{min}–{max} km",
@@ -451,7 +450,7 @@
   "bookingWhen": "When",
   "bookingTotal": "Total",
   "bookingViewMine": "View my bookings",
-  "commonBackHome": "Back to home",
+  "bookingAddToCalendar": "Add to calendar",
   "bookingTypeEyebrow": "How do you want to book",
   "bookingTypeTitle": "Now, or later?",
   "bookingTypeAccepts": "{name} accepts both same-day requests and scheduled bookings.",
@@ -900,7 +899,6 @@
       }
     }
   },
-  "providerCopied": "Copied — paste it anywhere to share.",
   "providerStartsAt": "Starts at",
   "providerAskProvider": "Ask provider",
   "providerBookNow": "Book now",

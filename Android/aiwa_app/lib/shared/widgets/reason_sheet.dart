@@ -27,6 +27,7 @@ Future<({String reason, String note})?> showReasonSheet(
   context,
   handleGap: 14,
   bottom: 36,
+  scrim: .45,
   builder: (_) => _ReasonSheet(
     eyebrow: eyebrow,
     title: title,

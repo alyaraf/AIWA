@@ -8,6 +8,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
+import '../../../../shared/widgets/screen_chrome.dart' show AiwaGlow;
 import 'package:aiwa_app/l10n/l10n.dart';
 
 class ProviderPendingPage extends StatelessWidget {
@@ -25,18 +26,11 @@ class ProviderPendingPage extends StatelessWidget {
           children: [
             // radial-gradient(circle at 30% 25%, rose .45, transparent 60%).
             Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(-.4, -.5),
-                    radius: .9,
-                    stops: const [0, .6],
-                    colors: [
-                      AppColors.rose300.withValues(alpha: .45),
-                      AppColors.rose300.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
+              child: AiwaGlow.fill(
+                center: const Alignment(-.4, -.5),
+                color: AppColors.rose300,
+                opacity: .45,
+                stop: .6,
               ),
             ),
             // Scrolls on short screens / large text; Spacers still centre.

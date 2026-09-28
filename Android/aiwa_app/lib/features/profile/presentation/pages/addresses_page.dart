@@ -376,6 +376,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                 ValidatedField(
                   error: _streetErr,
                   builder: (e) => AiwaTextField(
+                    validated: true,
                     label: l.addrStreet,
                     controller: _street,
                     icon: Icons.signpost_outlined,
@@ -394,6 +395,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                       child: ValidatedField(
                         error: _buildingErr,
                         builder: (e) => AiwaTextField(
+                          validated: true,
                           label: l.addrBuilding,
                           controller: _building,
                           placeholder: '14',
@@ -405,6 +407,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                     Expanded(
                       flex: 10,
                       child: AiwaTextField(
+                        validated: true,
                         label: l.addrFloor,
                         controller: _floor,
                         placeholder: '3',
@@ -414,6 +417,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                     Expanded(
                       flex: 10,
                       child: AiwaTextField(
+                        validated: true,
                         label: l.addrApt,
                         controller: _apartment,
                         placeholder: '7',
@@ -424,6 +428,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                 ),
                 const SizedBox(height: 14),
                 AiwaTextField(
+                  validated: true,
                   label: l.addrLandmark,
                   controller: _landmark,
                   icon: Icons.account_balance_outlined,
@@ -433,6 +438,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                 ),
                 const SizedBox(height: 14),
                 AiwaTextField(
+                  validated: true,
                   label: l.addrNotes,
                   controller: _notes,
                   placeholder: l.addrNotesPlaceholder,

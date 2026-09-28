@@ -1,8 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:aiwa_app/core/constants/api_constants.dart';
+import 'package:aiwa_app/core/constants/app_constants.dart';
 import 'package:aiwa_app/core/errors/exceptions.dart';
 import 'package:aiwa_app/core/network/api_client.dart';
 import 'package:aiwa_app/core/storage/secure_storage.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -58,4 +62,52 @@ void main() {
       throwsA(isA<NetworkException>()),
     );
   });
+
+  test('parallel 401s share one refresh and all retry', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      AppConstants.accessTokenKey: 'old',
+      AppConstants.refreshTokenKey: 'r',
+    });
+    final adapter = _RefreshAdapter();
+    final c = ApiClient(
+      SecureStorage(const FlutterSecureStorage()),
+      adapter: adapter,
+    );
+    final codes = await Future.wait(
+      List.generate(3, (i) => c.get('/me/$i').then((r) => r.statusCode)),
+    );
+    expect(codes, [200, 200, 200]);
+    expect(adapter.refreshes, 1);
+  });
+}
+
+/// 401 unless the request carries the refreshed token; refresh is slow so
+/// all three requests fail while it is in flight.
+class _RefreshAdapter implements HttpClientAdapter {
+  int refreshes = 0;
+  static final _json = {
+    Headers.contentTypeHeader: [Headers.jsonContentType],
+  };
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions o,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    if (o.path == ApiConstants.refresh) {
+      refreshes++;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      return ResponseBody.fromString(
+        '{"data":{"accessToken":"new"}}',
+        200,
+        headers: _json,
+      );
+    }
+    final ok = o.headers['Authorization'] == 'Bearer new';
+    return ResponseBody.fromString('{}', ok ? 200 : 401, headers: _json);
+  }
+
+  @override
+  void close({bool force = false}) {}
 }

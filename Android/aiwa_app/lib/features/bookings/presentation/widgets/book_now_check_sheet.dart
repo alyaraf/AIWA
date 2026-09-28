@@ -181,7 +181,7 @@ class _BookNowCheckState extends State<_BookNowCheck>
           const SizedBox(height: 14),
           Text(
             AppLocalizations.of(context).bookNowChecking,
-            style: AppTextStyles.h3.copyWith(fontSize: 19),
+            style: AppTextStyles.h3.copyWith(fontSize: 19, letterSpacing: 0),
           ),
           const SizedBox(height: 5),
           Text(

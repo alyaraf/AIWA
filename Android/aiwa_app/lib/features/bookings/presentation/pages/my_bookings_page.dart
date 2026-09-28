@@ -326,13 +326,7 @@ class _BookingCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           border: Border.all(color: AppColors.divider),
           // 0 1px 2px rgba(74,31,56,.04) (screens.jsx:537).
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.plum700.withValues(alpha: .04),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
+          boxShadow: AppTheme.shadowHairline,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

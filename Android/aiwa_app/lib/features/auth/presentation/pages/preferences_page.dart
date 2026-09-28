@@ -1,7 +1,6 @@
 import 'package:dartz/dartz.dart' show Either, Left;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/errors/failures.dart';
@@ -12,7 +11,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
-import '../../../../shared/widgets/aiwa_text_field.dart';
 import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
@@ -36,7 +34,6 @@ class PreferencesPage extends StatefulWidget {
 }
 
 class _PreferencesPageState extends State<PreferencesPage> {
-  final _area = TextEditingController(text: 'Maadi, Cairo');
   double _min = 1, _max = 5;
   String _lang = LocaleController.locale.value.languageCode;
   bool _busy = false;
@@ -48,31 +45,6 @@ class _PreferencesPageState extends State<PreferencesPage> {
 
   Map<String, dynamic> get _d => widget.registrationData;
   bool get _isProvider => _d['role'] == 'PROVIDER';
-
-  @override
-  void dispose() {
-    _area.dispose();
-    super.dispose();
-  }
-
-  Future<void> _useGps() async {
-    try {
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        return;
-      }
-      final p = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
-        timeLimit: const Duration(seconds: 5),
-      );
-      _area.text =
-          '${p.latitude.toStringAsFixed(4)}, ${p.longitude.toStringAsFixed(4)}';
-    } catch (_) {}
-  }
 
   void _save() {
     setState(() => _error = null);
@@ -212,24 +184,10 @@ class _PreferencesPageState extends State<PreferencesPage> {
               height: 1.55,
             ),
           ),
+          // ponytail: prototype's "Your area" field dropped — nothing stores
+          // or reads it (Home searches from GPS / the default address). Add it
+          // back with a backend field (BE-19) if search must start elsewhere.
           const SizedBox(height: 24),
-          EyebrowLabel(AppLocalizations.of(context).prefsYourArea),
-          const SizedBox(height: 10),
-          AiwaTextField(
-            controller: _area,
-            icon: Icons.location_on_outlined,
-            suffixIcon: TextButton(
-              onPressed: _useGps,
-              child: Text(
-                AppLocalizations.of(context).commonUseGps,
-                style: AppTextStyles.labelSm.copyWith(
-                  fontSize: 12,
-                  color: AppColors.plum700,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 22),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,

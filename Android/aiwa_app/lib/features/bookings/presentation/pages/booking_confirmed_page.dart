@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../../../../core/router/app_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
@@ -14,12 +14,33 @@ class BookingConfirmedPage extends StatelessWidget {
 
   const BookingConfirmedPage({super.key, required this.booking});
 
-  /// 'Tuesday, May 19 at 12:30 PM' (screens.jsx:478).
-  String _whenLong(AppLocalizations l) {
+  DateTime? get _start {
     final t = booking.scheduledTime;
-    final dt = DateTime.tryParse(
+    return DateTime.tryParse(
       '${booking.scheduledDate} ${t.length == 5 ? '$t:00' : t}',
     );
+  }
+
+  // ponytail: Google Calendar template link (opens the Calendar app on
+  // Android, the web elsewhere); add_2_calendar if iOS needs the native sheet.
+  Future<void> _addToCalendar() async {
+    final start = _start;
+    if (start == null) return;
+    final end = start.add(Duration(minutes: booking.serviceDurationMinutes));
+    String f(DateTime d) => DateFormat("yyyyMMdd'T'HHmmss", 'en').format(d);
+    await launchUrl(
+      Uri.https('calendar.google.com', '/calendar/render', {
+        'action': 'TEMPLATE',
+        'text': '${booking.serviceName} · ${booking.displayProviderName}',
+        'dates': '${f(start)}/${f(end)}',
+      }),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  /// 'Tuesday, May 19 at 12:30 PM' (screens.jsx:478).
+  String _whenLong(AppLocalizations l) {
+    final dt = _start;
     if (dt == null) {
       return l.formatWhen(booking.scheduledDate, booking.scheduledTime);
     }
@@ -128,7 +149,10 @@ class BookingConfirmedPage extends StatelessWidget {
                       ),
                       Text(
                         l.egp(booking.servicePrice),
-                        style: AppTextStyles.h3.copyWith(fontSize: 20),
+                        style: AppTextStyles.h3.copyWith(
+                          fontSize: 20,
+                          letterSpacing: 0,
+                        ),
                       ),
                     ],
                   ),
@@ -147,8 +171,8 @@ class BookingConfirmedPage extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             AiwaButton(
-              label: l.commonBackHome,
-              onPressed: () => context.go(AppRoutes.home),
+              label: l.bookingAddToCalendar,
+              onPressed: _addToCalendar,
               variant: AiwaButtonVariant.ghost,
               fullWidth: true,
             ),

@@ -38,6 +38,11 @@ class AiwaTextField extends StatelessWidget {
   /// Input text style; defaults to body 15 ink.
   final TextStyle? textStyle;
 
+  /// `ValidatedInput` look (states.jsx:181-203) instead of the auth `Field`:
+  /// sentence-case 12.5/600 ink2 label with " · optional", the mono counter
+  /// in the label row, ink4 hint, 11px error icon.
+  final bool validated;
+
   const AiwaTextField({
     super.key,
     this.label,
@@ -63,6 +68,7 @@ class AiwaTextField extends StatelessWidget {
     this.inlineError = false,
     this.belowInput,
     this.textStyle,
+    this.validated = false,
   });
 
   @override
@@ -82,11 +88,53 @@ class AiwaTextField extends StatelessWidget {
                 color: flagInput ? AppColors.danger500 : AppColors.plum700,
               )
             : null);
+    final counter = showCounter && maxLength != null && controller != null
+        ? ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller!,
+            builder: (_, v, _) => Text(
+              '${v.text.length}/$maxLength',
+              style: AppTextStyles.mono.copyWith(
+                fontSize: 11,
+                color: AppColors.ink4,
+              ),
+            ),
+          )
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (label != null) ...[
+        if (label != null && validated) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    text: label,
+                    children: [
+                      if (optional)
+                        TextSpan(
+                          text:
+                              ' · ${AppLocalizations.of(context).commonOptional.toLowerCase()}',
+                          style: TextStyle(
+                            color: AppColors.ink4,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                    ],
+                  ),
+                  style: AppTextStyles.labelSm.copyWith(
+                    fontSize: 12.5,
+                    color: AppColors.ink2,
+                  ),
+                ),
+              ),
+              ?counter,
+            ],
+          ),
+          const SizedBox(height: 6),
+        ] else if (label != null) ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -126,7 +174,10 @@ class AiwaTextField extends StatelessWidget {
             prefixIcon: prefix != null
                 ? Padding(
                     // M3 adds a 4px prefix-to-input gap; 6 + 4 = the kit's 10.
-                    padding: const EdgeInsetsDirectional.only(start: 14, end: 6),
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 14,
+                      end: 6,
+                    ),
                     child: prefix,
                   )
                 : null,
@@ -170,10 +221,10 @@ class AiwaTextField extends StatelessWidget {
               if (!inlineError) ...[
                 Icon(
                   Icons.error_outline_rounded,
-                  size: 12,
+                  size: validated ? 11 : 12,
                   color: AppColors.danger700,
                 ),
-                const SizedBox(width: 4),
+                SizedBox(width: validated ? 5 : 4),
               ],
               Expanded(
                 child: Text(
@@ -188,7 +239,7 @@ class AiwaTextField extends StatelessWidget {
           ),
         ],
         if ((!hasError || inlineError) &&
-            (hint != null || (showCounter && maxLength != null))) ...[
+            (hint != null || (counter != null && !validated))) ...[
           const SizedBox(height: 5),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,21 +248,14 @@ class AiwaTextField extends StatelessWidget {
                 child: hint != null
                     ? Text(
                         hint!,
-                        style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                        style: AppTextStyles.micro.copyWith(
+                          fontSize: 11.5,
+                          color: validated ? AppColors.ink4 : null,
+                        ),
                       )
                     : const SizedBox.shrink(),
               ),
-              if (showCounter && maxLength != null && controller != null)
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: controller!,
-                  builder: (_, v, _) => Text(
-                    '${v.text.length}/$maxLength',
-                    style: AppTextStyles.mono.copyWith(
-                      fontSize: 11,
-                      color: AppColors.ink4,
-                    ),
-                  ),
-                ),
+              if (!validated) ?counter,
             ],
           ),
         ],

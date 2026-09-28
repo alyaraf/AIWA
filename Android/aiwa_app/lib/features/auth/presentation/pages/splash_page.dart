@@ -71,23 +71,22 @@ class _SplashPageState extends State<SplashPage>
           decoration: BoxDecoration(gradient: AppTheme.heroGradient),
           child: Stack(
             children: [
-              // Soft radial highlights
-              Positioned(
-                left: -80,
-                top: -40,
-                child: AiwaGlow(
-                  size: 360,
+              // prototype.jsx:51 — circle at 30% 25% (.5, transparent 55%)
+              // and at 75% 80% (.3, transparent 60%).
+              Positioned.fill(
+                child: AiwaGlow.fill(
+                  center: const Alignment(-.4, -.5),
                   color: AppColors.rose300,
-                  opacity: 0.35,
+                  opacity: .5,
+                  stop: .55,
                 ),
               ),
-              Positioned(
-                right: -90,
-                bottom: 60,
-                child: AiwaGlow(
-                  size: 300,
+              Positioned.fill(
+                child: AiwaGlow.fill(
+                  center: const Alignment(.5, .6),
                   color: AppColors.gold300,
-                  opacity: 0.22,
+                  opacity: .3,
+                  stop: .6,
                 ),
               ),
               Padding(

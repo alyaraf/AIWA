@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -11,11 +12,13 @@ Future<T?> showAiwaSheet<T>(
   required WidgetBuilder builder,
   double handleGap = 16,
   double bottom = 34,
+  // .48 ConfirmSheet-style, .45 for CancelSheet (flow-screens.jsx:505).
+  double scrim = .48,
 }) => showModalBottomSheet<T>(
   context: context,
   useRootNavigator: true,
   backgroundColor: Colors.transparent,
-  barrierColor: AppColors.plum900.withOpacity(0.48),
+  barrierColor: AppColors.plum900.withValues(alpha: scrim),
   isScrollControlled: true,
   // Blocking sheets (e.g. while checking) wrap their body in PopScope.
   enableDrag: false,
@@ -25,7 +28,8 @@ Future<T?> showAiwaSheet<T>(
       22,
       18,
       22,
-      bottom + MediaQuery.paddingOf(ctx).bottom,
+      // The kit's bottom padding already includes the home indicator.
+      math.max(bottom, MediaQuery.paddingOf(ctx).bottom),
     ),
     child: Column(
       mainAxisSize: MainAxisSize.min,

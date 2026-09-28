@@ -52,19 +52,23 @@ class AuthChoicePage extends StatelessWidget {
                 decoration: BoxDecoration(gradient: AppTheme.heroGradient),
                 child: Stack(
                   clipBehavior: Clip.hardEdge,
+                  // auth-screens.jsx:786 — 30% 25% (.45) and 75% 80% (.25),
+                  // both transparent at 60%.
                   children: [
-                    Positioned(
-                      left: -60,
-                      top: -40,
-                      child: AiwaGlow(size: 320, color: AppColors.rose300),
+                    Positioned.fill(
+                      child: AiwaGlow.fill(
+                        center: const Alignment(-.4, -.5),
+                        color: AppColors.rose300,
+                        opacity: .45,
+                        stop: .6,
+                      ),
                     ),
-                    Positioned(
-                      right: -60,
-                      bottom: -80,
-                      child: AiwaGlow(
-                        size: 260,
+                    Positioned.fill(
+                      child: AiwaGlow.fill(
+                        center: const Alignment(.5, .6),
                         color: AppColors.gold300,
-                        opacity: 0.25,
+                        opacity: .25,
+                        stop: .6,
                       ),
                     ),
                   ],

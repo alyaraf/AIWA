@@ -920,12 +920,6 @@ abstract class AppLocalizations {
   /// **'We use these to tune the providers we show you. Change them any time from Profile.'**
   String get prefsSubtitle;
 
-  /// No description provided for @prefsYourArea.
-  ///
-  /// In en, this message translates to:
-  /// **'Your area'**
-  String get prefsYourArea;
-
   /// No description provided for @commonUseGps.
   ///
   /// In en, this message translates to:
@@ -1442,11 +1436,11 @@ abstract class AppLocalizations {
   /// **'View my bookings'**
   String get bookingViewMine;
 
-  /// No description provided for @commonBackHome.
+  /// No description provided for @bookingAddToCalendar.
   ///
   /// In en, this message translates to:
-  /// **'Back to home'**
-  String get commonBackHome;
+  /// **'Add to calendar'**
+  String get bookingAddToCalendar;
 
   /// No description provided for @bookingTypeEyebrow.
   ///
@@ -2701,12 +2695,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name} on AIWA'**
   String providerShareText(String name);
-
-  /// No description provided for @providerCopied.
-  ///
-  /// In en, this message translates to:
-  /// **'Copied — paste it anywhere to share.'**
-  String get providerCopied;
 
   /// No description provided for @providerStartsAt.
   ///

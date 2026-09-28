@@ -124,7 +124,9 @@ class ApiClient {
 class _AuthInterceptor extends Interceptor {
   final SecureStorage _storage;
   final Dio _dio;
-  bool _isRefreshing = false;
+
+  /// The in-flight refresh; concurrent 401s await it instead of failing.
+  Future<String?>? _refreshing;
 
   _AuthInterceptor(this._storage, this._dio);
 
@@ -148,42 +150,58 @@ class _AuthInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    if (err.response?.statusCode == 401 && !_isRefreshing) {
-      final refreshToken = await _storage.getRefreshToken();
-      // No refresh token = never signed in (guest / sign-in form): a plain
-      // 401, not an expired session.
-      if (refreshToken == null) return handler.next(err);
-      _isRefreshing = true;
-      String? newToken;
-      try {
-        final response = await _dio.post(
-          ApiConstants.refresh,
-          data: {'refreshToken': refreshToken},
-          options: Options(headers: {}),
-        );
-        newToken = response.data['data']['accessToken'] as String?;
-      } on DioException catch (e) {
-        // Offline is not an expired session: keep the tokens.
-        if (e.error is NetworkException) {
-          _isRefreshing = false;
-          return handler.next(err);
-        }
-      } catch (_) {}
-      _isRefreshing = false;
-      if (newToken == null) {
-        await _storage.clearAll();
-        ApiClient.authEvents.add(401);
-        return handler.next(err);
-      }
-      await _storage.saveAccessToken(newToken);
-      err.requestOptions.headers['Authorization'] = 'Bearer $newToken';
-      try {
-        return handler.resolve(await _dio.fetch(err.requestOptions));
-      } on DioException catch (e) {
-        return handler.next(e);
-      }
+    final opts = err.requestOptions;
+    // The refresh call itself and an already-retried request must not
+    // trigger (or await) another refresh.
+    if (err.response?.statusCode != 401 ||
+        opts.path == ApiConstants.refresh ||
+        opts.extra['retried'] == true) {
+      return handler.next(err);
     }
-    handler.next(err);
+    final refreshToken = await _storage.getRefreshToken();
+    // No refresh token = never signed in (guest / sign-in form): a plain
+    // 401, not an expired session.
+    if (refreshToken == null) return handler.next(err);
+    final String? newToken;
+    try {
+      newToken = await (_refreshing ??= _refresh(
+        refreshToken,
+      ).whenComplete(() => _refreshing = null));
+    } on NetworkException {
+      // Offline is not an expired session: keep the tokens.
+      return handler.next(err);
+    }
+    if (newToken == null) return handler.next(err);
+    opts.headers['Authorization'] = 'Bearer $newToken';
+    opts.extra['retried'] = true;
+    try {
+      handler.resolve(await _dio.fetch(opts));
+    } on DioException catch (e) {
+      handler.next(e);
+    }
+  }
+
+  /// New access token, or null after signing out because the refresh token
+  /// was rejected. Throws [NetworkException] when offline.
+  Future<String?> _refresh(String refreshToken) async {
+    String? token;
+    try {
+      final response = await _dio.post(
+        ApiConstants.refresh,
+        data: {'refreshToken': refreshToken},
+        options: Options(headers: {}),
+      );
+      token = response.data['data']['accessToken'] as String?;
+    } on DioException catch (e) {
+      if (e.error is NetworkException) throw e.error!;
+    } catch (_) {}
+    if (token == null) {
+      await _storage.clearAll();
+      ApiClient.authEvents.add(401);
+      return null;
+    }
+    await _storage.saveAccessToken(token);
+    return token;
   }
 }
 

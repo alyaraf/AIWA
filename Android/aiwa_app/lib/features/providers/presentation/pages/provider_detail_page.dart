@@ -1,8 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
@@ -13,7 +13,6 @@ import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_chip.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
-import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
@@ -68,21 +67,16 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
     }
   }
 
-  // ponytail: copies a text blurb; no share_plus and no public deep-link
-  // host yet. Swap for Share.share(url) once both exist.
-  Future<void> _share(ProviderDetailEntity p) async {
-    await Clipboard.setData(
-      ClipboardData(
-        text: [
-          AppLocalizations.of(context).providerShareText(p.displayName),
-          if (p.address != null && p.address!.isNotEmpty) p.address!,
-        ].join(' · '),
-      ),
-    );
-    if (mounted) {
-      showAiwaToast(context, AppLocalizations.of(context).providerCopied);
-    }
-  }
+  // ponytail: text only; append the https app link to /provider/{id} once a
+  // public deep-link host exists.
+  Future<void> _share(ProviderDetailEntity p) => SharePlus.instance.share(
+    ShareParams(
+      text: [
+        AppLocalizations.of(context).providerShareText(p.displayName),
+        if (p.address != null && p.address!.isNotEmpty) p.address!,
+      ].join(' · '),
+    ),
+  );
 
   void _toggleSave() {
     if (!_isSignedIn) {
@@ -175,7 +169,11 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                   const SizedBox(height: 2),
                   Text(
                     startsAt != null ? l.egp(startsAt) : l.providerAskProvider,
-                    style: AppTextStyles.price,
+                    // screens.jsx:318 renders 22 / lh 1, no tracking.
+                    style: AppTextStyles.price.copyWith(
+                      fontSize: 22,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ],
               ),

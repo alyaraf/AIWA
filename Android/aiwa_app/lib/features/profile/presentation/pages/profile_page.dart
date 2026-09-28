@@ -219,10 +219,14 @@ class _Header extends StatelessWidget {
       decoration: BoxDecoration(gradient: AppTheme.heroGradient),
       child: Stack(
         children: [
-          PositionedDirectional(
-            end: -40,
-            top: -60,
-            child: AiwaGlow(size: 320, color: AppColors.rose300, opacity: 0.4),
+          // prototype.jsx:358 — circle at 70% 30%, .4, transparent 60%.
+          Positioned.fill(
+            child: AiwaGlow.fill(
+              center: const Alignment(.4, -.4),
+              color: AppColors.rose300,
+              opacity: .4,
+              stop: .6,
+            ),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(

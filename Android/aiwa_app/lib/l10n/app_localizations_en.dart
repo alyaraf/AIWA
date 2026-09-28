@@ -450,9 +450,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'We use these to tune the providers we show you. Change them any time from Profile.';
 
   @override
-  String get prefsYourArea => 'Your area';
-
-  @override
   String get commonUseGps => 'Use GPS';
 
   @override
@@ -781,7 +778,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookingViewMine => 'View my bookings';
 
   @override
-  String get commonBackHome => 'Back to home';
+  String get bookingAddToCalendar => 'Add to calendar';
 
   @override
   String get bookingTypeEyebrow => 'How do you want to book';
@@ -1513,9 +1510,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String providerShareText(String name) {
     return '$name on AIWA';
   }
-
-  @override
-  String get providerCopied => 'Copied — paste it anywhere to share.';
 
   @override
   String get providerStartsAt => 'Starts at';

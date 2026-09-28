@@ -245,6 +245,7 @@ class _TypeCard extends StatelessWidget {
                       style: AppTextStyles.h1.copyWith(
                         fontSize: 26,
                         height: 1.1,
+                        letterSpacing: 0,
                         color: dark ? AppColors.bone : AppColors.plum900,
                       ),
                     ),

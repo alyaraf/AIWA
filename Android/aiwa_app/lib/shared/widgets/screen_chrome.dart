@@ -229,7 +229,6 @@ class SettingsRow extends StatelessWidget {
                   fontSize: boxed ? 14 : null,
                   fontWeight: boxed ? FontWeight.w600 : FontWeight.w500,
                   color: danger ? AppColors.danger700 : AppColors.ink,
-                  height: 1.3,
                 ),
               ),
               if (sub != null)
@@ -573,29 +572,72 @@ class MetaDot extends StatelessWidget {
 
 /// Soft radial highlight used on the dark hero gradients.
 class AiwaGlow extends StatelessWidget {
-  final double size;
+  final double? size;
   final Color color;
   final double opacity;
 
+  /// Where the gradient reaches transparent (CSS `transparent 60%` = .6).
+  final double stop;
+
+  /// Centre for [AiwaGlow.fill].
+  final Alignment center;
+
   const AiwaGlow({
     super.key,
-    required this.size,
+    required double this.size,
     required this.color,
     this.opacity = 0.35,
-  });
+    this.stop = 1,
+  }) : center = Alignment.center;
+
+  /// Fills its parent like CSS `radial-gradient(circle at x y, …)`: a
+  /// farthest-corner circle around [center], e.g. `30% 25%` = (-.4, -.5).
+  const AiwaGlow.fill({
+    super.key,
+    required this.center,
+    required this.color,
+    required this.opacity,
+    required this.stop,
+  }) : size = null;
+
+  RadialGradient _gradient(double radius) => RadialGradient(
+    center: center,
+    radius: radius,
+    colors: [color.withValues(alpha: opacity), color.withValues(alpha: 0)],
+    stops: [0, stop],
+  );
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color.withOpacity(opacity), color.withOpacity(0)],
+    if (size case final size?) {
+      return IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: _gradient(.5),
           ),
         ),
+      );
+    }
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (_, c) {
+          final w = c.maxWidth, h = c.maxHeight;
+          final cx = (center.x + 1) / 2 * w, cy = (center.y + 1) / 2 * h;
+          final far = math.sqrt(
+            math.pow(math.max(cx, w - cx), 2) +
+                math.pow(math.max(cy, h - cy), 2),
+          );
+          // RadialGradient.radius is a fraction of the box's shortest side.
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: _gradient(far / math.min(w, h)),
+            ),
+            child: const SizedBox.expand(),
+          );
+        },
       ),
     );
   }

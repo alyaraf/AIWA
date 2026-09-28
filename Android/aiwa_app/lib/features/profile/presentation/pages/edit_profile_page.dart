@@ -195,6 +195,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ValidatedField(
                   error: _nameErr,
                   builder: (e) => AiwaTextField(
+                    validated: true,
                     label: l.authFullName,
                     controller: _name,
                     icon: Icons.person_outline_rounded,
@@ -208,6 +209,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ValidatedField(
                   error: _phoneErr,
                   builder: (e) => AiwaTextField(
+                    validated: true,
                     label: l.editMobile,
                     controller: _phone,
                     icon: Icons.phone_outlined,
@@ -222,6 +224,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ValidatedField(
                   error: _emailErr,
                   builder: (e) => AiwaTextField(
+                    validated: true,
                     label: l.authModeEmail,
                     controller: _email,
                     icon: Icons.mail_outline_rounded,

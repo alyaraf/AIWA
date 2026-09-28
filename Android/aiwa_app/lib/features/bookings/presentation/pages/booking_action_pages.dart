@@ -90,7 +90,8 @@ Widget _withBooking(
   );
 }
 
-TextStyle get _title => AppTextStyles.h1.copyWith(height: 1.1);
+TextStyle get _title =>
+    AppTextStyles.h1.copyWith(height: 1.1, letterSpacing: 0);
 
 TextStyle get _lead =>
     AppTextStyles.bodySm.copyWith(color: AppColors.ink2, height: 1.55);

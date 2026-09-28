@@ -174,10 +174,14 @@ class _Hero extends StatelessWidget {
           // ponytail: intentional deviation (PROV-C6). The kit hard-codes
           // rgba(231,186,182,.3) in both palettes; we keep the gender-aware
           // rose300 token. Add AppColors.heroGlow if exact parity is required.
-          PositionedDirectional(
-            end: -40,
-            top: -50,
-            child: AiwaGlow(size: 260, color: AppColors.rose300, opacity: 0.3),
+          // provider-screens.jsx:45 — circle at 80% 20%, transparent 55%.
+          Positioned.fill(
+            child: AiwaGlow.fill(
+              center: const Alignment(.6, -.6),
+              color: AppColors.rose300,
+              opacity: .3,
+              stop: .55,
+            ),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(
@@ -316,7 +320,7 @@ class _StatTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.labelSm.copyWith(
                     fontSize: 11,
-                    letterSpacing: 0.88,
+                    letterSpacing: AppTextStyles.trackingWide * 11,
                     color: AppColors.rose300,
                   ),
                 ),
@@ -426,13 +430,7 @@ class _RequestCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppTheme.radiusLg),
             border: Border.all(color: AppColors.divider),
             // 0 1px 2px rgba(74,31,56,.04) (provider-screens.jsx:92).
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.plum700.withValues(alpha: .04),
-                blurRadius: 2,
-                offset: const Offset(0, 1),
-              ),
-            ],
+            boxShadow: AppTheme.shadowHairline,
           ),
           child: Column(
             children: [

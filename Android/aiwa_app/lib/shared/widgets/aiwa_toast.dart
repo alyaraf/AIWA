@@ -75,13 +75,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.plum700.withValues(alpha: .3),
-                    blurRadius: 32,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
+                boxShadow: AppTheme.toastShadow,
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),

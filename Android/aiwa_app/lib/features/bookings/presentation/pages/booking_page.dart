@@ -768,7 +768,11 @@ class _DayChip extends StatelessWidget {
                 'd',
                 Localizations.localeOf(context).toString(),
               ).format(date),
-              style: AppTextStyles.h3.copyWith(color: fg, height: 1.1),
+              style: AppTextStyles.h3.copyWith(
+                color: fg,
+                height: 1.1,
+                letterSpacing: 0,
+              ),
             ),
           ],
         ),

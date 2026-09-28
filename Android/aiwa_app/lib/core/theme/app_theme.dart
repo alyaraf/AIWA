@@ -29,10 +29,13 @@ class AppTheme {
 
   /// "Soft door" easing from the design tokens.
   static const Curve easeSoft = Cubic(.32, .72, 0, 1);
+  static const Curve easeOut = Cubic(.22, .61, .36, 1);
+  static const Curve easeIn = Cubic(.55, .055, .675, .19);
   static const Curve easeBounce = Cubic(.34, 1.56, .64, 1);
   static const Duration dur1 = Duration(milliseconds: 120);
   static const Duration dur2 = Duration(milliseconds: 200);
   static const Duration dur3 = Duration(milliseconds: 320);
+  static const Duration dur4 = Duration(milliseconds: 480);
 
   static BoxDecoration get cardDecoration => BoxDecoration(
     color: AppColors.paper,
@@ -95,6 +98,44 @@ class AppTheme {
       color: AppColors.ink.withOpacity(0.06),
       blurRadius: 10,
       offset: const Offset(0, 4),
+    ),
+  ];
+
+  static List<BoxShadow> get shadow4 => [
+    BoxShadow(
+      color: AppColors.plum900.withValues(alpha: 0.22),
+      blurRadius: 60,
+      offset: const Offset(0, 24),
+    ),
+  ];
+
+  static List<BoxShadow> get shadowCard => [
+    BoxShadow(
+      color: AppColors.plum700.withValues(alpha: 0.05),
+      blurRadius: 8,
+      offset: const Offset(0, 2),
+    ),
+    BoxShadow(
+      color: AppColors.ink.withValues(alpha: 0.04),
+      blurRadius: 2,
+      offset: const Offset(0, 1),
+    ),
+  ];
+
+  /// Booking / request cards: `0 1px 2px rgba(74,31,56,.04)`.
+  static List<BoxShadow> get shadowHairline => [
+    BoxShadow(
+      color: AppColors.plum700.withValues(alpha: 0.04),
+      blurRadius: 2,
+      offset: const Offset(0, 1),
+    ),
+  ];
+
+  static List<BoxShadow> get toastShadow => [
+    BoxShadow(
+      color: AppColors.plum700.withValues(alpha: 0.30),
+      blurRadius: 32,
+      offset: const Offset(0, 12),
     ),
   ];
 

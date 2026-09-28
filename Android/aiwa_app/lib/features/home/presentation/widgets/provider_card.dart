@@ -224,23 +224,19 @@ class CoverImage extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (hero) ...[
-            Positioned(
-              left: -60,
-              top: -20,
-              child: AiwaGlow(
-                size: 280,
-                color: AppColors.rose300,
-                opacity: 0.4,
-              ),
+            // screens.jsx:192 — 25% 30% (.4, transparent 50%) and
+            // 80% 70% (.25, transparent 60%).
+            AiwaGlow.fill(
+              center: const Alignment(-.5, -.4),
+              color: AppColors.rose300,
+              opacity: .4,
+              stop: .5,
             ),
-            Positioned(
-              right: -80,
-              bottom: -60,
-              child: AiwaGlow(
-                size: 280,
-                color: AppColors.gold300,
-                opacity: 0.25,
-              ),
+            AiwaGlow.fill(
+              center: const Alignment(.6, .4),
+              color: AppColors.gold300,
+              opacity: .25,
+              stop: .6,
             ),
           ] else
             Positioned(
