@@ -28,6 +28,7 @@ import '../bloc/booking_bloc.dart';
 import '../bloc/booking_event.dart';
 import '../bloc/booking_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class BookingPage extends StatefulWidget {
   final String providerId;
@@ -393,7 +394,7 @@ class _BookingPageState extends State<BookingPage> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.cream,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppTheme.radius14),
                 ),
                 child: Text(
                   l.bookingNoSlots,
@@ -428,7 +429,7 @@ class _BookingPageState extends State<BookingPage> {
           if (_isNow)
             InlineBanner(
               tone: BannerTone.plum,
-              icon: Icons.home_outlined,
+              icon: LucideIcons.house,
               body: l.bookingNowAddressNote,
             )
           else
@@ -437,7 +438,7 @@ class _BookingPageState extends State<BookingPage> {
                 Expanded(
                   child: _WhereOption(
                     label: l.bookingAtMyAddress,
-                    icon: Icons.home_outlined,
+                    icon: LucideIcons.house,
                     selected: _homeService,
                     onTap: () => setState(() => _homeService = true),
                   ),
@@ -446,7 +447,7 @@ class _BookingPageState extends State<BookingPage> {
                 Expanded(
                   child: _WhereOption(
                     label: l.bookingAtSalon,
-                    icon: Icons.storefront_outlined,
+                    icon: LucideIcons.store,
                     selected: !_homeService,
                     onTap: () => setState(() => _homeService = false),
                   ),
@@ -472,7 +473,7 @@ class _BookingPageState extends State<BookingPage> {
               onTap: _addAddress,
               radius: 12,
               padding: 10,
-              fontSize: 12.5,
+              fontSize: AppTextStyles.fsLabelSmPlus,
               iconSize: 14,
             ),
           ],
@@ -483,7 +484,7 @@ class _BookingPageState extends State<BookingPage> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: AppColors.paper,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppTheme.radius14),
               border: Border.all(color: AppColors.divider),
             ),
             child: Row(
@@ -493,10 +494,10 @@ class _BookingPageState extends State<BookingPage> {
                   height: 36,
                   decoration: BoxDecoration(
                     color: AppColors.gold100,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppTheme.radius10),
                   ),
                   child: Icon(
-                    Icons.money_rounded,
+                    LucideIcons.banknote,
                     size: 18,
                     color: AppColors.gold700,
                   ),
@@ -521,11 +522,7 @@ class _BookingPageState extends State<BookingPage> {
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.check_rounded,
-                  size: 18,
-                  color: AppColors.success500,
-                ),
+                Icon(LucideIcons.check, size: 18, color: AppColors.success500),
               ],
             ),
           ),
@@ -571,7 +568,7 @@ class _BookingPageState extends State<BookingPage> {
                 if (state is BookingError && !(state.slotTaken && !_isNow)) ...[
                   InlineBanner(
                     tone: BannerTone.danger,
-                    icon: Icons.error_outline_rounded,
+                    icon: LucideIcons.circleAlert,
                     body: l.error(state.message),
                     compact: true,
                   ),
@@ -611,7 +608,7 @@ class _SummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radius16),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -678,7 +675,7 @@ class _ServiceOption extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: selected ? AppColors.plum100 : AppColors.paper,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppTheme.radius14),
           border: Border.all(
             color: selected ? AppColors.plum700 : AppColors.divider,
             width: 1.5,
@@ -692,14 +689,18 @@ class _ServiceOption extends StatelessWidget {
                 children: [
                   Text(
                     service.name,
-                    style: AppTextStyles.label.copyWith(fontSize: 13.5),
+                    style: AppTextStyles.label.copyWith(
+                      fontSize: AppTextStyles.fsMetaPlus,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     AppLocalizations.of(
                       context,
                     ).durationMinutes(service.durationMinutes),
-                    style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                    style: AppTextStyles.micro.copyWith(
+                      fontSize: AppTextStyles.fsMicroPlus,
+                    ),
                   ),
                 ],
               ),
@@ -710,7 +711,7 @@ class _ServiceOption extends StatelessWidget {
             ),
             if (selected) ...[
               const SizedBox(width: 8),
-              Icon(Icons.check_rounded, size: 16, color: AppColors.plum700),
+              Icon(LucideIcons.check, size: 16, color: AppColors.plum700),
             ],
           ],
         ),
@@ -744,7 +745,7 @@ class _DayChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         decoration: BoxDecoration(
           color: selected ? AppColors.plum700 : AppColors.paper,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppTheme.radius14),
           border: Border.all(
             color: selected ? Colors.transparent : AppColors.divider,
           ),
@@ -810,7 +811,7 @@ class _SlotChip extends StatelessWidget {
               : available
               ? AppColors.paper
               : AppColors.cream,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           border: Border.all(
             color: selected ? Colors.transparent : AppColors.divider,
           ),
@@ -857,7 +858,7 @@ class _WhereOption extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
           color: selected ? AppColors.plum700 : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppTheme.radius14),
           border: Border.all(
             color: selected ? Colors.transparent : AppColors.divider,
           ),
@@ -911,7 +912,7 @@ class _AddressRow extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: selected ? AppColors.plum100 : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppTheme.radius14),
           border: Border.all(
             width: 1.5,
             color: selected ? AppColors.plum700 : AppColors.divider,
@@ -928,10 +929,10 @@ class _AddressRow extends StatelessWidget {
               ),
               child: Icon(
                 label == 'work'
-                    ? Icons.work_outline_rounded
+                    ? LucideIcons.briefcase
                     : label == 'home'
-                    ? Icons.home_outlined
-                    : Icons.place_outlined,
+                    ? LucideIcons.house
+                    : LucideIcons.mapPin,
                 size: 15,
                 color: Colors.white,
               ),
@@ -944,7 +945,7 @@ class _AddressRow extends StatelessWidget {
                   Text(
                     AppLocalizations.of(context).addressLabel(address.label),
                     style: AppTextStyles.label.copyWith(
-                      fontSize: 13.5,
+                      fontSize: AppTextStyles.fsMetaPlus,
                       color: AppColors.ink,
                     ),
                   ),
@@ -953,13 +954,15 @@ class _AddressRow extends StatelessWidget {
                     address.addressLine,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                    style: AppTextStyles.micro.copyWith(
+                      fontSize: AppTextStyles.fsMicroPlus,
+                    ),
                   ),
                 ],
               ),
             ),
             if (selected)
-              Icon(Icons.check_rounded, size: 16, color: AppColors.plum700),
+              Icon(LucideIcons.check, size: 16, color: AppColors.plum700),
           ],
         ),
       ),

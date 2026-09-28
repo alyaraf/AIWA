@@ -8,6 +8,7 @@ import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Soft gate shown when a guest tries to book — `AuthGateScreen` in the kit.
 ///
@@ -62,7 +63,7 @@ class AuthGatePage extends StatelessWidget {
       ),
       children: [
         AiwaIconButton(
-          icon: Icons.arrow_back_rounded,
+          icon: LucideIcons.arrowLeftDir,
           onTap: () => context.pop(),
         ),
         const SizedBox(height: 22),
@@ -87,13 +88,13 @@ class AuthGatePage extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               children: [
-                Icon(Icons.check_rounded, size: 14, color: AppColors.plum700),
+                Icon(LucideIcons.check, size: 14, color: AppColors.plum700),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     t,
                     style: AppTextStyles.bodySm.copyWith(
-                      fontSize: 13.5,
+                      fontSize: AppTextStyles.fsMetaPlus,
                       color: AppColors.ink2,
                     ),
                   ),

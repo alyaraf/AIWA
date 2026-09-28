@@ -9,6 +9,7 @@ import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Terms & safety policy — `TermsScreen` in flow-screens.jsx. Acceptance is
 /// sent with the account creation at the end of Preferences.
@@ -28,17 +29,13 @@ class _TermsPageState extends State<TermsPage> {
     final l = AppLocalizations.of(context);
     final sections = [
       (
-        Icons.verified_user_outlined,
+        LucideIcons.shieldCheck,
         l.authTermsVerifiedTitle,
         l.authTermsVerifiedBody,
       ),
-      (
-        Icons.lock_outline_rounded,
-        l.authTermsPrivateTitle,
-        l.authTermsPrivateBody,
-      ),
-      (Icons.flag_outlined, l.authTermsFlagTitle, l.authTermsFlagBody),
-      (Icons.payments_outlined, l.authTermsCashTitle, l.authTermsCashBody),
+      (LucideIcons.lock, l.authTermsPrivateTitle, l.authTermsPrivateBody),
+      (LucideIcons.flag, l.authTermsFlagTitle, l.authTermsFlagBody),
+      (LucideIcons.banknote, l.authTermsCashTitle, l.authTermsCashBody),
     ];
     final strong = TextStyle(
       color: AppColors.plum700,
@@ -58,7 +55,7 @@ class _TermsPageState extends State<TermsPage> {
       ),
       children: [
         AiwaIconButton(
-          icon: Icons.arrow_back_rounded,
+          icon: LucideIcons.arrowLeftDir,
           onTap: () => context.pop(),
         ),
         const SizedBox(height: 22),
@@ -88,7 +85,7 @@ class _TermsPageState extends State<TermsPage> {
             decoration: BoxDecoration(
               color: AppColors.paper,
               border: Border.all(color: AppColors.divider),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppTheme.radius16),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,7 +95,7 @@ class _TermsPageState extends State<TermsPage> {
                   height: 36,
                   decoration: BoxDecoration(
                     color: AppColors.plum100,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppTheme.radius10),
                   ),
                   child: Icon(icon, size: 18, color: AppColors.plum700),
                 ),
@@ -115,7 +112,7 @@ class _TermsPageState extends State<TermsPage> {
                       Text(
                         text,
                         style: AppTextStyles.bodySm.copyWith(
-                          fontSize: 12.5,
+                          fontSize: AppTextStyles.fsLabelSmPlus,
                           color: AppColors.ink2,
                           height: 1.5,
                         ),
@@ -138,7 +135,7 @@ class _TermsPageState extends State<TermsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
+                  duration: AppTheme.dur2,
                   curve: AppTheme.easeSoft,
                   width: 22,
                   height: 22,
@@ -153,7 +150,7 @@ class _TermsPageState extends State<TermsPage> {
                   ),
                   child: _agree
                       ? const Icon(
-                          Icons.check_rounded,
+                          LucideIcons.check,
                           size: 14,
                           color: Colors.white,
                         )

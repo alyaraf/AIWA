@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 
@@ -85,7 +86,7 @@ class AiwaAvatar extends StatelessWidget {
                 border: Border.all(color: AppColors.paper, width: 2),
               ),
               child: Icon(
-                Icons.check,
+                LucideIcons.check,
                 size: math.max(8, size * 0.18),
                 color: AppColors.paper,
               ),

@@ -10,6 +10,7 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/screen_chrome.dart' show AiwaGlow;
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ProviderPendingPage extends StatelessWidget {
   const ProviderPendingPage({super.key});
@@ -58,7 +59,9 @@ class ProviderPendingPage extends StatelessWidget {
                       children: [
                         const Spacer(),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(22),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radius22,
+                          ),
                           child: BackdropFilter(
                             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                             child: Container(
@@ -66,13 +69,15 @@ class ProviderPendingPage extends StatelessWidget {
                               height: 72,
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.16),
-                                borderRadius: BorderRadius.circular(22),
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radius22,
+                                ),
                                 border: Border.all(
                                   color: Colors.white.withOpacity(0.18),
                                 ),
                               ),
                               child: Icon(
-                                Icons.hourglass_empty_rounded,
+                                LucideIcons.hourglass,
                                 size: 34,
                                 color: AppColors.bone,
                               ),
@@ -117,19 +122,19 @@ class ProviderPendingPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 26),
                         _StatusRow(
-                          icon: Icons.check_circle_outline_rounded,
+                          icon: LucideIcons.circleCheck,
                           text: l.provPendingIdReceived,
                           color: AppColors.rose300,
                         ),
                         const SizedBox(height: 10),
                         _StatusRow(
-                          icon: Icons.check_circle_outline_rounded,
+                          icon: LucideIcons.circleCheck,
                           text: l.provPendingSelfieReceived,
                           color: AppColors.rose300,
                         ),
                         const SizedBox(height: 10),
                         _StatusRow(
-                          icon: Icons.hourglass_empty_rounded,
+                          icon: LucideIcons.hourglass,
                           text: l.provPendingAdminReview,
                           color: AppColors.gold300,
                         ),
@@ -146,7 +151,7 @@ class ProviderPendingPage extends StatelessWidget {
                           child: Text(
                             l.provPendingBrowseNote,
                             style: AppTextStyles.micro.copyWith(
-                              fontSize: 11.5,
+                              fontSize: AppTextStyles.fsMicroPlus,
                               color: AppColors.rose300,
                             ),
                             textAlign: TextAlign.center,
@@ -182,7 +187,7 @@ class _StatusRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         border: Border.all(color: Colors.white.withOpacity(0.12)),
       ),
       child: Row(

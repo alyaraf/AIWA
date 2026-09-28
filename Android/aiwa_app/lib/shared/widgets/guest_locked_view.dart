@@ -6,6 +6,7 @@ import '../../core/theme/app_text_styles.dart';
 import 'aiwa_button.dart';
 import 'eyebrow_label.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Shown in place of Saved / Bookings / Profile while browsing as a guest —
 /// `GuestLockedScreen` in the kit.
@@ -18,7 +19,7 @@ class GuestLockedView extends StatelessWidget {
     super.key,
     this.title,
     required this.body,
-    this.icon = Icons.lock_outline_rounded,
+    this.icon = LucideIcons.lock,
   });
 
   @override
@@ -57,7 +58,7 @@ class GuestLockedView extends StatelessWidget {
             child: Text(
               body,
               style: AppTextStyles.bodySm.copyWith(
-                fontSize: 13.5,
+                fontSize: AppTextStyles.fsMetaPlus,
                 color: AppColors.ink2,
               ),
               textAlign: TextAlign.center,

@@ -24,6 +24,7 @@ import '../../../bookings/domain/entities/booking_entity.dart';
 import '../../../bookings/domain/repositories/booking_repository.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 typedef _Next = ({
   String label,
@@ -285,7 +286,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
                           // ponytail: every customer account is phone-OTP
                           // verified, so the badge is unconditional.
                           Icon(
-                            Icons.verified_outlined,
+                            LucideIcons.badgeCheck,
                             size: 12,
                             color: AppColors.gold500,
                           ),
@@ -310,7 +311,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
                   ),
                 ),
                 // No-op in the kit too.
-                const AiwaIconButton(icon: Icons.chat_bubble_outline_rounded),
+                const AiwaIconButton(icon: LucideIcons.messageCircle),
               ],
             ),
           ),
@@ -324,10 +325,10 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
                     height: 34,
                     decoration: BoxDecoration(
                       color: AppColors.plum100,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppTheme.radius10),
                     ),
                     child: Icon(
-                      Icons.location_on_outlined,
+                      LucideIcons.mapPin,
                       size: 16,
                       color: AppColors.plum700,
                     ),
@@ -349,7 +350,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
                         Text(
                           hasAddress ? b.customerAddress! : l.pbdNoAddress,
                           style: AppTextStyles.bodySm.copyWith(
-                            fontSize: 13.5,
+                            fontSize: AppTextStyles.fsMetaPlus,
                             height: 1.4,
                           ),
                         ),
@@ -366,7 +367,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
             banner(
               InlineBanner(
                 tone: BannerTone.warn,
-                icon: Icons.warning_amber_rounded,
+                icon: LucideIcons.triangleAlert,
                 title: l.pbdNoAddress,
                 body: l.pbdNoAddressBody,
               ),
@@ -375,7 +376,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
             banner(
               InlineBanner(
                 tone: BannerTone.gold,
-                icon: Icons.directions_car_outlined,
+                icon: LucideIcons.car,
                 title: l.pbdQuoteSent(l.egp(_quote!)),
                 body: l.pbdQuoteSentBody,
               ),
@@ -384,7 +385,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
             banner(
               InlineBanner(
                 tone: BannerTone.success,
-                icon: Icons.check_rounded,
+                icon: LucideIcons.check,
                 title: l.pbdFeeAccepted,
                 body: l.pbdFeeAcceptedBody,
               ),
@@ -402,7 +403,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.cream,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppTheme.radius14),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,7 +452,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
               Expanded(
                 child: AiwaButton(
                   label: l.commonAccept,
-                  icon: Icons.check_rounded,
+                  icon: LucideIcons.check,
                   size: AiwaButtonSize.lg,
                   fullWidth: true,
                   loading: _busy,
@@ -466,7 +467,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
             const SizedBox(height: 8),
             AiwaButton(
               label: l.pbdQuoteInstead,
-              icon: Icons.directions_car_outlined,
+              icon: LucideIcons.car,
               variant: AiwaButtonVariant.ghost,
               size: AiwaButtonSize.sm,
               onPressed: _busy ? null : _quoteFee,
@@ -476,7 +477,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
             const SizedBox(height: 8),
             AiwaButton(
               label: l.pbdProposeInstead,
-              icon: Icons.edit_calendar_outlined,
+              icon: LucideIcons.calendarClock,
               variant: AiwaButtonVariant.ghost,
               size: AiwaButtonSize.sm,
               onPressed: _busy ? null : _propose,
@@ -492,25 +493,25 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
     final _Next? next = switch ((b.homeService, b.status)) {
       (true, 'ACCEPTED') => (
         label: l.pbdOnMyWay,
-        icon: Icons.navigation_outlined,
+        icon: LucideIcons.navigation,
         note: l.pbdOnMyWayNote,
         call: _repo.bookingOnTheWay,
       ),
       (true, 'ON_THE_WAY') => (
         label: l.pbdArrived,
-        icon: Icons.location_on_outlined,
+        icon: LucideIcons.mapPin,
         note: l.pbdArrivedNote,
         call: _repo.bookingArrived,
       ),
       (true, 'ARRIVED') => (
         label: l.pbdStartService,
-        icon: Icons.play_arrow_rounded,
+        icon: LucideIcons.play,
         note: l.pbdStartNote,
         call: _repo.bookingInProgress,
       ),
       (false, 'ACCEPTED') => (
         label: l.pbdStartService,
-        icon: Icons.play_arrow_rounded,
+        icon: LucideIcons.play,
         note: l.pbdStartVenueNote,
         call: _repo.bookingInProgress,
       ),
@@ -531,7 +532,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
               if (b.status != 'IN_PROGRESS') ...[
                 AiwaButton(
                   label: l.commonCancel,
-                  icon: Icons.close_rounded,
+                  icon: LucideIcons.x,
                   variant: AiwaButtonVariant.secondary,
                   size: AiwaButtonSize.lg,
                   onPressed: _busy ? null : _cancel,
@@ -550,7 +551,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
                       )
                     : AiwaButton(
                         label: l.pbdMarkCompleted,
-                        icon: Icons.done_all_rounded,
+                        icon: LucideIcons.checkCheck,
                         size: AiwaButtonSize.lg,
                         fullWidth: true,
                         onPressed: () => context.push(
@@ -594,7 +595,7 @@ class _JobProgress extends StatelessWidget {
                         color: i <= index
                             ? AppColors.plum700
                             : AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.circular(AppTheme.radius2),
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -729,11 +730,7 @@ class _QuoteSheetState extends State<_QuoteSheet> {
               color: AppColors.gold100,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.directions_car_outlined,
-              size: 21,
-              color: AppColors.gold700,
-            ),
+            child: Icon(LucideIcons.car, size: 21, color: AppColors.gold700),
           ),
           const SizedBox(height: 12),
           EyebrowLabel(l.pbdQuoteEyebrow, color: AppColors.gold700),
@@ -753,7 +750,10 @@ class _QuoteSheetState extends State<_QuoteSheet> {
           const SizedBox(height: 6),
           Text(
             l.pbdQuotePassThrough(l.egp(b.basePrice)),
-            style: AppTextStyles.micro.copyWith(fontSize: 12.5, height: 1.5),
+            style: AppTextStyles.micro.copyWith(
+              fontSize: AppTextStyles.fsLabelSmPlus,
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: 16),
           Row(
@@ -769,7 +769,7 @@ class _QuoteSheetState extends State<_QuoteSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             decoration: BoxDecoration(
               color: AppColors.paper,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppTheme.radius14),
               border: Border.all(color: AppColors.divider, width: 1.5),
             ),
             child: Row(
@@ -822,7 +822,7 @@ class _QuoteSheetState extends State<_QuoteSheet> {
               Expanded(
                 child: AiwaButton(
                   label: l.pbdSendQuote,
-                  icon: Icons.send_rounded,
+                  icon: LucideIcons.send,
                   size: AiwaButtonSize.lg,
                   fullWidth: true,
                   onPressed: _send,
@@ -845,7 +845,7 @@ class _QuoteSheetState extends State<_QuoteSheet> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: on ? AppColors.plum700 : AppColors.paper,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           border: Border.all(
             color: on ? Colors.transparent : AppColors.divider,
             width: 1.5,
@@ -854,7 +854,7 @@ class _QuoteSheetState extends State<_QuoteSheet> {
         child: Text(
           AppLocalizations.of(context).egp(v),
           style: AppTextStyles.label.copyWith(
-            fontSize: 13.5,
+            fontSize: AppTextStyles.fsMetaPlus,
             color: on ? AppColors.paper : AppColors.ink,
           ),
         ),

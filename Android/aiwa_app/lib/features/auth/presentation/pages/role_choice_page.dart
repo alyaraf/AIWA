@@ -10,6 +10,7 @@ import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/press_scale.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class RoleChoicePage extends StatefulWidget {
   const RoleChoicePage({super.key});
@@ -24,14 +25,14 @@ class _RoleChoicePageState extends State<RoleChoicePage> {
   List<_RoleOption> _roles(AppLocalizations l) => [
     _RoleOption(
       id: 'CUSTOMER',
-      icon: Icons.auto_awesome_outlined,
+      icon: LucideIcons.sparkles,
       title: l.authRoleCustomerTitle,
       subtitle: l.authRoleCustomerSub,
       perks: [l.authRolePerkBrowse, l.authRolePerkCash, l.authRolePerkTrack],
     ),
     _RoleOption(
       id: 'PROVIDER',
-      icon: Icons.work_outline_rounded,
+      icon: LucideIcons.briefcase,
       title: l.authRoleProviderTitle,
       subtitle: l.authRoleProviderSub,
       perks: [l.authRolePerkId, l.authRolePerkManage, l.authRolePerkPayouts],
@@ -58,7 +59,7 @@ class _RoleChoicePageState extends State<RoleChoicePage> {
             : null,
       ),
       children: [
-        AiwaIconButton(icon: Icons.arrow_back_rounded, onTap: _back),
+        AiwaIconButton(icon: LucideIcons.arrowLeftDir, onTap: _back),
         const SizedBox(height: 22),
         EyebrowLabel(AppLocalizations.of(context).authWelcomeToAiwa),
         const SizedBox(height: 6),
@@ -109,7 +110,7 @@ class _RoleCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: active ? AppColors.plum700 : AppColors.paper,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppTheme.radius20),
           border: Border.all(
             color: active ? Colors.transparent : AppColors.divider,
             width: 1.5,
@@ -127,7 +128,7 @@ class _RoleCard extends StatelessWidget {
                     color: active
                         ? Colors.white.withOpacity(0.18)
                         : AppColors.plum100,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
                   child: Icon(
                     role.icon,
@@ -161,7 +162,7 @@ class _RoleCard extends StatelessWidget {
                 ),
                 if (active)
                   Icon(
-                    Icons.check_circle_outline_rounded,
+                    LucideIcons.circleCheck,
                     size: 20,
                     color: AppColors.bone,
                   ),
@@ -179,7 +180,7 @@ class _RoleCard extends StatelessWidget {
                         child: Row(
                           children: [
                             Icon(
-                              Icons.check_rounded,
+                              LucideIcons.check,
                               size: 11,
                               color: active
                                   ? AppColors.rose300

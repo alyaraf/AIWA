@@ -6,6 +6,7 @@ import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../domain/entities/provider_summary_entity.dart';
 import 'provider_card.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Row card for a provider.
 ///
@@ -111,7 +112,7 @@ class ProviderListItem extends StatelessWidget {
               )
             else
               Icon(
-                Icons.chevron_right_rounded,
+                LucideIcons.chevronRightDir,
                 size: 18,
                 color: AppColors.ink3,
               ),

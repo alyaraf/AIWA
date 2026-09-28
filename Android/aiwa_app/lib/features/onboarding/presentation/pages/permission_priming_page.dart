@@ -9,13 +9,15 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/system_screen.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 
 enum PermissionKind { location, notifications, camera, contacts }
 
 /// `PERMISSIONS` in system-screens.jsx.
 _Copy _copy(AppLocalizations l, PermissionKind kind) => switch (kind) {
   PermissionKind.location => (
-    icon: Icons.location_on_outlined,
+    icon: LucideIcons.mapPin,
     eyebrow: l.permLocEyebrow,
     title: l.permLocTitle,
     body: l.permLocBody,
@@ -24,7 +26,7 @@ _Copy _copy(AppLocalizations l, PermissionKind kind) => switch (kind) {
     deny: l.permLocDeny,
   ),
   PermissionKind.notifications => (
-    icon: Icons.notifications_none_rounded,
+    icon: LucideIcons.bell,
     eyebrow: l.permNotifEyebrow,
     title: l.permNotifTitle,
     body: l.permNotifBody,
@@ -33,7 +35,7 @@ _Copy _copy(AppLocalizations l, PermissionKind kind) => switch (kind) {
     deny: l.permNotNow,
   ),
   PermissionKind.camera => (
-    icon: Icons.photo_camera_outlined,
+    icon: LucideIcons.camera,
     eyebrow: l.permCamEyebrow,
     title: l.permCamTitle,
     body: l.permCamBody,
@@ -42,7 +44,7 @@ _Copy _copy(AppLocalizations l, PermissionKind kind) => switch (kind) {
     deny: l.permCamDeny,
   ),
   PermissionKind.contacts => (
-    icon: Icons.person_add_alt_outlined,
+    icon: LucideIcons.userPlus,
     eyebrow: l.permContEyebrow,
     title: l.permContTitle,
     body: l.permContBody,
@@ -153,7 +155,7 @@ class PermissionPrimingPage extends StatelessWidget {
                 height: 66,
                 decoration: BoxDecoration(
                   color: AppColors.plum700,
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(AppTheme.radius22),
                 ),
                 child: Icon(p.icon, size: 29, color: AppColors.bone),
               ),
@@ -192,7 +194,7 @@ class PermissionPrimingPage extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        Icons.check_rounded,
+                        LucideIcons.check,
                         size: 12,
                         color: AppColors.success700,
                       ),
@@ -202,7 +204,7 @@ class PermissionPrimingPage extends StatelessWidget {
                       child: Text(
                         pt,
                         style: AppTextStyles.bodySm.copyWith(
-                          fontSize: 13.5,
+                          fontSize: AppTextStyles.fsMetaPlus,
                           color: AppColors.ink2,
                         ),
                       ),
@@ -260,7 +262,7 @@ class PermissionDeniedPage extends StatelessWidget {
       _ => (l.permDeniedLocTitle, l.permDeniedLocBody, l.permDeniedLocFallback),
     };
     return SystemScreen(
-      icon: Icons.block_rounded,
+      icon: LucideIcons.ban,
       tone: SystemTone.warn,
       eyebrow: l.permNeeded,
       title: title,

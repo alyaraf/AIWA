@@ -22,6 +22,7 @@ import '../bloc/booking_bloc.dart';
 import '../bloc/booking_event.dart';
 import '../bloc/booking_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class MyBookingsPage extends StatelessWidget {
   const MyBookingsPage({super.key});
@@ -39,7 +40,7 @@ class MyBookingsPage extends StatelessWidget {
               child: GuestLockedView(
                 title: AppLocalizations.of(context).bookingsGuestTitle,
                 body: AppLocalizations.of(context).bookingsGuestBody,
-                icon: Icons.event_available_outlined,
+                icon: LucideIcons.calendarCheck,
               ),
             ),
           );
@@ -175,9 +176,7 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
         padding: pad,
         sliver: SliverToBoxAdapter(
           child: EmptyState(
-            icon: upcoming
-                ? Icons.edit_calendar_outlined
-                : Icons.history_rounded,
+            icon: upcoming ? LucideIcons.calendarClock : LucideIcons.history,
             title: upcoming
                 ? l.bookingsEmptyUpcomingTitle
                 : l.bookingsEmptyPastTitle,
@@ -379,14 +378,14 @@ class _BookingCard extends StatelessWidget {
               runSpacing: 6,
               children: [
                 _Meta(
-                  icon: Icons.calendar_today_outlined,
+                  icon: LucideIcons.calendar,
                   text: l.formatWhen(b.scheduledDate, b.scheduledTime),
                   style: metaStyle,
                 ),
                 // Kit shows distance; fall back to the address without it.
                 if (b.providerDistanceKm != null || hasAddress)
                   _Meta(
-                    icon: Icons.location_on_outlined,
+                    icon: LucideIcons.mapPin,
                     text: b.providerDistanceKm != null
                         ? l.distanceKm(b.providerDistanceKm!.toStringAsFixed(1))
                         : b.providerAddress!,
@@ -401,8 +400,8 @@ class _BookingCard extends StatelessWidget {
               const SizedBox(height: 12),
               _ReasonBox(
                 icon: b.status == 'NO_SHOW'
-                    ? Icons.person_off_outlined
-                    : Icons.cancel_outlined,
+                    ? LucideIcons.userX
+                    : LucideIcons.circleX,
                 title: switch (b.status) {
                   'NO_SHOW' => l.bookingsNoShow,
                   'REJECTED' => l.bookingsRejectedByProvider,
@@ -443,7 +442,7 @@ class _BookingCard extends StatelessWidget {
                   Expanded(
                     child: AiwaButton(
                       label: l.bookingsDirections,
-                      icon: Icons.map_outlined,
+                      icon: LucideIcons.map,
                       size: AiwaButtonSize.sm,
                       fullWidth: true,
                       onPressed: hasAddress ? onDirections : null,
@@ -469,7 +468,7 @@ class _BookingCard extends StatelessWidget {
                   Expanded(
                     child: AiwaButton(
                       label: l.bookingsLeaveReview,
-                      icon: Icons.star_rounded,
+                      icon: LucideIcons.star,
                       size: AiwaButtonSize.sm,
                       fullWidth: true,
                       onPressed: onReview,
@@ -559,7 +558,7 @@ class _ReasonBox extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.danger100,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppTheme.radius10),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

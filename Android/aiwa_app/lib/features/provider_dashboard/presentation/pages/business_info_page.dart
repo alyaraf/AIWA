@@ -16,6 +16,7 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../data/provider_manage_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 const _categories = [
   'HAIR',
@@ -173,7 +174,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
                         builder: (e) => AiwaTextField(
                           label: l.provBizName,
                           controller: _name,
-                          icon: Icons.storefront_outlined,
+                          icon: LucideIcons.store,
                           error: e,
                           onChanged: _touch,
                         ),
@@ -192,7 +193,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
                       Text(
                         l.provBizPrimaryCategory,
                         style: AppTextStyles.label.copyWith(
-                          fontSize: 12.5,
+                          fontSize: AppTextStyles.fsLabelSmPlus,
                           color: AppColors.ink2,
                         ),
                       ),
@@ -218,7 +219,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
                         builder: (e) => AiwaTextField(
                           label: l.biBaseAddress,
                           controller: _address,
-                          icon: Icons.place_outlined,
+                          icon: LucideIcons.mapPin,
                           error: e,
                           onChanged: _touch,
                         ),
@@ -231,7 +232,9 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.paper,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radius14,
+                          ),
                           border: Border.all(color: AppColors.divider),
                         ),
                         child: Column(
@@ -242,7 +245,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
                                   child: Text(
                                     l.biServiceRadius,
                                     style: AppTextStyles.label.copyWith(
-                                      fontSize: 13.5,
+                                      fontSize: AppTextStyles.fsMetaPlus,
                                       color: AppColors.ink,
                                     ),
                                   ),
@@ -290,7 +293,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
                       AiwaTextField(
                         label: l.biSurcharge,
                         controller: _surcharge,
-                        icon: Icons.directions_car_outlined,
+                        icon: LucideIcons.car,
                         optional: true,
                         keyboardType: TextInputType.number,
                         hint: l.biSurchargeHint,
@@ -299,7 +302,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
                       const SizedBox(height: 14),
                       InlineBanner(
                         tone: BannerTone.info,
-                        icon: Icons.verified_outlined,
+                        icon: LucideIcons.badgeCheck,
                         title: l.biVerifiedStudio,
                         body: l.biReReview,
                       ),

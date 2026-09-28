@@ -190,7 +190,7 @@ class _PulseDotState extends State<_PulseDot>
     with SingleTickerProviderStateMixin {
   late final _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 550),
+    duration: AppTheme.durPulse,
     lowerBound: .55,
     upperBound: .9,
   )..repeat(reverse: true);

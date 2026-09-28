@@ -12,6 +12,8 @@ import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../auth/presentation/widgets/step_header.dart';
 import '../../domain/entities/provider_detail_entity.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 
 /// 'Pick your stylist.' — `StaffPickerScreen` in customer-extras-2.jsx.
 /// Shop-type providers only; pushed from the profile's Book actions.
@@ -40,7 +42,7 @@ class StaffPickerPage extends StatelessWidget {
       bottom: const SizedBox.shrink(),
       children: [
         AiwaIconButton(
-          icon: Icons.arrow_back_rounded,
+          icon: LucideIcons.arrowLeftDir,
           onTap: () => context.pop(),
         ),
         const SizedBox(height: 22),
@@ -76,7 +78,7 @@ class StaffPickerPage extends StatelessWidget {
             title: s.fullName,
             subtitle: s.title ?? '',
             trailing: Icon(
-              Icons.chevron_right_rounded,
+              LucideIcons.chevronRightDir,
               size: 18,
               color: AppColors.ink3,
             ),
@@ -94,7 +96,7 @@ class StaffPickerPage extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              Icons.shuffle_rounded,
+              LucideIcons.shuffle,
               size: 20,
               color: AppColors.plum700,
             ),
@@ -163,7 +165,7 @@ class _StaffCard extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: AppColors.cream,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                 ),
                 child: content,
               ),
@@ -171,7 +173,7 @@ class _StaffCard extends StatelessWidget {
           : DecoratedBox(
               decoration: BoxDecoration(
                 color: AppColors.paper,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                 border: Border.all(color: AppColors.divider, width: 1.5),
               ),
               child: content,
@@ -195,7 +197,7 @@ class _DashedBorder extends CustomPainter {
       ..addRRect(
         RRect.fromRectAndRadius(
           Offset.zero & size,
-          const Radius.circular(18),
+          const Radius.circular(AppTheme.radiusLg),
         ).deflate(.75),
       );
     for (final m in path.computeMetrics()) {

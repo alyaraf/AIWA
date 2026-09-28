@@ -15,6 +15,7 @@ import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../data/account_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Trusted contacts for SOS — `TrustedContactsScreen` in account-screens.jsx.
 class TrustedContactsPage extends StatefulWidget {
@@ -91,7 +92,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
       title: AppLocalizations.of(context).tcRemoveTitle,
       body: AppLocalizations.of(context).tcRemoveBody,
       confirmLabel: AppLocalizations.of(context).tcRemove,
-      icon: Icons.person_remove_outlined,
+      icon: LucideIcons.userRoundMinus,
     );
     if (!ok || !mounted) return;
     final r = await _repo.removeTrustedContact(c.id);
@@ -130,7 +131,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
               children: [
                 InlineBanner(
                   tone: BannerTone.warn,
-                  icon: Icons.emergency_share_outlined,
+                  icon: LucideIcons.siren,
                   title: l.tcBannerTitle,
                   body: l.tcBannerBody,
                 ),
@@ -143,7 +144,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
                   EmptyState(
                     compact: true,
                     tone: EmptyStateTone.gold,
-                    icon: Icons.person_add_alt_outlined,
+                    icon: LucideIcons.userPlus,
                     title: l.tcEmpty,
                     subtitle: l.tcEmptyBody,
                     actionLabel: l.tcAddContact,
@@ -160,7 +161,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppColors.paper,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                       border: Border.all(color: AppColors.plum700, width: 1.5),
                     ),
                     child: Column(
@@ -180,7 +181,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
                             validated: true,
                             label: l.svcName,
                             controller: _name,
-                            icon: Icons.person_outline_rounded,
+                            icon: LucideIcons.user,
                             placeholder: l.tcNamePlaceholder,
                             autoFocus: true,
                             error: e,
@@ -194,7 +195,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
                             validated: true,
                             label: l.editMobile,
                             controller: _phone,
-                            icon: Icons.phone_outlined,
+                            icon: LucideIcons.phone,
                             keyboardType: TextInputType.phone,
                             placeholder: '+20 100 000 0000',
                             error: e,
@@ -206,7 +207,7 @@ class _TrustedContactsPageState extends State<TrustedContactsPage> {
                           validated: true,
                           label: l.tcRelationship,
                           controller: _rel,
-                          icon: Icons.favorite_border_rounded,
+                          icon: LucideIcons.heart,
                           placeholder: l.tcRelationshipPlaceholder,
                           optional: true,
                         ),
@@ -269,7 +270,7 @@ class _ContactCard extends StatelessWidget {
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radius16),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -315,11 +316,7 @@ class _ContactCard extends StatelessWidget {
               ),
             ),
           ),
-          AiwaIconButton(
-            icon: Icons.delete_outline_rounded,
-            size: 34,
-            onTap: onRemove,
-          ),
+          AiwaIconButton(icon: LucideIcons.trash2, size: 34, onTap: onRemove),
         ],
       ),
     );

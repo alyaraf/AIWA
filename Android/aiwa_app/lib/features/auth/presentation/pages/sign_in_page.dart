@@ -16,6 +16,7 @@ import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class SignInPage extends StatefulWidget {
   final String role;
@@ -130,7 +131,7 @@ class _SignInPageState extends State<SignInPage> {
         ),
         children: [
           AiwaIconButton(
-            icon: Icons.arrow_back_rounded,
+            icon: LucideIcons.arrowLeftDir,
             onTap: () => context.canPop()
                 ? context.pop()
                 : context.go(AppRoutes.roleChoice),
@@ -175,7 +176,7 @@ class _SignInPageState extends State<SignInPage> {
               placeholder: 'you@example.com',
               controller: _emailCtrl,
               keyboardType: TextInputType.emailAddress,
-              icon: Icons.mail_outline_rounded,
+              icon: LucideIcons.mail,
               autoFocus: true,
               onChanged: (_) => setState(_clearErrorSilently),
             ),
@@ -185,14 +186,12 @@ class _SignInPageState extends State<SignInPage> {
             placeholder: '••••••••',
             controller: _passwordCtrl,
             obscureText: !_showPassword,
-            icon: Icons.lock_outline_rounded,
+            icon: LucideIcons.lock,
             suffixIcon: IconButton(
               padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(),
               icon: Icon(
-                _showPassword
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
+                _showPassword ? LucideIcons.eyeOff : LucideIcons.eye,
                 size: 16,
                 color: AppColors.ink3,
               ),
@@ -205,7 +204,7 @@ class _SignInPageState extends State<SignInPage> {
             const SizedBox(height: 14),
             InlineBanner(
               tone: BannerTone.danger,
-              icon: Icons.error_outline_rounded,
+              icon: LucideIcons.circleAlert,
               body: _error,
               compact: true,
             ),
@@ -234,7 +233,7 @@ class _SignInPageState extends State<SignInPage> {
                       ),
                       child: _remember
                           ? Icon(
-                              Icons.check_rounded,
+                              LucideIcons.check,
                               size: 12,
                               color: AppColors.paper,
                             )

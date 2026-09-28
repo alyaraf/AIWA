@@ -9,6 +9,7 @@ import 'package:aiwa_app/shared/widgets/screen_chrome.dart';
 import 'package:aiwa_app/shared/widgets/status_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../test_helpers.dart';
 
@@ -163,7 +164,7 @@ void main() {
       await tester.pumpWidget(
         host(
           EmptyState(
-            icon: Icons.favorite_border_rounded,
+            icon: LucideIcons.heart,
             title: 'No favorites yet',
             subtitle: 'Tap the heart on any provider.',
             actionLabel: 'Browse providers',
@@ -221,7 +222,7 @@ void main() {
       expect(find.text('INBOX'), findsOneWidget);
       expect(find.textContaining('Notifications'), findsOneWidget);
       expect(find.textContaining('· 3 new'), findsOneWidget);
-      expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+      expect(find.byIcon(LucideIcons.arrowLeftDir), findsOneWidget);
     });
 
     testWidgets('SettingsRow danger rows have no chevron', (tester) async {
@@ -232,12 +233,12 @@ void main() {
             body: Column(
               children: [
                 SettingsRow(
-                  icon: Icons.notifications_none_rounded,
+                  icon: LucideIcons.bell,
                   label: 'Notifications',
                   onTap: () {},
                 ),
                 SettingsRow(
-                  icon: Icons.logout_rounded,
+                  icon: LucideIcons.logOutDir,
                   label: 'Sign out',
                   danger: true,
                   onTap: () {},
@@ -248,7 +249,7 @@ void main() {
         ),
       );
 
-      expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
+      expect(find.byIcon(LucideIcons.chevronRightDir), findsOneWidget);
     });
   });
 

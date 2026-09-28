@@ -24,6 +24,8 @@ import '../bloc/dashboard_bloc.dart';
 import '../bloc/dashboard_event.dart';
 import '../bloc/dashboard_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../shared/widgets/star_rating.dart';
 
 /// Provider Today tab — `ProviderDashboard` (provider-screens.jsx:35-139).
 class DashboardPage extends StatefulWidget {
@@ -277,14 +279,14 @@ class _StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radius14),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: AppColors.bone.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppTheme.radius14),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,11 +294,7 @@ class _StatTile extends StatelessWidget {
                 Row(
                   children: [
                     if (star) ...[
-                      Icon(
-                        Icons.star_rounded,
-                        size: 14,
-                        color: AppColors.gold300,
-                      ),
+                      AiwaStar(size: 14, color: AppColors.gold300),
                       const SizedBox(width: 4),
                     ],
                     Flexible(
@@ -353,7 +351,7 @@ class _PendingCallout extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.warn100,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppTheme.radius16),
           border: Border.all(color: AppColors.warn500.withValues(alpha: 0.2)),
         ),
         child: Row(
@@ -366,7 +364,7 @@ class _PendingCallout extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.alarm_rounded,
+                LucideIcons.alarmClock,
                 size: 18,
                 color: AppColors.paper,
               ),
@@ -395,7 +393,7 @@ class _PendingCallout extends StatelessWidget {
               ),
             ),
             Icon(
-              Icons.chevron_right_rounded,
+              LucideIcons.chevronRightDir,
               size: 18,
               color: AppColors.warn700,
             ),
@@ -470,11 +468,7 @@ class _RequestCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: 13,
-                      color: AppColors.ink3,
-                    ),
+                    Icon(LucideIcons.calendar, size: 13, color: AppColors.ink3),
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
@@ -505,7 +499,7 @@ class _RequestCard extends StatelessWidget {
                   Expanded(
                     child: AiwaButton(
                       label: l.commonAccept,
-                      icon: Icons.check_rounded,
+                      icon: LucideIcons.check,
                       size: AiwaButtonSize.sm,
                       fullWidth: true,
                       onPressed: open,
@@ -536,7 +530,7 @@ class _TodayRow extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radius16),
         border: Border.all(color: AppColors.divider),
       ),
       child: IntrinsicHeight(
@@ -546,7 +540,7 @@ class _TodayRow extends StatelessWidget {
               width: 4,
               decoration: BoxDecoration(
                 color: AppColors.info500,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(AppTheme.radiusXs),
               ),
             ),
             const SizedBox(width: 12),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
+import 'app_theme.dart';
 
 class AppTextStyles {
   AppTextStyles._();
@@ -12,6 +13,11 @@ class AppTextStyles {
   static const double lhBase = 1.5;
   static const double lhLoose = 1.65;
   static const double trackingWide = 0.08;
+  // The kit's recurring inline half-step sizes (115 JSX fontSize literals),
+  // each half a pixel above the micro / labelSm / meta scale steps.
+  static const double fsMicroPlus = 11.5;
+  static const double fsLabelSmPlus = 12.5;
+  static const double fsMetaPlus = 13.5;
 
   // Display serif — DM Serif Display
   static TextStyle get display => _serif(
@@ -134,7 +140,7 @@ class AppTextStyles {
   static Widget monoChip(String text, {double fontSize = 13}) => DecoratedBox(
     decoration: BoxDecoration(
       color: AppColors.cream,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(AppTheme.radiusXs),
     ),
     child: Padding(
       padding: EdgeInsets.symmetric(

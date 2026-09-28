@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -10,6 +11,7 @@ import '../../../../shared/widgets/dashed_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ProviderBusinessPage extends StatefulWidget {
   final Map<String, dynamic> registrationData;
@@ -26,22 +28,48 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
   final List<TextEditingController> _staffCtrls = [TextEditingController()];
   String? _category;
   String _businessType = 'individual';
-  bool _hasLocation = true;
-  final double _lat = 30.0444, _lng = 31.2357;
+  double? _lat, _lng;
+  bool get _hasLocation => _lat != null;
 
   static const _categories = [
-    ('HAIR', Icons.content_cut_rounded),
-    ('NAILS', Icons.back_hand_outlined),
-    ('SPA', Icons.spa_outlined),
-    ('MAKEUP', Icons.brush_outlined),
-    ('LASHES', Icons.visibility_outlined),
-    ('SKIN', Icons.water_drop_outlined),
-    ('MASSAGE', Icons.volunteer_activism_outlined),
-    ('OTHER', Icons.auto_awesome_outlined),
+    ('HAIR', LucideIcons.scissors),
+    ('NAILS', LucideIcons.hand),
+    ('SPA', LucideIcons.leaf),
+    ('MAKEUP', LucideIcons.brush),
+    ('LASHES', LucideIcons.eye),
+    ('SKIN', LucideIcons.droplets),
+    ('MASSAGE', LucideIcons.handHeart),
+    ('OTHER', LucideIcons.sparkles),
   ];
 
   bool get _isValid =>
       _businessNameCtrl.text.trim().length >= 2 && _category != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _locate(ask: false); // kit opens GPS-locked; only prompt on "Use GPS"
+  }
+
+  Future<void> _locate({bool ask = true}) async {
+    var perm = await Geolocator.checkPermission();
+    if (ask && perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm != LocationPermission.always &&
+        perm != LocationPermission.whileInUse) {
+      return;
+    }
+    try {
+      final p = await Geolocator.getCurrentPosition();
+      if (mounted) {
+        setState(() {
+          _lat = p.latitude;
+          _lng = p.longitude;
+        });
+      }
+    } catch (_) {} // stays "No GPS"; the profile is saved without coordinates
+  }
 
   @override
   void dispose() {
@@ -100,7 +128,7 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
           label: l.provBizName,
           placeholder: l.provBizNamePlaceholder,
           controller: _businessNameCtrl,
-          icon: Icons.storefront_outlined,
+          icon: LucideIcons.store,
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 14),
@@ -110,14 +138,14 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
           children: [
             _TypeOption(
               label: l.provBizIndividual,
-              icon: Icons.person_outline_rounded,
+              icon: LucideIcons.user,
               active: _businessType == 'individual',
               onTap: () => setState(() => _businessType = 'individual'),
             ),
             const SizedBox(width: 10),
             _TypeOption(
               label: l.provBizShop,
-              icon: Icons.storefront_outlined,
+              icon: LucideIcons.store,
               active: _businessType == 'shop',
               onTap: () => setState(() => _businessType = 'shop'),
             ),
@@ -126,7 +154,9 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
         const SizedBox(height: 5),
         Text(
           l.provBizShopNote,
-          style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+          style: AppTextStyles.micro.copyWith(
+            fontSize: AppTextStyles.fsMicroPlus,
+          ),
         ),
         if (_businessType == 'shop') ...[
           const SizedBox(height: 14),
@@ -152,7 +182,7 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
                     child: AiwaTextField(
                       controller: _staffCtrls[i],
                       placeholder: l.provBizStaffName(i + 1),
-                      icon: Icons.person_outline_rounded,
+                      icon: LucideIcons.user,
                     ),
                   ),
                   if (_staffCtrls.length > 1)
@@ -161,7 +191,7 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
                       child: Padding(
                         padding: const EdgeInsets.all(8),
                         child: Icon(
-                          Icons.close_rounded,
+                          LucideIcons.x,
                           size: 16,
                           color: AppColors.danger700,
                         ),
@@ -191,7 +221,9 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
           const SizedBox(height: 5),
           Text(
             l.provBizStaffNote,
-            style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+            style: AppTextStyles.micro.copyWith(
+              fontSize: AppTextStyles.fsMicroPlus,
+            ),
           ),
         ],
         const SizedBox(height: 14),
@@ -240,7 +272,7 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
                 curve: AppTheme.easeSoft,
                 decoration: BoxDecoration(
                   color: active ? AppColors.plum700 : AppColors.paper,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   border: Border.all(
                     color: active ? Colors.transparent : AppColors.divider,
                     width: 1.5,
@@ -258,7 +290,7 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
                     Text(
                       l.category(c.$1),
                       style: AppTextStyles.labelSm.copyWith(
-                        fontSize: 11.5,
+                        fontSize: AppTextStyles.fsMicroPlus,
                         color: active ? AppColors.bone : AppColors.ink,
                       ),
                     ),
@@ -271,14 +303,16 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
         const SizedBox(height: 5),
         Text(
           l.provBizPickOne,
-          style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+          style: AppTextStyles.micro.copyWith(
+            fontSize: AppTextStyles.fsMicroPlus,
+          ),
         ),
         const SizedBox(height: 14),
         AiwaTextField(
           label: l.provBizAddress,
           placeholder: l.provBizAddressPlaceholder,
           controller: _addressCtrl,
-          icon: Icons.location_on_outlined,
+          icon: LucideIcons.mapPin,
           suffixIcon: TextButton(
             style: TextButton.styleFrom(
               padding: const EdgeInsetsDirectional.only(end: 14),
@@ -286,7 +320,7 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               splashFactory: NoSplash.splashFactory,
             ),
-            onPressed: () => setState(() => _hasLocation = true),
+            onPressed: _locate,
             child: Text(
               l.commonUseGps,
               style: AppTextStyles.labelSm.copyWith(color: AppColors.plum700),
@@ -297,7 +331,7 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
         Container(
           decoration: BoxDecoration(
             color: AppColors.paper,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           ),
           child: CustomPaint(
             painter: DashedBorder(AppColors.divider, 12, width: 1),
@@ -312,12 +346,10 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
                       color: _hasLocation
                           ? AppColors.success100
                           : AppColors.warn100,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppTheme.radius10),
                     ),
                     child: Icon(
-                      _hasLocation
-                          ? Icons.check_rounded
-                          : Icons.location_on_outlined,
+                      _hasLocation ? LucideIcons.check : LucideIcons.mapPin,
                       size: 16,
                       color: _hasLocation
                           ? AppColors.success700
@@ -331,10 +363,13 @@ class _ProviderBusinessPageState extends State<ProviderBusinessPage> {
                       children: [
                         Text(
                           _hasLocation
-                              ? l.provBizGpsLocked('$_lat', '$_lng')
+                              ? l.provBizGpsLocked(
+                                  _lat!.toStringAsFixed(4),
+                                  _lng!.toStringAsFixed(4),
+                                )
                               : l.provBizNoGps,
                           style: AppTextStyles.labelSm.copyWith(
-                            fontSize: 12.5,
+                            fontSize: AppTextStyles.fsLabelSmPlus,
                             height: 1.3,
                           ),
                         ),
@@ -377,7 +412,7 @@ class _TypeOption extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           decoration: BoxDecoration(
             color: active ? AppColors.plum700 : AppColors.paper,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
             border: Border.all(
               color: active ? Colors.transparent : AppColors.divider,
               width: 1.5,

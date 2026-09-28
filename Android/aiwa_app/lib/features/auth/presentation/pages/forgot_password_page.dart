@@ -12,6 +12,7 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Forgot password — identifier -> code -> new password
 /// (ForgotPasswordScreen, flow-additions-v3.jsx:135-202).
@@ -122,7 +123,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       children: [
         Align(
           alignment: AlignmentDirectional.centerStart,
-          child: AiwaIconButton(icon: Icons.arrow_back_rounded, onTap: _back),
+          child: AiwaIconButton(icon: LucideIcons.arrowLeftDir, onTap: _back),
         ),
         const SizedBox(height: 22),
         EyebrowLabel(eyebrow),
@@ -149,9 +150,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             key: ValueKey(_mode),
             controller: _value,
             placeholder: _mode == 'phone' ? '100 555 8821' : 'you@example.com',
-            icon: _mode == 'phone'
-                ? Icons.phone_outlined
-                : Icons.mail_outline_rounded,
+            icon: _mode == 'phone' ? LucideIcons.phone : LucideIcons.mail,
             keyboardType: _mode == 'phone'
                 ? TextInputType.phone
                 : TextInputType.emailAddress,
@@ -162,7 +161,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           AiwaTextField(
             controller: _code,
             placeholder: l.authCodePlaceholder,
-            icon: Icons.key_outlined,
+            icon: LucideIcons.keyRound,
             keyboardType: TextInputType.number,
             maxLength: 6,
             autoFocus: true,
@@ -172,7 +171,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           AiwaTextField(
             controller: _pw,
             placeholder: l.authNewPassword,
-            icon: Icons.lock_outline_rounded,
+            icon: LucideIcons.lock,
             obscureText: true,
             autoFocus: true,
             onChanged: changed,
@@ -181,7 +180,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           AiwaTextField(
             controller: _pw2,
             placeholder: l.authConfirmPassword,
-            icon: Icons.lock_outline_rounded,
+            icon: LucideIcons.lock,
             obscureText: true,
             onChanged: changed,
             onSubmitted: (_) => _next(),
@@ -191,7 +190,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           const SizedBox(height: 12),
           InlineBanner(
             tone: BannerTone.danger,
-            icon: Icons.error_outline_rounded,
+            icon: LucideIcons.circleAlert,
             body: _error,
           ),
         ],

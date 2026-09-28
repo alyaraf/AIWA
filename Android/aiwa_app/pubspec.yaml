@@ -75,7 +75,7 @@ dependencies:
   # Crash reporting + funnel breadcrumbs (off unless SENTRY_DSN is set)
   sentry_flutter: ^8.14.2
   share_plus: ^12.0.2
-
+  lucide_icons_flutter: ^3.1.20
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -99,7 +99,6 @@ flutter:
   generate: true
   uses-material-design: true
   assets:
-    - assets/images/
     - assets/icons/
     - assets/animations/
     # Bundled so google_fonts never downloads at runtime (see main.dart).

@@ -11,6 +11,7 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/dashed_button.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ProviderVerificationPage extends StatefulWidget {
   final Map<String, dynamic> registrationData;
@@ -89,7 +90,7 @@ class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
         _UploadSlot(
           label: l.provVerifyIdFront,
           hint: l.provVerifyIdFrontHint,
-          icon: Icons.credit_card_outlined,
+          icon: LucideIcons.creditCard,
           path: _idFront,
           onTap: () async {
             final p = await _pick();
@@ -100,7 +101,7 @@ class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
         _UploadSlot(
           label: l.provVerifyIdBack,
           hint: l.provVerifyIdBackHint,
-          icon: Icons.credit_card_outlined,
+          icon: LucideIcons.creditCard,
           path: _idBack,
           onTap: () async {
             final p = await _pick();
@@ -111,7 +112,7 @@ class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
         _UploadSlot(
           label: l.provVerifySelfie,
           hint: l.provVerifySelfieHint,
-          icon: Icons.photo_camera_outlined,
+          icon: LucideIcons.camera,
           path: _selfie,
           onTap: () async {
             final p = await _pick(selfie: true);
@@ -123,7 +124,7 @@ class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.plum100,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,7 +132,7 @@ class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
               Padding(
                 padding: const EdgeInsets.only(top: 1),
                 child: Icon(
-                  Icons.verified_user_outlined,
+                  LucideIcons.shieldCheck,
                   size: 16,
                   color: AppColors.plum700,
                 ),
@@ -179,7 +180,7 @@ class _UploadSlot extends StatelessWidget {
           height: 110,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
             border: Border.all(color: AppColors.plum700, width: 1.5),
             image: DecorationImage(
               image: FileImage(File(path!)),
@@ -187,7 +188,7 @@ class _UploadSlot extends StatelessWidget {
             ),
           ),
           foregroundDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
             gradient: LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
@@ -202,11 +203,7 @@ class _UploadSlot extends StatelessWidget {
           alignment: AlignmentDirectional.bottomStart,
           child: Row(
             children: [
-              Icon(
-                Icons.check_circle_outline_rounded,
-                size: 14,
-                color: AppColors.bone,
-              ),
+              Icon(LucideIcons.circleCheck, size: 14, color: AppColors.bone),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
@@ -226,7 +223,7 @@ class _UploadSlot extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 110),
         decoration: BoxDecoration(
           color: AppColors.paper,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppTheme.radius14),
         ),
         child: CustomPaint(
           painter: DashedBorder(AppColors.divider, 14),
@@ -239,7 +236,7 @@ class _UploadSlot extends StatelessWidget {
                   height: 48,
                   decoration: BoxDecoration(
                     color: AppColors.plum100,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
                   child: Icon(icon, size: 22, color: AppColors.plum700),
                 ),
@@ -256,7 +253,7 @@ class _UploadSlot extends StatelessWidget {
                       Text(
                         hint,
                         style: AppTextStyles.micro.copyWith(
-                          fontSize: 11.5,
+                          fontSize: AppTextStyles.fsMicroPlus,
                           height: 1.4,
                         ),
                       ),
@@ -264,7 +261,7 @@ class _UploadSlot extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Icon(Icons.upload_rounded, size: 18, color: AppColors.plum700),
+                Icon(LucideIcons.upload, size: 18, color: AppColors.plum700),
               ],
             ),
           ),

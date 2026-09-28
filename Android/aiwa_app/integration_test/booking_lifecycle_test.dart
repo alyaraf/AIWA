@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // Seeded accounts (LocalDataSeeder); override for other environments.
 const _customer = String.fromEnvironment(
@@ -92,7 +93,7 @@ void main() {
     await _settle(tester);
     await _tap(tester, find.textContaining('Yes, I paid'));
     await _tap(tester, find.text('Rate your provider'));
-    await _tap(tester, find.byIcon(Icons.star_outline_rounded).last); // 5★
+    await _tap(tester, find.byIcon(LucideIcons.star).last); // 5★
     await _tap(tester, find.text('Submit review'));
     expect(
       router.routerDelegate.currentConfiguration.uri.path,

@@ -14,6 +14,8 @@ import '../../../providers/presentation/bloc/provider_event.dart';
 import '../../../providers/presentation/bloc/provider_state.dart';
 import '../widgets/book_now_check_sheet.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 
 /// BookingTypeScreen (flow-screens.jsx:162-221): Book now vs Schedule.
 class BookingTypePage extends StatefulWidget {
@@ -85,7 +87,7 @@ class _BookingTypePageState extends State<BookingTypePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AiwaIconButton(
-              icon: Icons.arrow_back_rounded,
+              icon: LucideIcons.arrowLeftDir,
               onTap: () => context.pop(),
             ),
             const SizedBox(height: 22),
@@ -119,8 +121,8 @@ class _BookingTypePageState extends State<BookingTypePage> {
               eyebrow: l.bookingTypeNowEyebrow,
               title: l.bookingTypeNowTitle,
               facts: [
-                (Icons.schedule_rounded, l.bookingTypeNowEta),
-                (Icons.place_outlined, l.bookingTypeNowComes),
+                (LucideIcons.clock, l.bookingTypeNowEta),
+                (LucideIcons.mapPin, l.bookingTypeNowComes),
               ],
               onTap: _bookNow,
             ),
@@ -130,11 +132,8 @@ class _BookingTypePageState extends State<BookingTypePage> {
               eyebrow: l.bookingTypeScheduleEyebrow,
               title: l.bookingTypeScheduleTitle,
               facts: [
-                (Icons.calendar_today_outlined, l.bookingTypeUpTo14),
-                (
-                  Icons.check_circle_outline_rounded,
-                  l.bookingTypeProviderConfirms,
-                ),
+                (LucideIcons.calendar, l.bookingTypeUpTo14),
+                (LucideIcons.circleCheck, l.bookingTypeProviderConfirms),
               ],
               onTap: () => _toBooking('scheduled'),
             ),
@@ -143,7 +142,7 @@ class _BookingTypePageState extends State<BookingTypePage> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.cream,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppTheme.radius14),
                 border: Border.all(color: AppColors.divider),
               ),
               child: Row(
@@ -152,7 +151,7 @@ class _BookingTypePageState extends State<BookingTypePage> {
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Icon(
-                      Icons.info_outline_rounded,
+                      LucideIcons.info,
                       size: 16,
                       color: AppColors.plum700,
                     ),
@@ -169,7 +168,7 @@ class _BookingTypePageState extends State<BookingTypePage> {
                         }),
                       ),
                       style: AppTextStyles.body.copyWith(
-                        fontSize: 12.5,
+                        fontSize: AppTextStyles.fsLabelSmPlus,
                         height: 1.5,
                         color: AppColors.ink2,
                       ),
@@ -211,7 +210,7 @@ class _TypeCard extends StatelessWidget {
         color: dark ? AppColors.plum700 : AppColors.paper,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(AppTheme.radius22),
           side: dark
               ? BorderSide.none
               : BorderSide(color: AppColors.divider, width: 1.5),

@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_tab_bar.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Provider app frame: tab roots + `ProviderTabBar`
 /// (provider-screens.jsx:562-596). Pushed screens sit above it.
@@ -20,11 +21,11 @@ class ProviderShellPage extends StatefulWidget {
 class _ProviderShellPageState extends State<ProviderShellPage>
     with SingleTickerProviderStateMixin {
   List<AiwaTab> _tabs(AppLocalizations l) => [
-    (icon: Icons.dashboard_outlined, label: l.tabToday),
-    (icon: Icons.event_available_outlined, label: l.tabBookings),
-    (icon: Icons.list_rounded, label: l.tabServices),
-    (icon: Icons.schedule_rounded, label: l.tabSchedule),
-    (icon: Icons.person_outline_rounded, label: l.tabProfile),
+    (icon: LucideIcons.layoutDashboard, label: l.tabToday),
+    (icon: LucideIcons.calendarCheck, label: l.tabBookings),
+    (icon: LucideIcons.list, label: l.tabServices),
+    (icon: LucideIcons.clock, label: l.tabSchedule),
+    (icon: LucideIcons.user, label: l.tabProfile),
   ];
 
   /// Tab change fades the new root in (aiwa-fade-in).

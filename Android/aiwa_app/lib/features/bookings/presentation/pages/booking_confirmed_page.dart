@@ -8,6 +8,8 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../domain/entities/booking_entity.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class BookingConfirmedPage extends StatelessWidget {
   final BookingEntity booking;
@@ -79,7 +81,7 @@ class BookingConfirmedPage extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.check_rounded,
+                LucideIcons.check,
                 size: 48,
                 color: AppColors.success700,
               ),
@@ -123,7 +125,7 @@ class BookingConfirmedPage extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.paper,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                 border: Border.all(color: AppColors.divider),
               ),
               child: Column(

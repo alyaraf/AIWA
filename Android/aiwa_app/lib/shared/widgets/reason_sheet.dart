@@ -6,6 +6,7 @@ import 'aiwa_button.dart';
 import 'aiwa_sheet.dart';
 import 'eyebrow_label.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Pick-a-reason bottom sheet — `CancelSheet` (flow-screens.jsx:490-549).
 /// Picking [otherLabel] reveals an optional note (null: never). Confirm
@@ -100,7 +101,7 @@ class _ReasonSheetState extends State<_ReasonSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: AppColors.danger100,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,7 +109,7 @@ class _ReasonSheetState extends State<_ReasonSheet> {
                   Padding(
                     padding: const EdgeInsets.only(top: 1),
                     child: Icon(
-                      Icons.warning_amber_rounded,
+                      LucideIcons.triangleAlert,
                       size: 14,
                       color: AppColors.danger700,
                     ),
@@ -118,7 +119,7 @@ class _ReasonSheetState extends State<_ReasonSheet> {
                     child: Text(
                       widget.warning!,
                       style: AppTextStyles.micro.copyWith(
-                        fontSize: 12.5,
+                        fontSize: AppTextStyles.fsLabelSmPlus,
                         height: 1.5,
                         color: AppColors.danger700,
                       ),
@@ -236,7 +237,7 @@ class ReasonRow extends StatelessWidget {
                 height: 34,
                 decoration: BoxDecoration(
                   color: selected ? AppColors.plum700 : AppColors.plum100,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppTheme.radius10),
                 ),
                 child: Icon(
                   icon,
@@ -266,14 +267,16 @@ class ReasonRow extends StatelessWidget {
                     const SizedBox(height: 1),
                     Text(
                       hint!,
-                      style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                      style: AppTextStyles.micro.copyWith(
+                        fontSize: AppTextStyles.fsMicroPlus,
+                      ),
                     ),
                   ],
                 ],
               ),
             ),
             if (selected)
-              Icon(Icons.check_rounded, size: 16, color: AppColors.plum700),
+              Icon(LucideIcons.check, size: 16, color: AppColors.plum700),
           ],
         ),
       ),

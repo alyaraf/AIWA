@@ -13,14 +13,15 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../../shared/widgets/section_header.dart';
 import '../../../profile/data/account_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// `NOTIF_CHANNELS` in flow-additions-v3.jsx → NotificationPreferencesDto key.
 /// WhatsApp has no backend field (null key).
 List<(String?, String, IconData)> _channels(AppLocalizations l) => [
-  ('notifyPush', l.npPush, Icons.notifications_none_rounded),
-  ('notifySms', l.npSms, Icons.sms_outlined),
-  (null, l.providerWhatsApp, Icons.chat_bubble_outline_rounded),
-  ('notifyEmail', l.authModeEmail, Icons.mail_outline_rounded),
+  ('notifyPush', l.npPush, LucideIcons.bell),
+  ('notifySms', l.npSms, LucideIcons.messageSquare),
+  (null, l.providerWhatsApp, LucideIcons.messageCircle),
+  ('notifyEmail', l.authModeEmail, LucideIcons.mail),
 ];
 
 /// "22:00:00", "22:00" or [22, 0] → "22:00".
@@ -129,7 +130,7 @@ class _NotificationPreferencesPageState
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: AppColors.paper,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppTheme.radius14),
       border: Border.all(color: AppColors.divider),
     ),
     child: child,
@@ -195,7 +196,9 @@ class _NotificationPreferencesPageState
                             height: 34,
                             decoration: BoxDecoration(
                               color: AppColors.plum100,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radius10,
+                              ),
                             ),
                             child: Icon(
                               icon,

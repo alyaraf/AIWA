@@ -10,6 +10,7 @@ import '../../features/auth/presentation/bloc/auth_event.dart';
 import 'aiwa_button.dart';
 import 'eyebrow_label.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 enum SystemTone { plum, danger, warn, info }
 
@@ -133,7 +134,7 @@ class PopIn extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
     tween: Tween(begin: 0, end: 1),
-    duration: const Duration(milliseconds: 340),
+    duration: AppTheme.dur3,
     curve: AppTheme.easeBounce,
     builder: (_, t, c) => Opacity(
       opacity: t.clamp(0.0, 1.0),
@@ -157,7 +158,7 @@ class SessionExpiredPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SystemScreen(
-    icon: Icons.timer_off_outlined,
+    icon: LucideIcons.clockAlert,
     tone: SystemTone.warn,
     eyebrow: AppLocalizations.of(context).sysSignedOut,
     title: AppLocalizations.of(context).sysSessionTitle,
@@ -173,7 +174,7 @@ class AccountLockedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SystemScreen(
-    icon: Icons.lock_outline_rounded,
+    icon: LucideIcons.lock,
     tone: SystemTone.danger,
     eyebrow: AppLocalizations.of(context).sysLocked,
     title: AppLocalizations.of(context).sysLockedTitle,
@@ -191,7 +192,7 @@ class ForbiddenPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SystemScreen(
-    icon: Icons.gpp_bad_outlined,
+    icon: LucideIcons.shieldX,
     tone: SystemTone.danger,
     eyebrow: AppLocalizations.of(context).sysNoAccess,
     title: AppLocalizations.of(context).sysNoAccessTitle,
@@ -207,7 +208,7 @@ class NotFoundPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SystemScreen(
-    icon: Icons.search_off_rounded,
+    icon: LucideIcons.searchX,
     eyebrow: AppLocalizations.of(context).sysNotFound,
     title: AppLocalizations.of(context).sysNotFoundTitle,
     body: AppLocalizations.of(context).sysNotFoundBody,

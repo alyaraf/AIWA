@@ -21,6 +21,8 @@ import '../bloc/saved_bloc.dart';
 import '../bloc/saved_event.dart';
 import '../bloc/saved_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../shared/widgets/star_rating.dart';
 
 class SavedPage extends StatelessWidget {
   const SavedPage({super.key});
@@ -38,7 +40,7 @@ class SavedPage extends StatelessWidget {
               child: GuestLockedView(
                 title: AppLocalizations.of(context).savedGuestTitle,
                 body: AppLocalizations.of(context).savedGuestBody,
-                icon: Icons.favorite_border_rounded,
+                icon: LucideIcons.heart,
               ),
             ),
           );
@@ -120,7 +122,7 @@ class _SavedViewState extends State<_SavedView> {
     if (state.providers.isEmpty) {
       return SliverToBoxAdapter(
         child: EmptyState(
-          icon: Icons.favorite_border_rounded,
+          icon: LucideIcons.heart,
           tone: EmptyStateTone.rose,
           title: l.savedEmpty,
           subtitle: l.savedEmptyBody,
@@ -230,11 +232,7 @@ class _SavedCard extends StatelessWidget {
                     ),
                     Row(
                       children: [
-                        Icon(
-                          Icons.star_rounded,
-                          size: 11,
-                          color: AppColors.gold500,
-                        ),
+                        AiwaStar(size: 11, color: AppColors.gold500),
                         const SizedBox(width: 3),
                         Text(
                           rating != null && rating > 0
@@ -254,12 +252,14 @@ class _SavedCard extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.plum100,
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusPill,
+                              ),
                             ),
                             child: Text(
                               AppLocalizations.of(context).savedBookAgain,
                               style: AppTextStyles.labelSm.copyWith(
-                                fontSize: 11.5,
+                                fontSize: AppTextStyles.fsMicroPlus,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.plum700,
                               ),

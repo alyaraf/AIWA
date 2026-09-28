@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Top bar shown while offline — `OfflineBanner` in states.jsx. Mounted once
 /// above every route in app.dart; driven by connectivity_plus and by
@@ -59,7 +60,7 @@ class _OfflineBannerState extends State<OfflineBanner> {
 
   @override
   Widget build(BuildContext context) {
-    const drop = Duration(milliseconds: 260);
+    const drop = AppTheme.dur3;
     return Positioned(
       top: 0,
       left: 0,
@@ -86,7 +87,7 @@ class _OfflineBannerState extends State<OfflineBanner> {
                 child: Row(
                   children: [
                     Icon(
-                      Icons.wifi_off_rounded,
+                      LucideIcons.wifiOff,
                       size: 15,
                       color: AppColors.rose300,
                     ),
@@ -95,7 +96,7 @@ class _OfflineBannerState extends State<OfflineBanner> {
                       child: Text(
                         AppLocalizations.of(context).offlineBanner,
                         style: AppTextStyles.micro.copyWith(
-                          fontSize: 12.5,
+                          fontSize: AppTextStyles.fsLabelSmPlus,
                           fontWeight: FontWeight.w500,
                           color: AppColors.bone,
                         ),
@@ -119,7 +120,7 @@ class _OfflineBannerState extends State<OfflineBanner> {
                           child: Text(
                             AppLocalizations.of(context).commonRetry,
                             style: AppTextStyles.labelSm.copyWith(
-                              fontSize: 11.5,
+                              fontSize: AppTextStyles.fsMicroPlus,
                               fontWeight: FontWeight.w700,
                               color: AppColors.bone,
                             ),

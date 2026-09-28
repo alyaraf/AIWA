@@ -12,6 +12,7 @@ import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/press_scale.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// "Make it yours" — the gender choice sets the app palette, previewed live.
 class AvatarGenderPage extends StatefulWidget {
@@ -128,7 +129,7 @@ class _AvatarGenderPageState extends State<AvatarGenderPage> {
                       alignment: Alignment.center,
                       child: _avatar == null
                           ? Icon(
-                              Icons.camera_alt_outlined,
+                              LucideIcons.camera,
                               size: 36,
                               color: AppColors.bone,
                             )
@@ -147,8 +148,8 @@ class _AvatarGenderPageState extends State<AvatarGenderPage> {
                         ),
                         child: Icon(
                           _avatar == null
-                              ? Icons.add_rounded
-                              : Icons.edit_outlined,
+                              ? LucideIcons.plus
+                              : LucideIcons.pencil,
                           size: 16,
                           color: AppColors.bone,
                         ),
@@ -193,7 +194,9 @@ class _AvatarGenderPageState extends State<AvatarGenderPage> {
         const SizedBox(height: 5),
         Text(
           AppLocalizations.of(context).authPaletteNote,
-          style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+          style: AppTextStyles.micro.copyWith(
+            fontSize: AppTextStyles.fsMicroPlus,
+          ),
         ),
       ],
     );
@@ -225,7 +228,7 @@ class _GenderOption extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: selected ? AppColors.plum100 : AppColors.paper,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppTheme.radius16),
             border: Border.all(
               color: selected ? AppColors.plum700 : AppColors.divider,
               width: 1.5,

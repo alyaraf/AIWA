@@ -12,6 +12,7 @@ import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../data/account_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// "Talk to AIWA" — `WhatsAppSupportScreen` in customer-extras.jsx.
 class SupportPage extends StatefulWidget {
@@ -61,19 +62,19 @@ class _SupportPageState extends State<SupportPage> {
     final arHours = c?['availabilityHoursAr'] as String?;
     final rows = [
       (
-        Icons.phone_outlined,
+        LucideIcons.phone,
         l.supNumber,
         c?['whatsappNumberDisplay'] ?? c?['whatsappNumber'],
       ),
       (
-        Icons.schedule_rounded,
+        LucideIcons.clock,
         l.supHours,
         l.localeName == 'ar' && (arHours?.isNotEmpty ?? false)
             ? arHours
             : c?['availabilityHoursEn'],
       ),
-      (Icons.mail_outline_rounded, l.supEmail, c?['supportEmail']),
-      (Icons.language_rounded, l.supLanguages, 'العربية · English'),
+      (LucideIcons.mail, l.supEmail, c?['supportEmail']),
+      (LucideIcons.globe, l.supLanguages, 'العربية · English'),
     ];
     return Scaffold(
       backgroundColor: AppColors.bone,
@@ -95,7 +96,7 @@ class _SupportPageState extends State<SupportPage> {
             clipBehavior: Clip.hardEdge,
             decoration: BoxDecoration(
               gradient: AppTheme.heroGradient,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(AppTheme.radius22),
             ),
             child: Stack(
               children: [
@@ -117,10 +118,12 @@ class _SupportPageState extends State<SupportPage> {
                         height: 56,
                         decoration: BoxDecoration(
                           color: AppColors.bone,
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusLg,
+                          ),
                         ),
                         child: Icon(
-                          Icons.chat_bubble_outline_rounded,
+                          LucideIcons.messageCircle,
                           size: 28,
                           color: AppColors.plum900,
                         ),
@@ -155,7 +158,7 @@ class _SupportPageState extends State<SupportPage> {
                         label: l.supOpenWhatsApp,
                         variant: AiwaButtonVariant.accent,
                         size: AiwaButtonSize.lg,
-                        icon: Icons.open_in_new_rounded,
+                        icon: LucideIcons.externalLink,
                         onPressed: _number == null ? null : _openWhatsApp,
                       ),
                     ],
@@ -174,7 +177,7 @@ class _SupportPageState extends State<SupportPage> {
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: AppColors.paper,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
               border: Border.all(color: AppColors.divider),
             ),
             child: Column(
@@ -195,7 +198,9 @@ class _SupportPageState extends State<SupportPage> {
                           height: 32,
                           decoration: BoxDecoration(
                             color: AppColors.plum100,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radius10,
+                            ),
                           ),
                           child: Icon(icon, size: 15, color: AppColors.plum700),
                         ),
@@ -264,7 +269,7 @@ class _SupportPageState extends State<SupportPage> {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.paper,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppTheme.radius14),
                       border: Border.all(color: AppColors.divider),
                     ),
                     child: Row(
@@ -280,7 +285,7 @@ class _SupportPageState extends State<SupportPage> {
                           ),
                         ),
                         Icon(
-                          Icons.chevron_right_rounded,
+                          LucideIcons.chevronRightDir,
                           size: 16,
                           color: AppColors.ink3,
                         ),

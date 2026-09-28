@@ -20,6 +20,7 @@ import '../../domain/repositories/booking_repository.dart';
 import '../bloc/chat_cubit.dart';
 import '../bloc/live_booking_cubit.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// BOOK-36 / 37 — chat with the provider (customer-extras-2.jsx:100-177).
 class ChatPage extends StatelessWidget {
@@ -68,7 +69,7 @@ class _ChatViewState extends State<_ChatView> {
       title: AppLocalizations.of(context).chatReportTitle,
       body: AppLocalizations.of(context).chatReportBody,
       confirmLabel: AppLocalizations.of(context).chatReportEyebrow,
-      icon: Icons.flag_outlined,
+      icon: LucideIcons.flag,
     );
     if (ok && mounted) context.read<ChatCubit>().report(m.id);
   }
@@ -102,7 +103,7 @@ class _ChatViewState extends State<_ChatView> {
             child: Row(
               children: [
                 AiwaIconButton(
-                  icon: Icons.arrow_back_rounded,
+                  icon: LucideIcons.arrowLeftDir,
                   onTap: () => context.pop(),
                 ),
                 const SizedBox(width: 12),
@@ -131,7 +132,7 @@ class _ChatViewState extends State<_ChatView> {
                       Text(
                         AppLocalizations.of(context).chatMaskedOnline,
                         style: AppTextStyles.micro.copyWith(
-                          fontSize: 11.5,
+                          fontSize: AppTextStyles.fsMicroPlus,
                           fontWeight: FontWeight.w600,
                           color: AppColors.success700,
                         ),
@@ -139,11 +140,7 @@ class _ChatViewState extends State<_ChatView> {
                     ],
                   ),
                 ),
-                AiwaIconButton(
-                  icon: Icons.phone_outlined,
-                  size: 36,
-                  onTap: _call,
-                ),
+                AiwaIconButton(icon: LucideIcons.phone, size: 36, onTap: _call),
               ],
             ),
           ),
@@ -153,7 +150,7 @@ class _ChatViewState extends State<_ChatView> {
               children: [
                 InlineBanner(
                   tone: BannerTone.plum,
-                  icon: Icons.visibility_outlined,
+                  icon: LucideIcons.eye,
                   body: AppLocalizations.of(context).chatAdminNote,
                 ),
                 if (booking.actionError != null) ...[
@@ -256,7 +253,7 @@ class _ChatViewState extends State<_ChatView> {
                 ),
                 const SizedBox(width: 10),
                 AiwaIconButton(
-                  icon: Icons.send_rounded,
+                  icon: LucideIcons.send,
                   variant: AiwaIconButtonVariant.plum,
                   onTap: _send,
                 ),
@@ -269,7 +266,7 @@ class _ChatViewState extends State<_ChatView> {
   }
 
   static OutlineInputBorder _pill(Color c) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(999),
+    borderRadius: BorderRadius.circular(AppTheme.radiusPill),
     borderSide: BorderSide(color: c, width: 1.5),
   );
 }
@@ -299,23 +296,19 @@ class _Bubble extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.cream,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(AppTheme.radius16),
                     border: Border.all(color: AppColors.divider),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.visibility_off_outlined,
-                        size: 13,
-                        color: AppColors.ink4,
-                      ),
+                      Icon(LucideIcons.eyeOff, size: 13, color: AppColors.ink4),
                       const SizedBox(width: 7),
                       Flexible(
                         child: Text(
                           AppLocalizations.of(context).chatRemoved,
                           style: AppTextStyles.meta.copyWith(
-                            fontSize: 12.5,
+                            fontSize: AppTextStyles.fsLabelSmPlus,
                             fontStyle: FontStyle.italic,
                             color: AppColors.ink4,
                           ),
@@ -333,8 +326,8 @@ class _Bubble extends StatelessWidget {
                     color: mine ? AppColors.plum700 : AppColors.paper,
                     border: mine ? null : Border.all(color: AppColors.divider),
                     borderRadius: BorderRadiusDirectional.only(
-                      topStart: const Radius.circular(16),
-                      topEnd: const Radius.circular(16),
+                      topStart: const Radius.circular(AppTheme.radius16),
+                      topEnd: const Radius.circular(AppTheme.radius16),
                       bottomStart: Radius.circular(mine ? 16 : 4),
                       bottomEnd: Radius.circular(mine ? 4 : 16),
                     ),
@@ -376,7 +369,7 @@ class _Bubble extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.flag_outlined, size: 10, color: AppColors.ink4),
+                  Icon(LucideIcons.flag, size: 10, color: AppColors.ink4),
                   const SizedBox(width: 3),
                   Text(
                     AppLocalizations.of(context).chatReport,

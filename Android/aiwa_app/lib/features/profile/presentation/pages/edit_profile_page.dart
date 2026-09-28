@@ -19,6 +19,7 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Personal info — `EditProfileScreen` in account-screens.jsx.
 class EditProfilePage extends StatefulWidget {
@@ -172,14 +173,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           label: l.editChangePhoto,
                           variant: AiwaButtonVariant.secondary,
                           size: AiwaButtonSize.sm,
-                          icon: Icons.photo_camera_outlined,
+                          icon: LucideIcons.camera,
                           onPressed: _changePhoto,
                         ),
                         const SizedBox(height: 6),
                         Text(
                           l.editPhotoHint,
                           style: AppTextStyles.micro.copyWith(
-                            fontSize: 11.5,
+                            fontSize: AppTextStyles.fsMicroPlus,
                             color: AppColors.ink4,
                           ),
                         ),
@@ -198,7 +199,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     validated: true,
                     label: l.authFullName,
                     controller: _name,
-                    icon: Icons.person_outline_rounded,
+                    icon: LucideIcons.user,
                     placeholder: l.editYourName,
                     error: e,
                     textInputAction: TextInputAction.next,
@@ -212,7 +213,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     validated: true,
                     label: l.editMobile,
                     controller: _phone,
-                    icon: Icons.phone_outlined,
+                    icon: LucideIcons.phone,
                     keyboardType: TextInputType.phone,
                     hint: l.editMobileHint,
                     error: e,
@@ -227,7 +228,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     validated: true,
                     label: l.authModeEmail,
                     controller: _email,
-                    icon: Icons.mail_outline_rounded,
+                    icon: LucideIcons.mail,
                     keyboardType: TextInputType.emailAddress,
                     optional: true,
                     error: e,
@@ -238,7 +239,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 Text(
                   l.editTheme,
                   style: AppTextStyles.label.copyWith(
-                    fontSize: 12.5,
+                    fontSize: AppTextStyles.fsLabelSmPlus,
                     color: AppColors.ink2,
                   ),
                 ),
@@ -274,7 +275,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
                 const SizedBox(height: 14),
                 SettingsRow(
-                  icon: Icons.language_rounded,
+                  icon: LucideIcons.globe,
                   label: l.profLanguage,
                   value: _arabic ? 'العربية' : 'English',
                   showDivider: false,
@@ -341,7 +342,7 @@ class _ThemeOption extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
           decoration: BoxDecoration(
             color: selected ? AppColors.plum100 : AppColors.paper,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
             border: Border.all(
               color: selected ? AppColors.plum700 : AppColors.divider,
               width: 1.5,
@@ -374,13 +375,13 @@ class _ThemeOption extends StatelessWidget {
                 child: Text(
                   label,
                   style: AppTextStyles.label.copyWith(
-                    fontSize: 13.5,
+                    fontSize: AppTextStyles.fsMetaPlus,
                     color: AppColors.ink,
                   ),
                 ),
               ),
               if (selected)
-                Icon(Icons.check_rounded, size: 15, color: AppColors.plum700),
+                Icon(LucideIcons.check, size: 15, color: AppColors.plum700),
             ],
           ),
         ),

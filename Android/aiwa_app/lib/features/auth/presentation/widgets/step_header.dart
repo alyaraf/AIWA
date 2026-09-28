@@ -7,6 +7,7 @@ import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/press_scale.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Back button + progress segments + "Step n of N" + title — signup flow.
 class StepHeader extends StatelessWidget {
@@ -34,7 +35,7 @@ class StepHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AiwaIconButton(icon: Icons.arrow_back_rounded, onTap: onBack),
+        AiwaIconButton(icon: LucideIcons.arrowLeftDir, onTap: onBack),
         const SizedBox(height: 18),
         Row(
           children: List.generate(total, (i) {
@@ -46,7 +47,7 @@ class StepHeader extends StatelessWidget {
                 margin: EdgeInsetsDirectional.only(end: i < total - 1 ? 6 : 0),
                 decoration: BoxDecoration(
                   color: i < step ? AppColors.plum700 : AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(AppTheme.radius2),
                 ),
               ),
             );
@@ -68,7 +69,7 @@ class StepHeader extends StatelessWidget {
           Text.rich(
             TextSpan(text: subtitle, children: subtitleSpans),
             style: AppTextStyles.bodySm.copyWith(
-              fontSize: 13.5,
+              fontSize: AppTextStyles.fsMetaPlus,
               color: AppColors.ink2,
             ),
           ),
@@ -230,7 +231,7 @@ class EgyptPhoneField extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: AppColors.paper,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppTheme.radius14),
               border: Border.all(color: AppColors.divider, width: 1.5),
             ),
             child: Text(

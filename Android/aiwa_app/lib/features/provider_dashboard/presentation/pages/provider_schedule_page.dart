@@ -10,6 +10,7 @@ import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../data/provider_manage_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Backend DayOfWeek names in the prototype's Sun-first order; labels come
 /// from [AiwaL10n.weekdayShort].
@@ -89,7 +90,9 @@ class _ProviderSchedulePageState extends State<ProviderSchedulePage> {
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: AppColors.plum100,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radius14,
+                          ),
                         ),
                         child: Text.rich(
                           TextSpan(
@@ -183,7 +186,7 @@ class _WeekListState extends State<WeekList> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: AppColors.paper,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppTheme.radius14),
               border: Border.all(color: AppColors.divider),
             ),
             child: Row(
@@ -300,7 +303,7 @@ class _TravelBufferState extends State<_TravelBuffer> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.paper,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
             border: Border.all(color: AppColors.divider),
           ),
           child: Row(
@@ -310,10 +313,10 @@ class _TravelBufferState extends State<_TravelBuffer> {
                 height: 36,
                 decoration: BoxDecoration(
                   color: AppColors.plum100,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppTheme.radius10),
                 ),
                 child: Icon(
-                  Icons.directions_car_outlined,
+                  LucideIcons.car,
                   size: 17,
                   color: AppColors.plum700,
                 ),
@@ -334,7 +337,9 @@ class _TravelBufferState extends State<_TravelBuffer> {
                     const SizedBox(height: 1),
                     Text(
                       AppLocalizations.of(context).schedBufferBody,
-                      style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                      style: AppTextStyles.micro.copyWith(
+                        fontSize: AppTextStyles.fsMicroPlus,
+                      ),
                     ),
                   ],
                 ),

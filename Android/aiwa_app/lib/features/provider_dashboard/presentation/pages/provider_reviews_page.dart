@@ -14,6 +14,7 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../../shared/widgets/star_rating.dart';
 import '../../data/provider_manage_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Filter ids (labels come from [_filterLabel]).
 const _filters = ['All', 'Needs reply', '5 star', '4 star'];
@@ -135,7 +136,7 @@ class _ProviderReviewsPageState extends State<ProviderReviewsPage> {
             )
           else if (all.isEmpty)
             EmptyState(
-              icon: Icons.star_outline_rounded,
+              icon: LucideIcons.star,
               title: l.providerNoReviews,
               subtitle: l.revEmptyBody,
             )
@@ -182,7 +183,7 @@ class _ProviderReviewsPageState extends State<ProviderReviewsPage> {
                 children: [
                   if (filterReviews(all, _filter).isEmpty)
                     EmptyState(
-                      icon: Icons.chat_bubble_outline_rounded,
+                      icon: LucideIcons.messageCircle,
                       title: l.revNothingHere,
                       subtitle: l.revNoMatch,
                       compact: true,
@@ -225,7 +226,7 @@ class _Summary extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -326,7 +327,7 @@ class _ReviewCard extends StatelessWidget {
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppColors.divider),
       ),
       child: Column(
@@ -347,7 +348,7 @@ class _ReviewCard extends StatelessWidget {
                     Text(
                       author,
                       style: AppTextStyles.label.copyWith(
-                        fontSize: 13.5,
+                        fontSize: AppTextStyles.fsMetaPlus,
                         color: AppColors.ink,
                       ),
                     ),
@@ -372,7 +373,7 @@ class _ReviewCard extends StatelessWidget {
             Text(
               comment,
               style: AppTextStyles.body.copyWith(
-                fontSize: 13.5,
+                fontSize: AppTextStyles.fsMetaPlus,
                 color: AppColors.ink2,
                 height: 1.55,
               ),
@@ -402,7 +403,7 @@ class _ReviewCard extends StatelessWidget {
                     spacing: 6,
                     children: [
                       Icon(
-                        Icons.subdirectory_arrow_right_rounded,
+                        LucideIcons.cornerDownRightDir,
                         size: 12,
                         color: AppColors.plum700,
                       ),
@@ -421,7 +422,7 @@ class _ReviewCard extends StatelessWidget {
                   Text(
                     reply,
                     style: AppTextStyles.micro.copyWith(
-                      fontSize: 12.5,
+                      fontSize: AppTextStyles.fsLabelSmPlus,
                       height: 1.5,
                       color: AppColors.plum700,
                     ),
@@ -433,7 +434,7 @@ class _ReviewCard extends StatelessWidget {
             composer ??
                 AiwaButton(
                   label: l.revReplyPublicly,
-                  icon: Icons.reply_rounded,
+                  icon: LucideIcons.replyDir,
                   variant: AiwaButtonVariant.secondary,
                   size: AiwaButtonSize.sm,
                   onPressed: onReply,

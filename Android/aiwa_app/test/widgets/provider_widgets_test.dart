@@ -5,6 +5,7 @@ import 'package:aiwa_app/shared/widgets/aiwa_avatar.dart';
 import 'package:aiwa_app/shared/widgets/guest_locked_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../test_helpers.dart';
 
@@ -39,7 +40,7 @@ void main() {
     expect(find.text('1.2 km'), findsOneWidget);
     expect(find.text('FROM'), findsOneWidget);
     expect(find.text('EGP 350'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
+    expect(find.byIcon(LucideIcons.chevronRightDir), findsNothing);
 
     final avatar = tester.widget<AiwaAvatar>(find.byType(AiwaAvatar));
     expect(avatar.size, 52);
@@ -58,7 +59,7 @@ void main() {
 
     expect(find.text('4.9'), findsOneWidget);
     expect(find.text('EGP 350'), findsNothing);
-    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
+    expect(find.byIcon(LucideIcons.chevronRightDir), findsOneWidget);
     expect(tester.widget<AiwaAvatar>(find.byType(AiwaAvatar)).size, 56);
   });
 

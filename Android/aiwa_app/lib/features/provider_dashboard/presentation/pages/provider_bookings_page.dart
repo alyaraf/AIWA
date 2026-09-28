@@ -15,6 +15,7 @@ import '../../../bookings/domain/entities/booking_entity.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import 'dashboard_page.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Provider Bookings tab — `ProviderBookings` (provider-screens.jsx:145-190).
 class ProviderBookingsPage extends StatefulWidget {
@@ -192,14 +193,14 @@ class _BookingRow extends StatelessWidget {
     final customer = b.customerName ?? l.commonCustomer;
     return Material(
       color: AppColors.paper,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppTheme.radius16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radius16),
         onTap: () => openProviderBooking(context, b),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppTheme.radius16),
             border: Border.all(color: AppColors.divider),
           ),
           child: Row(
@@ -227,7 +228,7 @@ class _BookingRow extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          Icons.calendar_today_outlined,
+                          LucideIcons.calendar,
                           size: 12,
                           color: AppColors.ink3,
                         ),

@@ -9,6 +9,7 @@ import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/press_scale.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// After the role pick: "Create account" vs "I already have an account".
 class AuthChoicePage extends StatelessWidget {
@@ -86,7 +87,7 @@ class AuthChoicePage extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AiwaIconButton(
-                        icon: Icons.arrow_back_rounded,
+                        icon: LucideIcons.arrowLeftDir,
                         variant: AiwaIconButtonVariant.glass,
                         onTap: () => context.canPop()
                             ? context.pop()
@@ -119,8 +120,8 @@ class AuthChoicePage extends StatelessWidget {
                       const SizedBox(height: 80),
                       _ChoiceCard(
                         icon: isProvider
-                            ? Icons.work_outline_rounded
-                            : Icons.auto_awesome_outlined,
+                            ? LucideIcons.briefcase
+                            : LucideIcons.sparkles,
                         iconBg: AppColors.plum700,
                         iconFg: AppColors.bone,
                         title: signUpCta,
@@ -133,7 +134,7 @@ class AuthChoicePage extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       _ChoiceCard(
-                        icon: Icons.login_rounded,
+                        icon: LucideIcons.logInDir,
                         iconBg: AppColors.plum100,
                         iconFg: AppColors.plum700,
                         title: l.authHaveAccount,
@@ -147,14 +148,16 @@ class AuthChoicePage extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.verified_user_outlined,
+                            LucideIcons.shieldCheck,
                             size: 13,
                             color: AppColors.plum700,
                           ),
                           const SizedBox(width: 6),
                           Text(
                             l.authSafetyPolicy,
-                            style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                            style: AppTextStyles.micro.copyWith(
+                              fontSize: AppTextStyles.fsMicroPlus,
+                            ),
                           ),
                         ],
                       ),
@@ -196,7 +199,7 @@ class _ChoiceCard extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: AppColors.paper,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppTheme.radius20),
           border: Border.all(color: AppColors.divider),
           boxShadow: shadow ? AppTheme.shadow3 : null,
         ),
@@ -207,7 +210,7 @@ class _ChoiceCard extends StatelessWidget {
               height: 46,
               decoration: BoxDecoration(
                 color: iconBg,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppTheme.radius14),
               ),
               child: Icon(icon, size: 20, color: iconFg),
             ),
@@ -223,16 +226,14 @@ class _ChoiceCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: AppTextStyles.meta.copyWith(fontSize: 12.5),
+                    style: AppTextStyles.meta.copyWith(
+                      fontSize: AppTextStyles.fsLabelSmPlus,
+                    ),
                   ),
                 ],
               ),
             ),
-            Icon(
-              Icons.arrow_forward_rounded,
-              size: 18,
-              color: AppColors.plum700,
-            ),
+            Icon(LucideIcons.arrowRightDir, size: 18, color: AppColors.plum700),
           ],
         ),
       ),

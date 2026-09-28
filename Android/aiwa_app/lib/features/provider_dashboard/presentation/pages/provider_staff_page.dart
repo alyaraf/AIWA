@@ -18,6 +18,7 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../../data/provider_manage_repository.dart';
 import 'provider_schedule_page.dart' show WeekList, hhmm, weekDays;
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 const _palettes = [AvatarPalette.rose, AvatarPalette.gold, AvatarPalette.plum];
 
@@ -114,7 +115,7 @@ class _ProviderStaffPageState extends State<ProviderStaffPage> {
             onBack: () => context.pop(),
             trailing: AiwaButton(
               label: l.commonAdd,
-              icon: Icons.add_rounded,
+              icon: LucideIcons.plus,
               size: AiwaButtonSize.sm,
               onPressed: _add,
             ),
@@ -132,7 +133,7 @@ class _ProviderStaffPageState extends State<ProviderStaffPage> {
                       : const SkeletonList())
                 : staff.isEmpty
                 ? EmptyState(
-                    icon: Icons.group_outlined,
+                    icon: LucideIcons.users,
                     title: l.staffEmpty,
                     subtitle: l.staffEmptyBody,
                     actionLabel: l.commonAdd,
@@ -195,7 +196,7 @@ class _StaffCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppColors.divider),
       ),
       child: Column(
@@ -237,9 +238,7 @@ class _StaffCard extends StatelessWidget {
                     ),
                   ),
                   Icon(
-                    open
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
+                    open ? LucideIcons.chevronUp : LucideIcons.chevronDown,
                     size: 18,
                     color: AppColors.ink3,
                   ),
@@ -284,7 +283,7 @@ class _StaffCard extends StatelessWidget {
                                   child: Text(
                                     l.weekdayShort(i),
                                     style: AppTextStyles.label.copyWith(
-                                      fontSize: 12.5,
+                                      fontSize: AppTextStyles.fsLabelSmPlus,
                                       color: week[day]?['available'] == true
                                           ? AppColors.ink
                                           : AppColors.ink4,
@@ -297,7 +296,7 @@ class _StaffCard extends StatelessWidget {
                                       ? '${hhmm(week[day]!['startTime'])} – ${hhmm(week[day]!['endTime'])}'
                                       : l.staffOff,
                                   style: AppTextStyles.mono.copyWith(
-                                    fontSize: 12.5,
+                                    fontSize: AppTextStyles.fsLabelSmPlus,
                                     color: week[day]?['available'] == true
                                         ? AppColors.ink2
                                         : AppColors.ink4,
@@ -309,7 +308,7 @@ class _StaffCard extends StatelessWidget {
                         const SizedBox(height: 12),
                         AiwaButton(
                           label: l.staffEditSchedule(name),
-                          icon: Icons.edit_outlined,
+                          icon: LucideIcons.pencil,
                           variant: AiwaButtonVariant.secondary,
                           size: AiwaButtonSize.sm,
                           fullWidth: true,
@@ -392,7 +391,7 @@ class _AddStaffState extends State<_AddStaff> {
                 ),
               ),
               AiwaIconButton(
-                icon: Icons.close_rounded,
+                icon: LucideIcons.x,
                 size: 34,
                 onTap: () => Navigator.pop(context),
               ),

@@ -9,6 +9,7 @@ import '../auth/presentation/bloc/auth_bloc.dart';
 import '../auth/presentation/bloc/auth_state.dart';
 import '../bookings/domain/repositories/booking_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ShellPage extends StatefulWidget {
   final Widget child;
@@ -77,11 +78,11 @@ class _ShellPageState extends State<ShellPage> {
   ];
 
   static List<AiwaTab> _tabs(AppLocalizations l) => [
-    (icon: Icons.home_outlined, label: l.tabHome),
-    (icon: Icons.search_rounded, label: l.tabDiscover),
-    (icon: Icons.event_available_outlined, label: l.tabBookings),
-    (icon: Icons.favorite_border_rounded, label: l.tabSaved),
-    (icon: Icons.person_outline_rounded, label: l.tabProfile),
+    (icon: LucideIcons.house, label: l.tabHome),
+    (icon: LucideIcons.search, label: l.tabDiscover),
+    (icon: LucideIcons.calendarCheck, label: l.tabBookings),
+    (icon: LucideIcons.heart, label: l.tabSaved),
+    (icon: LucideIcons.user, label: l.tabProfile),
   ];
 
   int _currentIndex(String location) {

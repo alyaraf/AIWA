@@ -41,7 +41,7 @@ Future<T?> showAiwaSheet<T>(
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(AppTheme.radius2),
             ),
           ),
         ),
@@ -93,7 +93,7 @@ class SheetWarnHead extends StatelessWidget {
         Text(
           body,
           style: AppTextStyles.body.copyWith(
-            fontSize: 13.5,
+            fontSize: AppTextStyles.fsMetaPlus,
             height: 1.55,
             color: AppColors.ink2,
           ),

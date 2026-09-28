@@ -106,7 +106,7 @@ class _TabItem extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 6),
           decoration: BoxDecoration(
             color: active ? AppColors.plum100 : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

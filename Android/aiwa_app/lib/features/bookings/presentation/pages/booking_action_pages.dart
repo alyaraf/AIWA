@@ -19,6 +19,7 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../../domain/entities/booking_entity.dart';
 import '../bloc/live_booking_cubit.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Back button + content column used by Proposed time and Payment confirm
 /// (customer and provider)
@@ -52,7 +53,7 @@ class PlainScreen extends StatelessWidget {
                   Align(
                     alignment: AlignmentDirectional.centerStart,
                     child: AiwaIconButton(
-                      icon: Icons.arrow_back_rounded,
+                      icon: LucideIcons.arrowLeftDir,
                       onTap: () => Navigator.maybePop(context),
                     ),
                   ),
@@ -171,7 +172,7 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
         final urgent = _left < 120;
         final l = AppLocalizations.of(context);
         final cd = AppTextStyles.micro.copyWith(
-          fontSize: 12.5,
+          fontSize: AppTextStyles.fsLabelSmPlus,
           color: urgent ? AppColors.danger700 : AppColors.ink3,
         );
         return PlainScreen(
@@ -189,7 +190,7 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: AppColors.paper,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                 border: Border.all(color: AppColors.plum700, width: 1.5),
               ),
               child: Row(
@@ -199,10 +200,10 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
                     height: 46,
                     decoration: BoxDecoration(
                       color: AppColors.plum100,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     ),
                     child: Icon(
-                      Icons.edit_calendar_outlined,
+                      LucideIcons.calendarClock,
                       size: 22,
                       color: AppColors.plum700,
                     ),
@@ -230,7 +231,9 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
                             l.proposedInsteadOf(
                               l.formatWhen(b.scheduledDate, b.scheduledTime),
                             ),
-                            style: AppTextStyles.micro.copyWith(fontSize: 12.5),
+                            style: AppTextStyles.micro.copyWith(
+                              fontSize: AppTextStyles.fsLabelSmPlus,
+                            ),
                           ),
                         ],
                       ],
@@ -243,18 +246,14 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
             if (expired)
               InlineBanner(
                 tone: BannerTone.warn,
-                icon: Icons.hourglass_bottom_rounded,
+                icon: LucideIcons.hourglass,
                 title: l.proposedExpiredTitle,
                 body: l.proposedExpiredBody,
               )
             else
               Row(
                 children: [
-                  Icon(
-                    Icons.hourglass_empty_rounded,
-                    size: 14,
-                    color: cd.color,
-                  ),
+                  Icon(LucideIcons.hourglass, size: 14, color: cd.color),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text.rich(
@@ -264,7 +263,7 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
                           'time': TextSpan(
                             text: mmss(_left),
                             style: AppTextStyles.mono.copyWith(
-                              fontSize: 12.5,
+                              fontSize: AppTextStyles.fsLabelSmPlus,
                               fontWeight: FontWeight.w700,
                               color: cd.color,
                             ),
@@ -286,7 +285,7 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
             if (expired) ...[
               AiwaButton(
                 label: l.outcomeSeeAlternatives,
-                icon: Icons.search_rounded,
+                icon: LucideIcons.search,
                 size: AiwaButtonSize.lg,
                 fullWidth: true,
                 onPressed: () => _decline(b, expired: true),
@@ -302,7 +301,7 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
             ] else ...[
               AiwaButton(
                 label: l.proposedAccept,
-                icon: Icons.check_rounded,
+                icon: LucideIcons.check,
                 size: AiwaButtonSize.lg,
                 fullWidth: true,
                 loading: s.busy,
@@ -436,7 +435,7 @@ class _PaymentViewState extends State<_PaymentView> {
                   const SizedBox(height: 24),
                   AiwaButton(
                     label: l.payYes,
-                    icon: Icons.check_rounded,
+                    icon: LucideIcons.check,
                     size: AiwaButtonSize.lg,
                     fullWidth: true,
                     onPressed: () => setState(() => _step = _PayStep.confirmed),
@@ -444,7 +443,7 @@ class _PaymentViewState extends State<_PaymentView> {
                   const SizedBox(height: 10),
                   AiwaButton(
                     label: l.payNo,
-                    icon: Icons.warning_amber_rounded,
+                    icon: LucideIcons.triangleAlert,
                     variant: AiwaButtonVariant.secondary,
                     size: AiwaButtonSize.lg,
                     fullWidth: true,
@@ -457,7 +456,7 @@ class _PaymentViewState extends State<_PaymentView> {
                   const SizedBox(height: 16),
                   AiwaButton(
                     label: l.payRate,
-                    icon: Icons.star_rounded,
+                    icon: LucideIcons.star,
                     size: AiwaButtonSize.lg,
                     fullWidth: true,
                     loading: s.busy,
@@ -530,13 +529,13 @@ class PaidCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final k = AppTextStyles.meta.copyWith(fontSize: 13.5);
+    final k = AppTextStyles.meta.copyWith(fontSize: AppTextStyles.fsMetaPlus);
     final v = k.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppTheme.radius20),
         border: Border.all(color: AppColors.divider),
       ),
       child: Column(
@@ -551,7 +550,7 @@ class PaidCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.check_rounded,
+                  LucideIcons.check,
                   size: 22,
                   color: AppColors.success700,
                 ),
@@ -571,7 +570,9 @@ class PaidCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       sub ?? l.paidSub,
-                      style: AppTextStyles.micro.copyWith(fontSize: 12.5),
+                      style: AppTextStyles.micro.copyWith(
+                        fontSize: AppTextStyles.fsLabelSmPlus,
+                      ),
                     ),
                   ],
                 ),
@@ -622,37 +623,37 @@ List<_Cat> _categories(AppLocalizations l) => [
   (
     id: 'behavior',
     label: l.complaintBehavior,
-    icon: Icons.person_off_outlined,
+    icon: LucideIcons.userX,
     hint: l.complaintBehaviorHint,
   ),
   (
     id: 'quality',
     label: l.complaintQuality,
-    icon: Icons.thumb_down_outlined,
+    icon: LucideIcons.thumbsDown,
     hint: l.complaintQualityHint,
   ),
   (
     id: 'pricing',
     label: l.complaintPricing,
-    icon: Icons.payments_outlined,
+    icon: LucideIcons.banknote,
     hint: l.complaintPricingHint,
   ),
   (
     id: 'safety',
     label: l.complaintSafety,
-    icon: Icons.gpp_maybe_outlined,
+    icon: LucideIcons.shieldAlert,
     hint: l.complaintSafetyHint,
   ),
   (
     id: 'noshow',
     label: l.complaintNoShow,
-    icon: Icons.person_off_outlined,
+    icon: LucideIcons.userX,
     hint: l.complaintNoShowHint,
   ),
   (
     id: 'other',
     label: l.complaintOther,
-    icon: Icons.more_horiz_rounded,
+    icon: LucideIcons.ellipsis,
     hint: l.complaintOtherHint,
   ),
 ];
@@ -761,7 +762,7 @@ class _ComplaintViewState extends State<_ComplaintView> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.cream,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -769,7 +770,7 @@ class _ComplaintViewState extends State<_ComplaintView> {
                           Padding(
                             padding: const EdgeInsets.only(top: 1),
                             child: Icon(
-                              Icons.lock_outline_rounded,
+                              LucideIcons.lock,
                               size: 14,
                               color: AppColors.plum700,
                             ),
@@ -827,7 +828,7 @@ class _AboutCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radius14),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(

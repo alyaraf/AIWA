@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
@@ -74,11 +75,11 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
             type: MaterialType.transparency,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppTheme.radius14),
                 boxShadow: AppTheme.toastShadow,
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppTheme.radius14),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: Container(
@@ -97,7 +98,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            Icons.check_rounded,
+                            LucideIcons.check,
                             size: 15,
                             color: AppColors.paper,
                           ),

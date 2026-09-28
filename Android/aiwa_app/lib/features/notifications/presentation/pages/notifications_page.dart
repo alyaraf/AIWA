@@ -17,6 +17,7 @@ import '../bloc/notification_bloc.dart';
 import '../bloc/notification_event.dart';
 import '../bloc/notification_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -99,7 +100,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       return [
         SliverToBoxAdapter(
           child: EmptyState(
-            icon: Icons.notifications_none_rounded,
+            icon: LucideIcons.bell,
             title: l.notifCaughtUp,
             subtitle: l.notifCaughtUpBody,
           ),
@@ -202,29 +203,29 @@ class _NotificationRow extends StatelessWidget {
   IconData get _icon {
     final t = n.type.toUpperCase();
     if (t.contains('CONFIRMED') || t.contains('COMPLETED')) {
-      return Icons.check_circle_outline_rounded;
+      return LucideIcons.circleCheck;
     }
     if (t.contains('BOOKING') || t.contains('STATUS')) {
-      return Icons.event_available_outlined;
+      return LucideIcons.calendarCheck;
     }
-    if (t.contains('DISPUTED')) return Icons.warning_amber_rounded;
+    if (t.contains('DISPUTED')) return LucideIcons.triangleAlert;
     if (t.startsWith('SETTLEMENT') || t == 'COMMISSION_DUE') {
-      return Icons.payments_outlined;
+      return LucideIcons.banknote;
     }
-    if (t.startsWith('MODERATION')) return Icons.hide_image_outlined;
+    if (t.startsWith('MODERATION')) return LucideIcons.imageOff;
     if (t.contains('PAYMENT') || t.contains('SETTLEMENT')) {
-      return Icons.receipt_long_outlined;
+      return LucideIcons.scrollText;
     }
-    if (t.contains('REVIEW')) return Icons.star_outline_rounded;
-    if (t.contains('VERIF')) return Icons.verified_outlined;
+    if (t.contains('REVIEW')) return LucideIcons.star;
+    if (t.contains('VERIF')) return LucideIcons.badgeCheck;
     if (t.contains('SUPPORT') || t.contains('CHAT')) {
-      return Icons.chat_bubble_outline_rounded;
+      return LucideIcons.messageCircle;
     }
     if (t.contains('TERMS') || t.contains('POLICY')) {
-      return Icons.description_outlined;
+      return LucideIcons.fileText;
     }
-    if (t.contains('PROMO')) return Icons.auto_awesome_outlined;
-    return Icons.notifications_none_rounded;
+    if (t.contains('PROMO')) return LucideIcons.sparkles;
+    return LucideIcons.bell;
   }
 
   String _when(AppLocalizations l) {
@@ -261,7 +262,7 @@ class _NotificationRow extends StatelessWidget {
               height: 38,
               decoration: BoxDecoration(
                 color: AppColors.paper,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 border: Border.all(color: AppColors.divider),
               ),
               child: Icon(_icon, size: 18, color: AppColors.plum700),
@@ -298,7 +299,7 @@ class _NotificationRow extends StatelessWidget {
                   Text(
                     n.message,
                     style: AppTextStyles.micro.copyWith(
-                      fontSize: 12.5,
+                      fontSize: AppTextStyles.fsLabelSmPlus,
                       color: AppColors.ink2,
                       height: 1.45,
                     ),

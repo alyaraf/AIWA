@@ -15,6 +15,8 @@ import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../providers/domain/usecases/save_provider_usecase.dart';
 import '../../domain/entities/provider_summary_entity.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../shared/widgets/star_rating.dart';
 
 /// 200px carousel card — home "Trending near you".
 class ProviderCard extends StatelessWidget {
@@ -59,13 +61,15 @@ class ProviderCard extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.paper,
-                          borderRadius: BorderRadius.circular(999),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusPill,
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.verified_rounded,
+                              LucideIcons.badgeCheck,
                               size: 11,
                               color: AppColors.gold500,
                             ),
@@ -173,7 +177,9 @@ class _SaveHeartButtonState extends State<SaveHeartButton> {
   @override
   Widget build(BuildContext context) {
     return AiwaIconButton(
-      icon: _saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+      // ponytail: Lucide has no filled glyphs; the saved state keeps the
+      // filled Material heart so it is not signalled by colour alone.
+      icon: _saved ? Icons.favorite_rounded : LucideIcons.heart,
       iconColor: _saved ? AppColors.rose500 : null,
       variant: AiwaIconButtonVariant.glass,
       size: 32,
@@ -305,7 +311,7 @@ class RatingMeta extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.star_rounded, size: 11, color: AppColors.gold500),
+            AiwaStar(size: 11, color: AppColors.gold500),
             const SizedBox(width: 3),
             Text(
               reviews != null

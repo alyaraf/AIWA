@@ -8,6 +8,7 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_text_field.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AccountSetupPage extends StatefulWidget {
   final String role;
@@ -140,7 +141,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
           placeholder: l.authNamePlaceholder,
           hint: l.authNameHint,
           controller: _nameCtrl,
-          icon: Icons.person_outline_rounded,
+          icon: LucideIcons.user,
           error: _nameError,
           inlineError: true,
           onChanged: (_) => setState(() {}),
@@ -154,7 +155,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
             optional: true,
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
-            icon: Icons.mail_outline_rounded,
+            icon: LucideIcons.mail,
             error: _emailError,
             inlineError: true,
             onChanged: (_) => setState(() {}),
@@ -167,14 +168,12 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
           hint: l.authPasswordHint,
           controller: _passwordCtrl,
           obscureText: !_showPassword,
-          icon: Icons.lock_outline_rounded,
+          icon: LucideIcons.lock,
           suffixIcon: IconButton(
             padding: const EdgeInsets.all(4),
             constraints: const BoxConstraints(),
             icon: Icon(
-              _showPassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
+              _showPassword ? LucideIcons.eyeOff : LucideIcons.eye,
               size: 16,
               color: AppColors.ink3,
             ),
@@ -201,7 +200,9 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
                               color: i < strength
                                   ? strengthColor
                                   : AppColors.divider,
-                              borderRadius: BorderRadius.circular(2),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radius2,
+                              ),
                             ),
                           ),
                         ),

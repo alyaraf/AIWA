@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
@@ -92,7 +93,7 @@ class EmptyState extends StatelessWidget {
                 child: Text(
                   subtitle!,
                   style: AppTextStyles.bodySm.copyWith(
-                    fontSize: 13.5,
+                    fontSize: AppTextStyles.fsMetaPlus,
                     color: AppColors.ink3,
                   ),
                   textAlign: TextAlign.center,
@@ -137,6 +138,7 @@ class ErrorState extends StatelessWidget {
   final String? title;
   final String? body;
   final VoidCallback? onRetry;
+  final VoidCallback? onSupport;
   final bool compact;
 
   const ErrorState({
@@ -144,6 +146,7 @@ class ErrorState extends StatelessWidget {
     this.title,
     this.body,
     this.onRetry,
+    this.onSupport,
     this.compact = false,
   });
 
@@ -167,7 +170,7 @@ class ErrorState extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.warning_amber_rounded,
+                LucideIcons.triangleAlert,
                 size: compact ? 22 : 27,
                 color: AppColors.danger700,
               ),
@@ -187,21 +190,35 @@ class ErrorState extends StatelessWidget {
               child: Text(
                 body ?? l.errLoadBody,
                 style: AppTextStyles.bodySm.copyWith(
-                  fontSize: 13.5,
+                  fontSize: AppTextStyles.fsMetaPlus,
                   color: AppColors.ink3,
                 ),
                 textAlign: TextAlign.center,
               ),
             ),
-            if (onRetry != null) ...[
+            if (onRetry != null || onSupport != null) ...[
               const SizedBox(height: 18),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 250),
-                child: AiwaButton(
-                  label: l.commonTryAgain,
-                  icon: Icons.refresh_rounded,
-                  onPressed: onRetry,
-                  fullWidth: true,
+                child: Column(
+                  spacing: 8,
+                  children: [
+                    if (onRetry != null)
+                      AiwaButton(
+                        label: l.commonTryAgain,
+                        icon: LucideIcons.rotateCw,
+                        onPressed: onRetry,
+                        fullWidth: true,
+                      ),
+                    if (onSupport != null)
+                      AiwaButton(
+                        label: l.sysContactSupport,
+                        variant: AiwaButtonVariant.ghost,
+                        size: AiwaButtonSize.sm,
+                        onPressed: onSupport,
+                        fullWidth: true,
+                      ),
+                  ],
                 ),
               ),
             ],

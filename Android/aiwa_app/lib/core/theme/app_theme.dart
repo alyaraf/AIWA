@@ -13,6 +13,13 @@ class AppTheme {
   static const double radiusLg = 18;
   static const double radiusXl = 24;
   static const double radiusPill = 999;
+  // The kit's recurring inline radii (JSX borderRadius literals).
+  static const double radius2 = 2; // progress bars, sheet handles
+  static const double radius10 = 10;
+  static const double radius14 = 14;
+  static const double radius16 = 16;
+  static const double radius20 = 20;
+  static const double radius22 = 22;
 
   static const double s1 = 4;
   static const double s2 = 8;
@@ -36,6 +43,8 @@ class AppTheme {
   static const Duration dur2 = Duration(milliseconds: 200);
   static const Duration dur3 = Duration(milliseconds: 320);
   static const Duration dur4 = Duration(milliseconds: 480);
+  /// Half-cycle of the design's 1.1s `aiwa-pulse`, for `repeat(reverse: true)`.
+  static const Duration durPulse = Duration(milliseconds: 550);
 
   static BoxDecoration get cardDecoration => BoxDecoration(
     color: AppColors.paper,
@@ -140,7 +149,7 @@ class AppTheme {
   ];
 
   static OutlineInputBorder inputBorder(Color color) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(14),
+    borderRadius: BorderRadius.circular(radius14),
     borderSide: BorderSide(color: color, width: 1.5),
     // No floating labels; the default 4px gap pushes text past the 14px pad.
     gapPadding: 0,
@@ -243,7 +252,9 @@ class AppTheme {
           fontWeight: FontWeight.w500,
         ),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius14),
+        ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: AppColors.bone,

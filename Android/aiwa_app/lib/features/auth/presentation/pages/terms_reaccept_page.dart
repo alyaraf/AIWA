@@ -10,6 +10,8 @@ import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 
 /// "We've updated our terms." — `TermsReacceptScreen` in
 /// flow-additions-v3.jsx, opened from a TERMS notification.
@@ -66,7 +68,7 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
   Widget build(BuildContext context) {
     final insets = MediaQuery.paddingOf(context);
     final boxStyle = AppTextStyles.bodySm.copyWith(
-      fontSize: 12.5,
+      fontSize: AppTextStyles.fsLabelSmPlus,
       color: AppColors.ink2,
       height: 1.5,
     );
@@ -112,7 +114,7 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: AppColors.cream,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppTheme.radius14),
                 ),
                 child: _terms == null
                     ? Text(_error!, style: boxStyle)
@@ -139,7 +141,7 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
             if (_terms != null && _error != null) ...[
               InlineBanner(
                 tone: BannerTone.danger,
-                icon: Icons.error_outline_rounded,
+                icon: LucideIcons.circleAlert,
                 body: _error,
                 compact: true,
               ),

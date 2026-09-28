@@ -7,6 +7,7 @@ import 'aiwa_button.dart';
 import 'eyebrow_label.dart';
 import 'system_screen.dart' show PopIn;
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom-sheet confirm used for every destructive action — `ConfirmSheet`.
 ///
@@ -58,7 +59,7 @@ Future<bool> showConfirmSheet(
                   height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(AppTheme.radius2),
                   ),
                 ),
               ),
@@ -70,8 +71,8 @@ Future<bool> showConfirmSheet(
                 child: Icon(
                   icon ??
                       (danger
-                          ? Icons.warning_amber_rounded
-                          : Icons.help_outline_rounded),
+                          ? LucideIcons.triangleAlert
+                          : LucideIcons.circleQuestionMark),
                   size: 21,
                   color: fg,
                 ),
@@ -92,7 +93,7 @@ Future<bool> showConfirmSheet(
                 Text(
                   body,
                   style: AppTextStyles.bodySm.copyWith(
-                    fontSize: 13.5,
+                    fontSize: AppTextStyles.fsMetaPlus,
                     color: AppColors.ink2,
                   ),
                 ),
@@ -185,7 +186,7 @@ Future<void> showSuccessSheet(
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(AppTheme.radius2),
             ),
           ),
           const SizedBox(height: 18),
@@ -198,7 +199,7 @@ Future<void> showSuccessSheet(
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.check_rounded,
+                LucideIcons.check,
                 size: 27,
                 color: AppColors.success700,
               ),
@@ -222,7 +223,7 @@ Future<void> showSuccessSheet(
                 body,
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodySm.copyWith(
-                  fontSize: 13.5,
+                  fontSize: AppTextStyles.fsMetaPlus,
                   color: AppColors.ink2,
                 ),
               ),
@@ -282,7 +283,7 @@ Future<bool> showDeleteAccountSheet(BuildContext context) async {
                 height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(AppTheme.radius2),
                 ),
               ),
             ),

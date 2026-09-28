@@ -3,6 +3,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Labelled input — mirrors `Field` + `TextInput` in the design kit:
 /// eyebrow label, optional tag, hint underneath, per-field error with icon.
@@ -125,7 +126,7 @@ class AiwaTextField extends StatelessWidget {
                     ],
                   ),
                   style: AppTextStyles.labelSm.copyWith(
-                    fontSize: 12.5,
+                    fontSize: AppTextStyles.fsLabelSmPlus,
                     color: AppColors.ink2,
                   ),
                 ),
@@ -189,7 +190,7 @@ class AiwaTextField extends StatelessWidget {
                 suffixIcon ??
                 (flagInput
                     ? Icon(
-                        Icons.error_outline_rounded,
+                        LucideIcons.circleAlert,
                         size: 16,
                         color: AppColors.danger500,
                       )
@@ -220,7 +221,7 @@ class AiwaTextField extends StatelessWidget {
             children: [
               if (!inlineError) ...[
                 Icon(
-                  Icons.error_outline_rounded,
+                  LucideIcons.circleAlert,
                   size: validated ? 11 : 12,
                   color: AppColors.danger700,
                 ),
@@ -230,7 +231,7 @@ class AiwaTextField extends StatelessWidget {
                 child: Text(
                   error!,
                   style: AppTextStyles.micro.copyWith(
-                    fontSize: 11.5,
+                    fontSize: AppTextStyles.fsMicroPlus,
                     color: AppColors.danger700,
                   ),
                 ),
@@ -249,7 +250,7 @@ class AiwaTextField extends StatelessWidget {
                     ? Text(
                         hint!,
                         style: AppTextStyles.micro.copyWith(
-                          fontSize: 11.5,
+                          fontSize: AppTextStyles.fsMicroPlus,
                           color: validated ? AppColors.ink4 : null,
                         ),
                       )

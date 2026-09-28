@@ -28,6 +28,7 @@ import '../bloc/provider_event.dart';
 import '../bloc/provider_state.dart';
 import '../widgets/flag_provider_sheet.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ProviderDetailPage extends StatefulWidget {
   final String providerId;
@@ -180,7 +181,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
             ),
             AiwaButton(
               label: l.providerBookNow,
-              icon: Icons.event_available_rounded,
+              icon: LucideIcons.calendarCheck,
               size: AiwaButtonSize.lg,
               // Preselects the first bookable service (screens.jsx:320).
               onPressed: p.services.any((s) => s.available)
@@ -259,21 +260,19 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
             child: Row(
               children: [
                 AiwaIconButton(
-                  icon: Icons.arrow_back_rounded,
+                  icon: LucideIcons.arrowLeftDir,
                   variant: AiwaIconButtonVariant.glass,
                   onTap: () => context.pop(),
                 ),
                 const Spacer(),
                 AiwaIconButton(
-                  icon: Icons.share_outlined,
+                  icon: LucideIcons.share2,
                   variant: AiwaIconButtonVariant.glass,
                   onTap: () => _share(p),
                 ),
                 const SizedBox(width: 8),
                 AiwaIconButton(
-                  icon: isSaved
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
+                  icon: isSaved ? Icons.favorite_rounded : LucideIcons.heart,
                   iconColor: isSaved ? AppColors.rose500 : null,
                   variant: AiwaIconButtonVariant.glass,
                   onTap: _toggleSave,
@@ -307,7 +306,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                   runSpacing: 4,
                   children: [
                     _CoverMeta(
-                      icon: Icons.star_rounded,
+                      icon: LucideIcons.star,
                       iconColor: AppColors.gold300,
                       text: p.totalReviews > 0
                           ? '${p.averageRating.toStringAsFixed(1)} (${p.totalReviews})'
@@ -316,15 +315,12 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                     ),
                     if (p.address != null && p.address!.isNotEmpty) ...[
                       MetaDot(color: AppColors.rose300, gap: 0),
-                      _CoverMeta(
-                        icon: Icons.location_on_outlined,
-                        text: p.address!,
-                      ),
+                      _CoverMeta(icon: LucideIcons.mapPin, text: p.address!),
                     ],
                     if (p.isVerified) ...[
                       MetaDot(color: AppColors.rose300, gap: 0),
                       _CoverMeta(
-                        icon: Icons.verified_rounded,
+                        icon: LucideIcons.badgeCheck,
                         iconColor: AppColors.gold300,
                         text: l.providerVerified,
                       ),
@@ -371,13 +367,13 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
               if (p.phone.isNotEmpty)
                 AiwaChip(
                   label: l.providerCall,
-                  icon: Icons.phone_outlined,
+                  icon: LucideIcons.phone,
                   onTap: () => _launch('tel:${p.phone}'),
                 ),
               if (p.phone.isNotEmpty)
                 AiwaChip(
                   label: l.providerWhatsApp,
-                  icon: Icons.mode_comment_outlined,
+                  icon: LucideIcons.messageSquare,
                   onTap: () => _launch(
                     'https://wa.me/${p.phone.replaceAll(RegExp(r'[^0-9]'), '')}',
                   ),
@@ -385,14 +381,14 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
               if (p.latitude != null && p.longitude != null)
                 AiwaChip(
                   label: l.bookingsDirections,
-                  icon: Icons.map_outlined,
+                  icon: LucideIcons.map,
                   onTap: () => _launch(
                     'https://maps.google.com/?q=${p.latitude},${p.longitude}',
                   ),
                 ),
               AiwaChip(
                 label: l.providerReport,
-                icon: Icons.flag_outlined,
+                icon: LucideIcons.flag,
                 onTap: _isSignedIn
                     ? () => showFlagProviderSheet(
                         context,
@@ -428,7 +424,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
           return [
             SliverToBoxAdapter(
               child: EmptyState(
-                icon: Icons.star_outline_rounded,
+                icon: LucideIcons.star,
                 title: l.providerNoReviews,
                 subtitle: l.providerNoReviewsBody,
                 tone: EmptyStateTone.gold,
@@ -448,7 +444,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.cream,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppTheme.radius14),
                 ),
                 child: Row(
                   children: [
@@ -500,7 +496,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
           return [
             SliverToBoxAdapter(
               child: EmptyState(
-                icon: Icons.photo_library_outlined,
+                icon: LucideIcons.images,
                 title: l.providerNoPhotos,
                 subtitle: l.providerNoPhotosBody,
                 compact: true,
@@ -519,7 +515,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
               ),
               delegate: SliverChildBuilderDelegate(
                 (_, i) => ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   child: CachedNetworkImage(
                     imageUrl: p.galleryImages[i],
                     fit: BoxFit.cover,
@@ -538,7 +534,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
           return [
             SliverToBoxAdapter(
               child: EmptyState(
-                icon: Icons.content_cut_rounded,
+                icon: LucideIcons.scissors,
                 title: l.providerNoServices,
                 subtitle: l.providerNoServicesBody,
                 compact: true,
@@ -589,7 +585,9 @@ class _CoverMeta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: iconColor ?? AppColors.bone),
+        icon == LucideIcons.star
+            ? AiwaStar(size: 13, color: iconColor ?? AppColors.bone)
+            : Icon(icon, size: 13, color: iconColor ?? AppColors.bone),
         const SizedBox(width: 4),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 200),
@@ -737,7 +735,7 @@ class _ServiceRow extends StatelessWidget {
                   border: Border.all(color: AppColors.plum700, width: 1.5),
                 ),
                 child: Icon(
-                  Icons.add_rounded,
+                  LucideIcons.plus,
                   size: 16,
                   color: AppColors.plum700,
                 ),

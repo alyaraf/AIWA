@@ -20,6 +20,7 @@ import '../bloc/home_state.dart';
 import '../widgets/provider_list_item.dart';
 import 'home_page.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Discover — search, category chips, sort, and a rating/price filter sheet.
 class SearchPage extends StatefulWidget {
@@ -43,14 +44,14 @@ class _SearchPageState extends State<SearchPage> {
   static const double _priceCap = 2500;
 
   static const _cats = [
-    ('ALL', Icons.auto_awesome_outlined),
-    ('HAIR', Icons.content_cut_rounded),
-    ('NAILS', Icons.back_hand_outlined),
-    ('SPA', Icons.eco_outlined),
-    ('MAKEUP', Icons.brush_outlined),
-    ('LASHES', Icons.visibility_outlined),
-    ('SKIN', Icons.water_drop_outlined),
-    ('MASSAGE', Icons.volunteer_activism_outlined),
+    ('ALL', LucideIcons.sparkles),
+    ('HAIR', LucideIcons.scissors),
+    ('NAILS', LucideIcons.hand),
+    ('SPA', LucideIcons.leaf),
+    ('MAKEUP', LucideIcons.brush),
+    ('LASHES', LucideIcons.eye),
+    ('SKIN', LucideIcons.droplets),
+    ('MASSAGE', LucideIcons.handHeart),
   ];
 
   static const _sorts = ['nearest', 'rated', 'price'];
@@ -255,7 +256,7 @@ class _SearchPageState extends State<SearchPage> {
         ),
         child: Row(
           children: [
-            Icon(Icons.search_rounded, size: 18, color: AppColors.plum700),
+            Icon(LucideIcons.search, size: 18, color: AppColors.plum700),
             const SizedBox(width: 10),
             Expanded(
               child: TextField(
@@ -285,11 +286,7 @@ class _SearchPageState extends State<SearchPage> {
                 },
                 child: Padding(
                   padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.close_rounded,
-                    size: 16,
-                    color: AppColors.ink3,
-                  ),
+                  child: Icon(LucideIcons.x, size: 16, color: AppColors.ink3),
                 ),
               ),
             GestureDetector(
@@ -304,7 +301,7 @@ class _SearchPageState extends State<SearchPage> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.tune_rounded,
+                  LucideIcons.slidersHorizontal,
                   size: 18,
                   color: _filtersActive ? AppColors.paper : AppColors.plum700,
                 ),
@@ -408,7 +405,9 @@ class _SearchPageState extends State<SearchPage> {
         children: [
           Text(
             AppLocalizations.of(context).searchSort,
-            style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+            style: AppTextStyles.micro.copyWith(
+              fontSize: AppTextStyles.fsMicroPlus,
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -435,7 +434,7 @@ class _SearchPageState extends State<SearchPage> {
             Text(
               AppLocalizations.of(context).searchFound(count),
               style: AppTextStyles.micro.copyWith(
-                fontSize: 11.5,
+                fontSize: AppTextStyles.fsMicroPlus,
                 color: AppColors.ink4,
               ),
             ),
@@ -475,7 +474,7 @@ class _SearchPageState extends State<SearchPage> {
       return [
         SliverToBoxAdapter(
           child: EmptyState(
-            icon: Icons.search_off_rounded,
+            icon: LucideIcons.searchX,
             title: q.isNotEmpty
                 ? l.searchNoMatch(q)
                 : l.searchNothingInCategory,
@@ -494,7 +493,7 @@ class _SearchPageState extends State<SearchPage> {
             sliver: SliverToBoxAdapter(
               child: InlineBanner(
                 tone: BannerTone.danger,
-                icon: Icons.error_outline_rounded,
+                icon: LucideIcons.circleAlert,
                 body: _notifyError,
                 compact: true,
               ),
@@ -590,7 +589,7 @@ class _SearchPageState extends State<SearchPage> {
                     height: 4,
                     decoration: BoxDecoration(
                       color: AppColors.divider,
-                      borderRadius: BorderRadius.circular(2),
+                      borderRadius: BorderRadius.circular(AppTheme.radius2),
                     ),
                   ),
                 ),

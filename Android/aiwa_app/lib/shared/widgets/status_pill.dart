@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../l10n/l10n.dart';
+import '../../core/theme/app_theme.dart';
 
 /// Booking status pill with a coloured dot — `StatusPill` in the kit.
 /// Accepts backend statuses (`ON_THE_WAY`) and kit ids (`onway`).
@@ -17,7 +18,7 @@ class StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: c.bg,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppTheme.radiusPill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

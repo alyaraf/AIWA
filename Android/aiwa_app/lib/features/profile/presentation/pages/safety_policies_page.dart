@@ -13,14 +13,15 @@ import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// `POLICY_DOCS` in account-screens.jsx.
 List<(String, IconData, String, String?)> _docs(AppLocalizations l) => [
-  ('terms', Icons.description_outlined, l.polTerms, null),
-  ('safety', Icons.verified_user_outlined, l.polSafety, l.polSafetySub),
-  ('cancel', Icons.event_busy_outlined, l.polCancel, l.polCancelSub),
-  ('privacy', Icons.lock_outline_rounded, l.polPrivacy, l.polPrivacySub),
-  ('conduct', Icons.handshake_outlined, l.polConduct, l.polConductSub),
+  ('terms', LucideIcons.fileText, l.polTerms, null),
+  ('safety', LucideIcons.shieldCheck, l.polSafety, l.polSafetySub),
+  ('cancel', LucideIcons.calendarX, l.polCancel, l.polCancelSub),
+  ('privacy', LucideIcons.lock, l.polPrivacy, l.polPrivacySub),
+  ('conduct', LucideIcons.handshake, l.polConduct, l.polConductSub),
 ];
 
 /// Safety & policies — `SafetyPoliciesScreen` in account-screens.jsx.
@@ -75,7 +76,7 @@ class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
                 upToDate
                     ? InlineBanner(
                         tone: BannerTone.success,
-                        icon: Icons.check_circle_outline_rounded,
+                        icon: LucideIcons.circleCheck,
                         title: l.polUpToDate,
                         // Backend gap: UserDto has no termsAcceptedAt, so the
                         // date the prototype shows is replaced by the version.
@@ -107,8 +108,8 @@ class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
                               setState(() => _open = _open == id ? null : id),
                           right: Icon(
                             _open == id
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
+                                ? LucideIcons.chevronUp
+                                : LucideIcons.chevronDown,
                             size: 17,
                             color: AppColors.ink4,
                           ),
@@ -138,7 +139,7 @@ class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
               spacing: 9,
               children: [
                 SettingsRow(
-                  icon: Icons.person_add_alt_outlined,
+                  icon: LucideIcons.userPlus,
                   label: l.profTrustedContacts,
                   sub: l.polTrustedSub,
                   boxed: true,
@@ -147,7 +148,7 @@ class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
                 ),
                 // The prototype gives "How SOS works" no destination.
                 SettingsRow(
-                  icon: Icons.emergency_outlined,
+                  icon: LucideIcons.siren,
                   label: l.polHowSos,
                   sub: l.polHowSosSub,
                   boxed: true,
@@ -181,7 +182,7 @@ class _PolicyPanel extends StatelessWidget {
           Text(
             text,
             style: AppTextStyles.micro.copyWith(
-              fontSize: 12.5,
+              fontSize: AppTextStyles.fsLabelSmPlus,
               color: AppColors.ink2,
               height: 1.6,
             ),
@@ -193,7 +194,7 @@ class _PolicyPanel extends StatelessWidget {
             label: AppLocalizations.of(context).polDownloadPdf,
             variant: AiwaButtonVariant.ghost,
             size: AiwaButtonSize.sm,
-            icon: Icons.download_rounded,
+            icon: LucideIcons.download,
             onPressed: null,
           ),
         ],

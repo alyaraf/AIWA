@@ -12,6 +12,7 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Splash — brand hero + language picker + "Browse as guest".
 /// Signed-in users are routed straight past it.
@@ -210,7 +211,7 @@ class _LanguageButton extends StatelessWidget {
           : AppTextStyles.button.copyWith(color: fg),
     );
     // Each button lays itself out in its own language's direction.
-    final arrow = Icon(Icons.arrow_forward_rounded, size: 18, color: fg);
+    final arrow = Icon(LucideIcons.arrowRightDir, size: 18, color: fg);
     return Directionality(
       textDirection: arabic ? TextDirection.rtl : TextDirection.ltr,
       child: PressScale(

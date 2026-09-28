@@ -22,6 +22,7 @@ import '../../../providers/domain/usecases/get_provider_slots_usecase.dart';
 import '../../domain/entities/booking_entity.dart';
 import '../bloc/live_booking_cubit.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Centered terminal: icon circle, eyebrow, serif title, body, CTAs.
 /// Expired booking (system-screens.jsx:189-215) and the travel-fee
@@ -70,7 +71,7 @@ class OutcomeScreen extends StatelessWidget {
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: AiwaIconButton(
-                  icon: Icons.arrow_back_rounded,
+                  icon: LucideIcons.arrowLeftDir,
                   onTap: onBack,
                 ),
               ),
@@ -143,7 +144,7 @@ class ExpiredBookingPage extends StatelessWidget {
         final b = s.booking;
         final l = AppLocalizations.of(context);
         return OutcomeScreen(
-          icon: Icons.hourglass_empty_rounded,
+          icon: LucideIcons.hourglass,
           bg: AppColors.warn100,
           fg: AppColors.warn700,
           eyebrowColor: AppColors.warn700,
@@ -156,14 +157,14 @@ class ExpiredBookingPage extends StatelessWidget {
           // ponytail: static claim from the kit; not backed by a count.
           extra: InlineBanner(
             tone: BannerTone.plum,
-            icon: Icons.auto_awesome_outlined,
+            icon: LucideIcons.sparkles,
             title: l.outcomeThreeNearbyTitle,
             body: l.outcomeThreeNearbyBody,
           ),
           actions: [
             AiwaButton(
               label: l.outcomeSeeAlternatives,
-              icon: Icons.search_rounded,
+              icon: LucideIcons.search,
               size: AiwaButtonSize.lg,
               fullWidth: true,
               onPressed: () => context.go(
@@ -377,7 +378,7 @@ class _ReasonCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.danger100,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radius16),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -388,13 +389,9 @@ class _ReasonCard extends StatelessWidget {
             height: 32,
             decoration: BoxDecoration(
               color: AppColors.paper,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppTheme.radius10),
             ),
-            child: Icon(
-              Icons.close_rounded,
-              size: 16,
-              color: AppColors.danger700,
-            ),
+            child: Icon(LucideIcons.x, size: 16, color: AppColors.danger700),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -404,7 +401,7 @@ class _ReasonCard extends StatelessWidget {
                 Text(
                   AppLocalizations.of(context).rejectedReasonFrom(first),
                   style: AppTextStyles.label.copyWith(
-                    fontSize: 13.5,
+                    fontSize: AppTextStyles.fsMetaPlus,
                     height: 1.3,
                     color: AppColors.danger700,
                   ),
@@ -444,7 +441,7 @@ class _AnotherTimeCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppColors.divider),
       ),
       child: Column(
@@ -457,10 +454,10 @@ class _AnotherTimeCard extends StatelessWidget {
                 height: 34,
                 decoration: BoxDecoration(
                   color: AppColors.plum100,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppTheme.radius10),
                 ),
                 child: Icon(
-                  Icons.edit_calendar_outlined,
+                  LucideIcons.calendarClock,
                   size: 17,
                   color: AppColors.plum700,
                 ),
@@ -507,7 +504,7 @@ class _AnotherTimeCard extends StatelessWidget {
           const SizedBox(height: 12),
           AiwaButton(
             label: AppLocalizations.of(context).rejectedSeeAllTimes,
-            icon: Icons.calendar_today_outlined,
+            icon: LucideIcons.calendar,
             fullWidth: true,
             onPressed: onTap,
           ),
@@ -530,7 +527,7 @@ class _SlotButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         decoration: BoxDecoration(
           color: AppColors.bone,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           border: Border.all(color: AppColors.divider),
         ),
         child: Column(
@@ -574,7 +571,7 @@ class _AltRow extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: AppColors.paper,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppTheme.radius16),
           border: Border.all(color: AppColors.divider),
         ),
         child: Row(

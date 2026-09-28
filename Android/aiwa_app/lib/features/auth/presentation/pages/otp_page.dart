@@ -13,6 +13,8 @@ import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class OtpPage extends StatefulWidget {
   final String identifier;
@@ -90,7 +92,7 @@ class _OtpPageState extends State<OtpPage> {
     decoration: BoxDecoration(
       color: AppColors.paper,
       border: Border.all(color: border, width: 1.5),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppTheme.radius14),
     ),
   );
 
@@ -169,7 +171,7 @@ class _OtpPageState extends State<OtpPage> {
             const SizedBox(height: 14),
             InlineBanner(
               tone: BannerTone.danger,
-              icon: Icons.error_outline_rounded,
+              icon: LucideIcons.circleAlert,
               body: _error,
               compact: true,
             ),
@@ -219,16 +221,12 @@ class _OtpPageState extends State<OtpPage> {
             decoration: BoxDecoration(
               color: AppColors.cream,
               border: Border.all(color: AppColors.divider),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 14,
-                  color: AppColors.plum700,
-                ),
+                Icon(LucideIcons.info, size: 14, color: AppColors.plum700),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

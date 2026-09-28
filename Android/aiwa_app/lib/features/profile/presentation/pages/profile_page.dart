@@ -17,6 +17,7 @@ import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../data/account_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -66,64 +67,39 @@ class _ProfilePageState extends State<ProfilePage> {
               child: GuestLockedView(
                 title: l.profGuestTitle,
                 body: l.profGuestBody,
-                icon: Icons.person_outline_rounded,
+                icon: LucideIcons.user,
               ),
             ),
           );
         }
         // prototype.jsx:343-354, in order.
         final rows = [
+          (LucideIcons.user, l.profPersonalInfo, null, AppRoutes.editProfile),
+          (LucideIcons.mapPin, l.profSavedAddresses, null, AppRoutes.addresses),
           (
-            Icons.person_outline_rounded,
-            l.profPersonalInfo,
-            null,
-            AppRoutes.editProfile,
-          ),
-          (
-            Icons.place_outlined,
-            l.profSavedAddresses,
-            null,
-            AppRoutes.addresses,
-          ),
-          (
-            Icons.person_add_alt_outlined,
+            LucideIcons.userPlus,
             l.profTrustedContacts,
             _trusted == null ? null : l.profTrustedSaved(_trusted!),
             AppRoutes.trustedContacts,
           ),
+          (LucideIcons.bell, l.ppNotifications, null, AppRoutes.notifications),
           (
-            Icons.notifications_none_rounded,
-            l.ppNotifications,
-            null,
-            AppRoutes.notifications,
-          ),
-          (
-            Icons.notifications_active_outlined,
+            LucideIcons.bellRing,
             l.profNotificationPrefs,
             null,
             AppRoutes.notificationPreferences,
           ),
           // The language switch itself lives in Personal info.
           (
-            Icons.language_rounded,
+            LucideIcons.globe,
             l.profLanguage,
             user.preferredLanguage.toLowerCase() == 'ar'
                 ? 'العربية'
                 : 'English',
             AppRoutes.editProfile,
           ),
-          (
-            Icons.verified_user_outlined,
-            l.ppSafety,
-            null,
-            AppRoutes.safetyPolicies,
-          ),
-          (
-            Icons.chat_bubble_outline_rounded,
-            l.ppWhatsApp,
-            null,
-            AppRoutes.support,
-          ),
+          (LucideIcons.shieldCheck, l.ppSafety, null, AppRoutes.safetyPolicies),
+          (LucideIcons.messageCircle, l.ppWhatsApp, null, AppRoutes.support),
         ];
         return Scaffold(
           backgroundColor: AppColors.bone,
@@ -152,13 +128,13 @@ class _ProfilePageState extends State<ProfilePage> {
                         onTap: () => _push(route),
                       ),
                     SettingsRow(
-                      icon: Icons.logout_rounded,
+                      icon: LucideIcons.logOutDir,
                       label: l.commonSignOut,
                       danger: true,
                       onTap: _signOut,
                     ),
                     SettingsRow(
-                      icon: Icons.delete_outline_rounded,
+                      icon: LucideIcons.trash2,
                       label: l.profDeleteAccount,
                       danger: true,
                       showDivider: false,
@@ -181,7 +157,7 @@ class _ProfilePageState extends State<ProfilePage> {
       title: AppLocalizations.of(context).ppSignOutTitle,
       body: AppLocalizations.of(context).profSignOutBody,
       confirmLabel: AppLocalizations.of(context).commonSignOut,
-      icon: Icons.logout_rounded,
+      icon: LucideIcons.logOutDir,
       danger: false,
     );
     if (!ok || !mounted) return;
@@ -316,7 +292,7 @@ class _Stat extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.bone.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radius14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

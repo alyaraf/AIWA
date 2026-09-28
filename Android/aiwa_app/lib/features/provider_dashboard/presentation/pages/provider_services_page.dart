@@ -15,6 +15,7 @@ import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../data/provider_manage_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Services tab — `ProviderServices` (provider-screens.jsx:401-430).
 class ProviderServicesPage extends StatefulWidget {
@@ -77,7 +78,7 @@ class _ProviderServicesPageState extends State<ProviderServicesPage> {
                   title: l.tabServices,
                   trailing: AiwaButton(
                     label: l.svcNew,
-                    icon: Icons.add_rounded,
+                    icon: LucideIcons.plus,
                     size: AiwaButtonSize.sm,
                     onPressed: () => _edit(),
                   ),
@@ -99,7 +100,7 @@ class _ProviderServicesPageState extends State<ProviderServicesPage> {
                             : const SkeletonList())
                       : items.isEmpty
                       ? EmptyState(
-                          icon: Icons.list_rounded,
+                          icon: LucideIcons.list,
                           title: l.svcEmpty,
                           subtitle: l.svcEmptyBody,
                           actionLabel: l.svcNew,
@@ -144,7 +145,7 @@ class _ServiceRow extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.paper,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppTheme.radius16),
           border: Border.all(color: AppColors.divider),
         ),
         child: Row(
@@ -199,7 +200,7 @@ class _ServiceRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 14),
-            AiwaIconButton(icon: Icons.edit_outlined, size: 34, onTap: onEdit),
+            AiwaIconButton(icon: LucideIcons.pencil, size: 34, onTap: onEdit),
           ],
         ),
       ),

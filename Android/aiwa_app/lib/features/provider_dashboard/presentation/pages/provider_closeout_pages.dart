@@ -16,6 +16,9 @@ import '../../../bookings/presentation/pages/booking_action_pages.dart';
 import '../../../reviews/domain/repositories/review_repository.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../shared/widgets/star_rating.dart';
+import '../../../../core/theme/app_theme.dart';
 
 enum _Step { question, confirmed, dispute }
 
@@ -143,7 +146,7 @@ class _ProviderPaymentConfirmPageState
               const SizedBox(height: 24),
               AiwaButton(
                 label: l.closeCashReceived,
-                icon: Icons.check_rounded,
+                icon: LucideIcons.check,
                 size: AiwaButtonSize.lg,
                 fullWidth: true,
                 onPressed: () => setState(() => _step = _Step.confirmed),
@@ -151,7 +154,7 @@ class _ProviderPaymentConfirmPageState
               const SizedBox(height: 10),
               AiwaButton(
                 label: l.closeMarkDisputed,
-                icon: Icons.warning_amber_rounded,
+                icon: LucideIcons.triangleAlert,
                 variant: AiwaButtonVariant.secondary,
                 size: AiwaButtonSize.lg,
                 fullWidth: true,
@@ -169,7 +172,7 @@ class _ProviderPaymentConfirmPageState
               const SizedBox(height: 16),
               AiwaButton(
                 label: l.closeRate(_name),
-                icon: Icons.star_rounded,
+                icon: LucideIcons.star,
                 size: AiwaButtonSize.lg,
                 fullWidth: true,
                 loading: _busy,
@@ -295,7 +298,7 @@ class _RateCustomerPageState extends State<RateCustomerPage> {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
             decoration: BoxDecoration(
               color: AppColors.paper,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
               border: Border.all(color: AppColors.divider),
             ),
             child: Column(
@@ -313,10 +316,8 @@ class _RateCustomerPageState extends State<RateCustomerPage> {
                           onTap: () => setState(() => _rating = n),
                           child: Padding(
                             padding: const EdgeInsets.all(4),
-                            child: Icon(
-                              _rating >= n
-                                  ? Icons.star_rounded
-                                  : Icons.star_outline_rounded,
+                            child: AiwaStar(
+                              filled: _rating >= n,
                               size: 36,
                               color: _rating >= n
                                   ? AppColors.gold500

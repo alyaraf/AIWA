@@ -20,11 +20,12 @@ import '../../../bookings/domain/entities/saved_address_entity.dart';
 import '../../../onboarding/presentation/pages/permission_priming_page.dart';
 import '../../data/account_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 IconData _labelIcon(String label) => switch (label) {
-  'Home' => Icons.home_outlined,
-  'Work' => Icons.work_outline_rounded,
-  _ => Icons.place_outlined,
+  'Home' => LucideIcons.house,
+  'Work' => LucideIcons.briefcase,
+  _ => LucideIcons.mapPin,
 };
 
 /// Saved addresses — `AddressesScreen` in customer-extras-2.jsx.
@@ -95,7 +96,7 @@ class _AddressesPageState extends State<AddressesPage> {
                       if (items.isEmpty)
                         EmptyState(
                           compact: true,
-                          icon: Icons.place_outlined,
+                          icon: LucideIcons.mapPin,
                           title: l.addrEmpty,
                           subtitle: l.addrEmptyBody,
                         ),
@@ -128,7 +129,7 @@ class _AddressCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radius16),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -138,7 +139,7 @@ class _AddressCard extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               color: AppColors.plum100,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             ),
             child: Icon(
               _labelIcon(address.label),
@@ -161,13 +162,15 @@ class _AddressCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   address.addressLine,
-                  style: AppTextStyles.micro.copyWith(fontSize: 12.5),
+                  style: AppTextStyles.micro.copyWith(
+                    fontSize: AppTextStyles.fsLabelSmPlus,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          AiwaIconButton(icon: Icons.edit_outlined, size: 34, onTap: onEdit),
+          AiwaIconButton(icon: LucideIcons.pencil, size: 34, onTap: onEdit),
         ],
       ),
     );
@@ -303,7 +306,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
       ).addrDeleteTitle(AppLocalizations.of(context).addressLabel(_label)),
       body: AppLocalizations.of(context).addrDeleteBody,
       confirmLabel: AppLocalizations.of(context).commonDelete,
-      icon: Icons.delete_outline_rounded,
+      icon: LucideIcons.trash2,
     );
     if (!ok || !mounted) return;
     final r = await _repo.deleteAddress(widget.existing!.id);
@@ -324,7 +327,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
     child: Text(
       text,
       style: AppTextStyles.label.copyWith(
-        fontSize: 12.5,
+        fontSize: AppTextStyles.fsLabelSmPlus,
         color: AppColors.ink2,
       ),
     ),
@@ -379,7 +382,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                     validated: true,
                     label: l.addrStreet,
                     controller: _street,
-                    icon: Icons.signpost_outlined,
+                    icon: LucideIcons.signpost,
                     placeholder: l.addrStreetPlaceholder,
                     error: e,
                     onChanged: onChanged,
@@ -431,7 +434,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                   validated: true,
                   label: l.addrLandmark,
                   controller: _landmark,
-                  icon: Icons.account_balance_outlined,
+                  icon: LucideIcons.landmark,
                   placeholder: l.addrLandmarkPlaceholder,
                   optional: true,
                   hint: l.addrLandmarkHint,
@@ -450,7 +453,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                 ),
                 const SizedBox(height: 14),
                 SettingsRow(
-                  icon: Icons.star_outline_rounded,
+                  icon: LucideIcons.star,
                   label: l.addrDefault,
                   sub: l.addrDefaultSub,
                   boxed: true,
@@ -464,7 +467,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: _delete,
-                    icon: const Icon(Icons.delete_outline_rounded, size: 15),
+                    icon: const Icon(LucideIcons.trash2, size: 15),
                     label: Text(l.addrDeleteThis),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.danger700,
@@ -472,7 +475,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
                       padding: const EdgeInsets.all(13),
                       textStyle: AppTextStyles.label.copyWith(fontSize: 14),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(AppTheme.radius14),
                       ),
                     ),
                   ),
@@ -534,7 +537,7 @@ class _LabelOption extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
           decoration: BoxDecoration(
             color: selected ? AppColors.plum700 : AppColors.paper,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
             border: Border.all(
               color: selected ? Colors.transparent : AppColors.divider,
               width: 1.5,
@@ -550,7 +553,10 @@ class _LabelOption extends StatelessWidget {
               ),
               Text(
                 AppLocalizations.of(context).addressLabel(label),
-                style: AppTextStyles.label.copyWith(fontSize: 12.5, color: fg),
+                style: AppTextStyles.label.copyWith(
+                  fontSize: AppTextStyles.fsLabelSmPlus,
+                  color: fg,
+                ),
               ),
             ],
           ),
@@ -573,7 +579,7 @@ class _MapPlaceholder extends StatelessWidget {
       height: 132,
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppColors.divider),
         gradient: LinearGradient(
           begin: const Alignment(-.6, -1),
@@ -604,7 +610,7 @@ class _MapPlaceholder extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(Icons.place_outlined, size: 18, color: AppColors.paper),
+            child: Icon(LucideIcons.mapPin, size: 18, color: AppColors.paper),
           ),
           PositionedDirectional(
             end: 10,
@@ -626,7 +632,7 @@ class _MapPlaceholder extends StatelessWidget {
                   spacing: 6,
                   children: [
                     Icon(
-                      dropped ? Icons.check_rounded : Icons.my_location_rounded,
+                      dropped ? LucideIcons.check : LucideIcons.crosshair,
                       size: 13,
                       color: AppColors.plum700,
                     ),

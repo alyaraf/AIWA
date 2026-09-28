@@ -19,6 +19,8 @@ import '../bloc/review_event.dart';
 import '../bloc/review_state.dart';
 import '../../../../shared/widgets/aiwa_toast.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../shared/widgets/star_rating.dart';
 
 class ReviewPage extends StatefulWidget {
   final String bookingId;
@@ -183,7 +185,7 @@ class _ReviewPageState extends State<ReviewPage> {
                   if (state is ReviewError) ...[
                     InlineBanner(
                       tone: BannerTone.danger,
-                      icon: Icons.error_outline_rounded,
+                      icon: LucideIcons.circleAlert,
                       body: AppLocalizations.of(context).error(state.message),
                       compact: true,
                     ),
@@ -255,13 +257,13 @@ class _ReviewPageState extends State<ReviewPage> {
                 onTap: () => setState(() => _rating = i + 1),
                 child: AnimatedScale(
                   scale: on ? 1 : 0.94,
-                  duration: const Duration(milliseconds: 180),
+                  duration: AppTheme.dur2,
                   curve: AppTheme.easeSoft,
                   child: Padding(
                     // gap 10 + 2x4 button padding ≈ 18 between stars.
                     padding: const EdgeInsets.symmetric(horizontal: 9),
-                    child: Icon(
-                      on ? Icons.star_rounded : Icons.star_outline_rounded,
+                    child: AiwaStar(
+                      filled: on,
                       size: 38,
                       color: on ? AppColors.gold500 : AppColors.ink4,
                     ),

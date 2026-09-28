@@ -21,6 +21,7 @@ import '../bloc/auth_state.dart';
 import '../widgets/step_header.dart';
 import 'splash_page.dart' show arabicStyle;
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// "Where should we look for providers?" — `PreferencesScreen` in
 /// flow-screens.jsx. The last signup step: Save creates the account, then
@@ -161,7 +162,7 @@ class _PreferencesPageState extends State<PreferencesPage> {
         ),
         children: [
           AiwaIconButton(
-            icon: Icons.arrow_back_rounded,
+            icon: LucideIcons.arrowLeftDir,
             onTap: () => context.pop(),
           ),
           const SizedBox(height: 22),
@@ -275,7 +276,7 @@ class _PreferencesPageState extends State<PreferencesPage> {
           if (_error != null)
             InlineBanner(
               tone: BannerTone.danger,
-              icon: Icons.error_outline_rounded,
+              icon: LucideIcons.circleAlert,
               body: _error,
               compact: true,
             ),
@@ -314,7 +315,7 @@ class _LangPill extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               color: active ? AppColors.plum700 : AppColors.paper,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppTheme.radius14),
               border: Border.all(
                 color: active ? Colors.transparent : AppColors.divider,
                 width: 1.5,

@@ -12,6 +12,7 @@ import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class PhoneEntryPage extends StatefulWidget {
   final String role;
@@ -117,7 +118,7 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
               placeholder: 'you@example.com',
               controller: _emailCtrl,
               keyboardType: TextInputType.emailAddress,
-              icon: Icons.mail_outline_rounded,
+              icon: LucideIcons.mail,
               autoFocus: true,
               onChanged: (_) => setState(() => _error = null),
             ),
@@ -125,7 +126,7 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
             const SizedBox(height: 14),
             InlineBanner(
               tone: BannerTone.danger,
-              icon: Icons.error_outline_rounded,
+              icon: LucideIcons.circleAlert,
               body: _error,
               compact: true,
             ),
@@ -133,7 +134,10 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
           const SizedBox(height: 8),
           Text.rich(
             TextSpan(
-              style: AppTextStyles.micro.copyWith(fontSize: 11.5, height: 1.45),
+              style: AppTextStyles.micro.copyWith(
+                fontSize: AppTextStyles.fsMicroPlus,
+                height: 1.45,
+              ),
               children: spansOf(
                 AppLocalizations.of(
                   context,

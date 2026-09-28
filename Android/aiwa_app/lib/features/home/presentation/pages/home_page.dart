@@ -28,6 +28,7 @@ import '../widgets/category_tile.dart';
 import '../widgets/provider_card.dart';
 import '../widgets/provider_list_item.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -35,6 +36,9 @@ class HomePage extends StatefulWidget {
   /// Last position Home resolved (Cairo until then); Discover reuses it.
   // ponytail: static field, move to a LocationCubit if more screens need it.
   static ({double lat, double lng}) position = (lat: 30.0444, lng: 31.2357);
+
+  /// The pushed location priming screen is offered once per app run.
+  static bool locationPrimed = false;
 
   /// Greeting clock; goldens pin it so the golden doesn't change by hour.
   @visibleForTesting
@@ -51,14 +55,14 @@ class _HomePageState extends State<HomePage> {
   String? _area;
 
   static const _categories = [
-    _Cat('HAIR', Icons.content_cut_rounded, 'plum'),
-    _Cat('NAILS', Icons.back_hand_outlined, 'rose'),
-    _Cat('SPA', Icons.eco_outlined, 'cream'),
-    _Cat('MAKEUP', Icons.brush_outlined, 'gold'),
-    _Cat('LASHES', Icons.visibility_outlined, 'rose'),
-    _Cat('SKIN', Icons.water_drop_outlined, 'plum'),
-    _Cat('MASSAGE', Icons.volunteer_activism_outlined, 'cream'),
-    _Cat('ALL', Icons.auto_awesome_outlined, 'gold'),
+    _Cat('HAIR', LucideIcons.scissors, 'plum'),
+    _Cat('NAILS', LucideIcons.hand, 'rose'),
+    _Cat('SPA', LucideIcons.leaf, 'cream'),
+    _Cat('MAKEUP', LucideIcons.brush, 'gold'),
+    _Cat('LASHES', LucideIcons.eye, 'rose'),
+    _Cat('SKIN', LucideIcons.droplets, 'plum'),
+    _Cat('MASSAGE', LucideIcons.handHeart, 'cream'),
+    _Cat('ALL', LucideIcons.sparkles, 'gold'),
   ];
 
   @override
@@ -77,7 +81,20 @@ class _HomePageState extends State<HomePage> {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (serviceEnabled) {
         // Asked on the priming screen (/perm-location), never cold here.
-        final perm = await Geolocator.checkPermission();
+        var perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied &&
+            !HomePage.locationPrimed &&
+            mounted) {
+          // Skipped or refused at onboarding: offer it again, pop-back style.
+          HomePage.locationPrimed = true;
+          await context.push<bool>(
+            Uri(
+              path: AppRoutes.permission,
+              queryParameters: {'kind': 'location'},
+            ).toString(),
+          );
+          perm = await Geolocator.checkPermission();
+        }
         if (perm != LocationPermission.denied &&
             perm != LocationPermission.deniedForever) {
           final pos = await Geolocator.getCurrentPosition(
@@ -200,7 +217,7 @@ class _HomePageState extends State<HomePage> {
                       ? nState.unreadCount
                       : 0;
                   return AiwaIconButton(
-                    icon: Icons.notifications_none_rounded,
+                    icon: LucideIcons.bell,
                     dot: count > 0,
                     onTap: () => user != null
                         ? context.push(AppRoutes.notifications)
@@ -251,7 +268,7 @@ class _HomePageState extends State<HomePage> {
           ),
           child: Row(
             children: [
-              Icon(Icons.search_rounded, size: 18, color: AppColors.plum700),
+              Icon(LucideIcons.search, size: 18, color: AppColors.plum700),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -261,11 +278,7 @@ class _HomePageState extends State<HomePage> {
               ),
               Container(width: 1, height: 20, color: AppColors.divider),
               const SizedBox(width: 10),
-              Icon(
-                Icons.location_on_outlined,
-                size: 14,
-                color: AppColors.plum700,
-              ),
+              Icon(LucideIcons.mapPin, size: 14, color: AppColors.plum700),
               const SizedBox(width: 5),
               Text(
                 _area != null
@@ -292,7 +305,7 @@ class _HomePageState extends State<HomePage> {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           gradient: AppTheme.heroGradient,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(AppTheme.radius22),
         ),
         child: Stack(
           children: [
@@ -404,7 +417,7 @@ class _HomePageState extends State<HomePage> {
     if (state.trending.isEmpty && state.providers.isEmpty) {
       return SliverToBoxAdapter(
         child: EmptyState(
-          icon: Icons.location_searching_rounded,
+          icon: LucideIcons.locateFixed,
           title: l.homeNobodyNearby,
           subtitle: l.homeNobodyNearbyBody,
           actionLabel: l.homeBrowseAll,

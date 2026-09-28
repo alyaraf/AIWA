@@ -9,6 +9,7 @@ import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../domain/repositories/provider_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Report a provider — `FlagProviderSheet` in customer-extras.jsx.
 /// Sends POST /complaints; on success pops and shows the thank-you toast.
@@ -83,7 +84,7 @@ Future<void> showFlagProviderSheet(
                       height: 4,
                       decoration: BoxDecoration(
                         color: AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.circular(AppTheme.radius2),
                       ),
                     ),
                   ),
@@ -101,7 +102,7 @@ Future<void> showFlagProviderSheet(
                   Text(
                     l.flagBody,
                     style: AppTextStyles.micro.copyWith(
-                      fontSize: 12.5,
+                      fontSize: AppTextStyles.fsLabelSmPlus,
                       height: 1.5,
                     ),
                   ),
@@ -184,7 +185,7 @@ class _ReasonRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
           color: selected ? AppColors.plum100 : AppColors.paper,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           border: Border.all(
             color: selected ? AppColors.plum700 : AppColors.divider,
             width: 1.5,
@@ -203,7 +204,7 @@ class _ReasonRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              Icon(Icons.check_rounded, size: 16, color: AppColors.plum700),
+              Icon(LucideIcons.check, size: 16, color: AppColors.plum700),
           ],
         ),
       ),

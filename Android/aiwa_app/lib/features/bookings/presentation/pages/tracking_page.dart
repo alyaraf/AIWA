@@ -19,6 +19,7 @@ import '../../domain/entities/booking_entity.dart';
 import '../bloc/live_booking_cubit.dart';
 import 'booking_outcome_pages.dart' show OutcomeScreen;
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 typedef _Step = ({String status, IconData icon, String label, String hint});
 
@@ -26,37 +27,37 @@ typedef _Step = ({String status, IconData icon, String label, String hint});
 List<_Step> _steps(AppLocalizations l) => [
   (
     status: 'PENDING',
-    icon: Icons.hourglass_empty_rounded,
+    icon: LucideIcons.hourglass,
     label: l.statusPending,
     hint: l.trackPendingHint,
   ),
   (
     status: 'ACCEPTED',
-    icon: Icons.check_circle_outline_rounded,
+    icon: LucideIcons.circleCheck,
     label: l.statusAccepted,
     hint: l.trackAcceptedHint,
   ),
   (
     status: 'ON_THE_WAY',
-    icon: Icons.navigation_outlined,
+    icon: LucideIcons.navigation,
     label: l.statusOnTheWay,
     hint: l.trackOnTheWayHint,
   ),
   (
     status: 'ARRIVED',
-    icon: Icons.location_on_outlined,
+    icon: LucideIcons.mapPin,
     label: l.statusArrived,
     hint: l.trackArrivedHint,
   ),
   (
     status: 'IN_PROGRESS',
-    icon: Icons.auto_awesome_outlined,
+    icon: LucideIcons.sparkles,
     label: l.statusInProgress,
     hint: l.trackInProgressHint,
   ),
   (
     status: 'COMPLETED',
-    icon: Icons.verified_outlined,
+    icon: LucideIcons.badgeCheck,
     label: l.statusCompleted,
     hint: l.trackCompletedHint,
   ),
@@ -281,7 +282,7 @@ class _TrackingViewState extends State<_TrackingView> {
           if (b.canCancel) ...[
             AiwaButton(
               label: l.trackCancelBooking,
-              icon: Icons.close_rounded,
+              icon: LucideIcons.x,
               variant: AiwaButtonVariant.secondary,
               fullWidth: true,
               loading: s.busy,
@@ -292,7 +293,7 @@ class _TrackingViewState extends State<_TrackingView> {
           if (done && !b.reviewed) ...[
             AiwaButton(
               label: l.bookingsLeaveReview,
-              icon: Icons.star_rounded,
+              icon: LucideIcons.star,
               fullWidth: true,
               onPressed: () => _push('/review/${b.id}', b),
             ),
@@ -300,7 +301,7 @@ class _TrackingViewState extends State<_TrackingView> {
           ],
           AiwaButton(
             label: l.trackReportProblem,
-            icon: Icons.flag_outlined,
+            icon: LucideIcons.flag,
             variant: AiwaButtonVariant.ghost,
             fullWidth: true,
             onPressed: () => _push('/booking/${b.id}/complaint', b),
@@ -351,7 +352,7 @@ class _Header extends StatelessWidget {
           Row(
             children: [
               AiwaIconButton(
-                icon: Icons.arrow_back_rounded,
+                icon: LucideIcons.arrowLeftDir,
                 variant: AiwaIconButtonVariant.glass,
                 onTap: onBack,
               ),
@@ -381,7 +382,7 @@ class _Header extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: glass.withValues(alpha: .10),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
               border: Border.all(color: glass.withValues(alpha: .18)),
             ),
             child: Row(
@@ -415,7 +416,7 @@ class _Header extends StatelessWidget {
                       Text(
                         cur.hint,
                         style: AppTextStyles.micro.copyWith(
-                          fontSize: 12.5,
+                          fontSize: AppTextStyles.fsLabelSmPlus,
                           height: 1.45,
                           color: AppColors.rose300,
                         ),
@@ -430,12 +431,12 @@ class _Header extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.sensors_rounded, size: 12, color: AppColors.rose300),
+              Icon(LucideIcons.radio, size: 12, color: AppColors.rose300),
               const SizedBox(width: 5),
               Text(
                 _waitingOn(l, status),
                 style: AppTextStyles.micro.copyWith(
-                  fontSize: 11.5,
+                  fontSize: AppTextStyles.fsMicroPlus,
                   color: AppColors.rose300,
                 ),
               ),
@@ -517,7 +518,7 @@ class _ProviderCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -550,10 +551,10 @@ class _ProviderCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          AiwaIconButton(icon: Icons.phone_outlined, size: 36, onTap: onCall),
+          AiwaIconButton(icon: LucideIcons.phone, size: 36, onTap: onCall),
           const SizedBox(width: 8),
           AiwaIconButton(
-            icon: Icons.chat_bubble_outline_rounded,
+            icon: LucideIcons.messageCircle,
             size: 36,
             onTap: onChat,
           ),
@@ -584,7 +585,7 @@ class _TileHead extends StatelessWidget {
         height: 34,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppTheme.radius10),
         ),
         child: Icon(icon, size: 16, color: fg),
       ),
@@ -595,10 +596,18 @@ class _TileHead extends StatelessWidget {
           children: [
             Text(
               title,
-              style: AppTextStyles.label.copyWith(fontSize: 13.5, height: 1.3),
+              style: AppTextStyles.label.copyWith(
+                fontSize: AppTextStyles.fsMetaPlus,
+                height: 1.3,
+              ),
             ),
             const SizedBox(height: 1),
-            Text(sub, style: AppTextStyles.micro.copyWith(fontSize: 11.5)),
+            Text(
+              sub,
+              style: AppTextStyles.micro.copyWith(
+                fontSize: AppTextStyles.fsMicroPlus,
+              ),
+            ),
           ],
         ),
       ),
@@ -608,7 +617,7 @@ class _TileHead extends StatelessWidget {
 
 BoxDecoration get _card => BoxDecoration(
   color: AppColors.paper,
-  borderRadius: BorderRadius.circular(16),
+  borderRadius: BorderRadius.circular(AppTheme.radius16),
   border: Border.all(color: AppColors.divider),
 );
 
@@ -628,7 +637,7 @@ class _SafetyCard extends StatelessWidget {
           // confirmation are not in the backend yet (SafetyEventType has
           // LOCATION_SHARED / ID_CONFIRMED but nothing records them).
           _TileHead(
-            icon: Icons.verified_user_outlined,
+            icon: LucideIcons.shieldCheck,
             bg: AppColors.success100,
             fg: AppColors.success700,
             title: AppLocalizations.of(context).trackSafetyTitle,
@@ -637,9 +646,9 @@ class _SafetyCard extends StatelessWidget {
           const SizedBox(height: 12),
           Material(
             color: AppColors.danger100,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             child: InkWell(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               onTap: onSos,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 11),
@@ -647,7 +656,7 @@ class _SafetyCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.sos_rounded,
+                      LucideIcons.siren,
                       size: 16,
                       color: AppColors.danger700,
                     ),
@@ -655,7 +664,7 @@ class _SafetyCard extends StatelessWidget {
                     Text(
                       AppLocalizations.of(context).trackSos,
                       style: AppTextStyles.label.copyWith(
-                        fontSize: 13.5,
+                        fontSize: AppTextStyles.fsMetaPlus,
                         fontWeight: FontWeight.w700,
                         color: AppColors.danger700,
                       ),
@@ -692,7 +701,7 @@ class _SosBanner extends StatelessWidget {
       _ => (AppColors.plum100, AppColors.divider, AppColors.plum700),
     };
     final style = AppTextStyles.micro.copyWith(
-      fontSize: 12.5,
+      fontSize: AppTextStyles.fsLabelSmPlus,
       height: 1.45,
       color: fg,
     );
@@ -701,7 +710,7 @@ class _SosBanner extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radius14),
         border: Border.all(color: border),
       ),
       child: Row(
@@ -709,14 +718,14 @@ class _SosBanner extends StatelessWidget {
           switch (stage) {
             // No spinners: the loader pulses.
             SosStage.alerting => Pulse(
-              child: Icon(Icons.autorenew_rounded, size: 18, color: fg),
+              child: Icon(LucideIcons.refreshCw, size: 18, color: fg),
             ),
             SosStage.notified => Icon(
-              Icons.gpp_maybe_outlined,
+              LucideIcons.shieldAlert,
               size: 18,
               color: fg,
             ),
-            _ => Icon(Icons.fact_check_outlined, size: 18, color: fg),
+            _ => Icon(LucideIcons.fileCheck, size: 18, color: fg),
           },
           const SizedBox(width: 10),
           Expanded(
@@ -744,7 +753,7 @@ class _SosBanner extends StatelessWidget {
                 child: Text(
                   l.trackImSafe,
                   style: style.copyWith(
-                    fontSize: 11.5,
+                    fontSize: AppTextStyles.fsMicroPlus,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -776,7 +785,7 @@ class _CheckInCard extends StatelessWidget {
         children: [
           Expanded(
             child: _TileHead(
-              icon: Icons.where_to_vote_outlined,
+              icon: LucideIcons.mapPinCheck,
               bg: AppColors.plum100,
               fg: AppColors.plum700,
               title: AppLocalizations.of(context).trackCheckInTitle,
@@ -790,7 +799,7 @@ class _CheckInCard extends StatelessWidget {
             label: checkedIn
                 ? AppLocalizations.of(context).trackCheckedIn
                 : AppLocalizations.of(context).trackCheckIn,
-            icon: checkedIn ? Icons.check_rounded : null,
+            icon: checkedIn ? LucideIcons.check : null,
             variant: AiwaButtonVariant.secondary,
             size: AiwaButtonSize.sm,
             loading: busy && !checkedIn,
@@ -843,7 +852,7 @@ class _Timeline extends StatelessWidget {
                   ),
                 ),
                 child: Icon(
-                  done ? Icons.check_rounded : s.icon,
+                  done ? LucideIcons.check : s.icon,
                   size: done ? 14 : 13,
                   color: active
                       ? AppColors.bone
@@ -907,7 +916,7 @@ class _PaymentRow extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.plum100,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radius14),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -917,10 +926,10 @@ class _PaymentRow extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               color: AppColors.paper,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppTheme.radius10),
             ),
             child: Icon(
-              Icons.payments_outlined,
+              LucideIcons.banknote,
               size: 18,
               color: AppColors.plum700,
             ),
@@ -977,13 +986,16 @@ class _TravelFeeQuote extends StatelessWidget {
   Widget build(BuildContext context) {
     final fee = booking.travelFee!;
     final base = booking.basePrice;
-    final sub = AppTextStyles.micro.copyWith(fontSize: 12.5, height: 1.5);
+    final sub = AppTextStyles.micro.copyWith(
+      fontSize: AppTextStyles.fsLabelSmPlus,
+      height: 1.5,
+    );
     final l = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppColors.gold500, width: 1.5),
       ),
       child: Column(
@@ -997,10 +1009,10 @@ class _TravelFeeQuote extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: AppColors.gold100,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
                 child: Icon(
-                  Icons.directions_car_outlined,
+                  LucideIcons.car,
                   size: 19,
                   color: AppColors.gold700,
                 ),
@@ -1057,7 +1069,7 @@ class _TravelFeeQuote extends StatelessWidget {
               Expanded(
                 child: AiwaButton(
                   label: l.trackAcceptConfirm,
-                  icon: Icons.check_rounded,
+                  icon: LucideIcons.check,
                   size: AiwaButtonSize.sm,
                   fullWidth: true,
                   onPressed: busy ? null : onAccept,
@@ -1083,7 +1095,7 @@ class _TotalRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.cream,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radius14),
       ),
       child: Row(
         children: [
@@ -1111,7 +1123,7 @@ class _TotalRow extends StatelessWidget {
 
 /// BOOK-28 — after declining the travel fee.
 Widget _declinedFee(BuildContext context, double fee) => OutcomeScreen(
-  icon: Icons.event_busy_outlined,
+  icon: LucideIcons.calendarX,
   bg: AppColors.cream,
   fg: AppColors.ink3,
   eyebrow: AppLocalizations.of(context).trackDeclinedEyebrow,
@@ -1123,7 +1135,7 @@ Widget _declinedFee(BuildContext context, double fee) => OutcomeScreen(
   actions: [
     AiwaButton(
       label: AppLocalizations.of(context).trackFindAnother,
-      icon: Icons.search_rounded,
+      icon: LucideIcons.search,
       size: AiwaButtonSize.lg,
       fullWidth: true,
       onPressed: () => context.go(AppRoutes.myBookings),

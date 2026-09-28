@@ -16,6 +16,7 @@ import '../../../../shared/widgets/section_header.dart';
 import '../../../../shared/widgets/status_pill.dart';
 import '../../data/provider_manage_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // BACKEND GAP: SettlementSummaryDto has no negative limit; the prototype's
 // EGP 500 is used until the platform setting is exposed.
@@ -75,7 +76,7 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
         context,
       ).walletSettleTitle(AppLocalizations.of(context).egpCents(due)),
       confirmLabel: AppLocalizations.of(context).walletSettleBalance,
-      icon: Icons.payments_outlined,
+      icon: LucideIcons.banknote,
       danger: false,
     );
     if (!ok || !mounted) return;
@@ -136,7 +137,7 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                 clipBehavior: Clip.hardEdge,
                 decoration: BoxDecoration(
                   gradient: AppTheme.heroGradient,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppTheme.radius20),
                 ),
                 child: Stack(
                   children: [
@@ -165,7 +166,9 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                           ),
                           const SizedBox(height: 12),
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusXs,
+                            ),
                             child: LinearProgressIndicator(
                               value: (due / _limit).clamp(0, 1),
                               minHeight: 6,
@@ -202,7 +205,7 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                 ),
                 child: InlineBanner(
                   tone: BannerTone.danger,
-                  icon: Icons.block_rounded,
+                  icon: LucideIcons.ban,
                   title: l.walletBlocked,
                   body: l.walletBlockedBody,
                 ),
@@ -262,7 +265,7 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
               padding: const EdgeInsets.symmetric(horizontal: AppTheme.gutter),
               child: entries.isEmpty
                   ? EmptyState(
-                      icon: Icons.payments_outlined,
+                      icon: LucideIcons.banknote,
                       title: l.walletNoCommission,
                       subtitle: l.walletNoCommissionBody,
                       compact: true,
@@ -281,7 +284,7 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
               ),
               child: AiwaButton(
                 label: l.walletSettleNow,
-                icon: Icons.payments_outlined,
+                icon: LucideIcons.banknote,
                 size: AiwaButtonSize.lg,
                 fullWidth: true,
                 loading: _paying,
@@ -307,7 +310,7 @@ class _Tile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.paper,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppTheme.radius14),
           border: Border.all(color: AppColors.divider),
         ),
         child: Column(
@@ -338,7 +341,7 @@ class _LedgerRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radius14),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -349,10 +352,10 @@ class _LedgerRow extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: settled ? AppColors.success100 : AppColors.plum100,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppTheme.radius10),
             ),
             child: Icon(
-              settled ? Icons.check_rounded : Icons.payments_outlined,
+              settled ? LucideIcons.check : LucideIcons.banknote,
               size: 16,
               color: settled ? AppColors.success700 : AppColors.plum700,
             ),
@@ -366,7 +369,7 @@ class _LedgerRow extends StatelessWidget {
                       ? l.walletCommission
                       : l.walletCommissionBooking('${e['bookingId']}'),
                   style: AppTextStyles.label.copyWith(
-                    fontSize: 13.5,
+                    fontSize: AppTextStyles.fsMetaPlus,
                     color: AppColors.ink,
                   ),
                 ),
@@ -378,7 +381,9 @@ class _LedgerRow extends StatelessWidget {
                     if (at != null)
                       DateFormat('MMM d · h:mm a', l.localeName).format(at),
                   ].join(' · '),
-                  style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                  style: AppTextStyles.micro.copyWith(
+                    fontSize: AppTextStyles.fsMicroPlus,
+                  ),
                 ),
               ],
             ),

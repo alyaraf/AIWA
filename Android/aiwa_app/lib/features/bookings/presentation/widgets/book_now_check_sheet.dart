@@ -9,14 +9,15 @@ import '../../../../shared/widgets/aiwa_sheet.dart';
 import '../../../providers/domain/entities/provider_detail_entity.dart';
 import '../../../providers/domain/usecases/get_provider_slots_usecase.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// BOOK_NOW_BLOCKS (system-screens.jsx:220-226).
 enum BookNowBlock {
-  offline(Icons.wifi_off_rounded),
-  busy(Icons.schedule_rounded),
-  vacation(Icons.beach_access_outlined),
-  settlementPaused(Icons.payments_outlined),
-  notApproved(Icons.gpp_maybe_outlined);
+  offline(LucideIcons.wifiOff),
+  busy(LucideIcons.clock),
+  vacation(LucideIcons.palmtree),
+  settlementPaused(LucideIcons.banknote),
+  notApproved(LucideIcons.shieldAlert);
 
   final IconData icon;
   const BookNowBlock(this.icon);
@@ -100,7 +101,7 @@ class _BookNowCheckState extends State<_BookNowCheck>
   // aiwa-pulse 1.1s.
   late final _pulse = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 550),
+    duration: AppTheme.durPulse,
     lowerBound: .55,
   )..repeat(reverse: true);
 
@@ -175,7 +176,11 @@ class _BookNowCheckState extends State<_BookNowCheck>
                 color: AppColors.plum100,
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.radar, size: 21, color: AppColors.plum700),
+              child: Icon(
+                LucideIcons.radar,
+                size: 21,
+                color: AppColors.plum700,
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -187,7 +192,9 @@ class _BookNowCheckState extends State<_BookNowCheck>
           Text(
             AppLocalizations.of(context).bookNowConfirming(name),
             textAlign: TextAlign.center,
-            style: AppTextStyles.micro.copyWith(fontSize: 12.5),
+            style: AppTextStyles.micro.copyWith(
+              fontSize: AppTextStyles.fsLabelSmPlus,
+            ),
           ),
         ],
       ),
@@ -203,7 +210,7 @@ class _BookNowCheckState extends State<_BookNowCheck>
         const SizedBox(height: 18),
         AiwaButton(
           label: AppLocalizations.of(context).bookNowChooseScheduled,
-          icon: Icons.calendar_today_outlined,
+          icon: LucideIcons.calendar,
           size: AiwaButtonSize.lg,
           fullWidth: true,
           onPressed: () => Navigator.of(context).pop(BookNowChoice.schedule),
@@ -211,7 +218,7 @@ class _BookNowCheckState extends State<_BookNowCheck>
         const SizedBox(height: 9),
         AiwaButton(
           label: AppLocalizations.of(context).bookNowSeeOthers,
-          icon: Icons.search_rounded,
+          icon: LucideIcons.search,
           variant: AiwaButtonVariant.secondary,
           size: AiwaButtonSize.lg,
           fullWidth: true,

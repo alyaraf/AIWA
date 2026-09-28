@@ -15,6 +15,7 @@ import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../data/provider_manage_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Gallery manager — `GalleryManagerScreen` (provider-manage.jsx:84-175).
 class GalleryManagerPage extends StatefulWidget {
@@ -92,7 +93,7 @@ class _GalleryManagerPageState extends State<GalleryManagerPage> {
       title: AppLocalizations.of(context).galDeleteTitle,
       body: AppLocalizations.of(context).galDeleteBody,
       confirmLabel: AppLocalizations.of(context).commonDelete,
-      icon: Icons.delete_outline_rounded,
+      icon: LucideIcons.trash2,
     );
     if (!ok || !mounted) return;
     final r = await _repo.deletePhoto(url);
@@ -156,7 +157,7 @@ class _GalleryManagerPageState extends State<GalleryManagerPage> {
                       : const SkeletonRows(cols: 3, rows: 2)
                 else if (items.isEmpty)
                   EmptyState(
-                    icon: Icons.photo_library_outlined,
+                    icon: LucideIcons.images,
                     title: l.providerNoPhotos,
                     subtitle: l.galEmptyBody,
                     actionLabel: l.galUploadFirst,
@@ -198,7 +199,7 @@ class _GalleryManagerPageState extends State<GalleryManagerPage> {
                   const SizedBox(height: 14),
                   InlineBanner(
                     tone: BannerTone.warn,
-                    icon: Icons.visibility_off_outlined,
+                    icon: LucideIcons.eyeOff,
                     title: l.galOneHidden,
                     body: l.galOneHiddenBody,
                   ),
@@ -236,10 +237,10 @@ class _UploadCard extends StatelessWidget {
                 height: 32,
                 decoration: BoxDecoration(
                   color: AppColors.plum100,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppTheme.radius10),
                 ),
                 child: Icon(
-                  Icons.add_photo_alternate_outlined,
+                  LucideIcons.imageUp,
                   size: 16,
                   color: AppColors.plum700,
                 ),
@@ -268,11 +269,7 @@ class _UploadCard extends StatelessWidget {
               IconButton(
                 onPressed: onCancel,
                 tooltip: AppLocalizations.of(context).galCancelUpload,
-                icon: Icon(
-                  Icons.close_rounded,
-                  size: 16,
-                  color: AppColors.ink3,
-                ),
+                icon: Icon(LucideIcons.x, size: 16, color: AppColors.ink3),
               ),
             ],
           ),
@@ -281,7 +278,7 @@ class _UploadCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(3),
             child: TweenAnimationBuilder<double>(
               tween: Tween(end: progress),
-              duration: const Duration(milliseconds: 130),
+              duration: AppTheme.dur1,
               builder: (_, v, _) => LinearProgressIndicator(
                 value: v,
                 minHeight: 5,
@@ -328,11 +325,7 @@ class _Tile extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 spacing: 5,
                 children: [
-                  Icon(
-                    Icons.visibility_off_outlined,
-                    size: 17,
-                    color: AppColors.rose300,
-                  ),
+                  Icon(LucideIcons.eyeOff, size: 17, color: AppColors.rose300),
                   Text(
                     AppLocalizations.of(context).galHiddenByMod,
                     textAlign: TextAlign.center,
@@ -353,7 +346,7 @@ class _Tile extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .92),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusPill),
                 ),
                 child: Text(
                   AppLocalizations.of(context).galCover,
@@ -382,7 +375,7 @@ class _Tile extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.close_rounded,
+                    LucideIcons.x,
                     size: 12,
                     color: Colors.white,
                   ),

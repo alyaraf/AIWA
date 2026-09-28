@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import 'aiwa_button.dart';
 import 'aiwa_sheet.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// SlotConflictSheet (system-screens.jsx:150-186). Pops the picked entry of
 /// [alternatives], or null for 'Pick another day' / dismiss.
@@ -23,7 +24,7 @@ Future<String?> showSlotConflictSheet(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SheetWarnHead(
-            icon: Icons.event_busy_outlined,
+            icon: LucideIcons.calendarX,
             eyebrow: AppLocalizations.of(ctx).slotJustTaken,
             title: AppLocalizations.of(ctx).slotTitle,
             body: AppLocalizations.of(ctx).slotBody(providerName),

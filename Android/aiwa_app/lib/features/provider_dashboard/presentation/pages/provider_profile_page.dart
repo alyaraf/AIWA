@@ -16,6 +16,7 @@ import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../data/provider_manage_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Profile tab — `ProviderProfile` (provider-screens.jsx:482-557).
 class ProviderProfilePage extends StatefulWidget {
@@ -77,7 +78,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       title: AppLocalizations.of(context).ppSignOutTitle,
       body: AppLocalizations.of(context).ppSignOutBody,
       confirmLabel: AppLocalizations.of(context).commonSignOut,
-      icon: Icons.logout_rounded,
+      icon: LucideIcons.logOutDir,
       danger: false,
     );
     if (!ok || !mounted) return;
@@ -186,11 +187,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   border: AppColors.divider,
                   iconBg: _vacation ? AppColors.warn100 : AppColors.plum100,
                   iconFg: _vacation ? AppColors.warn700 : AppColors.plum700,
-                  icon: Icons.beach_access_outlined,
+                  icon: LucideIcons.palmtree,
                   title: l.ppVacation,
                   titleColor: AppColors.ink,
                   body: _vacation ? l.ppVacationOn : l.ppVacationOff,
-                  bodyStyle: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                  bodyStyle: AppTextStyles.micro.copyWith(
+                    fontSize: AppTextStyles.fsMicroPlus,
+                  ),
                   trailing: AiwaToggle(
                     value: _vacation,
                     warn: true,
@@ -208,7 +211,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     border: AppColors.success500.withValues(alpha: .2),
                     iconBg: AppColors.success500,
                     iconFg: AppColors.paper,
-                    icon: Icons.verified_rounded,
+                    icon: LucideIcons.badgeCheck,
                     title: l.ppVerified,
                     titleColor: AppColors.success700,
                     // BACKEND GAP: no approval date (verifiedAt) in any
@@ -222,33 +225,33 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                 ],
                 const SizedBox(height: 12),
                 SettingsRow(
-                  icon: Icons.work_outline_rounded,
+                  icon: LucideIcons.briefcase,
                   label: l.ppBusinessInfo,
                   onTap: () => _push(AppRoutes.providerBusinessInfo),
                 ),
                 SettingsRow(
-                  icon: Icons.photo_library_outlined,
+                  icon: LucideIcons.images,
                   label: l.galEyebrow,
                   value: photos == null ? null : l.ppPhotos(photos),
                   onTap: () => _push(AppRoutes.providerGallery),
                 ),
                 SettingsRow(
-                  icon: Icons.group_outlined,
+                  icon: LucideIcons.users,
                   label: l.staffTitle,
                   onTap: () => _push(AppRoutes.providerStaff),
                 ),
                 SettingsRow(
-                  icon: Icons.payments_outlined,
+                  icon: LucideIcons.banknote,
                   label: l.ppWallet,
                   onTap: () => _push(AppRoutes.providerWallet),
                 ),
                 SettingsRow(
-                  icon: Icons.notifications_none_rounded,
+                  icon: LucideIcons.bell,
                   label: l.ppNotifications,
                   onTap: () => context.push(AppRoutes.notifications),
                 ),
                 SettingsRow(
-                  icon: Icons.star_outline_rounded,
+                  icon: LucideIcons.star,
                   label: l.revTitle,
                   value: d == null
                       ? null
@@ -256,17 +259,17 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   onTap: () => _push(AppRoutes.providerReviews),
                 ),
                 SettingsRow(
-                  icon: Icons.verified_user_outlined,
+                  icon: LucideIcons.shieldCheck,
                   label: l.ppSafety,
                   onTap: () => context.push(AppRoutes.safetyPolicies),
                 ),
                 SettingsRow(
-                  icon: Icons.chat_bubble_outline_rounded,
+                  icon: LucideIcons.messageCircle,
                   label: l.ppWhatsApp,
                   onTap: () => context.push(AppRoutes.support),
                 ),
                 SettingsRow(
-                  icon: Icons.logout_rounded,
+                  icon: LucideIcons.logOutDir,
                   label: l.commonSignOut,
                   danger: true,
                   showDivider: false,
@@ -308,7 +311,7 @@ class _Card extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radius14),
         border: Border.all(color: border),
       ),
       child: Row(

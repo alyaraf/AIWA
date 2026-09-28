@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
@@ -49,7 +50,7 @@ class ScreenHeader extends StatelessWidget {
       child: Row(
         children: [
           if (onBack != null) ...[
-            AiwaIconButton(icon: Icons.arrow_back_rounded, onTap: onBack),
+            AiwaIconButton(icon: LucideIcons.arrowLeftDir, onTap: onBack),
             const SizedBox(width: 12),
           ],
           Expanded(
@@ -236,7 +237,9 @@ class SettingsRow extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     sub!,
-                    style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+                    style: AppTextStyles.micro.copyWith(
+                      fontSize: AppTextStyles.fsMicroPlus,
+                    ),
                   ),
                 ),
             ],
@@ -248,7 +251,9 @@ class SettingsRow extends StatelessWidget {
             child: Text(
               value!,
               style: boxed
-                  ? AppTextStyles.meta.copyWith(fontSize: 12.5)
+                  ? AppTextStyles.meta.copyWith(
+                      fontSize: AppTextStyles.fsLabelSmPlus,
+                    )
                   : AppTextStyles.meta,
             ),
           ),
@@ -258,7 +263,7 @@ class SettingsRow extends StatelessWidget {
         ] else if (onTap != null && (boxed || !danger)) ...[
           SizedBox(width: boxed ? 13 : 14),
           Icon(
-            Icons.chevron_right_rounded,
+            LucideIcons.chevronRightDir,
             size: boxed ? 17 : 16,
             color: boxed ? AppColors.ink4 : AppColors.ink3,
           ),
@@ -274,7 +279,7 @@ class SettingsRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
             color: AppColors.paper,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
             border: Border.all(color: AppColors.divider),
           ),
           child: row,
@@ -329,32 +334,32 @@ class InlineBanner extends StatelessWidget {
       case BannerTone.info:
         bg = AppColors.info100;
         fg = AppColors.info700;
-        defaultIcon = Icons.info_outline_rounded;
+        defaultIcon = LucideIcons.info;
         break;
       case BannerTone.warn:
         bg = AppColors.warn100;
         fg = AppColors.warn700;
-        defaultIcon = Icons.warning_amber_rounded;
+        defaultIcon = LucideIcons.triangleAlert;
         break;
       case BannerTone.danger:
         bg = AppColors.danger100;
         fg = AppColors.danger700;
-        defaultIcon = Icons.report_outlined;
+        defaultIcon = LucideIcons.octagonAlert;
         break;
       case BannerTone.success:
         bg = AppColors.success100;
         fg = AppColors.success700;
-        defaultIcon = Icons.check_circle_outline_rounded;
+        defaultIcon = LucideIcons.circleCheck;
         break;
       case BannerTone.plum:
         bg = AppColors.plum100;
         fg = AppColors.plum700;
-        defaultIcon = Icons.auto_awesome_outlined;
+        defaultIcon = LucideIcons.sparkles;
         break;
       case BannerTone.gold:
         bg = AppColors.gold100;
         fg = AppColors.gold700;
-        defaultIcon = Icons.auto_awesome_outlined;
+        defaultIcon = LucideIcons.sparkles;
         break;
     }
     return Container(
@@ -396,7 +401,7 @@ class InlineBanner extends StatelessWidget {
                     Text(
                       body!,
                       style: AppTextStyles.micro.copyWith(
-                        fontSize: 12.5,
+                        fontSize: AppTextStyles.fsLabelSmPlus,
                         color: fg.withValues(alpha: .92),
                         height: 1.5,
                       ),
@@ -446,7 +451,7 @@ class EndOfList extends StatelessWidget {
             child: Text(
               label ?? AppLocalizations.of(context).endOfList,
               style: AppTextStyles.micro.copyWith(
-                fontSize: 11.5,
+                fontSize: AppTextStyles.fsMicroPlus,
                 color: AppColors.ink4,
               ),
             ),
@@ -497,7 +502,7 @@ class AiwaPagination extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: selected ? AppColors.plum700 : AppColors.paper,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppTheme.radius10),
               border: Border.all(
                 color: selected ? Colors.transparent : AppColors.divider,
               ),
@@ -524,7 +529,7 @@ class AiwaPagination extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         spacing: 6,
         children: [
-          chevron(Icons.chevron_left_rounded, page - 1, page > 1),
+          chevron(LucideIcons.chevronLeftDir, page - 1, page > 1),
           for (var n = from; n <= to; n++)
             box(
               selected: n == page,
@@ -541,7 +546,7 @@ class AiwaPagination extends StatelessWidget {
               '…',
               style: AppTextStyles.meta.copyWith(color: AppColors.ink4),
             ),
-          chevron(Icons.chevron_right_rounded, page + 1, page < totalPages),
+          chevron(LucideIcons.chevronRightDir, page + 1, page < totalPages),
         ],
       ),
     );
@@ -603,7 +608,10 @@ class AiwaGlow extends StatelessWidget {
   RadialGradient _gradient(double radius) => RadialGradient(
     center: center,
     radius: radius,
-    colors: [color.withValues(alpha: opacity), color.withValues(alpha: 0)],
+    colors: [
+      color.withValues(alpha: opacity),
+      color.withValues(alpha: 0),
+    ],
     stops: [0, stop],
   );
 
