@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../l10n/l10n.dart';
 
 /// Booking status pill with a coloured dot — `StatusPill` in the kit.
 /// Accepts backend statuses (`ON_THE_WAY`) and kit ids (`onway`).
@@ -11,7 +12,7 @@ class StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _config(status);
+    final c = _config(status, AppLocalizations.of(context));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -36,14 +37,14 @@ class StatusPill extends StatelessWidget {
     );
   }
 
-  static _StatusConfig _config(String status) {
+  static _StatusConfig _config(String status, AppLocalizations l) {
     switch (status.toLowerCase()) {
       case 'pending':
         return _StatusConfig(
           AppColors.warn100,
           AppColors.warn700,
           AppColors.warn500,
-          'Pending',
+          l.statusPending,
         );
       case 'accepted':
       case 'confirmed':
@@ -51,7 +52,7 @@ class StatusPill extends StatelessWidget {
           AppColors.info100,
           AppColors.info700,
           AppColors.info500,
-          'Confirmed',
+          l.statusConfirmed,
         );
       case 'on_the_way':
       case 'onway':
@@ -59,14 +60,14 @@ class StatusPill extends StatelessWidget {
           AppColors.plum100,
           AppColors.plum700,
           AppColors.plum500,
-          'On the way',
+          l.statusOnTheWay,
         );
       case 'arrived':
         return _StatusConfig(
           AppColors.plum100,
           AppColors.plum900,
           AppColors.plum700,
-          'Arrived',
+          l.statusArrived,
         );
       case 'in_progress':
       case 'progress':
@@ -74,28 +75,28 @@ class StatusPill extends StatelessWidget {
           AppColors.rose100,
           AppColors.rose700,
           AppColors.rose500,
-          'In progress',
+          l.statusInProgress,
         );
       case 'completed':
         return _StatusConfig(
           AppColors.success100,
           AppColors.success700,
           AppColors.success500,
-          'Completed',
+          l.statusCompleted,
         );
       case 'cancelled':
         return _StatusConfig(
           AppColors.danger100,
           AppColors.danger700,
           AppColors.danger500,
-          'Cancelled',
+          l.statusCancelled,
         );
       case 'rejected':
         return _StatusConfig(
           AppColors.danger100,
           AppColors.danger700,
           AppColors.danger500,
-          'Rejected',
+          l.statusRejected,
         );
       case 'no_show':
       case 'noshow':
@@ -103,29 +104,24 @@ class StatusPill extends StatelessWidget {
           AppColors.warn100,
           AppColors.warn700,
           AppColors.warn500,
-          'No-show',
+          l.statusNoShow,
         );
       case 'expired':
         return _StatusConfig(
           AppColors.cream,
           AppColors.ink3,
           AppColors.ink4,
-          'Expired',
+          l.statusExpired,
         );
       case 'disputed':
         return _StatusConfig(
           AppColors.danger100,
           AppColors.danger700,
           AppColors.danger500,
-          'Disputed',
+          l.statusDisputed,
         );
-      default:
-        return _StatusConfig(
-          AppColors.cream,
-          AppColors.ink3,
-          AppColors.ink4,
-          status,
-        );
+      default: // kit: map[status] || map.pending
+        return _config('pending', l);
     }
   }
 }

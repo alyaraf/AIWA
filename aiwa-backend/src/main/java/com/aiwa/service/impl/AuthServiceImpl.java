@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
+    private final com.aiwa.repository.ProviderProfileRepository providerProfileRepo;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtils jwtUtils;
@@ -244,7 +245,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private ApiResponse.UserDto toUserDto(User u) {
+        // Lets the app gate unapproved providers on the pending screen.
+        var provider = u.getRole() == com.aiwa.enums.UserRole.PROVIDER
+                ? providerProfileRepo.findByUserId(u.getId()).orElse(null) : null;
         return ApiResponse.UserDto.builder()
+                .providerProfileId(provider == null ? null : provider.getId())
+                .providerStatus(provider == null ? null : provider.getVerificationStatus())
                 .id(u.getId())
                 .fullName(u.getFullName())
                 .email(u.getEmail())

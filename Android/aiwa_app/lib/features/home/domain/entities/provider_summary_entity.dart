@@ -17,6 +17,12 @@ class ProviderSummaryEntity extends Equatable {
   final String? profileImageUrl;
   final List<String> galleryImages;
 
+  /// ProviderSummaryDto.saved — true when the signed-in user hearted it.
+  final bool saved;
+
+  /// Derived: not on vacation, offline or settlement-paused.
+  final bool openNow;
+
   const ProviderSummaryEntity({
     required this.id,
     required this.businessName,
@@ -33,31 +39,11 @@ class ProviderSummaryEntity extends Equatable {
     required this.ownerName,
     this.profileImageUrl,
     this.galleryImages = const [],
+    this.saved = false,
+    this.openNow = false,
   });
 
   bool get isVerified => verificationStatus == 'APPROVED';
-
-  String get distanceText {
-    if (distanceKm == null) return '';
-    if (distanceKm! < 1) {
-      return '${(distanceKm! * 1000).round()} m';
-    }
-    return '${distanceKm!.toStringAsFixed(1)} km';
-  }
-
-  String get categoryLabel {
-    final map = {
-      'HAIR': 'Hair',
-      'NAILS': 'Nails',
-      'SPA': 'Spa',
-      'MAKEUP': 'Makeup',
-      'LASHES': 'Lashes',
-      'SKIN': 'Skin',
-      'MASSAGE': 'Massage',
-      'OTHER': 'Other',
-    };
-    return map[primaryCategory] ?? primaryCategory;
-  }
 
   @override
   List<Object?> get props => [id, businessName, primaryCategory];

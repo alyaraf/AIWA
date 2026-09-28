@@ -7,28 +7,38 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../domain/entities/booking_entity.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class BookingConfirmedPage extends StatelessWidget {
   final BookingEntity booking;
 
   const BookingConfirmedPage({super.key, required this.booking});
 
-  String get _when {
-    try {
-      final d = DateTime.parse(booking.scheduledDate);
-      final t = booking.scheduledTime.length >= 5
-          ? booking.scheduledTime.substring(0, 5)
-          : booking.scheduledTime;
-      return '${DateFormat('EEE, MMM d').format(d)} · $t';
-    } catch (_) {
-      return '${booking.scheduledDate} · ${booking.scheduledTime}';
+  /// 'Tuesday, May 19 at 12:30 PM' (screens.jsx:478).
+  String _whenLong(AppLocalizations l) {
+    final t = booking.scheduledTime;
+    final dt = DateTime.tryParse(
+      '${booking.scheduledDate} ${t.length == 5 ? '$t:00' : t}',
+    );
+    if (dt == null) {
+      return l.formatWhen(booking.scheduledDate, booking.scheduledTime);
     }
+    return l.bookingWhenLong(
+      DateFormat('EEEE, MMMM d', l.localeName).format(dt),
+      DateFormat('h:mm a', l.localeName).format(dt),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final insets = MediaQuery.paddingOf(context);
     final provider = booking.displayProviderName;
+    // Headline uses the owner's first name, the Provider row the business.
+    final firstName =
+        (booking.providerName.isNotEmpty ? booking.providerName : provider)
+            .split(' ')
+            .first;
     return Scaffold(
       backgroundColor: AppColors.bone,
       body: SingleChildScrollView(
@@ -54,24 +64,26 @@ class BookingConfirmedPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            EyebrowLabel('Booking placed', color: AppColors.rose700),
+            EyebrowLabel(l.bookingPlaced, color: AppColors.rose700),
             const SizedBox(height: 8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 320),
               child: Text.rich(
                 TextSpan(
-                  style: AppTextStyles.h1.copyWith(fontSize: 30, height: 1.1),
-                  children: [
-                    const TextSpan(text: 'You said '),
-                    TextSpan(
-                      text: 'aiwa',
+                  style: AppTextStyles.h1.copyWith(
+                    fontSize: 30,
+                    height: 1.1,
+                    letterSpacing: 0,
+                  ),
+                  children: spansOf(l.bookingSaidAiwa('{aiwa}', firstName), {
+                    'aiwa': TextSpan(
+                      text: l.bookingAiwaWord,
                       style: TextStyle(
                         color: AppColors.rose700,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
-                    TextSpan(text: '. We told $provider.'),
-                  ],
+                  }),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -80,7 +92,7 @@ class BookingConfirmedPage extends StatelessWidget {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 320),
               child: Text(
-                "$_when. We'll ping you the moment they confirm — usually within 30 minutes.",
+                l.bookingConfirmPing(_whenLong(l)),
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodySm.copyWith(color: AppColors.ink2),
               ),
@@ -95,19 +107,27 @@ class BookingConfirmedPage extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  _Row(label: 'Provider', value: provider),
+                  _Row(label: l.bookingProvider, value: provider),
                   const _Divider(),
-                  _Row(label: 'Service', value: booking.serviceName),
+                  _Row(label: l.bookingService, value: booking.serviceName),
                   const _Divider(),
-                  _Row(label: 'When', value: _when),
+                  _Row(
+                    label: l.bookingWhen,
+                    value: l.formatWhen(
+                      booking.scheduledDate,
+                      booking.scheduledTime,
+                    ),
+                  ),
                   const _Divider(),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Expanded(child: Text('Total', style: AppTextStyles.meta)),
+                      Expanded(
+                        child: Text(l.bookingTotal, style: AppTextStyles.meta),
+                      ),
                       Text(
-                        'EGP ${NumberFormat.decimalPattern('en').format(booking.servicePrice.round())}',
+                        l.egp(booking.servicePrice),
                         style: AppTextStyles.h3.copyWith(fontSize: 20),
                       ),
                     ],
@@ -117,14 +137,17 @@ class BookingConfirmedPage extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             AiwaButton(
-              label: 'View my bookings',
-              onPressed: () => context.go(AppRoutes.myBookings),
+              label: l.bookingViewMine,
+              // prototype.jsx:693 — the label says bookings, the target is
+              // Tracking.
+              onPressed: () =>
+                  context.go('/booking/${booking.id}/track', extra: booking),
               fullWidth: true,
               size: AiwaButtonSize.lg,
             ),
             const SizedBox(height: 10),
             AiwaButton(
-              label: 'Back to home',
+              label: l.commonBackHome,
               onPressed: () => context.go(AppRoutes.home),
               variant: AiwaButtonVariant.ghost,
               fullWidth: true,

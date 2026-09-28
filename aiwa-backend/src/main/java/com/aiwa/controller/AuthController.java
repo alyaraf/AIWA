@@ -31,6 +31,7 @@ public class AuthController {
     private final AuthService authService;
     private final OtpServiceImpl otpService;
     private final UserRepository userRepo;
+    private final com.aiwa.repository.ProviderProfileRepository providerProfileRepo;
     private final com.aiwa.service.impl.FileStorageServiceImpl fileStorageService;
     private final JwtUtils jwtUtils;
 
@@ -341,7 +342,12 @@ public class AuthController {
     }
 
     private ApiResponse.UserDto toUserDto(User u) {
+        // Lets the app gate unapproved providers on the pending screen.
+        var provider = u.getRole() == com.aiwa.enums.UserRole.PROVIDER
+                ? providerProfileRepo.findByUserId(u.getId()).orElse(null) : null;
         return ApiResponse.UserDto.builder()
+                .providerProfileId(provider == null ? null : provider.getId())
+                .providerStatus(provider == null ? null : provider.getVerificationStatus())
                 .id(u.getId())
                 .fullName(u.getFullName())
                 .email(u.getEmail())

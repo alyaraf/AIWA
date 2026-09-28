@@ -26,12 +26,11 @@ class ProviderLoaded extends ProviderState {
     ProviderDetailEntity? provider,
     bool? isSaved,
     List<AvailabilitySlot>? slots,
-  }) =>
-      ProviderLoaded(
-        provider: provider ?? this.provider,
-        isSaved: isSaved ?? this.isSaved,
-        slots: slots ?? this.slots,
-      );
+  }) => ProviderLoaded(
+    provider: provider ?? this.provider,
+    isSaved: isSaved ?? this.isSaved,
+    slots: slots ?? this.slots,
+  );
 
   @override
   List<Object?> get props => [provider, isSaved, slots];

@@ -21,8 +21,7 @@ class SecureStorage {
   Future<void> saveUserRole(String role) =>
       _storage.write(key: AppConstants.userRoleKey, value: role);
 
-  Future<String?> getUserRole() =>
-      _storage.read(key: AppConstants.userRoleKey);
+  Future<String?> getUserRole() => _storage.read(key: AppConstants.userRoleKey);
 
   Future<void> saveUserId(String id) =>
       _storage.write(key: AppConstants.userIdKey, value: id);
@@ -30,6 +29,14 @@ class SecureStorage {
   Future<String?> getUserId() => _storage.read(key: AppConstants.userIdKey);
 
   Future<void> clearAll() => _storage.deleteAll();
+
+  /// Sign-in "Remember me" off: the session ends at the next cold start.
+  Future<void> setRemember(bool remember) => remember
+      ? _storage.delete(key: 'remember_me')
+      : _storage.write(key: 'remember_me', value: 'false');
+
+  Future<bool> getRemember() async =>
+      await _storage.read(key: 'remember_me') != 'false';
 
   Future<bool> hasValidSession() async {
     final token = await getAccessToken();

@@ -16,6 +16,7 @@ abstract class AuthRepository {
     required String role,
     String? gender,
     String? profileImageUrl,
+    String? preferredLanguage,
   });
 
   Future<Either<Failure, void>> sendOtp({required String phone});
@@ -35,7 +36,39 @@ abstract class AuthRepository {
 
   Future<Either<Failure, void>> updateLanguage({required String language});
 
-  Future<Either<Failure, String>> refreshToken({
-    required String refreshToken,
+  /// Forgot password. Phone only: the backend has no email reset yet.
+  Future<Either<Failure, void>> resetPassword({
+    required String identifier,
+    required String code,
+    required String newPassword,
   });
+
+  Future<Either<Failure, void>> uploadAvatar(String path);
+
+  /// Provider sign-up, after register: business profile + staff.
+  Future<Either<Failure, void>> createProviderProfile(
+    Map<String, dynamic> profile, {
+    List<String> staff = const [],
+  });
+
+  Future<Either<Failure, void>> uploadVerificationDocuments({
+    required String idFront,
+    required String idBack,
+    required String selfie,
+  });
+
+  /// Latest active policy of [type] (CUSTOMER_TERMS / PROVIDER_TERMS):
+  /// `version` + `contentEn`.
+  Future<Either<Failure, ({String version, String content})>> latestTerms(
+    String type,
+  );
+
+  Future<Either<Failure, void>> acceptTerms(String version);
+
+  Future<Either<Failure, void>> updatePreferences({
+    required double minKm,
+    required double maxKm,
+  });
+
+  Future<Either<Failure, String>> refreshToken({required String refreshToken});
 }

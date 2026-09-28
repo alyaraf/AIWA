@@ -3,6 +3,7 @@ package com.aiwa.service;
 import com.aiwa.dto.request.AuthRequest;
 import com.aiwa.dto.response.ApiResponse;
 
+// ponytail: one implementation (AuthServiceImpl), inline into a concrete @Service when touched; keep only if a second impl appears
 public interface AuthService {
     ApiResponse.AuthResponse register(AuthRequest.Register request);
     ApiResponse.AuthResponse login(AuthRequest.Login request);

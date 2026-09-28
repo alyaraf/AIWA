@@ -11,7 +11,8 @@ class ProviderRepositoryImpl implements ProviderRepository {
 
   @override
   Future<Either<Failure, ProviderDetailEntity>> getProviderDetail(
-      String providerId) async {
+    String providerId,
+  ) async {
     try {
       final result = await _remote.getProviderDetail(providerId);
       return Right(result);
@@ -24,7 +25,8 @@ class ProviderRepositoryImpl implements ProviderRepository {
 
   @override
   Future<Either<Failure, List<ServiceEntity>>> getProviderServices(
-      String providerId) async {
+    String providerId,
+  ) async {
     try {
       final result = await _remote.getProviderServices(providerId);
       return Right(result);
@@ -35,10 +37,16 @@ class ProviderRepositoryImpl implements ProviderRepository {
 
   @override
   Future<Either<Failure, List<ReviewSummaryEntity>>> getProviderReviews(
-      String providerId, {int page = 0, int size = 10}) async {
+    String providerId, {
+    int page = 0,
+    int size = 10,
+  }) async {
     try {
-      final result =
-          await _remote.getProviderReviews(providerId, page: page, size: size);
+      final result = await _remote.getProviderReviews(
+        providerId,
+        page: page,
+        size: size,
+      );
       return Right(result);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
@@ -47,17 +55,25 @@ class ProviderRepositoryImpl implements ProviderRepository {
 
   @override
   Future<Either<Failure, List<AvailabilitySlot>>> getAvailableSlots(
-      String providerId, String date) async {
+    String providerId,
+    String serviceId,
+    String date,
+  ) async {
     try {
-      final raw = await _remote.getAvailableSlots(providerId, date);
-      final slots = raw.map((e) {
-        final d = DateTime.tryParse(e['date'] as String? ?? '') ?? DateTime.now();
-        final times = (e['times'] as List<dynamic>? ?? [])
-            .map((t) => t.toString())
-            .toList();
-        return AvailabilitySlot(date: d, times: times);
-      }).toList();
-      return Right(slots);
+      final raw = await _remote.getAvailableSlots(providerId, serviceId, date);
+      return Right([
+        AvailabilitySlot(
+          date: DateTime.parse(date),
+          times: [
+            for (final s in raw)
+              if (s['booked'] != true) s['startTime'].toString(),
+          ],
+          booked: [
+            for (final s in raw)
+              if (s['booked'] == true) s['startTime'].toString(),
+          ],
+        ),
+      ]);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     }
@@ -90,6 +106,22 @@ class ProviderRepositoryImpl implements ProviderRepository {
       return Right(saved);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> flagProvider(
+    String providerId,
+    String reason,
+    String note,
+  ) async {
+    try {
+      await _remote.flagProvider(providerId, reason, note);
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
     }
   }
 }

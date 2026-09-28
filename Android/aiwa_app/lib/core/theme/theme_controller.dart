@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_colors.dart';
@@ -43,5 +44,28 @@ class ThemeController {
     final next = name == female ? female : male;
     AppColors.use(next == female ? AiwaPalettes.female : AiwaPalettes.male);
     mode.value = next;
+  }
+}
+
+/// App language — `en` / `ar`, picked on Splash and Preferences. `ar` flips
+/// the app to RTL through MaterialApp.locale.
+class LocaleController {
+  LocaleController._();
+
+  static const String _prefsKey = 'aiwa_language';
+  static final ValueNotifier<Locale> locale = ValueNotifier(const Locale('en'));
+
+  static Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      locale.value = Locale(prefs.getString(_prefsKey) ?? 'en');
+    } catch (_) {}
+  }
+
+  static void set(String code) {
+    locale.value = Locale(code);
+    SharedPreferences.getInstance()
+        .then((p) => p.setString(_prefsKey, code))
+        .catchError((_) => false);
   }
 }

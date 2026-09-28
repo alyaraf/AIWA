@@ -112,8 +112,8 @@ class _AiwaButtonState extends State<AiwaButton>
       opacity: widget.onPressed == null && !widget.loading ? 0.45 : 1.0,
       duration: AppTheme.dur2,
       child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1,
-        duration: const Duration(milliseconds: 120),
+        scale: _pressed ? 0.96 : 1,
+        duration: AppTheme.dur1,
         curve: AppTheme.easeSoft,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,

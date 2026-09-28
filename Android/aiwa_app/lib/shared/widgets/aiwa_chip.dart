@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
+import 'press_scale.dart';
 
 /// Pill chip — mirrors `Chip` in the design kit (default / active / tonal).
 class AiwaChip extends StatelessWidget {
@@ -34,7 +35,7 @@ class AiwaChip extends StatelessWidget {
       fg = AppColors.plum700;
       border = Colors.transparent;
     }
-    return GestureDetector(
+    return PressScale(
       onTap: onTap,
       child: AnimatedContainer(
         duration: AppTheme.dur2,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// Labelled input — mirrors `Field` + `TextInput` in the design kit:
 /// eyebrow label, optional tag, hint underneath, per-field error with icon.
@@ -27,6 +28,16 @@ class AiwaTextField extends StatelessWidget {
   final bool autoFocus;
   final bool enabled;
 
+  /// Account-setup style (auth-screens.jsx:335): the input stays idle, the
+  /// error is a plain line without icon, and the hint still shows below it.
+  final bool inlineError;
+
+  /// Rendered between the input and the error/hint (e.g. strength meter).
+  final Widget? belowInput;
+
+  /// Input text style; defaults to body 15 ink.
+  final TextStyle? textStyle;
+
   const AiwaTextField({
     super.key,
     this.label,
@@ -49,14 +60,28 @@ class AiwaTextField extends StatelessWidget {
     this.onSubmitted,
     this.autoFocus = false,
     this.enabled = true,
+    this.inlineError = false,
+    this.belowInput,
+    this.textStyle,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasError = error != null && error!.isNotEmpty;
+    final style =
+        textStyle ?? AppTextStyles.body.copyWith(color: AppColors.ink);
+    final flagInput = hasError && !inlineError;
+    // ValidatedInput error state (states.jsx:189-199): danger leading icon
+    // plus a trailing circle-alert.
     final prefix =
         prefixIcon ??
-        (icon != null ? Icon(icon, size: 17, color: AppColors.plum700) : null);
-    final hasError = error != null && error!.isNotEmpty;
+        (icon != null
+            ? Icon(
+                icon,
+                size: 17,
+                color: flagInput ? AppColors.danger500 : AppColors.plum700,
+              )
+            : null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,7 +95,7 @@ class AiwaTextField extends StatelessWidget {
               ),
               if (optional)
                 Text(
-                  'Optional',
+                  AppLocalizations.of(context).commonOptional,
                   style: AppTextStyles.micro.copyWith(
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
@@ -93,14 +118,15 @@ class AiwaTextField extends StatelessWidget {
           onFieldSubmitted: onSubmitted,
           autofocus: autoFocus,
           enabled: enabled,
-          style: AppTextStyles.body.copyWith(color: AppColors.ink),
+          style: style,
           cursorColor: AppColors.plum700,
           decoration: InputDecoration(
             hintText: placeholder,
-            hintStyle: AppTextStyles.body.copyWith(color: AppColors.ink4),
+            hintStyle: style.copyWith(color: AppColors.ink4),
             prefixIcon: prefix != null
                 ? Padding(
-                    padding: const EdgeInsets.only(left: 14, right: 10),
+                    // M3 adds a 4px prefix-to-input gap; 6 + 4 = the kit's 10.
+                    padding: const EdgeInsetsDirectional.only(start: 14, end: 6),
                     child: prefix,
                   )
                 : null,
@@ -108,16 +134,24 @@ class AiwaTextField extends StatelessWidget {
               minWidth: 0,
               minHeight: 0,
             ),
-            suffixIcon: suffixIcon,
+            suffixIcon:
+                suffixIcon ??
+                (flagInput
+                    ? Icon(
+                        Icons.error_outline_rounded,
+                        size: 16,
+                        color: AppColors.danger500,
+                      )
+                    : null),
             filled: true,
             fillColor: enabled ? AppColors.paper : AppColors.cream,
             border: AppTheme.inputBorder(AppColors.divider),
             enabledBorder: AppTheme.inputBorder(
-              hasError ? AppColors.danger500 : AppColors.divider,
+              flagInput ? AppColors.danger500 : AppColors.divider,
             ),
             disabledBorder: AppTheme.inputBorder(AppColors.divider),
             focusedBorder: AppTheme.inputBorder(
-              hasError ? AppColors.danger500 : AppColors.plum700,
+              flagInput ? AppColors.danger500 : AppColors.plum700,
             ),
             errorBorder: AppTheme.inputBorder(AppColors.danger500),
             focusedErrorBorder: AppTheme.inputBorder(AppColors.danger500),
@@ -128,16 +162,19 @@ class AiwaTextField extends StatelessWidget {
             counterText: '',
           ),
         ),
+        ?belowInput,
         if (hasError) ...[
           const SizedBox(height: 5),
           Row(
             children: [
-              Icon(
-                Icons.error_outline_rounded,
-                size: 12,
-                color: AppColors.danger700,
-              ),
-              const SizedBox(width: 4),
+              if (!inlineError) ...[
+                Icon(
+                  Icons.error_outline_rounded,
+                  size: 12,
+                  color: AppColors.danger700,
+                ),
+                const SizedBox(width: 4),
+              ],
               Expanded(
                 child: Text(
                   error!,
@@ -149,7 +186,9 @@ class AiwaTextField extends StatelessWidget {
               ),
             ],
           ),
-        ] else if (hint != null || (showCounter && maxLength != null)) ...[
+        ],
+        if ((!hasError || inlineError) &&
+            (hint != null || (showCounter && maxLength != null))) ...[
           const SizedBox(height: 5),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,9 +202,15 @@ class AiwaTextField extends StatelessWidget {
                     : const SizedBox.shrink(),
               ),
               if (showCounter && maxLength != null && controller != null)
-                Text(
-                  '${controller!.text.length}/$maxLength',
-                  style: AppTextStyles.micro,
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller!,
+                  builder: (_, v, _) => Text(
+                    '${v.text.length}/$maxLength',
+                    style: AppTextStyles.mono.copyWith(
+                      fontSize: 11,
+                      color: AppColors.ink4,
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -173,4 +218,28 @@ class AiwaTextField extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Passes [error] to [builder] only once the field has lost focus —
+/// `ValidatedInput`'s touched-on-blur rule.
+class ValidatedField extends StatefulWidget {
+  final String? error;
+  final Widget Function(String? error) builder;
+  const ValidatedField({super.key, required this.error, required this.builder});
+
+  @override
+  State<ValidatedField> createState() => _ValidatedFieldState();
+}
+
+class _ValidatedFieldState extends State<ValidatedField> {
+  bool _touched = false;
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    skipTraversal: true,
+    onFocusChange: (f) {
+      if (!f && !_touched) setState(() => _touched = true);
+    },
+    child: widget.builder(_touched ? widget.error : null),
+  );
 }

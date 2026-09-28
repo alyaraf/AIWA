@@ -11,6 +11,5 @@ class GetSavedProvidersUseCase {
   Future<Either<Failure, PagedData<ProviderSummaryEntity>>> call({
     int page = 0,
     int size = 20,
-  }) =>
-      _repository.getSavedProviders(page: page, size: size);
+  }) => _repository.getSavedProviders(page: page, size: size);
 }

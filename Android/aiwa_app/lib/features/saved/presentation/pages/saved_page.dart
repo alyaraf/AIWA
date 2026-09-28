@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
+import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/guest_locked_view.dart';
@@ -19,6 +20,7 @@ import '../../../home/presentation/widgets/provider_card.dart';
 import '../bloc/saved_bloc.dart';
 import '../bloc/saved_event.dart';
 import '../bloc/saved_state.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class SavedPage extends StatelessWidget {
   const SavedPage({super.key});
@@ -31,12 +33,11 @@ class SavedPage extends StatelessWidget {
         if (state is! AuthAuthenticated) {
           return Scaffold(
             backgroundColor: AppColors.bone,
-            body: const Padding(
-              padding: EdgeInsets.only(bottom: 90),
+            body: Padding(
+              padding: const EdgeInsets.only(bottom: 90),
               child: GuestLockedView(
-                title: 'Keep your favorites',
-                body:
-                    'Sign in to save providers and book them again in one tap.',
+                title: AppLocalizations.of(context).savedGuestTitle,
+                body: AppLocalizations.of(context).savedGuestBody,
                 icon: Icons.favorite_border_rounded,
               ),
             ),
@@ -71,25 +72,29 @@ class _SavedViewState extends State<_SavedView> {
       value: _bloc,
       child: Scaffold(
         backgroundColor: AppColors.bone,
-        body: RefreshIndicator(
-          color: AppColors.plum700,
-          onRefresh: () async => _bloc.add(SavedLoadEvent()),
-          child: CustomScrollView(
-            slivers: [
-              const SliverToBoxAdapter(
-                child: PageTitle(
-                  eyebrow: 'Your favorites',
-                  title: 'Saved',
-                  bottom: 18,
-                ),
+        body: CustomScrollView(
+          physics: AiwaRefresh.physics,
+          slivers: [
+            AiwaRefresh(onRefresh: () async => _bloc.add(SavedLoadEvent())),
+            SliverToBoxAdapter(
+              child: PageTitle(
+                eyebrow: AppLocalizations.of(context).savedEyebrow,
+                title: AppLocalizations.of(context).tabSaved,
+                bottom: 18,
+                letterSpacing: 0,
               ),
-              BlocBuilder<SavedBloc, SavedState>(
-                bloc: _bloc,
-                builder: (context, state) => _buildBody(state),
+            ),
+            BlocConsumer<SavedBloc, SavedState>(
+              bloc: _bloc,
+              listenWhen: (_, s) => s is SavedLoaded && s.error != null,
+              listener: (context, s) => showAiwaToast(
+                context,
+                AppLocalizations.of(context).error((s as SavedLoaded).error!),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 110)),
-            ],
-          ),
+              builder: (context, state) => _buildBody(state),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 110)),
+          ],
         ),
       ),
     );
@@ -97,10 +102,11 @@ class _SavedViewState extends State<_SavedView> {
 
   Widget _buildBody(SavedState state) {
     const pad = EdgeInsets.symmetric(horizontal: AppTheme.gutter);
+    final l = AppLocalizations.of(context);
     if (state is SavedError) {
       return SliverToBoxAdapter(
         child: ErrorState(
-          body: state.message,
+          body: l.error(state.message),
           onRetry: () => _bloc.add(SavedLoadEvent()),
         ),
       );
@@ -116,10 +122,9 @@ class _SavedViewState extends State<_SavedView> {
         child: EmptyState(
           icon: Icons.favorite_border_rounded,
           tone: EmptyStateTone.rose,
-          title: 'No favorites yet',
-          subtitle:
-              'Tap the heart on any provider to save them here and book again in one tap.',
-          actionLabel: 'Browse providers',
+          title: l.savedEmpty,
+          subtitle: l.savedEmptyBody,
+          actionLabel: l.savedBrowse,
           onAction: () => context.go(AppRoutes.search),
         ),
       );
@@ -132,7 +137,7 @@ class _SavedViewState extends State<_SavedView> {
             return state.hasMore
                 ? Center(
                     child: AiwaButton(
-                      label: 'Load more',
+                      label: l.commonLoadMore,
                       variant: AiwaButtonVariant.ghost,
                       size: AiwaButtonSize.sm,
                       onPressed: () => _bloc.add(SavedLoadMoreEvent()),
@@ -146,7 +151,8 @@ class _SavedViewState extends State<_SavedView> {
             child: _SavedCard(
               provider: p,
               onOpen: () => context.push('/provider/${p.id}'),
-              onBook: () => context.push('/booking/${p.id}'),
+              // Book again reopens the profile (service, staff, booking type).
+              onBook: () => context.push('/provider/${p.id}'),
               onRemove: () => _bloc.add(SavedRemoveEvent(p.id.toString())),
             ),
           );
@@ -191,6 +197,7 @@ class _SavedCard extends StatelessWidget {
                 url: provider.profileImageUrl,
                 initial: provider.businessName,
                 showInitial: true,
+                colors: [AppColors.plum500, AppColors.plum900],
               ),
             ),
             Expanded(
@@ -203,7 +210,12 @@ class _SavedCard extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        EyebrowLabel(provider.categoryLabel, fontSize: 10),
+                        EyebrowLabel(
+                          AppLocalizations.of(
+                            context,
+                          ).category(provider.primaryCategory),
+                          fontSize: 10,
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           provider.businessName,
@@ -220,14 +232,14 @@ class _SavedCard extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.star_rounded,
-                          size: 13,
+                          size: 11,
                           color: AppColors.gold500,
                         ),
-                        const SizedBox(width: 2),
+                        const SizedBox(width: 3),
                         Text(
                           rating != null && rating > 0
                               ? rating.toStringAsFixed(1)
-                              : 'New',
+                              : AppLocalizations.of(context).providerNew,
                           style: AppTextStyles.labelSm.copyWith(
                             color: AppColors.ink2,
                           ),
@@ -245,7 +257,7 @@ class _SavedCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
-                              'Book again',
+                              AppLocalizations.of(context).savedBookAgain,
                               style: AppTextStyles.labelSm.copyWith(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,

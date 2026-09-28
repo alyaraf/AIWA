@@ -1,91 +1,168 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/theme/theme_controller.dart';
 import '../../../../shared/widgets/aiwa_avatar.dart';
+import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/confirm_sheet.dart';
-import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/guest_locked_view.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../data/account_repository.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final _repo = sl<AccountRepository>();
+  ({int bookings, int favorites})? _stats;
+  int? _trusted;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  void _refresh() {
+    _repo.stats().then((r) {
+      if (mounted) r.fold((_) {}, (s) => setState(() => _stats = s));
+    });
+    _repo.trustedContacts().then((r) {
+      if (mounted) r.fold((_) {}, (c) => setState(() => _trusted = c.length));
+    });
+  }
+
+  Future<void> _push(String route) async {
+    await context.push(route);
+    if (mounted) _refresh();
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(
+      buildWhen: (_, s) => s is AuthAuthenticated || s is AuthUnauthenticated,
       builder: (context, state) {
         final user = state is AuthAuthenticated ? state.user : null;
+        final l = AppLocalizations.of(context);
         if (user == null) {
           return Scaffold(
             backgroundColor: AppColors.bone,
-            body: const Padding(
-              padding: EdgeInsets.only(bottom: 90),
+            body: Padding(
+              padding: const EdgeInsets.only(bottom: 90),
               child: GuestLockedView(
-                title: 'Make AIWA yours',
-                body:
-                    'Sign in to manage your details, notifications and bookings.',
+                title: l.profGuestTitle,
+                body: l.profGuestBody,
                 icon: Icons.person_outline_rounded,
               ),
             ),
           );
         }
+        // prototype.jsx:343-354, in order.
+        final rows = [
+          (
+            Icons.person_outline_rounded,
+            l.profPersonalInfo,
+            null,
+            AppRoutes.editProfile,
+          ),
+          (
+            Icons.place_outlined,
+            l.profSavedAddresses,
+            null,
+            AppRoutes.addresses,
+          ),
+          (
+            Icons.person_add_alt_outlined,
+            l.profTrustedContacts,
+            _trusted == null ? null : l.profTrustedSaved(_trusted!),
+            AppRoutes.trustedContacts,
+          ),
+          (
+            Icons.notifications_none_rounded,
+            l.ppNotifications,
+            null,
+            AppRoutes.notifications,
+          ),
+          (
+            Icons.notifications_active_outlined,
+            l.profNotificationPrefs,
+            null,
+            AppRoutes.notificationPreferences,
+          ),
+          // The language switch itself lives in Personal info.
+          (
+            Icons.language_rounded,
+            l.profLanguage,
+            user.preferredLanguage.toLowerCase() == 'ar'
+                ? 'العربية'
+                : 'English',
+            AppRoutes.editProfile,
+          ),
+          (
+            Icons.verified_user_outlined,
+            l.ppSafety,
+            null,
+            AppRoutes.safetyPolicies,
+          ),
+          (
+            Icons.chat_bubble_outline_rounded,
+            l.ppWhatsApp,
+            null,
+            AppRoutes.support,
+          ),
+        ];
         return Scaffold(
           backgroundColor: AppColors.bone,
           body: ListView(
             padding: EdgeInsets.zero,
             children: [
-              _Header(user: user),
+              _Header(user: user, stats: _stats),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppTheme.gutter,
                   20,
                   AppTheme.gutter,
-                  110,
+                  100,
                 ),
                 child: Column(
                   children: [
-                    SettingsRow(
-                      icon: Icons.notifications_none_rounded,
-                      label: 'Notifications',
-                      onTap: () => context.push(AppRoutes.notifications),
-                    ),
-                    SettingsRow(
-                      icon: Icons.palette_outlined,
-                      label: 'App palette',
-                      value:
-                          ThemeController.mode.value == ThemeController.female
-                          ? 'Mauve'
-                          : 'Charcoal',
-                      onTap: () => _pickPalette(context),
-                    ),
-                    SettingsRow(
-                      icon: Icons.language_rounded,
-                      label: 'Language',
-                      value: user.preferredLanguage.toLowerCase() == 'ar'
-                          ? 'العربية'
-                          : 'English',
-                    ),
-                    if (user.email != null && user.email!.isNotEmpty)
+                    if (_error != null) ...[
+                      InlineBanner(tone: BannerTone.danger, body: _error),
+                      const SizedBox(height: 8),
+                    ],
+                    for (final (icon, label, value, route) in rows)
                       SettingsRow(
-                        icon: Icons.mail_outline_rounded,
-                        label: 'Email',
-                        value: user.email,
+                        icon: icon,
+                        label: label,
+                        value: value,
+                        onTap: () => _push(route),
                       ),
                     SettingsRow(
                       icon: Icons.logout_rounded,
-                      label: 'Sign out',
+                      label: l.commonSignOut,
+                      danger: true,
+                      onTap: _signOut,
+                    ),
+                    SettingsRow(
+                      icon: Icons.delete_outline_rounded,
+                      label: l.profDeleteAccount,
                       danger: true,
                       showDivider: false,
-                      onTap: () => _signOut(context),
+                      onTap: _deleteAccount,
                     ),
                   ],
                 ),
@@ -97,81 +174,42 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Future<void> _signOut(BuildContext context) async {
+  Future<void> _signOut() async {
     final ok = await showConfirmSheet(
       context,
-      eyebrow: 'Sign out',
-      title: 'Sign out of AIWA?',
-      body: "You'll need your phone or email and password to sign back in.",
-      confirmLabel: 'Sign out',
+      eyebrow: AppLocalizations.of(context).profYourAccount,
+      title: AppLocalizations.of(context).ppSignOutTitle,
+      body: AppLocalizations.of(context).profSignOutBody,
+      confirmLabel: AppLocalizations.of(context).commonSignOut,
       icon: Icons.logout_rounded,
+      danger: false,
     );
-    if (!ok || !context.mounted) return;
+    if (!ok || !mounted) return;
     context.read<AuthBloc>().add(AuthLogoutEvent());
     context.go(AppRoutes.splash);
   }
 
-  void _pickPalette(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: AppColors.plum900.withOpacity(0.45),
-      builder: (ctx) => Container(
-        decoration: AppTheme.sheetDecoration,
-        padding: EdgeInsets.fromLTRB(
-          AppTheme.gutter,
-          18,
-          AppTheme.gutter,
-          24 + MediaQuery.paddingOf(ctx).bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const EyebrowLabel('Make it yours'),
-            const SizedBox(height: 4),
-            Text('App palette', style: AppTextStyles.h3),
-            const SizedBox(height: 16),
-            _PaletteOption(
-              name: 'Charcoal & stone',
-              palette: AiwaPalettes.male,
-              selected: ThemeController.mode.value == ThemeController.male,
-              onTap: () {
-                Navigator.pop(ctx);
-                ThemeController.set(ThemeController.male);
-              },
-            ),
-            const SizedBox(height: 10),
-            _PaletteOption(
-              name: 'Mauve & dusty rose',
-              palette: AiwaPalettes.female,
-              selected: ThemeController.mode.value == ThemeController.female,
-              onTap: () {
-                Navigator.pop(ctx);
-                ThemeController.set(ThemeController.female);
-              },
-            ),
-          ],
-        ),
+  Future<void> _deleteAccount() async {
+    if (!await showDeleteAccountSheet(context) || !mounted) return;
+    final r = await _repo.deleteAccount();
+    if (!mounted) return;
+    r.fold(
+      (f) => setState(
+        () => _error = AppLocalizations.of(context).error(f.message),
       ),
+      (_) {
+        showAiwaToast(context, AppLocalizations.of(context).profAccountDeleted);
+        context.read<AuthBloc>().add(AuthLogoutEvent());
+        context.go(AppRoutes.splash);
+      },
     );
   }
 }
 
 class _Header extends StatelessWidget {
   final UserEntity user;
-  const _Header({required this.user});
+  final ({int bookings, int favorites})? stats;
+  const _Header({required this.user, this.stats});
 
   @override
   Widget build(BuildContext context) {
@@ -181,50 +219,76 @@ class _Header extends StatelessWidget {
       decoration: BoxDecoration(gradient: AppTheme.heroGradient),
       child: Stack(
         children: [
-          Positioned(
-            right: -60,
-            top: -30,
-            child: AiwaGlow(size: 260, color: AppColors.rose300, opacity: 0.4),
+          PositionedDirectional(
+            end: -40,
+            top: -60,
+            child: AiwaGlow(size: 320, color: AppColors.rose300, opacity: 0.4),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(
               AppTheme.gutter,
-              MediaQuery.paddingOf(context).top + 26,
+              MediaQuery.paddingOf(context).top + 22,
               AppTheme.gutter,
               22,
             ),
-            child: Row(
+            child: Column(
               children: [
-                AiwaAvatar(
-                  name: user.fullName,
-                  size: 64,
-                  palette: AvatarPalette.rose,
-                  imageUrl: user.profileImageUrl,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.fullName,
-                        style: AppTextStyles.h2.copyWith(
-                          fontSize: 24,
-                          color: AppColors.bone,
-                          height: 1.1,
-                        ),
-                      ),
-                      if (contact.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          contact,
-                          style: AppTextStyles.meta.copyWith(
-                            color: AppColors.rose300,
+                Row(
+                  children: [
+                    AiwaAvatar(
+                      name: user.fullName,
+                      size: 64,
+                      palette: AvatarPalette.rose,
+                      imageUrl: user.profileImageUrl,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user.fullName,
+                            style: AppTextStyles.h2.copyWith(
+                              fontSize: 24,
+                              letterSpacing: 0,
+                              color: AppColors.bone,
+                              height: 1.1,
+                            ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
+                          if (contact.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              contact,
+                              style: AppTextStyles.meta.copyWith(
+                                color: AppColors.rose300,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  spacing: 10,
+                  children: [
+                    // Backend gap: no endpoint counts the customer's reviews.
+                    for (final (n, label) in [
+                      (
+                        stats?.bookings,
+                        AppLocalizations.of(context).profStatBookings,
+                      ),
+                      (
+                        stats?.favorites,
+                        AppLocalizations.of(context).profStatFavorites,
+                      ),
+                      (null, AppLocalizations.of(context).profStatReviews),
+                    ])
+                      Expanded(
+                        child: _Stat(value: n, label: label),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -235,57 +299,42 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _PaletteOption extends StatelessWidget {
-  final String name;
-  final AiwaPalette palette;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _PaletteOption({
-    required this.name,
-    required this.palette,
-    required this.selected,
-    required this.onTap,
-  });
+class _Stat extends StatelessWidget {
+  final int? value;
+  final String label;
+  const _Stat({required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.plum100 : AppColors.paper,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? AppColors.plum700 : AppColors.divider,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            for (final c in [palette.plum700, palette.rose500, palette.bone])
-              Container(
-                width: 20,
-                height: 20,
-                margin: const EdgeInsets.only(right: 4),
-                decoration: BoxDecoration(
-                  color: c,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.divider),
-                ),
-              ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                name,
-                style: AppTextStyles.label.copyWith(fontSize: 14),
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.bone.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value?.toString() ?? '—',
+            style: AppTextStyles.h3.copyWith(
+              fontSize: 22,
+              height: 1,
+              letterSpacing: 0,
+              color: AppColors.bone,
             ),
-            if (selected)
-              Icon(Icons.check_rounded, size: 18, color: AppColors.plum700),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label.toUpperCase(),
+            style: AppTextStyles.micro.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: .88,
+              color: AppColors.rose300,
+            ),
+          ),
+        ],
       ),
     );
   }

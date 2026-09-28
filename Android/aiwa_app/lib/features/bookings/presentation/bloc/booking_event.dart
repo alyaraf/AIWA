@@ -9,21 +9,37 @@ abstract class BookingEvent extends Equatable {
 class BookingCreateEvent extends BookingEvent {
   final String providerId;
   final String serviceId;
-  final String scheduledDate;
-  final String scheduledTime;
+  final String? scheduledDate;
+  final String? scheduledTime;
+  final String? staffId;
+  final bool bookNow;
+  final bool homeService;
+  final String? savedAddressId;
   final String? customerNote;
 
   const BookingCreateEvent({
     required this.providerId,
     required this.serviceId,
-    required this.scheduledDate,
-    required this.scheduledTime,
+    this.scheduledDate,
+    this.scheduledTime,
+    this.staffId,
+    this.bookNow = false,
+    this.homeService = false,
+    this.savedAddressId,
     this.customerNote,
   });
 
   @override
-  List<Object?> get props =>
-      [providerId, serviceId, scheduledDate, scheduledTime];
+  List<Object?> get props => [
+    providerId,
+    serviceId,
+    scheduledDate,
+    scheduledTime,
+    staffId,
+    bookNow,
+    homeService,
+    savedAddressId,
+  ];
 }
 
 class BookingLoadMyEvent extends BookingEvent {

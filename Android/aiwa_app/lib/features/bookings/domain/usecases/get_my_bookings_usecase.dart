@@ -12,6 +12,5 @@ class GetMyBookingsUseCase {
     String? status,
     int page = 0,
     int size = 20,
-  }) =>
-      _repository.getMyBookings(status: status, page: page, size: size);
+  }) => _repository.getMyBookings(status: status, page: page, size: size);
 }

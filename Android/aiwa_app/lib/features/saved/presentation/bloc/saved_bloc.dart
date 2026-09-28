@@ -54,16 +54,20 @@ class SavedBloc extends Bloc<SavedEvent, SavedState> {
     SavedRemoveEvent event,
     Emitter<SavedState> emit,
   ) async {
-    await _repository.removeProvider(event.providerId);
-    final current = state;
-    if (current is SavedLoaded) {
+    // Optimistic: drop it now, restore it if the server says no.
+    final before = state;
+    if (before is SavedLoaded) {
       emit(
-        current.copyWith(
-          providers: current.providers
+        before.copyWith(
+          providers: before.providers
               .where((p) => p.id.toString() != event.providerId)
               .toList(),
         ),
       );
     }
+    final result = await _repository.removeProvider(event.providerId);
+    result.fold((f) {
+      if (before is SavedLoaded) emit(before.copyWith(error: f.message));
+    }, (_) {});
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_colors.dart';
@@ -20,6 +21,10 @@ class AiwaAvatar extends StatelessWidget {
     this.verified = false,
     this.imageUrl,
   });
+
+  /// Stable palette per provider id, so an avatar looks the same everywhere.
+  static AvatarPalette paletteFor(String id) =>
+      AvatarPalette.values[id.hashCode % AvatarPalette.values.length];
 
   static AvatarPalette paletteFromString(String? p) {
     switch (p) {
@@ -68,9 +73,9 @@ class AiwaAvatar extends StatelessWidget {
       children: [
         avatar,
         if (verified)
-          Positioned(
+          PositionedDirectional(
             bottom: -1,
-            right: -1,
+            end: -1,
             child: Container(
               width: badgeSize,
               height: badgeSize,
@@ -81,7 +86,7 @@ class AiwaAvatar extends StatelessWidget {
               ),
               child: Icon(
                 Icons.check,
-                size: badgeSize * 0.6,
+                size: math.max(8, size * 0.18),
                 color: AppColors.paper,
               ),
             ),

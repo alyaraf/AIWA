@@ -1,3 +1,5 @@
+import '../../features/provider_dashboard/data/provider_manage_repository.dart';
+import '../../features/profile/data/account_repository.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 
@@ -40,7 +42,6 @@ import '../../features/bookings/data/repositories/booking_repository_impl.dart';
 import '../../features/bookings/domain/repositories/booking_repository.dart';
 import '../../features/bookings/domain/usecases/create_booking_usecase.dart';
 import '../../features/bookings/domain/usecases/get_my_bookings_usecase.dart';
-import '../../features/bookings/domain/usecases/get_available_slots_usecase.dart';
 import '../../features/bookings/domain/usecases/cancel_booking_usecase.dart';
 import '../../features/bookings/presentation/bloc/booking_bloc.dart';
 
@@ -88,14 +89,18 @@ Future<void> initDependencies() async {
     SecureStorage(sl<FlutterSecureStorage>()),
   );
   sl.registerSingleton<ApiClient>(ApiClient(sl<SecureStorage>()));
+  sl.registerFactory(() => AccountRepository(sl<ApiClient>()));
+  sl.registerFactory(() => ProviderManageRepository(sl<ApiClient>()));
 
   // Auth
   sl.registerFactory<AuthRemoteDataSource>(
     () => AuthRemoteDataSourceImpl(sl<ApiClient>()),
   );
+  // ponytail: every domain repository interface has exactly one *Impl, drop the abstract classes unless a fake/second impl is needed
   sl.registerFactory<AuthRepository>(
     () => AuthRepositoryImpl(sl<AuthRemoteDataSource>(), sl<SecureStorage>()),
   );
+  // ponytail: all 21 usecases are one-line pass-throughs to a repository, blocs can call repositories directly; delete usecases/ when a feature is next reworked
   sl.registerFactory(() => LoginUseCase(sl<AuthRepository>()));
   sl.registerFactory(() => RegisterUseCase(sl<AuthRepository>()));
   sl.registerFactory(() => SendOtpUseCase(sl<AuthRepository>()));
@@ -159,13 +164,11 @@ Future<void> initDependencies() async {
   );
   sl.registerFactory(() => CreateBookingUseCase(sl<BookingRepository>()));
   sl.registerFactory(() => GetMyBookingsUseCase(sl<BookingRepository>()));
-  sl.registerFactory(() => GetAvailableSlotsUseCase(sl<BookingRepository>()));
   sl.registerFactory(() => CancelBookingUseCase(sl<BookingRepository>()));
   sl.registerFactory(
     () => BookingBloc(
       createBooking: sl<CreateBookingUseCase>(),
       getMyBookings: sl<GetMyBookingsUseCase>(),
-      getAvailableSlots: sl<GetAvailableSlotsUseCase>(),
       cancelBooking: sl<CancelBookingUseCase>(),
     ),
   );
@@ -196,6 +199,7 @@ Future<void> initDependencies() async {
   sl.registerFactory<ReviewRepository>(
     () => ReviewRepositoryImpl(sl<ReviewRemoteDataSource>()),
   );
+  // ponytail: registered but never resolved (ReviewBloc uses ReviewRepository), delete with its file
   sl.registerFactory(() => SubmitReviewUseCase(sl<ReviewRepository>()));
   sl.registerFactory(() => ReviewBloc(sl<ReviewRepository>()));
 

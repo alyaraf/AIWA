@@ -10,6 +10,7 @@ class GetProviderSlotsUseCase {
   /// [date] is `yyyy-MM-dd`.
   Future<Either<Failure, List<AvailabilitySlot>>> call(
     String providerId,
+    String serviceId,
     String date,
-  ) => _repository.getAvailableSlots(providerId, date);
+  ) => _repository.getAvailableSlots(providerId, serviceId, date);
 }

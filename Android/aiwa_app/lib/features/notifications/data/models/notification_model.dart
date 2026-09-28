@@ -21,7 +21,9 @@ class NotificationModel extends NotificationEntity {
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt']) ?? DateTime.now()
           : DateTime.now(),
-      referenceId: json['referenceId']?.toString(),
+      // NotificationDto.relatedBookingId.
+      referenceId: (json['relatedBookingId'] ?? json['referenceId'])
+          ?.toString(),
     );
   }
 }

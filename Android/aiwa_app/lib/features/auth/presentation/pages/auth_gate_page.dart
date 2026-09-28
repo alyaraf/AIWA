@@ -7,36 +7,56 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../widgets/step_header.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// Soft gate shown when a guest tries to book — `AuthGateScreen` in the kit.
+///
+/// [returnTo] is the booking step the guest was heading to; after signing in
+/// (or up) the booking resumes there instead of landing on Home.
 class AuthGatePage extends StatelessWidget {
-  const AuthGatePage({super.key});
+  final String? returnTo;
+  const AuthGatePage({super.key, this.returnTo});
+
+  Future<void> _signIn(BuildContext context) async {
+    if (returnTo == null) {
+      context.push('${AppRoutes.signIn}?role=CUSTOMER');
+      return;
+    }
+    final ok = await context.push<bool>(
+      '${AppRoutes.signIn}?role=CUSTOMER&resume=1',
+    );
+    if (ok == true && context.mounted) context.pushReplacement(returnTo!);
+  }
 
   @override
   Widget build(BuildContext context) {
-    const perks = [
-      'Your booking history in one place',
-      'Live status + safety tracking',
-      'Save favorite providers',
+    final l = AppLocalizations.of(context);
+    final perks = [
+      l.authGatePerkHistory,
+      l.authGatePerkTracking,
+      l.authGatePerkFavorites,
     ];
     return AuthStepScaffold(
+      topGap: 23,
       bottom: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           AiwaButton(
-            label: 'Create account',
+            label: l.authCreateAccount,
             fullWidth: true,
             size: AiwaButtonSize.lg,
-            onPressed: () =>
-                context.push(AppRoutes.phoneEntry, extra: {'role': 'CUSTOMER'}),
+            onPressed: () {
+              AppRoutes.resumeAfterSignUp = returnTo;
+              context.push(AppRoutes.phoneEntry, extra: {'role': 'CUSTOMER'});
+            },
           ),
           const SizedBox(height: 10),
           AiwaButton(
-            label: 'I already have an account',
+            label: l.authHaveAccount,
             variant: AiwaButtonVariant.secondary,
             fullWidth: true,
             size: AiwaButtonSize.lg,
-            onPressed: () => context.push('${AppRoutes.signIn}?role=CUSTOMER'),
+            onPressed: () => _signIn(context),
           ),
         ],
       ),
@@ -46,15 +66,19 @@ class AuthGatePage extends StatelessWidget {
           onTap: () => context.pop(),
         ),
         const SizedBox(height: 22),
-        EyebrowLabel('One quick step', color: AppColors.rose700),
+        EyebrowLabel(l.authGateEyebrow, color: AppColors.rose700),
         const SizedBox(height: 6),
         Text(
-          'Sign in to book.',
-          style: AppTextStyles.h1.copyWith(fontSize: 30, height: 1.05),
+          l.authGateTitle,
+          style: AppTextStyles.h1.copyWith(
+            fontSize: 30,
+            height: 1.05,
+            letterSpacing: -0.6,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Browsing is open to everyone. Booking needs an account so providers can reach you.',
+          l.authGateBody,
           style: AppTextStyles.bodySm.copyWith(color: AppColors.ink2),
         ),
         const SizedBox(height: 26),

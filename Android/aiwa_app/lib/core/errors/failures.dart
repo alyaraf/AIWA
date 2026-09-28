@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+// ponytail: dartz Either + Exception->Failure remap in every repo; plain throw/catch or a sealed Result would cut dartz, revisit if repos get rewritten
 abstract class Failure extends Equatable {
   final String message;
   const Failure(this.message);
@@ -18,7 +19,7 @@ class UnauthorizedFailure extends Failure {
 
 class NetworkFailure extends Failure {
   const NetworkFailure([String message = 'No internet connection'])
-      : super(message);
+    : super(message);
 }
 
 class CacheFailure extends Failure {
@@ -28,4 +29,10 @@ class CacheFailure extends Failure {
 class ValidationFailure extends Failure {
   final Map<String, String>? fieldErrors;
   const ValidationFailure(super.message, {this.fieldErrors});
+}
+
+/// The backend has no endpoint for this yet; the UI is built against it so
+/// wiring the real call is a one-line change in the repository.
+class NotSupportedFailure extends Failure {
+  const NotSupportedFailure(String what) : super('$what isn’t supported yet.');
 }

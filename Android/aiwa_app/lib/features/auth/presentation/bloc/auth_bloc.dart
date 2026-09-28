@@ -27,18 +27,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.updateProfileUseCase,
     required this.secureStorage,
   }) : super(AuthInitial()) {
-    on<AuthCheckSessionEvent>(_onCheckSession);
-    on<AuthLoginEvent>(_onLogin);
-    on<AuthRegisterEvent>(_onRegister);
-    on<AuthSendOtpEvent>(_onSendOtp);
-    on<AuthVerifyOtpEvent>(_onVerifyOtp);
-    on<AuthLogoutEvent>(_onLogout);
-    on<AuthGetCurrentUserEvent>(_onGetCurrentUser);
-    on<AuthUpdateProfileEvent>(_onUpdateProfile);
+    on<AuthCheckSessionEvent>(_safe(_onCheckSession, AuthUnauthenticated()));
+    on<AuthLoginEvent>(_safe(_onLogin));
+    on<AuthRegisterEvent>(_safe(_onRegister));
+    on<AuthSendOtpEvent>(_safe(_onSendOtp));
+    on<AuthVerifyOtpEvent>(_safe(_onVerifyOtp));
+    on<AuthLogoutEvent>(_safe(_onLogout, AuthUnauthenticated()));
+    on<AuthGetCurrentUserEvent>(_safe(_onGetCurrentUser));
+    on<AuthUpdateProfileEvent>(_safe(_onUpdateProfile));
   }
 
+  /// An unexpected throw (bad payload, 2FA response without tokens…) must
+  /// not leave the shared bloc stuck in [AuthLoading].
+  EventHandler<E, AuthState> _safe<E extends AuthEvent>(
+    EventHandler<E, AuthState> handler, [
+    AuthState? fallback,
+  ]) => (event, emit) async {
+    try {
+      await handler(event, emit);
+    } catch (_) {
+      emit(fallback ?? const AuthError('Something went wrong'));
+    }
+  };
+
   Future<void> _onCheckSession(
-      AuthCheckSessionEvent event, Emitter<AuthState> emit) async {
+    AuthCheckSessionEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    if (!await secureStorage.getRemember()) {
+      await secureStorage.clearAll();
+      emit(AuthUnauthenticated());
+      return;
+    }
     final hasSession = await secureStorage.hasValidSession();
     if (hasSession) {
       final result = await getCurrentUserUseCase();
@@ -57,20 +77,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       identifier: event.identifier,
       password: event.password,
     );
-    await result.fold(
-      (failure) async => emit(AuthError(failure.message)),
-      (_) async {
-        final userResult = await getCurrentUserUseCase();
-        userResult.fold(
-          (failure) => emit(AuthError(failure.message)),
-          (user) => emit(AuthAuthenticated(user)),
-        );
-      },
-    );
+    await result.fold((failure) async => emit(AuthError(failure.message)), (
+      _,
+    ) async {
+      await secureStorage.setRemember(event.remember);
+      final userResult = await getCurrentUserUseCase();
+      userResult.fold(
+        (failure) => emit(AuthError(failure.message)),
+        (user) => emit(AuthAuthenticated(user)),
+      );
+    });
   }
 
   Future<void> _onRegister(
-      AuthRegisterEvent event, Emitter<AuthState> emit) async {
+    AuthRegisterEvent event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(AuthLoading());
     final result = await registerUseCase(
       fullName: event.fullName,
@@ -80,21 +102,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       role: event.role,
       gender: event.gender,
       profileImageUrl: event.profileImageUrl,
+      preferredLanguage: event.preferredLanguage,
     );
-    await result.fold(
-      (failure) async => emit(AuthError(failure.message)),
-      (_) async {
-        final userResult = await getCurrentUserUseCase();
-        userResult.fold(
-          (failure) => emit(AuthError(failure.message)),
-          (user) => emit(AuthAuthenticated(user)),
-        );
-      },
-    );
+    await result.fold((failure) async => emit(AuthError(failure.message)), (
+      _,
+    ) async {
+      final userResult = await getCurrentUserUseCase();
+      userResult.fold(
+        (failure) => emit(AuthError(failure.message)),
+        (user) => emit(AuthAuthenticated(user)),
+      );
+    });
   }
 
   Future<void> _onSendOtp(
-      AuthSendOtpEvent event, Emitter<AuthState> emit) async {
+    AuthSendOtpEvent event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(AuthLoading());
     final result = await sendOtpUseCase(phone: event.phone);
     result.fold(
@@ -104,24 +128,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onVerifyOtp(
-      AuthVerifyOtpEvent event, Emitter<AuthState> emit) async {
+    AuthVerifyOtpEvent event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(AuthLoading());
-    final result =
-        await verifyOtpUseCase(phone: event.phone, code: event.code);
+    final result = await verifyOtpUseCase(phone: event.phone, code: event.code);
     result.fold(
       (failure) => emit(AuthError(failure.message)),
       (_) => emit(AuthOtpVerified(event.phone)),
     );
   }
 
-  Future<void> _onLogout(
-      AuthLogoutEvent event, Emitter<AuthState> emit) async {
+  Future<void> _onLogout(AuthLogoutEvent event, Emitter<AuthState> emit) async {
     await secureStorage.clearAll();
     emit(AuthUnauthenticated());
   }
 
   Future<void> _onGetCurrentUser(
-      AuthGetCurrentUserEvent event, Emitter<AuthState> emit) async {
+    AuthGetCurrentUserEvent event,
+    Emitter<AuthState> emit,
+  ) async {
     final result = await getCurrentUserUseCase();
     result.fold(
       (failure) => emit(AuthError(failure.message)),
@@ -130,8 +156,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onUpdateProfile(
-      AuthUpdateProfileEvent event, Emitter<AuthState> emit) async {
-    emit(AuthLoading());
+    AuthUpdateProfileEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    // No AuthLoading/AuthProfileUpdated: the Profile tab treats any
+    // non-authenticated state as a guest and would flash the lock screen.
     final result = await updateProfileUseCase(
       fullName: event.fullName,
       email: event.email,
@@ -139,7 +168,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
     result.fold(
       (failure) => emit(AuthError(failure.message)),
-      (user) => emit(AuthProfileUpdated(user)),
+      (user) => emit(AuthAuthenticated(user)),
     );
   }
 }

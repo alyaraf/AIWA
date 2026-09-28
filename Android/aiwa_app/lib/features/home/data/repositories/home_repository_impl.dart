@@ -30,14 +30,17 @@ class HomeRepositoryImpl implements HomeRepository {
         page: page,
         size: size,
       );
-      return Right(PagedData(
-        content: result.content,
-        totalElements: result.totalElements,
-        totalPages: result.totalPages,
-        number: result.number,
-        size: result.size,
-        last: result.last,
-      ));
+      // ponytail: field-by-field copy of a PagedData the datasource already returns; `return Right(result);` works (Model extends Entity, generics are covariant)
+      return Right(
+        PagedData(
+          content: result.content,
+          totalElements: result.totalElements,
+          totalPages: result.totalPages,
+          number: result.number,
+          size: result.size,
+          last: result.last,
+        ),
+      );
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
@@ -53,19 +56,31 @@ class HomeRepositoryImpl implements HomeRepository {
   }) async {
     try {
       final result = await _remote.searchProviders(
-          query: query, page: page, size: size);
-      return Right(PagedData(
-        content: result.content,
-        totalElements: result.totalElements,
-        totalPages: result.totalPages,
-        number: result.number,
-        size: result.size,
-        last: result.last,
-      ));
+        query: query,
+        page: page,
+        size: size,
+      );
+      // ponytail: field-by-field copy of a PagedData the datasource already returns; `return Right(result);` works (Model extends Entity, generics are covariant)
+      return Right(
+        PagedData(
+          content: result.content,
+          totalElements: result.totalElements,
+          totalPages: result.totalPages,
+          number: result.number,
+          size: result.size,
+          last: result.last,
+        ),
+      );
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
       return Left(NetworkFailure(e.message));
     }
   }
+
+  // Backend gap: aiwa-backend has no waitlist / join-alert endpoint.
+  @override
+  Future<Either<Failure, void>> notifyWhenProviderJoins({
+    String? category,
+  }) async => const Left(ServerFailure('Join alerts are not supported yet.'));
 }

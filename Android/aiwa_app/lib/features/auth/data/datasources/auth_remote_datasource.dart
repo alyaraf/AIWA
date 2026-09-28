@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/network/api_client.dart';
@@ -17,6 +18,7 @@ abstract class AuthRemoteDataSource {
     required String role,
     String? gender,
     String? profileImageUrl,
+    String? preferredLanguage,
   });
 
   Future<void> sendOtp({required String phone});
@@ -28,6 +30,25 @@ abstract class AuthRemoteDataSource {
     String? profileImageUrl,
   });
   Future<void> updateLanguage({required String language});
+  Future<void> resetPassword({
+    required String phone,
+    required String code,
+    required String newPassword,
+  });
+  Future<void> uploadAvatar(String path);
+  Future<void> createProviderProfile(Map<String, dynamic> profile);
+  Future<void> addStaff(String fullName);
+  Future<void> uploadVerificationDocuments({
+    required String idFront,
+    required String idBack,
+    required String selfie,
+  });
+  Future<Map<String, dynamic>> latestTerms(String type);
+  Future<void> acceptTerms(String version);
+  Future<void> updatePreferences({
+    required double minKm,
+    required double maxKm,
+  });
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -45,7 +66,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     );
     final data = response.data as Map<String, dynamic>;
     if (data['success'] != true) {
-      throw ServerException(message: data['message'] as String? ?? 'Login failed');
+      throw ServerException(
+        message: data['message'] as String? ?? 'Login failed',
+      );
     }
     final authData = data['data'] as Map<String, dynamic>;
     return {
@@ -65,6 +88,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     required String role,
     String? gender,
     String? profileImageUrl,
+    String? preferredLanguage,
   }) async {
     final body = <String, dynamic>{
       'fullName': fullName,
@@ -75,12 +99,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     if (phone != null) body['phone'] = phone;
     if (gender != null) body['gender'] = gender;
     if (profileImageUrl != null) body['profileImageUrl'] = profileImageUrl;
+    if (preferredLanguage != null)
+      body['preferredLanguage'] = preferredLanguage;
 
     final response = await _client.post(ApiConstants.register, data: body);
     final data = response.data as Map<String, dynamic>;
     if (data['success'] != true) {
       throw ServerException(
-          message: data['message'] as String? ?? 'Registration failed');
+        message: data['message'] as String? ?? 'Registration failed',
+      );
     }
     final authData = data['data'] as Map<String, dynamic>;
     return {
@@ -100,7 +127,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     final data = response.data as Map<String, dynamic>;
     if (data['success'] != true) {
       throw ServerException(
-          message: data['message'] as String? ?? 'Failed to send OTP');
+        message: data['message'] as String? ?? 'Failed to send OTP',
+      );
     }
   }
 
@@ -113,7 +141,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     final data = response.data as Map<String, dynamic>;
     if (data['success'] != true) {
       throw ServerException(
-          message: data['message'] as String? ?? 'Invalid OTP');
+        message: data['message'] as String? ?? 'Invalid OTP',
+      );
     }
   }
 
@@ -150,11 +179,88 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<void> updateLanguage({required String language}) async {
     final response = await _client.patch(
       ApiConstants.meLanguage,
-      data: {'language': language},
+      // AuthRequest.UpdateLanguage: preferredLanguage, enum EN / AR.
+      data: {'preferredLanguage': language.toUpperCase()},
     );
     final data = response.data as Map<String, dynamic>;
     if (data['success'] != true) {
       throw ServerException(message: data['message'] as String? ?? 'Failed');
     }
   }
+
+  /// AuthRequest.ResetPassword — the backend verifies the OTP here, so the
+  /// code must not be spent on /auth/verify-otp first.
+  @override
+  Future<void> resetPassword({
+    required String phone,
+    required String code,
+    required String newPassword,
+  }) => _client.post(
+    ApiConstants.resetPassword,
+    data: {'phone': phone, 'code': code, 'newPassword': newPassword},
+  );
+
+  /// Multipart `image`.
+  @override
+  Future<void> uploadAvatar(String path) async {
+    await _client.postForm(
+      ApiConstants.meAvatar,
+      formData: FormData.fromMap({'image': await MultipartFile.fromFile(path)}),
+    );
+  }
+
+  /// POST /provider/profile — ProviderProfileRequest.
+  @override
+  Future<void> createProviderProfile(Map<String, dynamic> profile) =>
+      _client.post(ApiConstants.myProviderProfile, data: profile);
+
+  /// POST /provider/staff — StaffMemberRequest.
+  @override
+  Future<void> addStaff(String fullName) =>
+      _client.post(ApiConstants.providerStaff, data: {'fullName': fullName});
+
+  /// Multipart nationalIdFront / nationalIdBack / selfie.
+  @override
+  Future<void> uploadVerificationDocuments({
+    required String idFront,
+    required String idBack,
+    required String selfie,
+  }) async {
+    await _client.postForm(
+      ApiConstants.providerVerification,
+      formData: FormData.fromMap({
+        'nationalIdFront': await MultipartFile.fromFile(idFront),
+        'nationalIdBack': await MultipartFile.fromFile(idBack),
+        'selfie': await MultipartFile.fromFile(selfie),
+      }),
+    );
+  }
+
+  /// GET /terms/latest?type= — TermsPolicyDto.
+  @override
+  Future<Map<String, dynamic>> latestTerms(String type) async {
+    final response = await _client.get(
+      ApiConstants.termsLatest,
+      queryParameters: {'type': type},
+    );
+    return (response.data as Map<String, dynamic>)['data']
+        as Map<String, dynamic>;
+  }
+
+  /// POST /terms/accept?version= — stores acceptedTermsVersion + timestamp.
+  @override
+  Future<void> acceptTerms(String version) => _client.post(
+    ApiConstants.termsAccept,
+    queryParameters: {'version': version},
+  );
+
+  /// PATCH /auth/me/preferences — UpdatePreferencesRequest.
+  @override
+  Future<void> updatePreferences({
+    required double minKm,
+    required double maxKm,
+  }) => _client.patch(
+    ApiConstants.mePreferences,
+    data: {'searchRadiusMinKm': minKm, 'searchRadiusMaxKm': maxKm},
+  );
 }

@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/theme_controller.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
+import '../../../../shared/widgets/press_scale.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_state.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// Splash — brand hero + language picker + "Browse as guest".
 /// Signed-in users are routed straight past it.
@@ -23,25 +25,19 @@ class SplashPage extends StatefulWidget {
 
 class _SplashPageState extends State<SplashPage>
     with SingleTickerProviderStateMixin {
+  // aiwa-slide-in: translateX 8% -> 0, 320ms soft.
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: AppTheme.dur3,
   )..forward();
-  late final Animation<double> _fade = CurvedAnimation(
-    parent: _controller,
-    curve: AppTheme.easeSoft,
-  );
+  late final Animation<Offset> _slide = Tween(
+    begin: const Offset(0.08, 0),
+    end: Offset.zero,
+  ).chain(CurveTween(curve: AppTheme.easeSoft)).animate(_controller);
 
-  bool _showChoices = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final state = context.read<AuthBloc>().state;
-    if (state is AuthUnauthenticated || state is AuthError) {
-      _showChoices = true;
-    }
-  }
+  /// Hidden only while a stored session is being checked (AuthInitial);
+  /// the bloc always leaves AuthInitial, even when the check throws.
+  late bool _showChoices = context.read<AuthBloc>().state is! AuthInitial;
 
   @override
   void dispose() {
@@ -49,12 +45,8 @@ class _SplashPageState extends State<SplashPage>
     super.dispose();
   }
 
-  Future<void> _pickLanguage(String code, {bool guest = false}) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('aiwa_language', code);
-    } catch (_) {}
-    if (!mounted) return;
+  void _pickLanguage(String code, {bool guest = false}) {
+    LocaleController.set(code);
     if (guest) {
       context.go(AppRoutes.home);
     } else {
@@ -66,14 +58,11 @@ class _SplashPageState extends State<SplashPage>
   Widget build(BuildContext context) {
     final insets = MediaQuery.paddingOf(context);
     return BlocListener<AuthBloc, AuthState>(
+      listenWhen: (_, _) => ModalRoute.of(context)?.isCurrent ?? false,
       listener: (context, state) {
         if (state is AuthAuthenticated) {
-          context.go(
-            state.user.isProvider
-                ? AppRoutes.providerDashboard
-                : AppRoutes.home,
-          );
-        } else if (state is AuthUnauthenticated || state is AuthError) {
+          context.go(AppRoutes.landingFor(state.user));
+        } else if (state is! AuthInitial && !_showChoices) {
           setState(() => _showChoices = true);
         }
       },
@@ -109,8 +98,8 @@ class _SplashPageState extends State<SplashPage>
                   28,
                   insets.bottom + 34,
                 ),
-                child: FadeTransition(
-                  opacity: _fade,
+                child: SlideTransition(
+                  position: _slide,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -124,7 +113,7 @@ class _SplashPageState extends State<SplashPage>
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 280),
                         child: Text(
-                          'Beauty & grooming, near you.',
+                          AppLocalizations.of(context).authTagline,
                           style: AppTextStyles.h1.copyWith(
                             color: AppColors.bone,
                             fontSize: 34,
@@ -136,7 +125,7 @@ class _SplashPageState extends State<SplashPage>
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 300),
                         child: Text(
-                          'Trusted barbers, hairdressers, nail artists, and spas — one tap away.',
+                          AppLocalizations.of(context).authTaglineSub,
                           style: AppTextStyles.bodySm.copyWith(
                             color: AppColors.rose300,
                           ),
@@ -166,7 +155,10 @@ class _SplashPageState extends State<SplashPage>
       key: const ValueKey('choices'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        EyebrowLabel('Choose your language', color: AppColors.rose300),
+        EyebrowLabel(
+          AppLocalizations.of(context).authChooseLanguage,
+          color: AppColors.rose300,
+        ),
         const SizedBox(height: 14),
         _LanguageButton(
           label: 'English',
@@ -182,9 +174,12 @@ class _SplashPageState extends State<SplashPage>
         const SizedBox(height: 16),
         Center(
           child: GestureDetector(
-            onTap: () => _pickLanguage('en', guest: true),
+            onTap: () => _pickLanguage(
+              LocaleController.locale.value.languageCode,
+              guest: true,
+            ),
             child: Text(
-              'Browse as guest →',
+              AppLocalizations.of(context).authBrowseAsGuest,
               style: AppTextStyles.label.copyWith(color: AppColors.rose300),
             ),
           ),
@@ -213,48 +208,52 @@ class _LanguageButton extends StatelessWidget {
     final text = Text(
       label,
       style: arabic
-          ? _arabicStyle(fg)
+          ? arabicStyle(fg)
           : AppTextStyles.button.copyWith(color: fg),
     );
-    final arrow = Icon(
-      arabic ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded,
-      size: 18,
-      color: fg,
-    );
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-        decoration: BoxDecoration(
-          color: filled ? AppColors.bone : AppColors.bone.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-          border: filled
-              ? null
-              : Border.all(color: AppColors.bone.withOpacity(0.25)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: arabic ? [arrow, text] : [text, arrow],
+    // Each button lays itself out in its own language's direction.
+    final arrow = Icon(Icons.arrow_forward_rounded, size: 18, color: fg);
+    return Directionality(
+      textDirection: arabic ? TextDirection.rtl : TextDirection.ltr,
+      child: PressScale(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+          decoration: BoxDecoration(
+            color: filled ? AppColors.bone : AppColors.bone.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+            border: filled
+                ? null
+                : Border.all(color: AppColors.bone.withOpacity(0.25)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [text, arrow],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Markazi Text for the Arabic language button (plain family in tests).
-TextStyle _arabicStyle(Color color) {
+/// Markazi Text for the Arabic language buttons (plain family in tests).
+TextStyle arabicStyle(
+  Color color, {
+  double size = 20,
+  FontWeight weight = FontWeight.w500,
+}) {
   if (aiwaUseGoogleFonts) {
     return GoogleFonts.markaziText(
-      fontSize: 20,
-      fontWeight: FontWeight.w500,
+      fontSize: size,
+      fontWeight: weight,
       color: color,
       height: 1,
     );
   }
   return TextStyle(
     fontFamily: 'Markazi Text',
-    fontSize: 20,
-    fontWeight: FontWeight.w500,
+    fontSize: size,
+    fontWeight: weight,
     color: color,
     height: 1,
   );

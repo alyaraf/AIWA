@@ -11,10 +11,18 @@ class HomeLoadEvent extends HomeEvent {
   final double lng;
   final String? category;
 
-  const HomeLoadEvent({required this.lat, required this.lng, this.category});
+  /// The user's searchRadiusMaxKm (Preferences); 5 km is the prototype default.
+  final double radiusKm;
+
+  const HomeLoadEvent({
+    required this.lat,
+    required this.lng,
+    this.category,
+    this.radiusKm = 5,
+  });
 
   @override
-  List<Object?> get props => [lat, lng, category];
+  List<Object?> get props => [lat, lng, category, radiusKm];
 }
 
 class HomeSearchEvent extends HomeEvent {

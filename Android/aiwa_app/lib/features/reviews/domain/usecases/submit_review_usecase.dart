@@ -11,11 +11,10 @@ class SubmitReviewUseCase {
     required double rating,
     String? comment,
     List<String> tags = const [],
-  }) =>
-      _repository.submitReview(
-        bookingId: bookingId,
-        rating: rating,
-        comment: comment,
-        tags: tags,
-      );
+  }) => _repository.submitReview(
+    bookingId: bookingId,
+    rating: rating,
+    comment: comment,
+    tags: tags,
+  );
 }

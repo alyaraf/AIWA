@@ -3,6 +3,8 @@ import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/network/api_response.dart';
 import '../../domain/entities/booking_entity.dart';
+import '../../domain/entities/chat_message_entity.dart';
+import '../../domain/entities/saved_address_entity.dart';
 import '../../domain/repositories/booking_repository.dart';
 import '../datasources/booking_remote_datasource.dart';
 
@@ -14,8 +16,12 @@ class BookingRepositoryImpl implements BookingRepository {
   Future<Either<Failure, BookingEntity>> createBooking({
     required String providerId,
     required String serviceId,
-    required String scheduledDate,
-    required String scheduledTime,
+    String? scheduledDate,
+    String? scheduledTime,
+    String? staffId,
+    bool bookNow = false,
+    bool homeService = false,
+    String? savedAddressId,
     String? customerNote,
   }) async {
     try {
@@ -24,11 +30,26 @@ class BookingRepositoryImpl implements BookingRepository {
         serviceId: serviceId,
         scheduledDate: scheduledDate,
         scheduledTime: scheduledTime,
+        staffId: staffId,
+        bookNow: bookNow,
+        homeService: homeService,
+        savedAddressId: savedAddressId,
         customerNote: customerNote,
       );
       return Right(result);
     } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<SavedAddressEntity>>> getSavedAddresses() async {
+    try {
+      return Right(await _remote.getSavedAddresses());
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
     } on NetworkException catch (e) {
       return Left(NetworkFailure(e.message));
     }
@@ -41,16 +62,22 @@ class BookingRepositoryImpl implements BookingRepository {
     int size = 20,
   }) async {
     try {
-      final result =
-          await _remote.getMyBookings(status: status, page: page, size: size);
-      return Right(PagedData(
-        content: result.content,
-        totalElements: result.totalElements,
-        totalPages: result.totalPages,
-        number: result.number,
-        size: result.size,
-        last: result.last,
-      ));
+      final result = await _remote.getMyBookings(
+        status: status,
+        page: page,
+        size: size,
+      );
+      // ponytail: field-by-field copy of a PagedData the datasource already returns; `return Right(result);` works (Model extends Entity, generics are covariant)
+      return Right(
+        PagedData(
+          content: result.content,
+          totalElements: result.totalElements,
+          totalPages: result.totalPages,
+          number: result.number,
+          size: result.size,
+          last: result.last,
+        ),
+      );
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
@@ -60,7 +87,8 @@ class BookingRepositoryImpl implements BookingRepository {
 
   @override
   Future<Either<Failure, BookingEntity>> getBookingDetail(
-      String bookingId) async {
+    String bookingId,
+  ) async {
     try {
       final result = await _remote.getBookingDetail(bookingId);
       return Right(result);
@@ -69,16 +97,104 @@ class BookingRepositoryImpl implements BookingRepository {
     }
   }
 
-  @override
-  Future<Either<Failure, BookingEntity>> cancelBooking(
-      String bookingId) async {
+  Future<Either<Failure, T>> _guard<T>(Future<T> Function() call) async {
     try {
-      final result = await _remote.cancelBooking(bookingId);
-      return Right(result);
+      return Right(await call());
     } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
     }
   }
+
+  @override
+  Future<Either<Failure, BookingEntity>> cancelBooking(
+    String bookingId, {
+    String? reason,
+  }) => _guard(() => _remote.cancelBooking(bookingId, reason: reason));
+
+  @override
+  Future<Either<Failure, BookingEntity>> respondToProposal(
+    String bookingId,
+    bool accept,
+  ) => _guard(() => _remote.respondToProposal(bookingId, accept));
+
+  // BACKEND GAP: travel fees are a fixed provider setting applied at
+  // booking time; there is no quote the customer can accept or decline.
+  @override
+  Future<Either<Failure, BookingEntity>> respondToTravelFee(
+    String bookingId,
+    bool accept,
+  ) async => const Left(NotSupportedFailure('Answering a travel-fee quote'));
+
+  @override
+  Future<Either<Failure, BookingEntity>> checkIn(String bookingId) =>
+      _guard(() => _remote.checkIn(bookingId));
+
+  @override
+  Future<Either<Failure, BookingEntity>> confirmPayment(
+    String bookingId, {
+    required bool paid,
+    String? providerId,
+    String? reason,
+  }) => _guard(() async {
+    final b = await _remote.confirmPayment(bookingId, paid);
+    if (!paid && reason != null && providerId != null) {
+      await _remote.submitComplaint(
+        bookingId: bookingId,
+        providerId: providerId,
+        category: 'PAYMENT',
+        description: reason,
+      );
+    }
+    return b;
+  });
+
+  @override
+  Future<Either<Failure, void>> sendSos(String bookingId) =>
+      _guard(() => _remote.sendSos(bookingId));
+
+  // BACKEND GAP: SafetyController has GET/POST events only; nothing closes
+  // an SOS incident.
+  @override
+  Future<Either<Failure, void>> resolveSos(String bookingId) async =>
+      const Left(NotSupportedFailure('Closing an SOS'));
+
+  // BACKEND GAP: no masked-number proxy; BookingDto carries no phone.
+  @override
+  Future<Either<Failure, String>> maskedPhone(String bookingId) async =>
+      const Left(NotSupportedFailure('Calling through a masked number'));
+
+  @override
+  Future<Either<Failure, void>> submitComplaint({
+    required String bookingId,
+    required String providerId,
+    required String category,
+    required String description,
+  }) => _guard(
+    () => _remote.submitComplaint(
+      bookingId: bookingId,
+      providerId: providerId,
+      category: category,
+      description: description,
+    ),
+  );
+
+  @override
+  Future<Either<Failure, List<ChatMessageEntity>>> getChat(String bookingId) =>
+      _guard(() => _remote.getChat(bookingId));
+
+  @override
+  Future<Either<Failure, ChatMessageEntity>> sendChat(
+    String bookingId,
+    String message,
+  ) => _guard(() => _remote.sendChat(bookingId, message));
+
+  @override
+  Future<Either<Failure, void>> reportChatMessage(
+    String bookingId,
+    String messageId,
+  ) => _guard(() => _remote.reportChatMessage(bookingId, messageId));
 
   @override
   Future<Either<Failure, BookingEntity>> rescheduleBooking({

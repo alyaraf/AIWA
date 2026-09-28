@@ -11,9 +11,14 @@ class AuthCheckSessionEvent extends AuthEvent {}
 class AuthLoginEvent extends AuthEvent {
   final String identifier;
   final String password;
-  const AuthLoginEvent({required this.identifier, required this.password});
+  final bool remember;
+  const AuthLoginEvent({
+    required this.identifier,
+    required this.password,
+    this.remember = true,
+  });
   @override
-  List<Object?> get props => [identifier, password];
+  List<Object?> get props => [identifier, password, remember];
 }
 
 class AuthRegisterEvent extends AuthEvent {
@@ -25,6 +30,9 @@ class AuthRegisterEvent extends AuthEvent {
   final String? gender;
   final String? profileImageUrl;
 
+  /// 'EN' or 'AR'.
+  final String? preferredLanguage;
+
   const AuthRegisterEvent({
     required this.fullName,
     required this.password,
@@ -33,11 +41,19 @@ class AuthRegisterEvent extends AuthEvent {
     required this.role,
     this.gender,
     this.profileImageUrl,
+    this.preferredLanguage,
   });
 
   @override
-  List<Object?> get props =>
-      [fullName, password, email, phone, role, gender];
+  List<Object?> get props => [
+    fullName,
+    password,
+    email,
+    phone,
+    role,
+    gender,
+    preferredLanguage,
+  ];
 }
 
 class AuthSendOtpEvent extends AuthEvent {

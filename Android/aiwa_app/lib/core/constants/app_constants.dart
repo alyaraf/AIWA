@@ -1,6 +1,7 @@
 class AppConstants {
   AppConstants._();
 
+  // ponytail: only the 4 storage keys are referenced; the other 10 constants are unused, delete or wire them up
   static const String appName = 'AIWA';
   static const String accessTokenKey = 'access_token';
   static const String refreshTokenKey = 'refresh_token';

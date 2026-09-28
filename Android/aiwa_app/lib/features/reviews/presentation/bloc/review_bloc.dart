@@ -11,7 +11,9 @@ class ReviewBloc extends Bloc<ReviewEvent, ReviewState> {
   }
 
   Future<void> _onSubmit(
-      ReviewSubmitEvent event, Emitter<ReviewState> emit) async {
+    ReviewSubmitEvent event,
+    Emitter<ReviewState> emit,
+  ) async {
     emit(ReviewLoading());
     final result = await _repository.submitReview(
       bookingId: event.bookingId,

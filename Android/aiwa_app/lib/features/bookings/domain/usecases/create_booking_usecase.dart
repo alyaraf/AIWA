@@ -10,15 +10,22 @@ class CreateBookingUseCase {
   Future<Either<Failure, BookingEntity>> call({
     required String providerId,
     required String serviceId,
-    required String scheduledDate,
-    required String scheduledTime,
+    String? scheduledDate,
+    String? scheduledTime,
+    String? staffId,
+    bool bookNow = false,
+    bool homeService = false,
+    String? savedAddressId,
     String? customerNote,
-  }) =>
-      _repository.createBooking(
-        providerId: providerId,
-        serviceId: serviceId,
-        scheduledDate: scheduledDate,
-        scheduledTime: scheduledTime,
-        customerNote: customerNote,
-      );
+  }) => _repository.createBooking(
+    providerId: providerId,
+    serviceId: serviceId,
+    scheduledDate: scheduledDate,
+    scheduledTime: scheduledTime,
+    staffId: staffId,
+    bookNow: bookNow,
+    homeService: homeService,
+    savedAddressId: savedAddressId,
+    customerNote: customerNote,
+  );
 }

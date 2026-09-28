@@ -1,0 +1,1722 @@
+{
+  "@@locale": "en",
+  "authTagline": "Beauty & grooming, near you.",
+  "authTaglineSub": "Trusted barbers, hairdressers, nail artists, and spas — one tap away.",
+  "authChooseLanguage": "Choose your language",
+  "authBrowseAsGuest": "Browse as guest →",
+  "authChoiceProviderEyebrow": "Provider · Welcome",
+  "authChoiceCustomerEyebrow": "Customer · Welcome",
+  "authChoiceProviderTitle": "Run your beauty studio with AIWA.",
+  "authChoiceProviderSubtitle": "Manage bookings, hours, and your verified profile — all in one app.",
+  "authChoiceProviderSignUp": "Set up a new studio",
+  "authChoiceCustomerSignUp": "Create an account",
+  "authChoiceProviderHint": "ID verification required.",
+  "authChoiceCustomerHint": "Takes about a minute.",
+  "authHaveAccount": "I already have an account",
+  "authSignInWithPhoneOrEmail": "Sign in with phone or email.",
+  "authSafetyPolicy": "Protected by AIWA's safety policy",
+  "authGatePerkHistory": "Your booking history in one place",
+  "authGatePerkTracking": "Live status + safety tracking",
+  "authGatePerkFavorites": "Save favorite providers",
+  "authCreateAccount": "Create account",
+  "authGateEyebrow": "One quick step",
+  "authGateTitle": "Sign in to book.",
+  "authGateBody": "Browsing is open to everyone. Booking needs an account so providers can reach you.",
+  "authStepOf": "Step {step} of {total}",
+  "@authStepOf": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "authModePhone": "Phone",
+  "authModeEmail": "Email",
+  "errorNoInternet": "No internet connection",
+  "errorTimeout": "Connection timed out",
+  "errorGeneric": "Something went wrong",
+  "errorUnauthorized": "Unauthorized. Please sign in again.",
+  "errorNotSupported": "This isn't available yet.",
+  "errorLoginFailed": "Login failed",
+  "errorRegistrationFailed": "Registration failed",
+  "errorSendOtpFailed": "Failed to send OTP",
+  "errorInvalidOtp": "Invalid OTP",
+  "authWelcomeBackName": "Welcome back, {name}.",
+  "@authWelcomeBackName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "authSignIn": "Sign in",
+  "authNewToAiwa": "New to AIWA? ",
+  "authProviderSignIn": "Provider sign in",
+  "authWelcomeBack": "Welcome back",
+  "authSignInTitle": "Sign in to AIWA",
+  "authSignInSubtitlePhone": "Use the number and password you signed up with.",
+  "authSignInSubtitleEmail": "Use the email and password you signed up with.",
+  "authPhoneNumber": "Phone number",
+  "authPassword": "Password",
+  "authRememberMe": "Remember me",
+  "authForgotPassword": "Forgot password?",
+  "authSendCode": "Send code",
+  "authWhatsYourPhone": "What's your phone number?",
+  "authWhatsYourEmail": "What's your email?",
+  "authSendCodeSubtitle": "We'll send a 6-digit code to confirm.",
+  "authAgreeTerms": "By continuing you agree to AIWA's {terms} and {policy}.",
+  "@authAgreeTerms": {
+    "placeholders": {
+      "terms": {
+        "type": "String"
+      },
+      "policy": {
+        "type": "String"
+      }
+    }
+  },
+  "authTermsLink": "terms",
+  "authSafetyPolicyLink": "safety policy",
+  "authVerify": "Verify",
+  "authEnterCode": "Enter the code",
+  "authCodeSentTo": "We sent a 6-digit code to {destination}.",
+  "@authCodeSentTo": {
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "authResendIn": "Resend code in {time}",
+  "@authResendIn": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "authResendCode": "Resend code",
+  "authOtpHelp": "Didn't get it? Check the number, then tap Resend once the timer ends.",
+  "authResetPassword": "Reset password",
+  "authWhereSendCode": "Where should we send the code?",
+  "authSendResetCode": "Send reset code",
+  "authCheckMessages": "Check your messages.",
+  "authCheckInbox": "Check your inbox.",
+  "authAlmostDone": "Almost done",
+  "authSetNewPassword": "Set a new password.",
+  "authCodePlaceholder": "6-digit code",
+  "authNewPassword": "New password",
+  "authConfirmPassword": "Confirm password",
+  "authPasswordResetDone": "Password reset. Please sign in.",
+  "commonContinue": "Continue",
+  "authSetupTitle": "Set up your account",
+  "authSetupSubtitle": "A name and a password — that's it. We'll add the rest later.",
+  "authNameError": "Enter your first and last name",
+  "authEmailError": "Doesn't look like a valid email",
+  "authPasswordMinError": "At least 6 characters",
+  "authPasswordHint": "At least 6 characters.",
+  "authStrengthWeak": "Weak",
+  "authStrengthOkay": "Okay",
+  "authStrengthGood": "Good",
+  "authStrengthStrong": "Strong",
+  "authFullName": "Full name",
+  "authNamePlaceholder": "e.g. Layla Hassan",
+  "authNameHint": "Your real name — providers see it on bookings.",
+  "authEmailHint": "For receipts and account recovery.",
+  "authContinueWithoutPhoto": "Continue without a photo",
+  "authMakeItYours": "Make it yours",
+  "authMakeItYoursSub": "Add a photo, pick your palette. You can change both later.",
+  "authUploadPhoto": "Upload a photo",
+  "authReplacePhoto": "Replace photo",
+  "authSigningUpAs": "I'm signing up as",
+  "authWoman": "Woman",
+  "authMan": "Man",
+  "authPaletteNote": "This sets the palette of your app.",
+  "authRoleCustomerTitle": "I'm here to book",
+  "authRoleCustomerSub": "Find a barber, hairdresser, nail artist, or spa near you.",
+  "authRolePerkBrowse": "Browse verified providers",
+  "authRolePerkCash": "Cash on visit",
+  "authRolePerkTrack": "Track your booking live",
+  "authRoleProviderTitle": "I'm offering services",
+  "authRoleProviderSub": "Get bookings from customers in your area.",
+  "authRolePerkId": "ID verification required",
+  "authRolePerkManage": "Manage your services & hours",
+  "authRolePerkPayouts": "Cash payouts",
+  "authWelcomeToAiwa": "Welcome to AIWA",
+  "authHowUsing": "How will you\nbe using AIWA?",
+  "authChangeLater": "You can change this later from your profile.",
+  "authTermsVerifiedTitle": "Verified providers only",
+  "authTermsVerifiedBody": "Every provider is checked with a national ID and a live selfie before they can take bookings.",
+  "authTermsPrivateTitle": "Your data stays private",
+  "authTermsPrivateBody": "Your phone and address are only shared with a provider after you confirm a booking with them.",
+  "authTermsFlagTitle": "You can always flag or complain",
+  "authTermsFlagBody": "If anything feels off, flag the provider or open a complaint. Our team reviews every report.",
+  "authTermsCashTitle": "Cash only — for now",
+  "authTermsCashBody": "In this version you pay the provider directly in cash after the service. Online payment is on the way.",
+  "authAgreeContinue": "Agree & continue",
+  "authTermsTitle": "A few promises\nbefore you start.",
+  "authTermsSubtitle": "AIWA's customer terms & safety policy in plain words.",
+  "authTermsAgree": "I've read and agree to the AIWA {terms} and {policy}.",
+  "@authTermsAgree": {
+    "placeholders": {
+      "terms": {
+        "type": "String"
+      },
+      "policy": {
+        "type": "String"
+      }
+    }
+  },
+  "authCustomerTermsLink": "customer terms",
+  "authTermsAccepted": "Thanks — terms accepted.",
+  "authPoliciesUpdated": "Policies updated",
+  "authTermsUpdatedTitle": "We've updated our terms.",
+  "authTermsUpdatedBody": "AIWA's terms & safety policy changed on May 20, 2026 — mainly around cancellation penalties and provider verification. Please re-accept to keep booking.",
+  "authTermsVersion": "v{version}",
+  "categoryHair": "Hair",
+  "categoryNails": "Nails",
+  "categorySpa": "Spa",
+  "categoryMakeup": "Makeup",
+  "categoryLashes": "Lashes",
+  "categorySkin": "Skin",
+  "categoryMassage": "Massage",
+  "categoryOther": "Other",
+  "prefsSave": "Save preferences",
+  "prefsLastStep": "Last step",
+  "prefsTitle": "Where should we\nlook for providers?",
+  "prefsSubtitle": "We use these to tune the providers we show you. Change them any time from Profile.",
+  "prefsYourArea": "Your area",
+  "commonUseGps": "Use GPS",
+  "prefsSearchRadius": "Search radius",
+  "prefsRadiusRange": "{min}–{max} km",
+  "@prefsRadiusRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "prefsMinKm": "Min · {km} km",
+  "@prefsMinKm": {
+    "placeholders": {
+      "km": {
+        "type": "int"
+      }
+    }
+  },
+  "prefsMaxKm": "Max · {km} km",
+  "@prefsMaxKm": {
+    "placeholders": {
+      "km": {
+        "type": "int"
+      }
+    }
+  },
+  "prefsAppLanguage": "App language",
+  "authAccountCreatedReview": "Account created. Verification in review.",
+  "provBizTitle": "Set up your studio",
+  "provBizSubtitle": "Customers will see this on your profile.",
+  "provBizName": "Business name",
+  "provBizNamePlaceholder": "e.g. Nadia Studio",
+  "provBizType": "Business type",
+  "provBizIndividual": "Individual",
+  "provBizShop": "Shop / salon",
+  "provBizShopNote": "Shops can add staff members with their own calendars.",
+  "provBizStaff": "Staff members",
+  "commonOptional": "Optional",
+  "provBizStaffName": "Staff member {number} name",
+  "@provBizStaffName": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "provBizAddStaff": "Add staff member",
+  "provBizStaffNote": "Add the team who'll take bookings. You can add more later.",
+  "provBizBio": "Short bio",
+  "provBizBioPlaceholder": "Cairo-trained colorist with a soft, editorial touch…",
+  "provBizBioHint": "2–3 lines on what makes you stand out.",
+  "provBizPrimaryCategory": "Primary category",
+  "provBizPickOne": "Pick the one you do most.",
+  "provBizAddress": "Studio address",
+  "provBizAddressPlaceholder": "Street, neighborhood, city",
+  "provBizGpsLocked": "GPS locked — {lat}, {lng}",
+  "@provBizGpsLocked": {
+    "placeholders": {
+      "lat": {
+        "type": "String"
+      },
+      "lng": {
+        "type": "String"
+      }
+    }
+  },
+  "provBizNoGps": "No GPS — tap \"Use GPS\"",
+  "provBizNearby": "Customers nearby can find you",
+  "provPendingEyebrow": "Verification submitted",
+  "provPendingTitle": "We're reviewing\nyour documents.",
+  "provPendingBody": "Most reviews take {duration}. You'll get a notification the moment AIWA approves your studio — then you can take bookings.",
+  "@provPendingBody": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "provPendingUnder24h": "under 24 hours",
+  "provPendingIdReceived": "ID front & back received",
+  "provPendingSelfieReceived": "Live selfie received",
+  "provPendingAdminReview": "Admin review in progress",
+  "provPendingExplore": "Explore the app while you wait",
+  "provPendingBrowseNote": "You can browse, but bookings open after verification.",
+  "provVerifySubmit": "Submit for review",
+  "provVerifyTitle": "Verify your identity",
+  "provVerifySubtitle": "Upload your national ID and a live selfie. AIWA reviews every provider before they can take bookings.",
+  "provVerifyIdFront": "National ID — front",
+  "provVerifyIdFrontHint": "Front side of your government-issued ID. Make sure all four corners are visible.",
+  "provVerifyIdBack": "National ID — back",
+  "provVerifyIdBackHint": "The back side of the same ID.",
+  "provVerifySelfie": "Live selfie",
+  "provVerifySelfieHint": "A clear photo of your face, taken now. We compare it to your ID.",
+  "provVerifyPrivate": "Your documents are private. Only AIWA admins reviewing your account see them. They're never shown to customers.",
+  "provVerifyUploaded": "{label} uploaded · tap to replace",
+  "@provVerifyUploaded": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "moneyEgp": "EGP {amount}",
+  "@moneyEgp": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "whenToday": "Today · {time}",
+  "@whenToday": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "whenTomorrow": "Tomorrow · {time}",
+  "@whenTomorrow": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "whenYesterday": "Yesterday · {time}",
+  "@whenYesterday": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "durationMinutes": "{m, plural, other{{m} min}}",
+  "@durationMinutes": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHours": "{h, plural, other{{h}h}}",
+  "@durationHours": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHoursMinutes": "{h}h {m}m",
+  "@durationHoursMinutes": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "bookNowOfflineEyebrow": "Not online",
+  "bookNowOfflineTitle": "{name} is offline right now.",
+  "@bookNowOfflineTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookNowOfflineBody": "They’ll show as available again the moment they come back online. You can try Book Now later, or pick a scheduled time now.",
+  "bookNowBusyEyebrow": "Fully booked",
+  "bookNowBusyTitle": "{name} is busy with another client.",
+  "@bookNowBusyTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookNowBusyBody": "Every Book Now slot is taken for the next stretch. A scheduled slot later today is usually faster than waiting.",
+  "bookNowVacationEyebrow": "On vacation",
+  "bookNowVacationTitle": "{name} is on vacation.",
+  "@bookNowVacationTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookNowVacationBody": "They’ve paused all bookings for now. We’ll show them again as soon as they’re back.",
+  "bookNowPausedEyebrow": "Temporarily paused",
+  "bookNowPausedTitle": "{name} can’t take new bookings right now.",
+  "@bookNowPausedTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookNowPausedBody": "They’re settling an outstanding balance with AIWA. This clears automatically once that’s paid — try again soon.",
+  "bookNowUnavailableEyebrow": "Unavailable",
+  "bookNowUnavailableTitle": "{name} isn’t taking bookings.",
+  "@bookNowUnavailableTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookNowUnavailableBody": "This provider, staff member, or service is temporarily inactive. Try another provider nearby.",
+  "bookNowChecking": "Checking availability…",
+  "bookNowConfirming": "Confirming {name} can take this right now.",
+  "@bookNowConfirming": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookNowChooseScheduled": "Choose a scheduled time",
+  "bookNowSeeOthers": "See other providers nearby",
+  "bookingPlaced": "Booking placed",
+  "bookingSaidAiwa": "You said {aiwa}. We told {name}.",
+  "@bookingSaidAiwa": {
+    "placeholders": {
+      "aiwa": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingAiwaWord": "aiwa",
+  "bookingWhenLong": "{date} at {time}",
+  "@bookingWhenLong": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingConfirmPing": "{when}. We'll ping you the moment they confirm — usually within 30 minutes.",
+  "@bookingConfirmPing": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingProvider": "Provider",
+  "bookingService": "Service",
+  "bookingWhen": "When",
+  "bookingTotal": "Total",
+  "bookingViewMine": "View my bookings",
+  "commonBackHome": "Back to home",
+  "bookingTypeEyebrow": "How do you want to book",
+  "bookingTypeTitle": "Now, or later?",
+  "bookingTypeAccepts": "{name} accepts both same-day requests and scheduled bookings.",
+  "@bookingTypeAccepts": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingTypeNowEyebrow": "Book now",
+  "bookingTypeNowTitle": "Get someone on the way",
+  "bookingTypeNowEta": "Est. arrival 25–40 min",
+  "bookingTypeNowComes": "Comes to you",
+  "bookingTypeScheduleEyebrow": "Schedule",
+  "bookingTypeScheduleTitle": "Pick a date & time slot",
+  "bookingTypeUpTo14": "Up to 14 days out",
+  "bookingTypeProviderConfirms": "Provider confirms slot",
+  "bookingTypeCashNote": "Either way, payment is {cash}. Online payment is coming in a future version.",
+  "@bookingTypeCashNote": {
+    "placeholders": {
+      "cash": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingCashOnVisit": "cash on visit",
+  "chatReportEyebrow": "Report message",
+  "chatReportTitle": "Send this to admin review?",
+  "chatReportBody": "Support reviews reported messages and can remove them. This doesn't notify the other person.",
+  "chatMaskedOnline": "Masked number · online",
+  "chatAdminNote": "Admin can view this chat only if you submit a complaint or dispute a payment.",
+  "chatHint": "Message…",
+  "chatRemoved": "[message removed by admin]",
+  "chatReport": "Report",
+  "bookingsGuestTitle": "See your bookings",
+  "bookingsGuestBody": "Sign in to view and track your bookings.",
+  "bookingsEyebrow": "Your appointments",
+  "bookingsTitle": "Bookings",
+  "bookingsUpcoming": "Upcoming",
+  "bookingsPast": "Past",
+  "bookingsEmptyUpcomingTitle": "Nothing booked yet",
+  "bookingsEmptyPastTitle": "No past appointments",
+  "bookingsEmptyUpcomingBody": "When you book a provider, it shows up here so you can track them on the way.",
+  "bookingsEmptyPastBody": "Once an appointment is finished it moves here, ready to re-book in a tap.",
+  "bookingsFindProvider": "Find a provider",
+  "commonLoadMore": "Load more",
+  "distanceKm": "{km} km",
+  "@distanceKm": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingsNoShow": "Marked no-show",
+  "bookingsRejectedByProvider": "Rejected by provider",
+  "bookingsCancelledByYou": "Cancelled by you",
+  "bookingsCancelledByProvider": "Cancelled by Provider",
+  "bookingsCancelledBy": "Cancelled by {who}",
+  "@bookingsCancelledBy": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "commonQuoted": "\"{text}\"",
+  "@commonQuoted": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingsPenaltyApplied": "Provider penalty applied for late cancellation.",
+  "bookingsTrack": "Track",
+  "bookingsDirections": "Directions",
+  "bookingsRebook": "Re-book",
+  "bookingsLeaveReview": "Leave a review",
+  "bookingsSeeAlternatives": "See alternatives",
+  "bookingRebookedFor": "Rebooked for {time}.",
+  "@bookingRebookedFor": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingProviderOnWay": "Provider is on the way.",
+  "bookingPlacedWaiting": "Booking placed. Waiting to confirm.",
+  "bookingThisProvider": "this provider",
+  "bookingBookService": "Book a service",
+  "bookingPickTime": "Pick a time",
+  "bookingDateMonth": "Date · {month}",
+  "@bookingDateMonth": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingAvailableSlots": "Available slots",
+  "bookingNoSlots": "No free slots on this day — try another date.",
+  "bookingWhere": "Where",
+  "bookingNowAddressNote": "Book Now always comes to your address — confirm which one below.",
+  "bookingAtMyAddress": "At my address",
+  "bookingAtSalon": "At the salon",
+  "bookingAddAddress": "Add new address",
+  "bookingPayment": "Payment",
+  "bookingCashOnVisitTitle": "Cash on visit",
+  "bookingCashOnVisitSub": "Pay the provider directly after your service",
+  "bookingNoteLabel": "Note for the provider",
+  "bookingNotePlaceholder": "Any special requests…",
+  "bookingTotalCash": "Total · cash",
+  "bookingChooseService": "Choose a service",
+  "bookingChooseTime": "Choose a time",
+  "bookingChooseAddress": "Choose an address",
+  "bookingConfirm": "Confirm booking",
+  "bookingChooseServiceBelow": "Choose a service below",
+  "outcomeExpiredEyebrow": "Request expired",
+  "outcomeExpiredTitle": "No answer in time.",
+  "outcomeExpiredBody": "{name} didn't respond within the booking window, so your request was released. You haven't been charged anything.",
+  "@outcomeExpiredBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "outcomeTheProvider": "The provider",
+  "outcomeThreeNearbyTitle": "Three providers nearby are free at the same time",
+  "outcomeThreeNearbyBody": "Same category, similar rating, all within your radius.",
+  "outcomeSeeAlternatives": "See alternative providers",
+  "outcomeBackToBookings": "Back to bookings",
+  "rejectedEyebrow": "Booking rejected",
+  "rejectedTitleGeneric": "Provider couldn’t take this one.",
+  "rejectedTitle": "{name} couldn't take this one.",
+  "@rejectedTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "rejectedSimilar": "Similar providers",
+  "rejectedOtherNearby": "Other providers nearby",
+  "rejectedReasonFrom": "Reason from {name}",
+  "@rejectedReasonFrom": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "rejectedBookAnother": "Book {name} at another time",
+  "@rejectedBookAnother": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "rejectedNextSlots": "Next open slots for the same service",
+  "rejectedSeeAllTimes": "See all times",
+  "commonToday": "Today",
+  "commonTomorrow": "Tomorrow",
+  "commonBook": "Book",
+  "distanceMeters": "{m} m",
+  "@distanceMeters": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "proposedAccepted": "New time confirmed — your calendar and reminders are updated.",
+  "proposedEyebrow": "New time proposed",
+  "proposedTitle": "{name} suggested a different time.",
+  "@proposedTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "proposedLead": "Your original slot wasn't available. Here's what they can offer instead.",
+  "proposedInsteadOf": "Instead of {when}",
+  "@proposedInsteadOf": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "proposedExpiredTitle": "This offer expired",
+  "proposedExpiredBody": "You didn't respond in time, so the request was released automatically. Ask for another time or see who else is free.",
+  "proposedRespondWithin": "Respond within {time} or this offer expires automatically.",
+  "@proposedRespondWithin": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "proposedAccept": "Accept new time",
+  "proposedDecline": "Decline & see alternatives",
+  "payConfirmedToast": "Payment confirmed. Receipt sent.",
+  "payUnpaidToast": "Reported as unpaid. AIWA support has been notified.",
+  "payEyebrow": "Confirm payment",
+  "payTitle": "Did you pay {name} in cash?",
+  "@payTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "payTotalDue": "Total due · {amount}",
+  "@payTotalDue": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payYes": "Yes, I paid — confirm",
+  "payNo": "No / something's wrong",
+  "payRate": "Rate your provider",
+  "payUndo": "Undo — I tapped by mistake",
+  "payWhatHappened": "What happened?",
+  "payExplainPlaceholder": "Explain the payment issue…",
+  "paySubmitUnpaid": "Submit as unpaid",
+  "commonBack": "Back",
+  "paidTitle": "Payment confirmed",
+  "paidSub": "Receipt sent to your email",
+  "paidCashCollected": "Cash collected",
+  "paidCommission": "AIWA commission (15%) · added to ledger",
+  "paidBookingStatus": "Booking status",
+  "statusCompleted": "Completed",
+  "complaintBehavior": "Provider behavior",
+  "complaintBehaviorHint": "Rude, unsafe, or unprofessional conduct.",
+  "complaintQuality": "Service quality",
+  "complaintQualityHint": "Service didn't match what was advertised.",
+  "complaintPricing": "Pricing or billing",
+  "complaintPricingHint": "Asked for more cash than agreed.",
+  "complaintSafety": "Safety concern",
+  "complaintSafetyHint": "Hygiene, identity, or any safety issue.",
+  "complaintNoShow": "Provider didn't show",
+  "complaintNoShowHint": "Booked but never arrived.",
+  "complaintOther": "Something else",
+  "complaintOtherHint": "Tell us in your own words.",
+  "complaintSubmitted": "Complaint submitted. We will reach out via WhatsApp.",
+  "complaintEyebrow": "Open a complaint",
+  "complaintPickCategory": "Pick a category",
+  "complaintTellMore": "Tell us more",
+  "complaintPlaceholder": "Walk us through what happened. The more detail, the faster we can help.",
+  "complaintPrivate": "Your name and contact info stay private. Only the AIWA support team will see this case.",
+  "complaintSubmit": "Submit complaint",
+  "complaintAbout": "About {name}",
+  "@complaintAbout": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "complaintBookingNo": "Booking #{id}",
+  "@complaintBookingNo": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "complaintPrivateTag": "Private",
+  "statusPending": "Pending",
+  "statusConfirmed": "Confirmed",
+  "statusAccepted": "Accepted",
+  "statusOnTheWay": "On the way",
+  "statusArrived": "Arrived",
+  "statusInProgress": "In progress",
+  "statusCancelled": "Cancelled",
+  "statusRejected": "Rejected",
+  "statusNoShow": "No-show",
+  "statusExpired": "Expired",
+  "statusDisputed": "Disputed",
+  "trackPendingHint": "Waiting for the provider to confirm.",
+  "trackAcceptedHint": "Your booking is confirmed.",
+  "trackOnTheWayHint": "Provider is heading to your address.",
+  "trackArrivedHint": "Provider has arrived at your door.",
+  "trackInProgressHint": "Service is underway.",
+  "trackCompletedHint": "Service done. Pay cash and rate.",
+  "trackWaitPending": "Waiting for the provider to accept",
+  "trackWaitAccepted": "Updates when the provider heads out",
+  "trackWaitOnTheWay": "Updates when the provider arrives",
+  "trackWaitArrived": "Updates when the provider starts the service",
+  "trackWaitInProgress": "Updates when the provider marks it complete",
+  "trackUpdatesAuto": "Updates automatically",
+  "cancelReasonMind": "Changed my mind",
+  "cancelReasonOther": "Found another provider",
+  "cancelReasonWrong": "Wrong service / time",
+  "cancelReasonPrice": "Price is too high",
+  "cancelReasonUnresponsive": "Provider not responsive",
+  "cancelReasonElse": "Something else",
+  "trackCancelEyebrow": "Cancel your booking",
+  "trackCancelTitle": "Why are you cancelling?",
+  "trackCancelledToast": "Booking cancelled. Reason: {reason}",
+  "@trackCancelledToast": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "trackStatusTimeline": "Status timeline",
+  "trackCancelBooking": "Cancel booking",
+  "trackReportProblem": "Report a problem",
+  "trackTracking": "Tracking",
+  "trackSafetyTitle": "Live location + ID shared",
+  "trackSafetySub": "Identity confirmed both ways. A trusted contact can follow along too.",
+  "trackSos": "SOS — alert a trusted contact & AIWA",
+  "trackSosAlerting": "Alerting your trusted contact and AIWA support…",
+  "trackSosNotified": "{bold} A trusted contact was alerted with your live location. Stay safe — a specialist may call shortly.",
+  "@trackSosNotified": {
+    "placeholders": {
+      "bold": {
+        "type": "String"
+      }
+    }
+  },
+  "trackSosNotifiedBold": "Support has been notified.",
+  "trackSosLogged": "Incident logged for admin review. Our trust & safety team will follow up within 24h.",
+  "trackImSafe": "I'm safe",
+  "trackCheckInTitle": "On-site service — check in when you arrive",
+  "trackCheckInSub": "Tap in at the venue to let {name} know you're there.",
+  "@trackCheckInSub": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "trackCheckedIn": "Checked in",
+  "trackCheckIn": "Check in",
+  "trackConfirmCash": "Confirm your cash payment",
+  "trackDueTo": "{amount} due to {name}",
+  "@trackDueTo": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "commonConfirm": "Confirm",
+  "trackFeeWants": "{name} wants {amount} for travel",
+  "@trackFeeWants": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "trackFeeTotal": "Total will be {base} + {fee} = {total}.",
+  "@trackFeeTotal": {
+    "placeholders": {
+      "base": {
+        "type": "String"
+      },
+      "fee": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "commonDecline": "Decline",
+  "trackAcceptConfirm": "Accept & confirm",
+  "trackServicePlusTravel": "Service {service} + travel {travel}",
+  "@trackServicePlusTravel": {
+    "placeholders": {
+      "service": {
+        "type": "String"
+      },
+      "travel": {
+        "type": "String"
+      }
+    }
+  },
+  "trackTotalAmount": "Total {amount}",
+  "@trackTotalAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "trackDeclinedEyebrow": "Booking cancelled",
+  "trackDeclinedTitle": "No problem — no fee applied.",
+  "trackDeclinedBody": "You declined the {fee} travel fee, so this request was cancelled cleanly. Neither of you is penalized.",
+  "@trackDeclinedBody": {
+    "placeholders": {
+      "fee": {
+        "type": "String"
+      }
+    }
+  },
+  "trackFindAnother": "Find another provider",
+  "agoYesterday": "Yesterday",
+  "agoDays": "{n, plural, =1{1 day ago} other{{n} days ago}}",
+  "@agoDays": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "agoWeeks": "{n, plural, =1{1 week ago} other{{n} weeks ago}}",
+  "@agoWeeks": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "agoMonths": "{n, plural, =1{1 month ago} other{{n} months ago}}",
+  "@agoMonths": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "providerShareText": "{name} on AIWA",
+  "@providerShareText": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "providerCopied": "Copied — paste it anywhere to share.",
+  "providerStartsAt": "Starts at",
+  "providerAskProvider": "Ask provider",
+  "providerBookNow": "Book now",
+  "providerNew": "New",
+  "providerVerified": "Verified",
+  "providerBioFallback": "Top-rated provider in your area. Read more about the studio, services, and recent reviews.",
+  "providerCall": "Call",
+  "providerWhatsApp": "WhatsApp",
+  "providerReport": "Report",
+  "providerNoReviews": "No reviews yet",
+  "providerNoReviewsBody": "Be the first to book and leave a review.",
+  "providerBasedOn": "{count, plural, =1{Based on 1 review} other{Based on {count} reviews}}",
+  "@providerBasedOn": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "providerNoPhotos": "No photos yet",
+  "providerNoPhotosBody": "This provider hasn't added gallery photos.",
+  "providerNoServices": "No services listed",
+  "providerNoServicesBody": "This provider has not published services yet.",
+  "providerTabServices": "Services",
+  "providerTabReviews": "Reviews",
+  "providerTabGallery": "Gallery",
+  "providerUnavailable": "Unavailable",
+  "staffPickTitle": "Pick your stylist.",
+  "staffPickBody": "This is a shop with multiple staff — your booking will be tied to whoever you pick.",
+  "staffNoPreference": "No preference",
+  "staffFirstAvailable": "First available staff member",
+  "flagReasonMisleading": "Misleading profile or gallery",
+  "flagReasonBehavior": "Inappropriate or unsafe behavior",
+  "flagReasonPrice": "Refused to honor agreed price",
+  "flagReasonIdentity": "Identity feels suspicious",
+  "flagReasonSpam": "Spam or fake account",
+  "flagReasonOther": "Other",
+  "flagThanks": "Thanks — flag received. Our team reviews every report.",
+  "flagEyebrow": "Flag {name}",
+  "@flagEyebrow": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "flagTitle": "Tell us what's wrong",
+  "flagBody": "Flags are anonymous. Our team reviews every report and acts on the provider if confirmed.",
+  "flagHelpUs": "Help us understand",
+  "commonCancel": "Cancel",
+  "flagSubmit": "Submit flag",
+  "homeOpen": "Open",
+  "homeOpenNow": "Open now",
+  "homeFrom": "From",
+  "homeNearMe": "Near me",
+  "homeGoodMorning": "Good morning",
+  "homeGoodAfternoon": "Good afternoon",
+  "homeGoodEvening": "Good evening",
+  "homeGreetingName": "{greeting}, {name}",
+  "@homeGreetingName": {
+    "placeholders": {
+      "greeting": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeHeadline": "Who's making you\nfeel new tonight?",
+  "homeSearchHint": "Service or provider",
+  "homePromoEyebrow": "This week · 20% off",
+  "homePromoTitle": "Bridal lookbook season",
+  "homePromoBody": "Top-rated makeup & lash artists, with package pricing.",
+  "homeExplore": "Explore →",
+  "homeCategories": "Categories",
+  "commonSeeAll": "See all",
+  "homeAll": "All",
+  "homeNobodyNearby": "Nobody nearby yet",
+  "homeNobodyNearbyBody": "No providers within your radius right now. Try browsing all categories.",
+  "homeBrowseAll": "Browse all",
+  "homeTrending": "Trending near you",
+  "homeViewMap": "View map",
+  "homeAvailableNow": "Available now",
+  "searchSortNearest": "Nearest",
+  "searchSortTopRated": "Top rated",
+  "searchSortPrice": "Price",
+  "searchNotifyToast": "We'll let you know.",
+  "searchEyebrow": "Find someone new",
+  "searchTitle": "Discover",
+  "searchHint": "Search providers, services, locations",
+  "searchMinRatingChip": "★ {rating}+ ×",
+  "@searchMinRatingChip": {
+    "placeholders": {
+      "rating": {
+        "type": "String"
+      }
+    }
+  },
+  "searchUnderPriceChip": "Under {price} ×",
+  "@searchUnderPriceChip": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "searchSort": "Sort",
+  "searchFound": "{count, plural, other{{count} found}}",
+  "@searchFound": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchNoMatch": "No match for “{query}”",
+  "@searchNoMatch": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "searchNothingInCategory": "Nothing in this category nearby",
+  "searchNoMatchBody": "Try a different spelling, or browse by category instead.",
+  "searchNoFilterMatchBody": "No providers within your radius match these filters yet.",
+  "searchClearAll": "Clear search & filters",
+  "searchWiden": "Widen my radius",
+  "searchNotifyMe": "Notify me when someone joins",
+  "searchInRange": "{count, plural, =1{1 provider in range} other{{count} providers in range}}",
+  "@searchInRange": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchFilters": "Filters",
+  "searchReset": "Reset",
+  "searchMinRating": "Minimum rating",
+  "searchAny": "Any",
+  "searchMaxPrice": "Max price",
+  "searchShowProviders": "{count, plural, =1{Show 1 provider} other{Show {count} providers}}",
+  "@searchShowProviders": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tabToday": "Today",
+  "tabBookings": "Bookings",
+  "tabServices": "Services",
+  "tabSchedule": "Schedule",
+  "tabProfile": "Profile",
+  "dashNewRequests": "New requests",
+  "dashPendingCount": "{count} pending",
+  "@dashPendingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashConfirmedToday": "Confirmed today",
+  "dashNothingElse": "Nothing else on the books for today.",
+  "dashHelloName": "Hello, {name}",
+  "@dashHelloName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dashHello": "Hello",
+  "dashTodaysSchedule": "Today's schedule.",
+  "dashStatToday": "Today",
+  "dashStatEgpToday": "EGP today",
+  "dashStatRating": "Rating",
+  "dashNewRequestsCount": "{count, plural, =1{1 new booking request} other{{count} new booking requests}}",
+  "@dashNewRequestsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashReplyWithin": "Reply within 30 minutes to keep your top rating.",
+  "commonCustomer": "Customer",
+  "commonAccept": "Accept",
+  "provBookingsEyebrow": "Manage",
+  "provTabPending": "Pending",
+  "provTabUpcoming": "Upcoming",
+  "provTabPast": "Past",
+  "provNothingHere": "Nothing here yet.",
+  "closeTheCustomer": "the customer",
+  "closeDisputedToast": "Marked as disputed. Admin has been notified.",
+  "closeEyebrow": "Close out this job",
+  "closeDidPay": "Did {name} pay in cash?",
+  "@closeDidPay": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "closeCashReceived": "Yes, cash received",
+  "closeMarkDisputed": "Mark unpaid or disputed",
+  "closeJobClosed": "Cash received · job closed",
+  "closeReceiptSentTo": "Receipt sent to {name}",
+  "@closeReceiptSentTo": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "closeRate": "Rate {name}",
+  "@closeRate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "closeSubmitDisputed": "Submit as disputed",
+  "rateTagOnTime": "On time",
+  "rateTagRespectful": "Respectful",
+  "rateTagClear": "Clear about needs",
+  "rateTagPaid": "Paid in full",
+  "rateTagLate": "Late",
+  "rateTagHardToReach": "Difficult to reach",
+  "rateSubmitted": "Rating submitted. Slot freed — next booking notified.",
+  "rateCustomerFallback": "customer",
+  "rateSubmit": "Submit rating",
+  "rateEyebrow": "Two-way rating",
+  "rateStars": "{n, plural, =1{1 star} other{{n} stars}}",
+  "@rateStars": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "rateQuickTags": "Quick tags",
+  "pbdAltTimeSent": "Alternative time sent to customer.",
+  "pbdCancelEyebrow": "Cancelling after accepting",
+  "pbdCancelTitle": "This applies a penalty",
+  "pbdCancelWarning": "Cancelling an accepted booking affects your reliability score and adds a small penalty fee to your ledger.",
+  "pbdReasonEmergency": "Emergency / unavailable",
+  "pbdReasonSick": "Staff called in sick",
+  "pbdReasonOverbooked": "Overbooked by mistake",
+  "pbdReasonUnreachable": "Customer unreachable",
+  "pbdCancelConfirm": "Cancel + accept penalty",
+  "pbdCancelledToast": "Booking cancelled. Penalty applied to your ledger.",
+  "pbdEyebrow": "Booking request",
+  "pbdTitle": "Review & respond",
+  "pbdPriorBookings": "{count, plural, =1{1 prior booking} other{{count} prior bookings}}",
+  "@pbdPriorBookings": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pbdHomeAddress": "HOME SERVICE ADDRESS",
+  "pbdNoAddress": "No address attached",
+  "pbdNoAddressBody": "This home-service request has no address, so there's nothing to price a travel fee against. You can still accept or decline normally.",
+  "pbdQuoteSent": "Travel fee quote sent · {amount}",
+  "@pbdQuoteSent": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pbdQuoteSentBody": "Waiting on the customer to accept or decline. If they accept, this booking confirms automatically — no extra tap needed from you.",
+  "pbdFeeAccepted": "Travel fee accepted",
+  "pbdFeeAcceptedBody": "Locked in and added to the total. The travel fee is pass-through to you — AIWA doesn't take commission on it.",
+  "pbdCustomerNote": "Customer note",
+  "pbdQuoteInstead": "Quote a travel fee instead",
+  "pbdProposeInstead": "Propose a different time instead",
+  "pbdOnMyWay": "On my way",
+  "pbdOnMyWayNote": "Customer gets a push + live tracking starts.",
+  "pbdArrived": "I've arrived",
+  "pbdArrivedNote": "Customer is told you are at the door.",
+  "pbdStartService": "Start service",
+  "pbdStartNote": "Timer starts. Safety check-in stays on.",
+  "pbdStartVenueNote": "Tap once the customer has arrived at your venue.",
+  "pbdFinishNote": "Finish the job, then confirm the cash you received.",
+  "pbdMarkCompleted": "Mark completed",
+  "pbdJobProgress": "Job progress",
+  "pbdDuration": "Duration",
+  "pbdRequested": "Requested",
+  "pbdServicePrice": "Service price",
+  "pbdTravelFeePending": "Travel fee (pending)",
+  "pbdTravelFee": "Travel fee",
+  "pbdQuoteEyebrow": "Quote a travel fee",
+  "pbdQuoteTitle": "How much to reach {name}'s address?",
+  "@pbdQuoteTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pbdQuotePassThrough": "This is pass-through — AIWA doesn't take commission on the travel fee, only the {amount} service price.",
+  "@pbdQuotePassThrough": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "currencyEgp": "EGP",
+  "pbdSendQuote": "Send quote",
+  "svcEyebrow": "Your menu",
+  "svcNew": "New",
+  "svcEmpty": "No services yet",
+  "svcEmptyBody": "Add what you offer so customers can book it.",
+  "svcStartsAt": "Starts at",
+  "svcFixedPrice": "Fixed price",
+  "svcHidden": "Hidden",
+  "svcNewService": "New service",
+  "svcEditService": "Edit service",
+  "svcName": "Name",
+  "svcPrice": "Price (EGP)",
+  "svcDuration": "Duration (min)",
+  "svcHide": "Hide",
+  "svcHiddenToast": "Service hidden.",
+  "commonSave": "Save",
+  "svcSavedToast": "Service saved.",
+  "schedEyebrow": "Weekly availability",
+  "schedTip": "{tip} Tap any day to add multiple time blocks, breaks, or one-off availability changes.",
+  "@schedTip": {
+    "placeholders": {
+      "tip": {
+        "type": "String"
+      }
+    }
+  },
+  "schedTipLabel": "Tip:",
+  "schedClosed": "Closed",
+  "schedDecrease": "Decrease buffer",
+  "schedIncrease": "Increase buffer",
+  "schedBufferTitle": "Travel buffer between bookings",
+  "schedBufferBody": "Blocks slots too close together for home visits.",
+  "staffNameSchedule": "{name}'s schedule",
+  "@staffNameSchedule": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "staffShopPlan": "Shop plan",
+  "staffTitle": "Staff & availability",
+  "commonAdd": "Add",
+  "staffEmpty": "No staff yet",
+  "staffEmptyBody": "Add the people who take bookings at your shop.",
+  "staffSkills": "Skills",
+  "staffOff": "Off",
+  "staffEditSchedule": "Edit {name}'s schedule",
+  "@staffEditSchedule": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "staffAdded": "Staff member added.",
+  "staffRole": "Role",
+  "staffSkillsHint": "Separate with commas.",
+  "walletEyebrow": "Commission & settlement",
+  "walletSettleTitle": "Settle {amount} now?",
+  "@walletSettleTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSettleBalance": "Settle balance",
+  "walletSettled": "Balance settled.",
+  "walletTitle": "Wallet",
+  "walletOwed": "Wallet balance owed to AIWA",
+  "walletLimit": "Negative limit {amount} — settle weekly to keep taking bookings.",
+  "@walletLimit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletBlocked": "Blocked from new bookings",
+  "walletBlockedBody": "You can still finish any job you've already accepted — completing those and settling this balance lifts the block automatically.",
+  "walletNextSettlement": "Next settlement",
+  "walletStatus": "Status",
+  "walletLedger": "Ledger",
+  "walletNoCommission": "No commission yet",
+  "walletNoCommissionBody": "Completed bookings show up here.",
+  "walletSettleNow": "Settle balance now",
+  "walletCommission": "Commission",
+  "walletCommissionBooking": "Commission · Booking #{id}",
+  "@walletCommissionBooking": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSettledTag": "Settled",
+  "walletOverdue": "Overdue",
+  "revFilterAll": "All",
+  "revFilterNeedsReply": "Needs reply",
+  "revFilterStars": "{n} star",
+  "@revFilterStars": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "revEyebrow": "Provider",
+  "revTitle": "Reviews",
+  "revEmptyBody": "Reviews from completed bookings show up here.",
+  "revNothingHere": "Nothing here",
+  "revNoMatch": "No reviews match this filter.",
+  "revTotal": "{count, plural, =1{1 review total} other{{count} reviews total}}",
+  "@revTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "revCount": "{count, plural, =1{1 review} other{{count} reviews}}",
+  "@revCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "revYourReply": "YOUR REPLY",
+  "revReplyPublicly": "Reply publicly",
+  "revReplyHint": "Thank them, or explain what happened…",
+  "revPostReply": "Post reply",
+  "galEyebrow": "Gallery",
+  "galDeleteTitle": "Delete this photo?",
+  "galDeleteBody": "It's removed from your public profile straight away. This can't be undone.",
+  "commonDelete": "Delete",
+  "galIntro": "Your best work, shown on your public profile. Drag to reorder — the first photo is your cover.",
+  "galEmptyBody": "Profiles with photos get noticeably more bookings. Add a few examples of your work.",
+  "galUploadFirst": "Upload first photo",
+  "galOneHidden": "One photo is hidden",
+  "galOneHiddenBody": "Our team hid a photo that didn't match your services. Replace it or contact support if you disagree.",
+  "galUploading": "Uploading photo…",
+  "galCancelUpload": "Cancel upload",
+  "galHiddenByMod": "Hidden by moderation",
+  "galCover": "COVER",
+  "galDeletePhoto": "Delete photo",
+  "ppAccount": "Provider account",
+  "ppSignOutTitle": "Sign out of AIWA?",
+  "ppSignOutBody": "Your bookings stay exactly as they are. You'll need your number and a code to sign back in.",
+  "commonSignOut": "Sign out",
+  "commonSignedOut": "Signed out.",
+  "ppVacation": "Vacation / offline mode",
+  "ppVacationOn": "You're hidden from search.",
+  "ppVacationOff": "Pause new bookings temporarily.",
+  "ppVerified": "Verified provider",
+  "ppApproved": "Approved by AIWA.",
+  "ppBusinessInfo": "Business info",
+  "ppPhotos": "{count, plural, =1{1 photo} other{{count} photos}}",
+  "@ppPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ppWallet": "Wallet & settlement",
+  "ppNotifications": "Notifications",
+  "ppSafety": "Safety & policies",
+  "ppWhatsApp": "WhatsApp support",
+  "biNameRequired": "Business name is required.",
+  "biAddressRequired": "Add the area so customers can find you.",
+  "biSaved": "Business info saved.",
+  "biBioHint": "Shown at the top of your public profile.",
+  "biBaseAddress": "Base address",
+  "biServiceRadius": "Service radius",
+  "biSurcharge": "Home-visit surcharge (EGP)",
+  "biSurchargeHint": "Added on top of the service price for bookings at the customer's address.",
+  "biVerifiedStudio": "Verified studio",
+  "biReReview": "Changing your business name or address sends your profile for a quick re-review.",
+  "commonSaveChanges": "Save changes",
+  "tabHome": "Home",
+  "tabDiscover": "Discover",
+  "tabSaved": "Saved",
+  "profGuestTitle": "Your profile",
+  "profGuestBody": "Sign in to manage your account, addresses, and notifications.",
+  "profPersonalInfo": "Personal info",
+  "profSavedAddresses": "Saved addresses",
+  "profTrustedContacts": "Trusted contacts",
+  "profTrustedSaved": "{count} saved",
+  "@profTrustedSaved": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profNotificationPrefs": "Notification preferences",
+  "profLanguage": "Language",
+  "profDeleteAccount": "Delete account",
+  "profYourAccount": "Your account",
+  "profSignOutBody": "Your bookings, saved providers and addresses all stay safe. You'll need a code to sign back in.",
+  "profAccountDeleted": "Account deleted. Sorry to see you go.",
+  "profStatBookings": "Bookings",
+  "profStatFavorites": "Favorites",
+  "profStatReviews": "Reviews",
+  "editNameError": "Enter your full name.",
+  "editPhoneError": "Enter a valid Egyptian mobile number.",
+  "editEmailError": "That email doesn’t look right.",
+  "editProfileUpdated": "Profile updated.",
+  "editAccount": "Account",
+  "editChangePhoto": "Change photo",
+  "editPhotoHint": "JPG or PNG · max 5 MB",
+  "editYourName": "Your name",
+  "editMobile": "Mobile number",
+  "editMobileHint": "Changing this sends a verification code to the new number.",
+  "editTheme": "Theme",
+  "editThemeMauve": "Mauve",
+  "editThemeCharcoal": "Charcoal",
+  "editSaving": "Saving…",
+  "addrHome": "Home",
+  "addrWork": "Work",
+  "addrOther": "Other",
+  "addrEmpty": "No saved addresses",
+  "addrEmptyBody": "Add your home or work so booking a home visit takes one tap.",
+  "addrStreetError": "Add the street and area so your provider can find you.",
+  "addrBuildingError": "Building number or name is required.",
+  "addrFloorN": "Floor {n}",
+  "@addrFloorN": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "addrAptN": "Apt {n}",
+  "@addrAptN": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "addrUpdated": "Address updated.",
+  "addrAdded": "Address added.",
+  "addrRemove": "Remove address",
+  "addrDeleteTitle": "Delete \"{label}\"?",
+  "@addrDeleteTitle": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "addrDeleteBody": "Bookings already made to this address keep their details. You can add it again any time.",
+  "addrDeleted": "Address deleted.",
+  "addrEditTitle": "Edit address",
+  "addrNewTitle": "New address",
+  "addrLabel": "Label",
+  "addrStreet": "Street & area",
+  "addrStreetPlaceholder": "e.g. Road 9, Maadi",
+  "addrBuilding": "Building",
+  "addrFloor": "Floor",
+  "addrApt": "Apt",
+  "addrLandmark": "Nearest landmark",
+  "addrLandmarkPlaceholder": "e.g. opposite Sakia",
+  "addrLandmarkHint": "Helps providers find you faster on the first visit.",
+  "addrNotes": "Notes for the provider",
+  "addrNotesPlaceholder": "Gate code, parking, which bell to ring…",
+  "addrDefault": "Default address",
+  "addrDefaultSub": "Pre-selected on every home booking",
+  "addrDeleteThis": "Delete this address",
+  "addrSave": "Save address",
+  "addrAdd": "Add address",
+  "addrPinDropped": "Pin dropped",
+  "addrDropPin": "Drop pin",
+  "tcContactDefault": "Contact",
+  "tcSafety": "Safety",
+  "tcRemoveTitle": "Remove this contact?",
+  "tcRemoveBody": "They'll no longer be alerted if you press SOS during a home service.",
+  "tcRemove": "Remove",
+  "tcBannerTitle": "Alerted the moment you press SOS",
+  "tcBannerBody": "They receive your live location by SMS. Nothing is shared with them at any other time.",
+  "tcEmpty": "No trusted contact yet",
+  "tcEmptyBody": "Add someone you'd want alerted if you ever felt unsafe during a home service.",
+  "tcAddContact": "Add a contact",
+  "tcNew": "New trusted contact",
+  "tcNameError": "Enter their name.",
+  "tcNamePlaceholder": "Their full name",
+  "tcPhoneError": "Enter a valid mobile number.",
+  "tcRelationship": "Relationship",
+  "tcRelationshipPlaceholder": "Sister, friend, partner…",
+  "tcAdd": "Add contact",
+  "tcAddAnother": "Add another contact",
+  "supOpening": "Opening WhatsApp…",
+  "supNumber": "WhatsApp number",
+  "supHours": "Support hours",
+  "supEmail": "Email fallback",
+  "supLanguages": "Languages",
+  "supEyebrow": "Support",
+  "supTitle": "Talk to AIWA",
+  "supHero": "Chat with a human on WhatsApp.",
+  "supHeroBody": "We answer in Arabic or English, usually within a few minutes during support hours.",
+  "supOpenWhatsApp": "Open WhatsApp",
+  "supCommonQuestions": "Common questions",
+  "supQCancel": "How do I cancel a booking?",
+  "supQPaid": "When does the provider get paid?",
+  "supQNoShow": "My provider didn't show up",
+  "supQBecome": "How do I become a provider?",
+  "polTerms": "Terms of service",
+  "polSafety": "Safety policy",
+  "polSafetySub": "Home visits, ID checks, SOS",
+  "polCancel": "Cancellation policy",
+  "polCancelSub": "Cutoffs, penalties, no-shows",
+  "polPrivacy": "Privacy policy",
+  "polPrivacySub": "What we store and for how long",
+  "polConduct": "Community conduct",
+  "polConductSub": "What we expect from everyone",
+  "polUpToDate": "You're up to date",
+  "polUpToDateBody": "You accepted the current terms (v{version}). We'll tell you if anything changes.",
+  "polUpdated": "Updated terms to review",
+  "polReview": "Review",
+  "polAccepted": "v{version} · accepted",
+  "polNotAccepted": "Not accepted yet",
+  "polPlaceholder": "This is the full text of the {doc}, shown in the customer's language. It stays readable offline and records which version you accepted, so we only ask you again when something material changes.",
+  "@polPlaceholder": {
+    "placeholders": {
+      "doc": {
+        "type": "String"
+      }
+    }
+  },
+  "polSafetyTools": "Your safety tools",
+  "polTrustedSub": "Alerted if you press SOS",
+  "polHowSos": "How SOS works",
+  "polHowSosSub": "What happens when you press it",
+  "polDownloadPdf": "Download PDF",
+  "notifInbox": "Inbox",
+  "notifNewSuffix": "· {count} new",
+  "@notifNewSuffix": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notifMarkAllRead": "Mark all read",
+  "notifCaughtUp": "You're all caught up",
+  "notifCaughtUpBody": "Booking updates, reviews and news from AIWA will show up here.",
+  "notifEarlier": "Earlier",
+  "notifJustNow": "Just now",
+  "notifMinAgo": "{n, plural, other{{n} min ago}}",
+  "@notifMinAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "notifHrAgo": "{n, plural, other{{n} hr ago}}",
+  "@notifHrAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "npPush": "Push notifications",
+  "npSms": "SMS",
+  "npChannels": "Channels",
+  "npQuietHours": "Quiet hours",
+  "npMute": "Mute non-urgent notifications",
+  "npFrom": "From",
+  "npTo": "To",
+  "tagPunctual": "Punctual",
+  "tagSkilled": "Skilled",
+  "tagFriendly": "Friendly",
+  "tagCleanStudio": "Clean studio",
+  "tagWorthPrice": "Worth the price",
+  "tagGreatHair": "Great with hair",
+  "reviewTapStar": "Tap a star",
+  "reviewDisappointing": "Disappointing",
+  "reviewBelow": "Below expectations",
+  "reviewGood": "Good",
+  "reviewGreat": "Great",
+  "reviewOutstanding": "Outstanding",
+  "reviewThanks": "Thanks — your review is live.",
+  "reviewEyebrow": "Leave a review",
+  "reviewTitle": "How was it?",
+  "reviewQuickTags": "Quick tags (optional)",
+  "reviewStoodOut": "Tell others what stood out",
+  "reviewHint": "Optional — your review will be public on the provider's profile.",
+  "reviewSubmit": "Submit review",
+  "savedGuestTitle": "Save your favorites",
+  "savedGuestBody": "Sign in to save providers you love and book them faster next time.",
+  "savedEyebrow": "Your favorites",
+  "savedEmpty": "No favorites yet",
+  "savedEmptyBody": "Tap the heart on any provider to save them here and book again in one tap.",
+  "savedBrowse": "Browse providers",
+  "savedBookAgain": "Book again",
+  "permLocEyebrow": "One quick permission",
+  "permLocTitle": "Find beauty pros near you.",
+  "permLocBody": "AIWA uses your location to show providers within your chosen radius and to share live arrival updates during a home visit.",
+  "permLocP1": "Only used while the app is open",
+  "permLocP2": "Never shared with other customers",
+  "permLocP3": "You can pick an area manually instead",
+  "permLocAllow": "Allow location",
+  "permLocDeny": "Choose my area manually",
+  "permNotifEyebrow": "Stay in the loop",
+  "permNotifTitle": "Know the moment you’re confirmed.",
+  "permNotifBody": "We’ll tell you when a provider accepts, when they’re on the way, and when it’s time for your appointment.",
+  "permNotifP1": "Booking updates only by default",
+  "permNotifP2": "Set quiet hours any time",
+  "permNotifP3": "Turn off individual channels in settings",
+  "permNotifAllow": "Turn on notifications",
+  "permNotNow": "Not now",
+  "permCamEyebrow": "Verification step",
+  "permCamTitle": "We need your camera.",
+  "permCamBody": "To verify providers we capture your national ID and a live selfie. This keeps every customer safe.",
+  "permCamP1": "Documents are encrypted and private",
+  "permCamP2": "Reviewed only by our verification team",
+  "permCamP3": "Never shown on your public profile",
+  "permCamAllow": "Open camera",
+  "permCamDeny": "Upload from files instead",
+  "permContEyebrow": "Safety feature",
+  "permContTitle": "Add a trusted contact.",
+  "permContBody": "If you ever press SOS during a home service, we alert this person instantly with your live location.",
+  "permContP1": "Only contacted if you trigger SOS",
+  "permContP2": "You choose exactly who",
+  "permContP3": "Change or remove them any time",
+  "permContAllow": "Choose a contact",
+  "permContDeny": "Enter manually",
+  "permDeniedCamTitle": "Camera access is off.",
+  "permDeniedCamBody": "Verification needs a live selfie. Enable the camera in Settings, or upload photos from your files.",
+  "permDeniedCamFallback": "Upload from files",
+  "permDeniedNotifTitle": "Notifications are off.",
+  "permDeniedNotifBody": "You’ll still see every update in your in-app inbox, but we can’t alert you when a provider is on the way.",
+  "permDeniedNotifFallback": "Use the in-app inbox",
+  "permDeniedLocTitle": "Location is off.",
+  "permDeniedLocBody": "Turn it on in Settings, or pick your area manually and we’ll search from there.",
+  "permDeniedLocFallback": "Pick my area manually",
+  "permNeeded": "Permission needed",
+  "permOpenSettings": "Open Settings",
+  "commonDone": "Done",
+  "delCantUndo": "This can't be undone",
+  "delTitle": "Delete your account?",
+  "delBody": "Your data will be anonymized and any active bookings cancelled. Type {phrase} to confirm.",
+  "@delBody": {
+    "placeholders": {
+      "phrase": {
+        "type": "String"
+      }
+    }
+  },
+  "delPhrase": "DELETE",
+  "errLoadTitle": "Couldn't load this",
+  "errLoadBody": "Something went wrong on our side. Give it another try.",
+  "commonTryAgain": "Try again",
+  "guestTitle": "Sign in to continue",
+  "guestBrowsing": "Browsing as guest",
+  "guestSignIn": "Sign in or create account",
+  "offlineBanner": "No connection — showing saved data",
+  "commonRetry": "Retry",
+  "reasonNotePlaceholder": "Tell us what happened (optional)",
+  "reasonKeepBooking": "Keep booking",
+  "endOfList": "That's everything",
+  "slotJustTaken": "Just taken",
+  "slotTitle": "Someone booked that slot.",
+  "slotBody": "It went in the last moment. Here's what {name} still has free today.",
+  "@slotBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "slotPickAnotherDay": "Pick another day",
+  "slotBook": "Book slot",
+  "slotBookTime": "Book {time}",
+  "@slotBookTime": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "sysSignedOut": "Signed out",
+  "sysSessionTitle": "Your session expired.",
+  "sysSessionBody": "For your security we sign you out after a period of inactivity. Your bookings and saved providers are all still here.",
+  "sysSignInAgain": "Sign in again",
+  "sysLocked": "Account locked",
+  "sysLockedTitle": "This account is locked.",
+  "sysLockedBody": "Your account has been suspended by our team. Our support agents can explain why and what happens next.",
+  "sysContactSupport": "Contact support",
+  "sysBackToSignIn": "Back to sign in",
+  "sysNoAccess": "No access",
+  "sysNoAccessTitle": "You can't open this.",
+  "sysNoAccessBody": "This area belongs to a different kind of account. If you think that's wrong, contact support.",
+  "sysGoBack": "Go back",
+  "sysNotFound": "Not found",
+  "sysNotFoundTitle": "This page isn't available.",
+  "sysNotFoundBody": "It may have been cancelled, removed, or the link is out of date."
+}

@@ -33,9 +33,17 @@ class UserModel extends UserEntity {
       acceptedTermsVersion: json['acceptedTermsVersion'] as String?,
       searchRadiusMinKm: (json['searchRadiusMinKm'] as num?)?.toDouble(),
       searchRadiusMaxKm: (json['searchRadiusMaxKm'] as num?)?.toDouble(),
+      // UserDto sends the flat providerProfileId / providerStatus.
       providerProfile: json['providerProfile'] != null
           ? ProviderProfileSummaryModel.fromJson(
-              json['providerProfile'] as Map<String, dynamic>)
+              json['providerProfile'] as Map<String, dynamic>,
+            )
+          : json['providerStatus'] != null
+          ? ProviderProfileSummaryModel(
+              id: (json['providerProfileId'] as num?)?.toInt() ?? 0,
+              businessName: '',
+              verificationStatus: json['providerStatus'] as String,
+            )
           : null,
     );
   }

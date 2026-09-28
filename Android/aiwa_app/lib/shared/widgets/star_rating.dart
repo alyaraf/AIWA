@@ -19,20 +19,16 @@ class StarRating extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
+      spacing: 1,
       children: List.generate(5, (i) {
-        final filled = i < value.floor();
-        final halfFilled =
-            !filled && i < value && (value - value.floor()) >= 0.5;
-        final color = activeColor ?? AppColors.gold500;
-        final emptyColor = inactiveColor ?? AppColors.divider;
+        // Integer fill like the kit (`n <= value`): 4.8 shows 4 stars.
+        final filled = i + 1 <= value;
         return Icon(
-          halfFilled
-              ? Icons.star_half_rounded
-              : filled
-              ? Icons.star_rounded
-              : Icons.star_outline_rounded,
+          filled ? Icons.star_rounded : Icons.star_outline_rounded,
           size: size,
-          color: (filled || halfFilled) ? color : emptyColor,
+          color: filled
+              ? activeColor ?? AppColors.gold500
+              : inactiveColor ?? AppColors.ink4,
         );
       }),
     );

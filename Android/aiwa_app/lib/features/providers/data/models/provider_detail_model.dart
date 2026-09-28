@@ -22,50 +22,60 @@ class ProviderDetailModel extends ProviderDetailEntity {
     super.services,
     super.reviews,
     super.availableSlots,
+    super.providerType,
+    super.staff,
+    super.offlineMode,
+    super.vacationMode,
+    super.settlementPaused,
   });
 
-  factory ProviderDetailModel.fromJson(Map<String, dynamic> json) {
-    final user = json['user'] as Map<String, dynamic>? ?? json;
-    final profile =
-        json['providerProfile'] as Map<String, dynamic>? ?? {};
-
-    final rawServices = json['services'] as List<dynamic>? ?? [];
-    final services = rawServices
-        .map((s) => ServiceModel.fromJson(s as Map<String, dynamic>))
-        .toList();
-
-    final rawReviews = json['reviews'] as List<dynamic>? ?? [];
-    final reviews = rawReviews
-        .map((r) => ReviewSummaryModel.fromJson(r as Map<String, dynamic>))
-        .toList();
-
-    final rawGallery = json['galleryImages'] as List<dynamic>? ?? [];
-    final gallery = rawGallery.map((e) => e.toString()).toList();
-
-    final rawCats = profile['categories'] as List<dynamic>? ??
-        json['categories'] as List<dynamic>? ?? [];
-    final categories = rawCats.map((c) => c.toString()).toList();
-
+  /// Backend ProviderDetailDto is flat; the account sits under `owner`.
+  /// Reviews come from GET /providers/{id}/reviews, passed in separately.
+  factory ProviderDetailModel.fromJson(
+    Map<String, dynamic> json, {
+    List<ReviewSummaryModel> reviews = const [],
+  }) {
+    final owner = json['owner'] as Map<String, dynamic>? ?? const {};
     return ProviderDetailModel(
-      id: (json['id'] ?? user['id']).toString(),
-      providerName: user['fullName'] as String? ?? '',
-      businessName: profile['businessName'] as String?,
-      bio: profile['bio'] as String?,
-      profileImageUrl: user['profileImageUrl'] as String?,
-      galleryImages: gallery,
-      email: user['email'] as String? ?? '',
-      phone: user['phone'] as String? ?? '',
-      categories: categories,
-      address: profile['address'] as String?,
-      latitude: (profile['latitude'] as num?)?.toDouble(),
-      longitude: (profile['longitude'] as num?)?.toDouble(),
+      id: json['id'].toString(),
+      providerName: owner['fullName'] as String? ?? '',
+      businessName: json['businessName'] as String?,
+      bio: json['bio'] as String?,
+      profileImageUrl: owner['profileImageUrl'] as String?,
+      galleryImages: (json['galleryImages'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+      email: owner['email'] as String? ?? '',
+      phone: owner['phone'] as String? ?? '',
+      categories: [
+        if (json['primaryCategory'] != null) json['primaryCategory'] as String,
+      ],
+      address: json['address'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
       averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
-      totalReviews: (json['totalReviews'] as int?) ?? 0,
-      totalBookings: (json['totalBookings'] as int?) ?? 0,
-      isVerified: profile['verified'] as bool? ?? false,
-      isActive: user['active'] as bool? ?? true,
-      services: services,
+      totalReviews: (json['totalReviews'] as num?)?.toInt() ?? 0,
+      // ponytail: ProviderDetailDto has no booking count; nothing shows it.
+      totalBookings: 0,
+      isVerified: json['verificationStatus'] == 'APPROVED',
+      isActive: owner['active'] as bool? ?? true,
+      services: (json['services'] as List<dynamic>? ?? const [])
+          .map((s) => ServiceModel.fromJson(s as Map<String, dynamic>))
+          .toList(),
       reviews: reviews,
+      providerType: json['providerType'] as String? ?? 'INDIVIDUAL',
+      offlineMode: json['offlineMode'] as bool? ?? false,
+      vacationMode: json['vacationMode'] as bool? ?? false,
+      settlementPaused: json['settlementPaused'] as bool? ?? false,
+      staff: [
+        for (final m in json['staffMembers'] as List<dynamic>? ?? const [])
+          if ((m as Map<String, dynamic>)['active'] != false)
+            StaffEntity(
+              id: m['id'].toString(),
+              fullName: m['fullName'] as String? ?? '',
+              title: m['title'] as String?,
+            ),
+      ],
     );
   }
 }
@@ -88,7 +98,7 @@ class ServiceModel extends ServiceEntity {
       description: json['description'] as String?,
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       durationMinutes: (json['durationMinutes'] as int?) ?? 60,
-      available: json['available'] as bool? ?? true,
+      available: json['active'] as bool? ?? true,
       category: json['category'] as String?,
     );
   }
@@ -105,12 +115,12 @@ class ReviewSummaryModel extends ReviewSummaryEntity {
   });
 
   factory ReviewSummaryModel.fromJson(Map<String, dynamic> json) {
+    // ReviewDto sends the author as `user`.
     final customer =
-        json['customer'] as Map<String, dynamic>? ?? {};
+        (json['user'] ?? json['customer'] ?? const {}) as Map<String, dynamic>;
     return ReviewSummaryModel(
       id: json['id'].toString(),
-      customerName:
-          customer['fullName'] as String? ?? 'Anonymous',
+      customerName: customer['fullName'] as String? ?? 'Anonymous',
       customerImageUrl: customer['profileImageUrl'] as String?,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       comment: json['comment'] as String?,

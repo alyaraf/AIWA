@@ -1,16 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
-import '../../../../shared/widgets/screen_chrome.dart';
-import '../bloc/auth_bloc.dart';
-import '../bloc/auth_event.dart';
-import '../bloc/auth_state.dart';
+import '../../../../shared/widgets/dashed_button.dart';
 import '../widgets/step_header.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class ProviderVerificationPage extends StatefulWidget {
   final Map<String, dynamic> registrationData;
@@ -22,94 +22,135 @@ class ProviderVerificationPage extends StatefulWidget {
 }
 
 class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
-  bool _idFrontDone = false;
-  bool _idBackDone = false;
-  bool _selfieDone = false;
+  String? _idFront;
+  String? _idBack;
+  String? _selfie;
 
-  bool get _ready => _idFrontDone && _idBackDone && _selfieDone;
+  /// Camera priming is shown once, before the first capture.
+  bool _primed = false;
 
-  void _submit() {
-    final data = widget.registrationData;
-    final mode = data['mode'] as String? ?? 'phone';
-    context.read<AuthBloc>().add(
-      AuthRegisterEvent(
-        fullName: data['fullName'] as String,
-        password: data['password'] as String,
-        email: data['email'] as String?,
-        phone: mode == 'phone' ? data['identifier'] as String? : null,
-        role: 'PROVIDER',
-        gender: data['gender'] as String?,
-      ),
-    );
+  bool get _ready => _idFront != null && _idBack != null && _selfie != null;
+
+  Future<String?> _pick({bool selfie = false}) async {
+    if (!_primed && !await Permission.camera.isGranted) {
+      if (!mounted) return null;
+      final answered = await context.push<bool>(
+        '${AppRoutes.permission}?kind=camera',
+      );
+      if (answered == null) return null;
+      _primed = true;
+    }
+    try {
+      final file = await ImagePicker().pickImage(
+        source: await Permission.camera.isGranted
+            ? ImageSource.camera
+            : ImageSource.gallery,
+        preferredCameraDevice: selfie ? CameraDevice.front : CameraDevice.rear,
+        imageQuality: 80,
+      );
+      return file?.path;
+    } catch (_) {
+      return null;
+    }
   }
+
+  /// Registration, the business profile and these uploads all happen at the
+  /// end of Preferences, after Terms (prototype.jsx:649-650).
+  void _submit() => context.push(
+    AppRoutes.terms,
+    extra: {
+      ...widget.registrationData,
+      'idFront': _idFront,
+      'idBack': _idBack,
+      'selfie': _selfie,
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthState>(
-      listener: (context, state) {
-        if (state is AuthAuthenticated) {
-          context.go(AppRoutes.providerPending);
-        } else if (state is AuthError) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(state.message)));
-        }
-      },
-      child: AuthStepScaffold(
-        stickyBar: true,
-        bottom: BlocBuilder<AuthBloc, AuthState>(
-          builder: (context, state) => AiwaButton(
-            label: 'Submit for review',
-            fullWidth: true,
-            size: AiwaButtonSize.lg,
-            loading: state is AuthLoading,
-            onPressed: _ready ? _submit : null,
+    final l = AppLocalizations.of(context);
+    return AuthStepScaffold(
+      stickyBar: true,
+      bottom: AiwaButton(
+        label: l.provVerifySubmit,
+        fullWidth: true,
+        size: AiwaButtonSize.lg,
+        onPressed: _ready ? _submit : null,
+      ),
+      children: [
+        StepHeader(
+          step: 6,
+          total: 6,
+          title: l.provVerifyTitle,
+          subtitle: l.provVerifySubtitle,
+          onBack: () => context.pop(),
+        ),
+        const SizedBox(height: 22),
+        _UploadSlot(
+          label: l.provVerifyIdFront,
+          hint: l.provVerifyIdFrontHint,
+          icon: Icons.credit_card_outlined,
+          path: _idFront,
+          onTap: () async {
+            final p = await _pick();
+            if (p != null) setState(() => _idFront = p);
+          },
+        ),
+        const SizedBox(height: 10),
+        _UploadSlot(
+          label: l.provVerifyIdBack,
+          hint: l.provVerifyIdBackHint,
+          icon: Icons.credit_card_outlined,
+          path: _idBack,
+          onTap: () async {
+            final p = await _pick();
+            if (p != null) setState(() => _idBack = p);
+          },
+        ),
+        const SizedBox(height: 10),
+        _UploadSlot(
+          label: l.provVerifySelfie,
+          hint: l.provVerifySelfieHint,
+          icon: Icons.photo_camera_outlined,
+          path: _selfie,
+          onTap: () async {
+            final p = await _pick(selfie: true);
+            if (p != null) setState(() => _selfie = p);
+          },
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.plum100,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(
+                  Icons.verified_user_outlined,
+                  size: 16,
+                  color: AppColors.plum700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l.provVerifyPrivate,
+                  style: AppTextStyles.micro.copyWith(
+                    fontSize: 12,
+                    color: AppColors.plum700,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        children: [
-          StepHeader(
-            step: 6,
-            total: 6,
-            title: 'Verify your identity',
-            subtitle:
-                'Upload your national ID and a live selfie. AIWA reviews every provider before they can take bookings.',
-            onBack: () => context.pop(),
-          ),
-          const SizedBox(height: 22),
-          _UploadSlot(
-            label: 'National ID — front',
-            hint:
-                'Front side of your government-issued ID. Make sure all four corners are visible.',
-            icon: Icons.credit_card_outlined,
-            done: _idFrontDone,
-            onTap: () => setState(() => _idFrontDone = !_idFrontDone),
-          ),
-          const SizedBox(height: 10),
-          _UploadSlot(
-            label: 'National ID — back',
-            hint: 'The back side of the same ID.',
-            icon: Icons.credit_card_outlined,
-            done: _idBackDone,
-            onTap: () => setState(() => _idBackDone = !_idBackDone),
-          ),
-          const SizedBox(height: 10),
-          _UploadSlot(
-            label: 'Live selfie',
-            hint:
-                'A clear photo of your face, taken now. We compare it to your ID.',
-            icon: Icons.photo_camera_outlined,
-            done: _selfieDone,
-            onTap: () => setState(() => _selfieDone = !_selfieDone),
-          ),
-          const SizedBox(height: 16),
-          const InlineBanner(
-            tone: BannerTone.plum,
-            icon: Icons.verified_user_outlined,
-            body:
-                "Your documents are private. Only AIWA admins reviewing your account see them. They're never shown to customers.",
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -118,42 +159,58 @@ class _UploadSlot extends StatelessWidget {
   final String label;
   final String hint;
   final IconData icon;
-  final bool done;
+  final String? path;
   final VoidCallback onTap;
 
   const _UploadSlot({
     required this.label,
     required this.hint,
     required this.icon,
-    required this.done,
+    required this.path,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (done) {
+    if (path != null) {
       return GestureDetector(
         onTap: onTap,
         child: Container(
           height: 110,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.plum700, width: 1.5),
+            image: DecorationImage(
+              image: FileImage(File(path!)),
+              fit: BoxFit.cover,
+            ),
+          ),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
             gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [AppColors.plum500, AppColors.plum900],
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              stops: const [0, .6],
+              colors: [
+                AppColors.plum900.withValues(alpha: .7),
+                AppColors.plum900.withValues(alpha: 0),
+              ],
             ),
           ),
           padding: const EdgeInsets.all(12),
-          alignment: Alignment.bottomLeft,
+          alignment: AlignmentDirectional.bottomStart,
           child: Row(
             children: [
-              Icon(Icons.check_circle_rounded, size: 14, color: AppColors.bone),
+              Icon(
+                Icons.check_circle_outline_rounded,
+                size: 14,
+                color: AppColors.bone,
+              ),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
-                  '$label uploaded · tap to replace',
+                  AppLocalizations.of(context).provVerifyUploaded(label),
                   style: AppTextStyles.labelSm.copyWith(color: AppColors.bone),
                 ),
               ),
@@ -167,46 +224,50 @@ class _UploadSlot extends StatelessWidget {
       child: AnimatedContainer(
         duration: AppTheme.dur2,
         constraints: const BoxConstraints(minHeight: 110),
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.paper,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider, width: 1.5),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.plum100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, size: 22, color: AppColors.plum700),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: AppTextStyles.label.copyWith(fontSize: 14),
+        child: CustomPaint(
+          painter: DashedBorder(AppColors.divider, 14),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.plum100,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    hint,
-                    style: AppTextStyles.micro.copyWith(
-                      fontSize: 11.5,
-                      height: 1.4,
-                    ),
+                  child: Icon(icon, size: 22, color: AppColors.plum700),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: AppTextStyles.label.copyWith(fontSize: 14),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        hint,
+                        style: AppTextStyles.micro.copyWith(
+                          fontSize: 11.5,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.upload_rounded, size: 18, color: AppColors.plum700),
+              ],
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.upload_rounded, size: 18, color: AppColors.plum700),
-          ],
+          ),
         ),
       ),
     );

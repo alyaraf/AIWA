@@ -22,8 +22,9 @@ class ProviderToggleSaveEvent extends ProviderEvent {
 
 class ProviderLoadSlotsEvent extends ProviderEvent {
   final String providerId;
+  final String serviceId;
   final String date;
-  const ProviderLoadSlotsEvent(this.providerId, this.date);
+  const ProviderLoadSlotsEvent(this.providerId, this.serviceId, this.date);
   @override
-  List<Object?> get props => [providerId, date];
+  List<Object?> get props => [providerId, serviceId, date];
 }

@@ -11,6 +11,5 @@ class GetNotificationsUseCase {
   Future<Either<Failure, PagedData<NotificationEntity>>> call({
     int page = 0,
     int size = 20,
-  }) =>
-      _repository.getNotifications(page: page, size: size);
+  }) => _repository.getNotifications(page: page, size: size);
 }

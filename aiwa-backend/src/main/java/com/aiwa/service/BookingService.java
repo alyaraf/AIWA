@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import java.time.LocalDate;
 import java.util.List;
 
+// ponytail: one implementation (BookingServiceImpl), inline into a concrete @Service when touched; keep only if a second impl appears
 public interface BookingService {
     ApiResponse.BookingDto create(Long customerId, BookingRequest request);
     ApiResponse.BookingDto getById(Long bookingId, Long requesterId);

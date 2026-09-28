@@ -17,9 +17,14 @@ abstract class DashboardRemoteDataSource {
 
   Future<BookingModel> rejectBooking(String bookingId, String reason);
 
-  Future<BookingModel> completeBooking(String bookingId);
+  /// cashCollected=false marks the booking DISPUTED.
+  Future<BookingModel> completeBooking(
+    String bookingId, {
+    bool cashCollected = true,
+  });
 
-  Future<BookingModel> markNoShow(String bookingId);
+  /// RescheduleRequest: bookingDate `yyyy-MM-dd`, startTime `HH:mm`.
+  Future<BookingModel> proposeTime(String bookingId, String date, String time);
 
   Future<BookingModel> onTheWay(String bookingId);
 
@@ -34,15 +39,9 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
 
   @override
   Future<DashboardStats> getStats() async {
-    final response = await _api.get(ApiConstants.providerStats);
-    final d = response.data['data'] ?? response.data;
-    return DashboardStats(
-      totalBookings: (d['totalBookings'] as int?) ?? 0,
-      pendingBookings: (d['pendingBookings'] as int?) ?? 0,
-      completedBookings: (d['completedBookings'] as int?) ?? 0,
-      totalRevenue: (d['totalRevenue'] as num?)?.toDouble() ?? 0.0,
-      averageRating: (d['averageRating'] as num?)?.toDouble() ?? 0.0,
-      totalReviews: (d['totalReviews'] as int?) ?? 0,
+    final response = await _api.get(ApiConstants.providerDashboard);
+    return DashboardStats.fromJson(
+      response.data['data'] as Map<String, dynamic>,
     );
   }
 
@@ -61,61 +60,78 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
       },
     );
     final data = response.data['data'] ?? response.data;
-    return PagedData.fromJson(
+    final paged = PagedData.fromJson(
       data,
       (e) => BookingModel.fromJson(e as Map<String, dynamic>),
     );
+    if (status == null) return paged;
+    final wanted = status.split(',');
+    return paged.where((b) => wanted.contains(b.status));
   }
 
   @override
   Future<BookingModel> acceptBooking(String bookingId) async {
-    final response =
-        await _api.patch(ApiConstants.bookingAccept(bookingId));
+    final response = await _api.patch(ApiConstants.bookingAccept(bookingId));
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 
   @override
-  Future<BookingModel> rejectBooking(
-      String bookingId, String reason) async {
+  Future<BookingModel> rejectBooking(String bookingId, String reason) async {
+    // `reason` is a required @RequestParam; the response is
+    // BookingWithAlternativesDto {booking, alternativeProviders}.
     final response = await _api.patch(
       ApiConstants.bookingReject(bookingId),
-      data: {'reason': reason},
+      queryParameters: {
+        'reason': reason.isEmpty ? 'Declined by provider' : reason,
+      },
+    );
+    return BookingModel.fromJson(
+      response.data['data']['booking'] as Map<String, dynamic>,
+    );
+  }
+
+  @override
+  Future<BookingModel> completeBooking(
+    String bookingId, {
+    bool cashCollected = true,
+  }) async {
+    final response = await _api.patch(
+      ApiConstants.bookingComplete(bookingId),
+      queryParameters: {'cashCollected': cashCollected},
     );
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 
   @override
-  Future<BookingModel> completeBooking(String bookingId) async {
-    final response =
-        await _api.patch(ApiConstants.bookingComplete(bookingId));
-    return BookingModel.fromJson(response.data['data'] ?? response.data);
-  }
-
-  @override
-  Future<BookingModel> markNoShow(String bookingId) async {
-    final response =
-        await _api.patch(ApiConstants.bookingNoShow(bookingId));
+  Future<BookingModel> proposeTime(
+    String bookingId,
+    String date,
+    String time,
+  ) async {
+    final response = await _api.patch(
+      ApiConstants.bookingProposeTime(bookingId),
+      data: {'bookingDate': date, 'startTime': time},
+    );
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 
   @override
   Future<BookingModel> onTheWay(String bookingId) async {
-    final response =
-        await _api.patch(ApiConstants.bookingOnTheWay(bookingId));
+    final response = await _api.patch(ApiConstants.bookingOnTheWay(bookingId));
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 
   @override
   Future<BookingModel> arrived(String bookingId) async {
-    final response =
-        await _api.patch(ApiConstants.bookingArrived(bookingId));
+    final response = await _api.patch(ApiConstants.bookingArrived(bookingId));
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 
   @override
   Future<BookingModel> inProgress(String bookingId) async {
-    final response =
-        await _api.patch(ApiConstants.bookingInProgress(bookingId));
+    final response = await _api.patch(
+      ApiConstants.bookingInProgress(bookingId),
+    );
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 }

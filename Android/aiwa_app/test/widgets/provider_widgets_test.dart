@@ -1,3 +1,4 @@
+import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:aiwa_app/features/home/domain/entities/provider_summary_entity.dart';
 import 'package:aiwa_app/features/home/presentation/widgets/provider_list_item.dart';
 import 'package:aiwa_app/shared/widgets/aiwa_avatar.dart';
@@ -87,7 +88,8 @@ void main() {
 
   testWidgets('guest locked view explains and offers sign in', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         home: Scaffold(
           body: GuestLockedView(
             title: 'Keep your favorites',

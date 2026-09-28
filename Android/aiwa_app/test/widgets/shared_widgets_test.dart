@@ -1,3 +1,4 @@
+import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:aiwa_app/core/theme/app_colors.dart';
 import 'package:aiwa_app/shared/widgets/aiwa_button.dart';
 import 'package:aiwa_app/shared/widgets/aiwa_chip.dart';
@@ -38,9 +39,11 @@ void main() {
       });
     }
 
-    testWidgets('unknown status shows the raw value', (tester) async {
+    testWidgets('unknown status falls back to Pending (kit map.pending)', (
+      tester,
+    ) async {
       await tester.pumpWidget(host(const StatusPill(status: 'WEIRD')));
-      expect(find.text('WEIRD'), findsOneWidget);
+      expect(find.text('Pending'), findsOneWidget);
     });
   });
 
@@ -203,6 +206,7 @@ void main() {
     testWidgets('ScreenHeader shows eyebrow, title and suffix', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           home: Scaffold(
             body: ScreenHeader(
               eyebrow: 'Inbox',
@@ -223,6 +227,7 @@ void main() {
     testWidgets('SettingsRow danger rows have no chevron', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           home: Scaffold(
             body: Column(
               children: [
@@ -252,6 +257,7 @@ void main() {
       bool? result;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           home: Scaffold(
             body: Builder(
               builder: (context) => TextButton(

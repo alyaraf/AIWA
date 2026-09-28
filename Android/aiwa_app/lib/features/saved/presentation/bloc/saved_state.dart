@@ -15,19 +15,27 @@ class SavedLoaded extends SavedState {
   final List<ProviderSummaryEntity> providers;
   final bool hasMore;
 
-  const SavedLoaded({required this.providers, required this.hasMore});
+  /// One-shot message when an optimistic unsave was rolled back.
+  final String? error;
+
+  const SavedLoaded({
+    required this.providers,
+    required this.hasMore,
+    this.error,
+  });
 
   SavedLoaded copyWith({
     List<ProviderSummaryEntity>? providers,
     bool? hasMore,
-  }) =>
-      SavedLoaded(
-        providers: providers ?? this.providers,
-        hasMore: hasMore ?? this.hasMore,
-      );
+    String? error,
+  }) => SavedLoaded(
+    providers: providers ?? this.providers,
+    hasMore: hasMore ?? this.hasMore,
+    error: error,
+  );
 
   @override
-  List<Object?> get props => [providers, hasMore];
+  List<Object?> get props => [providers, hasMore, error];
 }
 
 class SavedError extends SavedState {

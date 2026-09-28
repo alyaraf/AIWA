@@ -11,11 +11,15 @@ import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
+import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../domain/entities/provider_summary_entity.dart';
+import '../../domain/repositories/home_repository.dart';
 import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
 import '../bloc/home_state.dart';
 import '../widgets/provider_list_item.dart';
+import 'home_page.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// Discover — search, category chips, sort, and a rating/price filter sheet.
 class SearchPage extends StatefulWidget {
@@ -31,26 +35,39 @@ class _SearchPageState extends State<SearchPage> {
   late HomeBloc _homeBloc;
   final _controller = TextEditingController();
   String? _activeCategory;
-  String _sort = 'Nearest';
+  String _sort = 'nearest';
   double _minRating = 0;
   double _maxPrice = _priceCap;
 
   static const double _priceCap = 2500;
 
   static const _cats = [
-    ('ALL', 'All', Icons.auto_awesome_outlined),
-    ('HAIR', 'Hair', Icons.content_cut_rounded),
-    ('NAILS', 'Nails', Icons.back_hand_outlined),
-    ('SPA', 'Spa', Icons.spa_outlined),
-    ('MAKEUP', 'Makeup', Icons.brush_outlined),
-    ('LASHES', 'Lashes', Icons.visibility_outlined),
-    ('SKIN', 'Skin', Icons.water_drop_outlined),
-    ('MASSAGE', 'Massage', Icons.volunteer_activism_outlined),
+    ('ALL', Icons.auto_awesome_outlined),
+    ('HAIR', Icons.content_cut_rounded),
+    ('NAILS', Icons.back_hand_outlined),
+    ('SPA', Icons.eco_outlined),
+    ('MAKEUP', Icons.brush_outlined),
+    ('LASHES', Icons.visibility_outlined),
+    ('SKIN', Icons.water_drop_outlined),
+    ('MASSAGE', Icons.volunteer_activism_outlined),
   ];
 
-  static const _sorts = ['Nearest', 'Top rated', 'Price'];
+  static const _sorts = ['nearest', 'rated', 'price'];
+
+  String _sortLabel(String s) => switch (s) {
+    'rated' => AppLocalizations.of(context).searchSortTopRated,
+    'price' => AppLocalizations.of(context).searchSortPrice,
+    _ => AppLocalizations.of(context).searchSortNearest,
+  };
 
   bool get _filtersActive => _minRating > 0 || _maxPrice < _priceCap;
+
+  /// ProviderSummaryDto has no startingPrice yet, so the Price sort and the
+  /// Max price filter stay hidden until some provider carries one.
+  bool get _pricesKnown {
+    final s = _homeBloc.state;
+    return s is HomeLoaded && s.providers.any((p) => p.startingPrice != null);
+  }
 
   @override
   void initState() {
@@ -59,8 +76,8 @@ class _SearchPageState extends State<SearchPage> {
     _activeCategory = widget.initialCategory;
     _homeBloc.add(
       HomeLoadEvent(
-        lat: 30.0444,
-        lng: 31.2357,
+        lat: HomePage.position.lat,
+        lng: HomePage.position.lng,
         category: widget.initialCategory,
       ),
     );
@@ -85,11 +102,41 @@ class _SearchPageState extends State<SearchPage> {
     setState(() {});
     if (q.trim().isEmpty) {
       _homeBloc.add(
-        HomeLoadEvent(lat: 30.0444, lng: 31.2357, category: _activeCategory),
+        HomeLoadEvent(
+          lat: HomePage.position.lat,
+          lng: HomePage.position.lng,
+          category: _activeCategory,
+        ),
       );
     } else {
       _homeBloc.add(HomeSearchEvent(q.trim()));
     }
+  }
+
+  void _widenRadius() => _homeBloc.add(
+    HomeLoadEvent(
+      lat: HomePage.position.lat,
+      lng: HomePage.position.lng,
+      category: _activeCategory,
+      // ponytail: one fixed step out from the 5 km default.
+      radiusKm: 25,
+    ),
+  );
+
+  Future<void> _notifyMe() async {
+    final result = await sl<HomeRepository>().notifyWhenProviderJoins(
+      category: _activeCategory,
+    );
+    if (!mounted) return;
+    result.fold(
+      (f) => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).error(f.message))),
+      ),
+      (_) => showAiwaToast(
+        context,
+        AppLocalizations.of(context).searchNotifyToast,
+      ),
+    );
   }
 
   void _clearAll() {
@@ -99,11 +146,17 @@ class _SearchPageState extends State<SearchPage> {
       _minRating = 0;
       _maxPrice = _priceCap;
     });
-    _homeBloc.add(const HomeLoadEvent(lat: 30.0444, lng: 31.2357));
+    _homeBloc.add(
+      HomeLoadEvent(lat: HomePage.position.lat, lng: HomePage.position.lng),
+    );
   }
 
   List<ProviderSummaryEntity> _apply(List<ProviderSummaryEntity> input) {
     final list = input.where((p) {
+      // Search results come back unfiltered by category.
+      if (_activeCategory != null && p.primaryCategory != _activeCategory) {
+        return false;
+      }
       if (_minRating > 0 && (p.averageRating ?? 0) < _minRating) return false;
       if (_maxPrice < _priceCap &&
           p.startingPrice != null &&
@@ -113,12 +166,12 @@ class _SearchPageState extends State<SearchPage> {
       return true;
     }).toList();
     switch (_sort) {
-      case 'Top rated':
+      case 'rated':
         list.sort(
           (a, b) => (b.averageRating ?? 0).compareTo(a.averageRating ?? 0),
         );
         break;
-      case 'Price':
+      case 'price':
         list.sort(
           (a, b) => (a.startingPrice ?? double.infinity).compareTo(
             b.startingPrice ?? double.infinity,
@@ -150,10 +203,11 @@ class _SearchPageState extends State<SearchPage> {
                 : <ProviderSummaryEntity>[];
             return CustomScrollView(
               slivers: [
-                const SliverToBoxAdapter(
+                SliverToBoxAdapter(
                   child: PageTitle(
-                    eyebrow: 'Find someone new',
-                    title: 'Discover',
+                    eyebrow: AppLocalizations.of(context).searchEyebrow,
+                    title: AppLocalizations.of(context).searchTitle,
+                    letterSpacing: 0,
                     bottom: 12,
                   ),
                 ),
@@ -183,7 +237,7 @@ class _SearchPageState extends State<SearchPage> {
         6,
       ),
       child: Container(
-        padding: const EdgeInsets.only(left: 18, right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
         decoration: BoxDecoration(
           color: AppColors.paper,
           borderRadius: BorderRadius.circular(AppTheme.radiusPill),
@@ -209,14 +263,14 @@ class _SearchPageState extends State<SearchPage> {
                 cursorColor: AppColors.plum700,
                 style: AppTextStyles.body.copyWith(color: AppColors.ink),
                 decoration: InputDecoration(
-                  hintText: 'Search providers, services, locations',
+                  hintText: AppLocalizations.of(context).searchHint,
                   hintStyle: AppTextStyles.body.copyWith(color: AppColors.ink3),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   filled: false,
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
             ),
@@ -239,7 +293,7 @@ class _SearchPageState extends State<SearchPage> {
               onTap: () => _openFilters(count),
               child: AnimatedContainer(
                 duration: AppTheme.dur2,
-                padding: const EdgeInsets.all(7),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: _filtersActive
                       ? AppColors.plum700
@@ -260,33 +314,49 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildCategoryChips() {
-    return SizedBox(
-      height: 50,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(
-          AppTheme.gutter,
-          14,
-          AppTheme.gutter,
-          4,
-        ),
-        itemCount: _cats.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final (id, label, icon) = _cats[i];
-          final selected =
-              _activeCategory == id || (id == 'ALL' && _activeCategory == null);
-          return AiwaChip(
-            label: label,
-            icon: id == 'ALL' ? null : icon,
-            active: selected,
-            onTap: () {
-              setState(() => _activeCategory = id == 'ALL' ? null : id);
-              _homeBloc.add(HomeCategoryFilterEvent(_activeCategory));
-            },
-          );
-        },
+    // Content-height row: a fixed SizedBox clipped chips at larger text.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(
+        AppTheme.gutter,
+        14,
+        AppTheme.gutter,
+        6,
       ),
+      child: Row(
+        children: [
+          for (final (i, (id, icon)) in _cats.indexed) ...[
+            if (i > 0) const SizedBox(width: 8),
+            _categoryChip(
+              id,
+              id == 'ALL'
+                  ? AppLocalizations.of(context).homeAll
+                  : AppLocalizations.of(context).category(id),
+              icon,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _categoryChip(String id, String label, IconData icon) {
+    final selected =
+        _activeCategory == id || (id == 'ALL' && _activeCategory == null);
+    return AiwaChip(
+      label: label,
+      icon: id == 'ALL' ? null : icon,
+      active: selected,
+      onTap: () {
+        setState(() => _activeCategory = id == 'ALL' ? null : id);
+        // Keep the typed query: re-run the search, the category is
+        // applied client-side in _apply.
+        if (_controller.text.trim().isNotEmpty) {
+          _onSearch(_controller.text);
+        } else {
+          _homeBloc.add(HomeCategoryFilterEvent(_activeCategory));
+        }
+      },
     );
   }
 
@@ -294,9 +364,9 @@ class _SearchPageState extends State<SearchPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppTheme.gutter,
-        8,
-        AppTheme.gutter,
         0,
+        AppTheme.gutter,
+        4,
       ),
       child: Wrap(
         spacing: 6,
@@ -304,13 +374,17 @@ class _SearchPageState extends State<SearchPage> {
         children: [
           if (_minRating > 0)
             AiwaChip(
-              label: '★ ${_minRating.toStringAsFixed(1)}+  ×',
+              label: AppLocalizations.of(
+                context,
+              ).searchMinRatingChip(_minRating.toStringAsFixed(1)),
               tonal: true,
               onTap: () => setState(() => _minRating = 0),
             ),
           if (_maxPrice < _priceCap)
             AiwaChip(
-              label: 'Under EGP ${_maxPrice.toStringAsFixed(0)}  ×',
+              label: AppLocalizations.of(context).searchUnderPriceChip(
+                AppLocalizations.of(context).egp(_maxPrice),
+              ),
               tonal: true,
               onTap: () => setState(() => _maxPrice = _priceCap),
             ),
@@ -329,18 +403,22 @@ class _SearchPageState extends State<SearchPage> {
       ),
       child: Row(
         children: [
-          Text('Sort', style: AppTextStyles.micro.copyWith(fontSize: 11.5)),
+          Text(
+            AppLocalizations.of(context).searchSort,
+            style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: _sorts
+                    .where((s) => s != 'price' || _pricesKnown)
                     .map(
                       (s) => Padding(
-                        padding: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsetsDirectional.only(end: 6),
                         child: AiwaChip(
-                          label: s,
+                          label: _sortLabel(s),
                           active: _sort == s,
                           onTap: () => setState(() => _sort = s),
                         ),
@@ -352,7 +430,7 @@ class _SearchPageState extends State<SearchPage> {
           ),
           if (count != null)
             Text(
-              '$count found',
+              AppLocalizations.of(context).searchFound(count),
               style: AppTextStyles.micro.copyWith(
                 fontSize: 11.5,
                 color: AppColors.ink4,
@@ -368,11 +446,12 @@ class _SearchPageState extends State<SearchPage> {
     List<ProviderSummaryEntity> results,
   ) {
     const pad = EdgeInsets.fromLTRB(AppTheme.gutter, 14, AppTheme.gutter, 0);
+    final l = AppLocalizations.of(context);
     if (state is HomeError) {
       return [
         SliverToBoxAdapter(
           child: ErrorState(
-            body: state.message,
+            body: l.error(state.message),
             onRetry: () => _onSearch(_controller.text),
             compact: true,
           ),
@@ -389,20 +468,21 @@ class _SearchPageState extends State<SearchPage> {
     }
     if (results.isEmpty) {
       final q = _controller.text.trim();
-      final narrowed =
-          q.isNotEmpty || _filtersActive || _activeCategory != null;
+      final cleared = q.isNotEmpty || _filtersActive;
       return [
         SliverToBoxAdapter(
           child: EmptyState(
             icon: Icons.search_off_rounded,
             title: q.isNotEmpty
-                ? 'No match for “$q”'
-                : 'Nothing in this category nearby',
+                ? l.searchNoMatch(q)
+                : l.searchNothingInCategory,
             subtitle: q.isNotEmpty
-                ? 'Try a different spelling, or browse by category instead.'
-                : 'No providers within your radius match these filters yet.',
-            actionLabel: narrowed ? 'Clear search & filters' : null,
-            onAction: narrowed ? _clearAll : null,
+                ? l.searchNoMatchBody
+                : l.searchNoFilterMatchBody,
+            actionLabel: cleared ? l.searchClearAll : l.searchWiden,
+            onAction: cleared ? _clearAll : _widenRadius,
+            secondaryLabel: l.searchNotifyMe,
+            onSecondary: _notifyMe,
           ),
         ),
       ];
@@ -432,13 +512,13 @@ class _SearchPageState extends State<SearchPage> {
               : state.hasMore
               ? Center(
                   child: AiwaButton(
-                    label: 'Load more',
+                    label: l.commonLoadMore,
                     variant: AiwaButtonVariant.ghost,
                     size: AiwaButtonSize.sm,
                     onPressed: () => _homeBloc.add(HomeLoadMoreEvent()),
                   ),
                 )
-              : EndOfList(label: '${results.length} providers in range'),
+              : EndOfList(label: l.searchInRange(results.length)),
         ),
       ),
     ];
@@ -447,9 +527,14 @@ class _SearchPageState extends State<SearchPage> {
   void _openFilters(int count) {
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       barrierColor: AppColors.plum900.withOpacity(0.45),
       isScrollControlled: true,
+      sheetAnimationStyle: AnimationStyle(
+        duration: AppTheme.dur3,
+        curve: AppTheme.easeSoft,
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           void update(VoidCallback fn) {
@@ -458,17 +543,27 @@ class _SearchPageState extends State<SearchPage> {
           }
 
           final state = _homeBloc.state;
+          final l = AppLocalizations.of(context);
           final liveCount = state is HomeLoaded
               ? _apply(state.providers).length
               : count;
 
           return Container(
-            decoration: AppTheme.sheetDecoration,
+            // prototype.jsx:244 filters sheet: 0 -12px 32px rgba(0,0,0,.18).
+            decoration: AppTheme.sheetDecoration.copyWith(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .18),
+                  blurRadius: 32,
+                  offset: const Offset(0, -12),
+                ),
+              ],
+            ),
             padding: EdgeInsets.fromLTRB(
               AppTheme.gutter,
               18,
               AppTheme.gutter,
-              24 + MediaQuery.paddingOf(ctx).bottom,
+              36 + MediaQuery.paddingOf(ctx).bottom,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -489,14 +584,16 @@ class _SearchPageState extends State<SearchPage> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Expanded(child: Text('Filters', style: AppTextStyles.h3)),
+                    Expanded(
+                      child: Text(l.searchFilters, style: AppTextStyles.h3),
+                    ),
                     GestureDetector(
                       onTap: () => update(() {
                         _minRating = 0;
                         _maxPrice = _priceCap;
                       }),
                       child: Text(
-                        'Reset',
+                        l.searchReset,
                         style: AppTextStyles.label.copyWith(
                           color: AppColors.plum700,
                         ),
@@ -506,35 +603,43 @@ class _SearchPageState extends State<SearchPage> {
                 ),
                 const SizedBox(height: 18),
                 _SliderHeader(
-                  label: 'Minimum rating',
+                  label: l.searchMinRating,
                   value: _minRating == 0
-                      ? 'Any'
+                      ? l.searchAny
                       : '${_minRating.toStringAsFixed(1)}★',
                 ),
+                const SizedBox(height: 8),
                 Slider(
+                  padding: EdgeInsets.zero,
                   value: _minRating,
                   min: 0,
                   max: 5,
                   divisions: 10,
                   onChanged: (v) => update(() => _minRating = v),
                 ),
-                const _SliderRange(left: 'Any', right: '5.0'),
-                const SizedBox(height: 22),
-                _SliderHeader(
-                  label: 'Max price',
-                  value: 'EGP ${_maxPrice.toStringAsFixed(0)}',
-                ),
-                Slider(
-                  value: _maxPrice,
-                  min: 100,
-                  max: _priceCap,
-                  divisions: 48,
-                  onChanged: (v) => update(() => _maxPrice = v),
-                ),
-                const _SliderRange(left: 'EGP 100', right: 'EGP 2,500+'),
+                const SizedBox(height: 4),
+                _SliderRange(left: l.searchAny, right: '5.0'),
+                if (_pricesKnown) ...[
+                  const SizedBox(height: 22),
+                  _SliderHeader(
+                    label: l.searchMaxPrice,
+                    value: l.egp(_maxPrice),
+                  ),
+                  const SizedBox(height: 8),
+                  Slider(
+                    padding: EdgeInsets.zero,
+                    value: _maxPrice,
+                    min: 100,
+                    max: _priceCap,
+                    divisions: 48,
+                    onChanged: (v) => update(() => _maxPrice = v),
+                  ),
+                  const SizedBox(height: 4),
+                  _SliderRange(left: l.egp(100), right: '${l.egp(2500)}+'),
+                ],
                 const SizedBox(height: 22),
                 AiwaButton(
-                  label: 'Show $liveCount provider${liveCount == 1 ? '' : 's'}',
+                  label: l.searchShowProviders(liveCount),
                   fullWidth: true,
                   size: AiwaButtonSize.lg,
                   onPressed: () => Navigator.pop(ctx),

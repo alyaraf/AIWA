@@ -19,7 +19,24 @@ class NotificationEntity extends Equatable {
     this.referenceId,
   });
 
+  NotificationEntity markedRead() => NotificationEntity(
+    id: id,
+    title: title,
+    message: message,
+    type: type,
+    read: true,
+    createdAt: createdAt,
+    referenceId: referenceId,
+  );
+
   @override
-  List<Object?> get props =>
-      [id, title, message, type, read, createdAt, referenceId];
+  List<Object?> get props => [
+    id,
+    title,
+    message,
+    type,
+    read,
+    createdAt,
+    referenceId,
+  ];
 }

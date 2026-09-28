@@ -11,17 +11,22 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/step_header.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class OtpPage extends StatefulWidget {
   final String identifier;
   final String role;
   final String mode;
 
+  /// Destination as the user typed it ('+20 100 555 8821').
+  final String? display;
+
   const OtpPage({
     super.key,
     required this.identifier,
     required this.role,
     required this.mode,
+    this.display,
   });
 
   @override
@@ -30,6 +35,7 @@ class OtpPage extends StatefulWidget {
 
 class _OtpPageState extends State<OtpPage> {
   final _controller = TextEditingController();
+  final _focus = FocusNode();
   int _seconds = 45;
   Timer? _timer;
 
@@ -59,6 +65,7 @@ class _OtpPageState extends State<OtpPage> {
   void dispose() {
     _timer?.cancel();
     _controller.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -69,9 +76,9 @@ class _OtpPageState extends State<OtpPage> {
     );
   }
 
-  PinTheme _pinTheme(Color border) => PinTheme(
-    width: 44,
-    height: 54,
+  PinTheme _pinTheme(Color border, double width) => PinTheme(
+    width: width,
+    height: width * 1.15,
     textStyle: AppTextStyles.h2.copyWith(
       fontSize: 28,
       color: AppColors.plum900,
@@ -87,6 +94,7 @@ class _OtpPageState extends State<OtpPage> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
+      listenWhen: (_, _) => ModalRoute.of(context)?.isCurrent ?? false,
       listener: (context, state) {
         if (state is AuthOtpVerified) {
           context.push(
@@ -98,9 +106,11 @@ class _OtpPageState extends State<OtpPage> {
             },
           );
         } else if (state is AuthError) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(state.message)));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context).error(state.message)),
+            ),
+          );
           _controller.clear();
           setState(() {});
         }
@@ -108,7 +118,7 @@ class _OtpPageState extends State<OtpPage> {
       child: AuthStepScaffold(
         bottom: BlocBuilder<AuthBloc, AuthState>(
           builder: (context, state) => AiwaButton(
-            label: 'Verify',
+            label: AppLocalizations.of(context).authVerify,
             fullWidth: true,
             size: AiwaButtonSize.lg,
             loading: state is AuthLoading,
@@ -119,53 +129,74 @@ class _OtpPageState extends State<OtpPage> {
           StepHeader(
             step: 2,
             total: _totalSteps,
-            title: 'Enter the code',
-            subtitle: 'We sent a 6-digit code to ${widget.identifier}.',
+            title: AppLocalizations.of(context).authEnterCode,
+            subtitleSpans: spansOf(
+              AppLocalizations.of(context).authCodeSentTo('{destination}'),
+              {
+                'destination': TextSpan(
+                  // LTR isolate keeps '+20 …' intact inside Arabic text.
+                  text: '\u2066${widget.display ?? widget.identifier}\u2069',
+                  style: TextStyle(
+                    color: AppColors.plum900,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              },
+            ),
             onBack: () => context.pop(),
           ),
           const SizedBox(height: 26),
-          Center(
-            child: Pinput(
-              length: 6,
-              controller: _controller,
-              autofocus: true,
-              separatorBuilder: (_) => const SizedBox(width: 8),
-              defaultPinTheme: _pinTheme(AppColors.divider),
-              focusedPinTheme: _pinTheme(AppColors.plum700),
-              submittedPinTheme: _pinTheme(AppColors.plum700),
-              onChanged: (_) => setState(() {}),
-              onCompleted: (_) => _verify(),
-            ),
+          // Cells span the width, 8px apart, 1:1.15 (auth-screens.jsx:258-272).
+          LayoutBuilder(
+            builder: (context, bc) {
+              final w = (bc.maxWidth - 5 * 8) / 6;
+              return Directionality(
+                textDirection: TextDirection.ltr,
+                child: Pinput(
+                  length: 6,
+                  controller: _controller,
+                  focusNode: _focus,
+                  separatorBuilder: (_) => const SizedBox(width: 8),
+                  defaultPinTheme: _pinTheme(AppColors.divider, w),
+                  focusedPinTheme: _pinTheme(AppColors.divider, w),
+                  submittedPinTheme: _pinTheme(AppColors.plum700, w),
+                  onChanged: (_) => setState(() {}),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 18),
           Center(
             child: _seconds > 0
                 ? Text.rich(
                     TextSpan(
-                      text: 'Resend code in ',
                       style: AppTextStyles.meta,
-                      children: [
-                        TextSpan(
-                          text: '0:${_seconds.toString().padLeft(2, '0')}',
-                          style: AppTextStyles.mono.copyWith(
-                            color: AppColors.plum900,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                      children: spansOf(
+                        AppLocalizations.of(context).authResendIn('{time}'),
+                        {
+                          'time': TextSpan(
+                            text: '0:${_seconds.toString().padLeft(2, '0')}',
+                            style: AppTextStyles.mono.copyWith(
+                              color: AppColors.plum900,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                      ],
+                        },
+                      ),
                     ),
                   )
                 : GestureDetector(
                     onTap: () {
                       _controller.clear();
+                      _focus.requestFocus();
                       _startTimer();
                       context.read<AuthBloc>().add(
                         AuthSendOtpEvent(phone: widget.identifier),
                       );
                     },
                     child: Text(
-                      'Resend code',
+                      AppLocalizations.of(context).authResendCode,
                       style: AppTextStyles.label.copyWith(
                         color: AppColors.plum700,
                       ),
@@ -191,7 +222,7 @@ class _OtpPageState extends State<OtpPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    "Didn't get it? Check the number, then tap Resend once the timer ends.",
+                    AppLocalizations.of(context).authOtpHelp,
                     style: AppTextStyles.micro.copyWith(
                       color: AppColors.ink2,
                       fontSize: 12,

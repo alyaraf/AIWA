@@ -99,6 +99,7 @@
 
         <!-- MapStruct -->
         <dependency>
+            <!-- ponytail: mapstruct + processor unused (no @Mapper anywhere), delete both, re-add when a real mapper is written -->
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
             <version>1.5.5.Final</version>

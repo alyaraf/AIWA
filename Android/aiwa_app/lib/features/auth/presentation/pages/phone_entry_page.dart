@@ -10,6 +10,7 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/step_header.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class PhoneEntryPage extends StatefulWidget {
   final String role;
@@ -47,20 +48,15 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
         ? '+20${_phoneCtrl.text.replaceAll(RegExp(r'\D'), '')}'
         : _emailCtrl.text.trim();
 
-    if (_mode == 'phone') {
-      context.read<AuthBloc>().add(AuthSendOtpEvent(phone: value));
-    } else {
-      // Email flow — no OTP endpoint for email, go straight to account setup.
-      context.push(
-        AppRoutes.accountSetup,
-        extra: {'role': widget.role, 'identifier': value, 'mode': _mode},
-      );
-    }
+    // Email too: the repository fails clearly until the backend can send
+    // email codes, rather than skipping verification.
+    context.read<AuthBloc>().add(AuthSendOtpEvent(phone: value));
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
+      listenWhen: (_, _) => ModalRoute.of(context)?.isCurrent ?? false,
       listener: (context, state) {
         if (state is AuthOtpSent) {
           context.push(
@@ -69,18 +65,21 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
               'identifier': state.phone,
               'role': widget.role,
               'mode': _mode,
+              if (_mode == 'phone') 'display': '+20 ${_phoneCtrl.text.trim()}',
             },
           );
         } else if (state is AuthError) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(state.message)));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context).error(state.message)),
+            ),
+          );
         }
       },
       child: AuthStepScaffold(
         bottom: BlocBuilder<AuthBloc, AuthState>(
           builder: (context, state) => AiwaButton(
-            label: 'Send code',
+            label: AppLocalizations.of(context).authSendCode,
             fullWidth: true,
             size: AiwaButtonSize.lg,
             loading: state is AuthLoading,
@@ -91,9 +90,10 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
           StepHeader(
             step: 1,
             total: _totalSteps,
-            title:
-                "What's your ${_mode == 'phone' ? 'phone number' : 'email'}?",
-            subtitle: "We'll send a 6-digit code to confirm.",
+            title: _mode == 'phone'
+                ? AppLocalizations.of(context).authWhatsYourPhone
+                : AppLocalizations.of(context).authWhatsYourEmail,
+            subtitle: AppLocalizations.of(context).authSendCodeSubtitle,
             onBack: () => context.pop(),
           ),
           const SizedBox(height: 22),
@@ -105,7 +105,6 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
           if (_mode == 'phone')
             EgyptPhoneField(
               controller: _phoneCtrl,
-              autoFocus: true,
               onChanged: (_) => setState(() {}),
             )
           else
@@ -121,25 +120,27 @@ class _PhoneEntryPageState extends State<PhoneEntryPage> {
           Text.rich(
             TextSpan(
               style: AppTextStyles.micro.copyWith(fontSize: 11.5, height: 1.45),
-              children: [
-                const TextSpan(text: "By continuing you agree to AIWA's "),
-                TextSpan(
-                  text: 'terms',
-                  style: TextStyle(
-                    color: AppColors.plum700,
-                    fontWeight: FontWeight.w600,
+              children: spansOf(
+                AppLocalizations.of(
+                  context,
+                ).authAgreeTerms('{terms}', '{policy}'),
+                {
+                  'terms': TextSpan(
+                    text: AppLocalizations.of(context).authTermsLink,
+                    style: TextStyle(
+                      color: AppColors.plum700,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const TextSpan(text: ' and '),
-                TextSpan(
-                  text: 'safety policy',
-                  style: TextStyle(
-                    color: AppColors.plum700,
-                    fontWeight: FontWeight.w600,
+                  'policy': TextSpan(
+                    text: AppLocalizations.of(context).authSafetyPolicyLink,
+                    style: TextStyle(
+                      color: AppColors.plum700,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const TextSpan(text: '.'),
-              ],
+                },
+              ),
             ),
           ),
         ],

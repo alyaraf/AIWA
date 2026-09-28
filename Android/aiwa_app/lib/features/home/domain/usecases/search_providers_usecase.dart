@@ -12,6 +12,5 @@ class SearchProvidersUseCase {
     required String query,
     int page = 0,
     int size = 20,
-  }) =>
-      _repository.searchProviders(query: query, page: page, size: size);
+  }) => _repository.searchProviders(query: query, page: page, size: size);
 }

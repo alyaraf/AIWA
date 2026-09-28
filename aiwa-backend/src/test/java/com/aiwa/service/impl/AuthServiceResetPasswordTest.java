@@ -27,7 +27,7 @@ class AuthServiceResetPasswordTest {
     private final TotpService totpService = mock(TotpService.class);
 
     private final AuthServiceImpl service =
-            new AuthServiceImpl(userRepo, encoder, authManager, jwtUtils, otpService, blacklist, totpService);
+            new AuthServiceImpl(userRepo, mock(com.aiwa.repository.ProviderProfileRepository.class), encoder, authManager, jwtUtils, otpService, blacklist, totpService);
 
     private AuthRequest.ResetPassword req() {
         AuthRequest.ResetPassword r = new AuthRequest.ResetPassword();

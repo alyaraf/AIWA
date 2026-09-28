@@ -19,4 +19,7 @@ abstract class HomeRepository {
     int page = 0,
     int size = 20,
   });
+
+  /// 'Notify me when someone joins' on Discover's empty state.
+  Future<Either<Failure, void>> notifyWhenProviderJoins({String? category});
 }

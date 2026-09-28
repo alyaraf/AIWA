@@ -3,11 +3,7 @@ class ApiResponse<T> {
   final String? message;
   final T? data;
 
-  const ApiResponse({
-    required this.success,
-    this.message,
-    this.data,
-  });
+  const ApiResponse({required this.success, this.message, this.data});
 
   factory ApiResponse.fromJson(
     Map<String, dynamic> json,
@@ -45,7 +41,8 @@ class PagedData<T> {
     T Function(Map<String, dynamic>) fromItem,
   ) {
     return PagedData(
-      content: (json['content'] as List<dynamic>?)
+      content:
+          (json['content'] as List<dynamic>?)
               ?.map((e) => fromItem(e as Map<String, dynamic>))
               .toList() ??
           [],
@@ -58,4 +55,17 @@ class PagedData<T> {
   }
 
   bool get hasNextPage => !last;
+
+  // ponytail: the backend ignores `status` on /bookings/my and
+  // /bookings/provider, so pages are filtered client-side. A page can come
+  // back short or empty while hasNextPage is true; add a server-side filter
+  // (BookingController) when that shows up in practice.
+  PagedData<T> where(bool Function(T) test) => PagedData(
+    content: content.where(test).toList(),
+    totalElements: totalElements,
+    totalPages: totalPages,
+    number: number,
+    size: size,
+    last: last,
+  );
 }

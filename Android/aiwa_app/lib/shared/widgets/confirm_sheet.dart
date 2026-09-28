@@ -1,9 +1,12 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
 import 'aiwa_button.dart';
 import 'eyebrow_label.dart';
+import 'system_screen.dart' show PopIn;
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// Bottom-sheet confirm used for every destructive action — `ConfirmSheet`.
 ///
@@ -14,8 +17,8 @@ Future<bool> showConfirmSheet(
   required String title,
   String? eyebrow,
   String? body,
-  String confirmLabel = 'Confirm',
-  String cancelLabel = 'Cancel',
+  String? confirmLabel,
+  String? cancelLabel,
   bool danger = true,
   IconData? icon,
   TextEditingController? input,
@@ -23,9 +26,14 @@ Future<bool> showConfirmSheet(
 }) async {
   final result = await showModalBottomSheet<bool>(
     context: context,
+    useRootNavigator: true,
     backgroundColor: Colors.transparent,
     barrierColor: AppColors.plum900.withOpacity(0.48),
     isScrollControlled: true,
+    sheetAnimationStyle: AnimationStyle(
+      duration: AppTheme.dur3,
+      curve: AppTheme.easeSoft,
+    ),
     builder: (ctx) {
       final fg = danger ? AppColors.danger700 : AppColors.plum700;
       final bg = danger ? AppColors.danger100 : AppColors.plum100;
@@ -37,7 +45,8 @@ Future<bool> showConfirmSheet(
             AppTheme.gutter,
             18,
             AppTheme.gutter,
-            24 + MediaQuery.paddingOf(ctx).bottom,
+            // states.jsx:234 bottom 34 already includes the home indicator.
+            math.max(34, MediaQuery.paddingOf(ctx).bottom),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -72,7 +81,11 @@ Future<bool> showConfirmSheet(
               const SizedBox(height: 4),
               Text(
                 title,
-                style: AppTextStyles.h3.copyWith(fontSize: 23, height: 1.12),
+                style: AppTextStyles.h3.copyWith(
+                  fontSize: 23,
+                  height: 1.12,
+                  letterSpacing: 0,
+                ),
               ),
               if (body != null) ...[
                 const SizedBox(height: 7),
@@ -107,7 +120,8 @@ Future<bool> showConfirmSheet(
                 children: [
                   Expanded(
                     child: AiwaButton(
-                      label: cancelLabel,
+                      label:
+                          cancelLabel ?? AppLocalizations.of(ctx).commonCancel,
                       variant: AiwaButtonVariant.secondary,
                       size: AiwaButtonSize.lg,
                       fullWidth: true,
@@ -117,7 +131,9 @@ Future<bool> showConfirmSheet(
                   const SizedBox(width: 10),
                   Expanded(
                     child: AiwaButton(
-                      label: confirmLabel,
+                      label:
+                          confirmLabel ??
+                          AppLocalizations.of(ctx).commonConfirm,
                       variant: danger
                           ? AiwaButtonVariant.danger
                           : AiwaButtonVariant.primary,
@@ -134,5 +150,226 @@ Future<bool> showConfirmSheet(
       );
     },
   );
+  return result ?? false;
+}
+
+/// Centered success terminal — `SuccessSheet` in states.jsx.
+Future<void> showSuccessSheet(
+  BuildContext context, {
+  required String title,
+  String? body,
+  String? primary,
+  VoidCallback? onPrimary,
+  String? secondary,
+  VoidCallback? onSecondary,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: AppColors.plum900.withValues(alpha: 0.48),
+    isScrollControlled: true,
+    builder: (ctx) => Container(
+      decoration: AppTheme.sheetDecoration,
+      padding: EdgeInsets.fromLTRB(
+        AppTheme.gutter,
+        18,
+        AppTheme.gutter,
+        24 + MediaQuery.paddingOf(ctx).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 18),
+          PopIn(
+            child: Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: AppColors.success100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: 27,
+                color: AppColors.success700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.h3.copyWith(
+              fontSize: 24,
+              height: 1.12,
+              letterSpacing: 0,
+            ),
+          ),
+          if (body != null) ...[
+            const SizedBox(height: 7),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 280),
+              child: Text(
+                body,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodySm.copyWith(
+                  fontSize: 13.5,
+                  color: AppColors.ink2,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
+          AiwaButton(
+            label: primary ?? AppLocalizations.of(ctx).commonDone,
+            size: AiwaButtonSize.lg,
+            fullWidth: true,
+            onPressed: onPrimary ?? () => Navigator.pop(ctx),
+          ),
+          if (secondary != null) ...[
+            const SizedBox(height: 9),
+            AiwaButton(
+              label: secondary,
+              variant: AiwaButtonVariant.ghost,
+              size: AiwaButtonSize.sm,
+              fullWidth: true,
+              onPressed: onSecondary,
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+/// "Type DELETE to confirm" — `DeleteAccountSheet` in customer-extras-2.jsx.
+/// Returns `true` once the phrase matches and the user confirms.
+Future<bool> showDeleteAccountSheet(BuildContext context) async {
+  final text = TextEditingController();
+  final l = AppLocalizations.of(context);
+  final result = await showModalBottomSheet<bool>(
+    context: context,
+    useRootNavigator: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: AppColors.plum900.withValues(alpha: .5),
+    isScrollControlled: true,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+      child: Container(
+        decoration: AppTheme.sheetDecoration,
+        padding: EdgeInsets.fromLTRB(
+          AppTheme.gutter,
+          18,
+          AppTheme.gutter,
+          36 + MediaQuery.paddingOf(ctx).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            EyebrowLabel(l.delCantUndo, color: AppColors.danger700),
+            const SizedBox(height: 4),
+            Text(
+              l.delTitle,
+              style: AppTextStyles.h3.copyWith(
+                fontSize: 22,
+                height: 1.1,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text.rich(
+              TextSpan(
+                children: spansOf(l.delBody('{phrase}'), {
+                  'phrase': TextSpan(
+                    text: l.delPhrase,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                }),
+              ),
+              style: AppTextStyles.bodySm.copyWith(
+                fontSize: 13,
+                height: 1.5,
+                color: AppColors.ink2,
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: text,
+              autocorrect: false,
+              textCapitalization: TextCapitalization.characters,
+              cursorColor: AppColors.plum700,
+              style: AppTextStyles.mono.copyWith(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: l.delPhrase,
+                hintStyle: AppTextStyles.mono.copyWith(
+                  fontSize: 14,
+                  color: AppColors.ink4,
+                ),
+                filled: true,
+                fillColor: AppColors.paper,
+                border: AppTheme.inputBorder(AppColors.divider),
+                enabledBorder: AppTheme.inputBorder(AppColors.divider),
+                focusedBorder: AppTheme.inputBorder(AppColors.plum700),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 13,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: AiwaButton(
+                    label: l.commonCancel,
+                    variant: AiwaButtonVariant.secondary,
+                    fullWidth: true,
+                    onPressed: () => Navigator.pop(ctx, false),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ValueListenableBuilder(
+                    valueListenable: text,
+                    builder: (_, v, _) => AiwaButton(
+                      label: l.profDeleteAccount,
+                      variant: AiwaButtonVariant.danger,
+                      fullWidth: true,
+                      onPressed: v.text.trim().toUpperCase() == l.delPhrase
+                          ? () => Navigator.pop(ctx, true)
+                          : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  // ponytail: `text` isn't disposed — the sheet still reads it during its
+  // exit animation, after this future completes; it holds no resources.
   return result ?? false;
 }

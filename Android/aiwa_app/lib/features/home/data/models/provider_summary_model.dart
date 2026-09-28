@@ -17,6 +17,8 @@ class ProviderSummaryModel extends ProviderSummaryEntity {
     required super.ownerName,
     super.profileImageUrl,
     super.galleryImages,
+    super.saved,
+    super.openNow,
   });
 
   factory ProviderSummaryModel.fromJson(Map<String, dynamic> json) {
@@ -49,12 +51,23 @@ class ProviderSummaryModel extends ProviderSummaryEntity {
       address: json['address'] as String?,
       distanceKm: (json['distanceKm'] as num?)?.toDouble(),
       startingPrice: startingPrice,
-      ownerName: user?['fullName'] as String? ?? json['ownerName'] as String? ?? '',
-      profileImageUrl: user?['profileImageUrl'] as String?,
-      galleryImages: (json['galleryImages'] as List<dynamic>?)
+      ownerName:
+          user?['fullName'] as String? ?? json['ownerName'] as String? ?? '',
+      profileImageUrl:
+          user?['profileImageUrl'] as String? ??
+          json['profileImageUrl'] as String?,
+      galleryImages:
+          (json['galleryImages'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
+      saved: json['saved'] as bool? ?? false,
+      // ponytail: availability-blind; ProviderSummaryDto has no real openNow
+      // (today's hours) yet, so this only reflects the provider's mode flags.
+      openNow:
+          json['vacationMode'] != true &&
+          json['offlineMode'] != true &&
+          json['settlementPaused'] != true,
     );
   }
 }

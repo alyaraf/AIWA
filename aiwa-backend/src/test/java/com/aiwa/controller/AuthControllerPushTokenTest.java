@@ -5,6 +5,7 @@ import com.aiwa.entity.User;
 import com.aiwa.enums.DevicePlatform;
 import com.aiwa.enums.UserRole;
 import com.aiwa.repository.UserRepository;
+import com.aiwa.security.JwtUtils;
 import com.aiwa.service.AuthService;
 import com.aiwa.service.impl.FileStorageServiceImpl;
 import com.aiwa.service.impl.OtpServiceImpl;
@@ -29,7 +30,7 @@ class AuthControllerPushTokenTest {
     private final UserRepository userRepo = mock(UserRepository.class);
     private final FileStorageServiceImpl fileStorageService = mock(FileStorageServiceImpl.class);
 
-    private final AuthController controller = new AuthController(authService, otpService, userRepo, fileStorageService);
+    private final AuthController controller = new AuthController(authService, otpService, userRepo, mock(com.aiwa.repository.ProviderProfileRepository.class), fileStorageService, mock(JwtUtils.class));
 
     private UserDetails principal(String email) {
         return new org.springframework.security.core.userdetails.User(

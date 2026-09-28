@@ -6,6 +6,7 @@ import com.aiwa.enums.ServiceCategory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+// ponytail: one implementation (ProviderServiceImpl), inline into a concrete @Service when touched; keep only if a second impl appears
 public interface ProviderService {
     ApiResponse.ProviderDetailDto createProfile(Long userId, ProviderProfileRequest request);
     ApiResponse.ProviderDetailDto updateProfile(Long userId, ProviderProfileRequest request);

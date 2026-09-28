@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+// ponytail: dead since OTP moved to Redis, delete with OtpRepository
 @Entity
 @Table(name = "otp_codes")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

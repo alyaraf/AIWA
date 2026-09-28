@@ -33,6 +33,7 @@ class _FakeProviderRepository implements ProviderRepository {
   final Map<String, List<AvailabilitySlot>> slotsByDate = {};
   bool slotsFail = false;
   bool saved = false;
+  bool saveFails = false;
   final List<String> saveCalls = [];
 
   @override
@@ -46,6 +47,7 @@ class _FakeProviderRepository implements ProviderRepository {
   @override
   Future<Either<Failure, List<AvailabilitySlot>>> getAvailableSlots(
     String providerId,
+    String serviceId,
     String date,
   ) async {
     if (slotsFail) return const Left(ServerFailure('boom'));
@@ -59,6 +61,7 @@ class _FakeProviderRepository implements ProviderRepository {
   @override
   Future<Either<Failure, void>> saveProvider(String providerId) async {
     saveCalls.add('save:$providerId');
+    if (saveFails) return const Left(ServerFailure('nope'));
     saved = true;
     return const Right(null);
   }
@@ -69,6 +72,13 @@ class _FakeProviderRepository implements ProviderRepository {
     saved = false;
     return const Right(null);
   }
+
+  @override
+  Future<Either<Failure, void>> flagProvider(
+    String providerId,
+    String reason,
+    String note,
+  ) async => const Right(null);
 
   @override
   Future<Either<Failure, List<ServiceEntity>>> getProviderServices(
@@ -133,7 +143,7 @@ void main() {
     bloc.add(const ProviderLoadEvent('1'));
     await _nextLoaded(bloc, (_) => true);
 
-    bloc.add(const ProviderLoadSlotsEvent('1', '2026-10-01'));
+    bloc.add(const ProviderLoadSlotsEvent('1', '7', '2026-10-01'));
     final loaded = await _nextLoaded(bloc, (s) => s.slots.isNotEmpty);
 
     expect(loaded.slots.single.times, ['10:00', '10:30']);
@@ -147,7 +157,7 @@ void main() {
     ];
 
     bloc.add(const ProviderLoadEvent('1'));
-    bloc.add(const ProviderLoadSlotsEvent('1', '2026-10-01'));
+    bloc.add(const ProviderLoadSlotsEvent('1', '7', '2026-10-01'));
     await Future<void>.delayed(const Duration(milliseconds: 20));
     repo.detailGate.complete();
 
@@ -165,9 +175,9 @@ void main() {
     bloc.add(const ProviderLoadEvent('1'));
     await _nextLoaded(bloc, (_) => true);
 
-    bloc.add(const ProviderLoadSlotsEvent('1', '2026-10-01'));
+    bloc.add(const ProviderLoadSlotsEvent('1', '7', '2026-10-01'));
     await _nextLoaded(bloc, (s) => s.slots.length == 1);
-    bloc.add(const ProviderLoadSlotsEvent('1', '2026-10-02'));
+    bloc.add(const ProviderLoadSlotsEvent('1', '7', '2026-10-02'));
     final both = await _nextLoaded(bloc, (s) => s.slots.length == 2);
 
     expect(both.slots.expand((s) => s.times), containsAll(['10:00', '11:00']));
@@ -176,7 +186,7 @@ void main() {
     repo.slotsByDate['2026-10-01'] = [
       _slot('2026-10-01', ['15:00']),
     ];
-    bloc.add(const ProviderLoadSlotsEvent('1', '2026-10-01'));
+    bloc.add(const ProviderLoadSlotsEvent('1', '7', '2026-10-01'));
     final refreshed = await _nextLoaded(
       bloc,
       (s) => s.slots.expand((x) => x.times).contains('15:00'),
@@ -192,7 +202,7 @@ void main() {
     bloc.add(const ProviderLoadEvent('1'));
     await _nextLoaded(bloc, (_) => true);
 
-    bloc.add(const ProviderLoadSlotsEvent('1', '2026-10-01'));
+    bloc.add(const ProviderLoadSlotsEvent('1', '7', '2026-10-01'));
     await Future<void>.delayed(const Duration(milliseconds: 20));
 
     final state = bloc.state as ProviderLoaded;
@@ -209,5 +219,16 @@ void main() {
     await _nextLoaded(bloc, (s) => !s.isSaved);
 
     expect(repo.saveCalls, ['save:1', 'unsave:1']);
+  });
+
+  test('a failed save flips the heart back', () async {
+    repo.saveFails = true;
+    bloc.add(const ProviderLoadEvent('1'));
+    await _nextLoaded(bloc, (_) => true);
+
+    bloc.add(const ProviderToggleSaveEvent('1'));
+    await _nextLoaded(bloc, (s) => s.isSaved); // optimistic
+    final reverted = await _nextLoaded(bloc, (s) => !s.isSaved);
+    expect(reverted.isSaved, isFalse);
   });
 }

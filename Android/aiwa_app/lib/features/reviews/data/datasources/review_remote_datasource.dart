@@ -7,6 +7,7 @@ abstract class ReviewRemoteDataSource {
     required double rating,
     String? comment,
     List<String> tags,
+    String? direction,
   });
 }
 
@@ -20,12 +21,18 @@ class ReviewRemoteDataSourceImpl implements ReviewRemoteDataSource {
     required double rating,
     String? comment,
     List<String> tags = const [],
+    String? direction,
   }) async {
-    await _api.post(ApiConstants.reviews, data: {
-      'bookingId': bookingId,
-      'rating': rating,
-      if (comment != null) 'comment': comment,
-      if (tags.isNotEmpty) 'tags': tags,
-    });
+    await _api.post(
+      ApiConstants.reviews,
+      data: {
+        'bookingId': bookingId,
+        'rating': rating,
+        if (comment != null) 'comment': comment,
+        // ReviewRequest.quickTags; direction defaults to CUSTOMER_TO_PROVIDER.
+        if (tags.isNotEmpty) 'quickTags': tags,
+        'direction': ?direction,
+      },
+    );
   }
 }

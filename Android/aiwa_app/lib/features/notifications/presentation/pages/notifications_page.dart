@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../../core/router/app_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -13,6 +16,7 @@ import '../../domain/entities/notification_entity.dart';
 import '../bloc/notification_bloc.dart';
 import '../bloc/notification_event.dart';
 import '../bloc/notification_state.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -35,14 +39,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
       body: BlocBuilder<NotificationBloc, NotificationState>(
         builder: (context, state) {
           final unread = state is NotificationLoaded ? state.unreadCount : 0;
+          final l = AppLocalizations.of(context);
           return CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
                 child: ScreenHeader(
-                  eyebrow: 'Inbox',
-                  titleSuffix: unread > 0 ? '· $unread new' : null,
+                  eyebrow: l.notifInbox,
+                  titleSuffix: unread > 0 ? l.notifNewSuffix(unread) : null,
                   titleSize: 24,
-                  title: 'Notifications',
+                  titleHeight: 1.05,
+                  title: l.ppNotifications,
                   onBack: () => context.pop(),
                   trailing: unread > 0
                       ? GestureDetector(
@@ -50,7 +56,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                             NotificationMarkAllReadEvent(),
                           ),
                           child: Text(
-                            'Mark all read',
+                            l.notifMarkAllRead,
                             style: AppTextStyles.label.copyWith(
                               color: AppColors.plum700,
                             ),
@@ -69,11 +75,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   List<Widget> _buildBody(NotificationState state) {
+    final l = AppLocalizations.of(context);
     if (state is NotificationError) {
       return [
         SliverToBoxAdapter(
           child: ErrorState(
-            body: state.message,
+            body: l.error(state.message),
             onRetry: () =>
                 context.read<NotificationBloc>().add(NotificationLoadEvent()),
           ),
@@ -89,13 +96,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
       ];
     }
     if (state.notifications.isEmpty) {
-      return const [
+      return [
         SliverToBoxAdapter(
           child: EmptyState(
             icon: Icons.notifications_none_rounded,
-            title: "You're all caught up",
-            subtitle:
-                "Booking updates, reviews and news from AIWA will show up here.",
+            title: l.notifCaughtUp,
+            subtitle: l.notifCaughtUpBody,
           ),
         ),
       ];
@@ -103,8 +109,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     final now = DateTime.now();
     bool isToday(DateTime d) {
-      final l = d.toLocal();
-      return l.year == now.year && l.month == now.month && l.day == now.day;
+      final t = d.toLocal();
+      return t.year == now.year && t.month == now.month && t.day == now.day;
     }
 
     final today = state.notifications
@@ -137,6 +143,29 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         NotificationMarkReadEvent(n.id),
                       );
                     }
+                    final id = n.referenceId;
+                    // Providers only mark read (PROVIDER_NOTIFICATIONS'
+                    // onOpen is a no-op); the routes below are customer ones.
+                    final auth = context.read<AuthBloc>().state;
+                    if (auth is AuthAuthenticated && auth.user.isProvider) {
+                      return;
+                    }
+                    if (n.type.toUpperCase().contains('TERMS')) {
+                      context.push(AppRoutes.termsReaccept);
+                    } else if (id != null &&
+                        RegExp(
+                          r'^(BOOKING|CHAT|PAYMENT|SAFETY)_',
+                        ).hasMatch(n.type)) {
+                      // Booking notifications open the live booking; the
+                      // rest reference other things, so they only mark read.
+                      context.push(switch (n.type) {
+                        'BOOKING_TIME_PROPOSED' => '/booking/$id/proposed-time',
+                        'CHAT_MESSAGE' => '/booking/$id/chat',
+                        'BOOKING_REJECTED' => '/booking/$id/rejected',
+                        'BOOKING_EXPIRED' => '/booking/$id/expired',
+                        _ => '/booking/$id/track',
+                      });
+                    }
                   },
                 ),
               ),
@@ -147,8 +176,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     return [
-      if (today.isNotEmpty) group('Today', today),
-      if (earlier.isNotEmpty) group('Earlier', earlier),
+      if (today.isNotEmpty) group(l.commonToday, today),
+      if (earlier.isNotEmpty) group(l.notifEarlier, earlier),
       if (state.hasMore)
         SliverToBoxAdapter(
           child: Center(
@@ -156,7 +185,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               onPressed: () => context.read<NotificationBloc>().add(
                 NotificationLoadMoreEvent(),
               ),
-              child: const Text('Load more'),
+              child: Text(l.commonLoadMore),
             ),
           ),
         ),
@@ -172,9 +201,17 @@ class _NotificationRow extends StatelessWidget {
 
   IconData get _icon {
     final t = n.type.toUpperCase();
+    if (t.contains('CONFIRMED') || t.contains('COMPLETED')) {
+      return Icons.check_circle_outline_rounded;
+    }
     if (t.contains('BOOKING') || t.contains('STATUS')) {
       return Icons.event_available_outlined;
     }
+    if (t.contains('DISPUTED')) return Icons.warning_amber_rounded;
+    if (t.startsWith('SETTLEMENT') || t == 'COMMISSION_DUE') {
+      return Icons.payments_outlined;
+    }
+    if (t.startsWith('MODERATION')) return Icons.hide_image_outlined;
     if (t.contains('PAYMENT') || t.contains('SETTLEMENT')) {
       return Icons.receipt_long_outlined;
     }
@@ -190,15 +227,15 @@ class _NotificationRow extends StatelessWidget {
     return Icons.notifications_none_rounded;
   }
 
-  String get _when {
+  String _when(AppLocalizations l) {
     final d = n.createdAt.toLocal();
     final diff = DateTime.now().difference(d);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return '${diff.inHours} hr ago';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays} days ago';
-    return DateFormat('d MMM').format(d);
+    if (diff.inMinutes < 1) return l.notifJustNow;
+    if (diff.inMinutes < 60) return l.notifMinAgo(diff.inMinutes);
+    if (diff.inHours < 24) return l.notifHrAgo(diff.inHours);
+    if (diff.inDays == 1) return l.agoYesterday;
+    if (diff.inDays < 7) return l.agoDays(diff.inDays);
+    return DateFormat('d MMM', l.localeName).format(d);
   }
 
   @override
@@ -235,7 +272,8 @@ class _NotificationRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
                     children: [
                       Expanded(
                         child: Text(
@@ -245,12 +283,15 @@ class _NotificationRow extends StatelessWidget {
                             fontWeight: unread
                                 ? FontWeight.w700
                                 : FontWeight.w600,
-                            height: 1.25,
+                            height: 1.2,
                           ),
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text(_when, style: AppTextStyles.micro),
+                      Text(
+                        _when(AppLocalizations.of(context)),
+                        style: AppTextStyles.micro,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 3),
@@ -269,7 +310,7 @@ class _NotificationRow extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                margin: const EdgeInsets.only(left: 8, top: 14),
+                margin: const EdgeInsetsDirectional.only(start: 12, top: 14),
                 decoration: BoxDecoration(
                   color: AppColors.rose500,
                   shape: BoxShape.circle,

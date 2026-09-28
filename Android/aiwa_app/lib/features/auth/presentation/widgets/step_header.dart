@@ -1,9 +1,12 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
+import '../../../../shared/widgets/press_scale.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// Back button + progress segments + "Step n of N" + title — signup flow.
 class StepHeader extends StatelessWidget {
@@ -11,6 +14,9 @@ class StepHeader extends StatelessWidget {
   final int total;
   final String title;
   final String? subtitle;
+
+  /// Rich subtitle (e.g. a bold destination); used instead of [subtitle].
+  final List<InlineSpan>? subtitleSpans;
   final VoidCallback onBack;
 
   const StepHeader({
@@ -19,6 +25,7 @@ class StepHeader extends StatelessWidget {
     required this.total,
     required this.title,
     this.subtitle,
+    this.subtitleSpans,
     required this.onBack,
   });
 
@@ -36,7 +43,7 @@ class StepHeader extends StatelessWidget {
                 duration: AppTheme.dur3,
                 curve: AppTheme.easeSoft,
                 height: 3,
-                margin: EdgeInsets.only(right: i < total - 1 ? 6 : 0),
+                margin: EdgeInsetsDirectional.only(end: i < total - 1 ? 6 : 0),
                 decoration: BoxDecoration(
                   color: i < step ? AppColors.plum700 : AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
@@ -46,7 +53,7 @@ class StepHeader extends StatelessWidget {
           }),
         ),
         const SizedBox(height: 16),
-        EyebrowLabel('Step $step of $total'),
+        EyebrowLabel(AppLocalizations.of(context).authStepOf(step, total)),
         const SizedBox(height: 6),
         Text(
           title,
@@ -56,10 +63,10 @@ class StepHeader extends StatelessWidget {
             letterSpacing: -0.02 * 28,
           ),
         ),
-        if (subtitle != null) ...[
+        if (subtitle != null || subtitleSpans != null) ...[
           const SizedBox(height: 8),
-          Text(
-            subtitle!,
+          Text.rich(
+            TextSpan(text: subtitle, children: subtitleSpans),
             style: AppTextStyles.bodySm.copyWith(
               fontSize: 13.5,
               color: AppColors.ink2,
@@ -77,11 +84,15 @@ class AuthStepScaffold extends StatelessWidget {
   final Widget bottom;
   final bool stickyBar;
 
+  /// Gap below the status bar (auth gate uses 23, customer-extras-2.jsx:29).
+  final double topGap;
+
   const AuthStepScaffold({
     super.key,
     required this.children,
     required this.bottom,
     this.stickyBar = false,
+    this.topGap = 18,
   });
 
   @override
@@ -93,7 +104,7 @@ class AuthStepScaffold extends StatelessWidget {
         children: [
           Expanded(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(24, insets.top + 18, 24, 16),
+              padding: EdgeInsets.fromLTRB(24, insets.top + topGap, 24, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: children,
@@ -106,7 +117,13 @@ class AuthStepScaffold extends StatelessWidget {
                 color: AppColors.paper,
                 border: Border(top: BorderSide(color: AppColors.divider)),
               ),
-              padding: EdgeInsets.fromLTRB(22, 14, 22, 14 + insets.bottom),
+              // auth-screens.jsx:613 bottom 32 already includes the home indicator.
+              padding: EdgeInsets.fromLTRB(
+                22,
+                14,
+                22,
+                math.max(32, 14 + insets.bottom),
+              ),
               child: bottom,
             )
           else
@@ -125,10 +142,14 @@ class IdentifierModeToggle extends StatelessWidget {
   final String mode;
   final ValueChanged<String> onChanged;
 
+  /// The forgot-password toggle has no shadow on the active pill.
+  final bool shadow;
+
   const IdentifierModeToggle({
     super.key,
     required this.mode,
     required this.onChanged,
+    this.shadow = true,
   });
 
   @override
@@ -140,10 +161,11 @@ class IdentifierModeToggle extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppTheme.radiusPill),
       ),
       child: Row(
+        spacing: 4,
         children: ['phone', 'email'].map((m) {
           final active = mode == m;
           return Expanded(
-            child: GestureDetector(
+            child: PressScale(
               onTap: () => onChanged(m),
               child: AnimatedContainer(
                 duration: AppTheme.dur2,
@@ -152,7 +174,7 @@ class IdentifierModeToggle extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: active ? AppColors.paper : Colors.transparent,
                   borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-                  boxShadow: active
+                  boxShadow: active && shadow
                       ? [
                           BoxShadow(
                             color: AppColors.plum700.withOpacity(0.08),
@@ -164,7 +186,9 @@ class IdentifierModeToggle extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  m == 'phone' ? 'Phone' : 'Email',
+                  m == 'phone'
+                      ? AppLocalizations.of(context).authModePhone
+                      : AppLocalizations.of(context).authModeEmail,
                   style: AppTextStyles.label.copyWith(
                     color: active ? AppColors.plum900 : AppColors.ink3,
                   ),
@@ -193,52 +217,56 @@ class EgyptPhoneField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: AppColors.paper,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.divider, width: 1.5),
-          ),
-          child: Text(
-            '🇪🇬 +20',
-            style: AppTextStyles.body.copyWith(
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink,
-              height: 1.3,
+    // Phone numbers read left-to-right in Arabic too.
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.paper,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.divider, width: 1.5),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextField(
-            controller: controller,
-            keyboardType: TextInputType.phone,
-            autofocus: autoFocus,
-            onChanged: onChanged,
-            cursorColor: AppColors.plum700,
-            style: AppTextStyles.body.copyWith(
-              color: AppColors.ink,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-            decoration: InputDecoration(
-              hintText: '100 555 8821',
-              hintStyle: AppTextStyles.body.copyWith(color: AppColors.ink4),
-              filled: true,
-              fillColor: AppColors.paper,
-              border: AppTheme.inputBorder(AppColors.divider),
-              enabledBorder: AppTheme.inputBorder(AppColors.divider),
-              focusedBorder: AppTheme.inputBorder(AppColors.plum700),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 13,
+            child: Text(
+              '🇪🇬 +20',
+              style: AppTextStyles.body.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppColors.ink,
+                height: 1.3,
               ),
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              autofocus: autoFocus,
+              onChanged: onChanged,
+              cursorColor: AppColors.plum700,
+              style: AppTextStyles.body.copyWith(
+                color: AppColors.ink,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+              decoration: InputDecoration(
+                hintText: '100 555 8821',
+                hintStyle: AppTextStyles.body.copyWith(color: AppColors.ink4),
+                filled: true,
+                fillColor: AppColors.paper,
+                border: AppTheme.inputBorder(AppColors.divider),
+                enabledBorder: AppTheme.inputBorder(AppColors.divider),
+                focusedBorder: AppTheme.inputBorder(AppColors.plum700),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 13,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

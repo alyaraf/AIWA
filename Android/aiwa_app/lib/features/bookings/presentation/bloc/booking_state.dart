@@ -33,12 +33,11 @@ class BookingListLoaded extends BookingState {
     List<BookingEntity>? bookings,
     bool? hasMore,
     String? filterStatus,
-  }) =>
-      BookingListLoaded(
-        bookings: bookings ?? this.bookings,
-        hasMore: hasMore ?? this.hasMore,
-        filterStatus: filterStatus ?? this.filterStatus,
-      );
+  }) => BookingListLoaded(
+    bookings: bookings ?? this.bookings,
+    hasMore: hasMore ?? this.hasMore,
+    filterStatus: filterStatus ?? this.filterStatus,
+  );
 
   @override
   List<Object?> get props => [bookings, hasMore, filterStatus];
@@ -60,7 +59,10 @@ class BookingRescheduled extends BookingState {
 
 class BookingError extends BookingState {
   final String message;
-  const BookingError(this.message);
+
+  /// Create failed because the slot was just taken (BOOK-13).
+  final bool slotTaken;
+  const BookingError(this.message, {this.slotTaken = false});
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, slotTaken];
 }

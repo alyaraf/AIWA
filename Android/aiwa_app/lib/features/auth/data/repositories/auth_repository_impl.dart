@@ -6,6 +6,12 @@ import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
 
+/// /auth/send-otp and /auth/reset-password take a phone only.
+// ponytail: remove once the backend can send codes by email.
+const emailOtpUnsupported = ServerFailure(
+  "Email codes aren't supported yet. Use your phone number instead.",
+);
+
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource _remote;
   final SecureStorage _storage;
@@ -18,8 +24,10 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
   }) async {
     try {
-      final tokens =
-          await _remote.login(identifier: identifier, password: password);
+      final tokens = await _remote.login(
+        identifier: identifier,
+        password: password,
+      );
       await _storage.saveAccessToken(tokens['accessToken']!);
       await _storage.saveRefreshToken(tokens['refreshToken']!);
       await _storage.saveUserRole(tokens['role']!);
@@ -30,7 +38,12 @@ class AuthRepositoryImpl implements AuthRepository {
     } on NetworkException catch (e) {
       return Left(NetworkFailure(e.message));
     } on UnauthorizedException {
-      return const Left(UnauthorizedFailure());
+      return const Left(
+        ServerFailure(
+          "That phone/email and password don't match.",
+          statusCode: 401,
+        ),
+      );
     }
   }
 
@@ -43,6 +56,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String role,
     String? gender,
     String? profileImageUrl,
+    String? preferredLanguage,
   }) async {
     try {
       final tokens = await _remote.register(
@@ -53,6 +67,7 @@ class AuthRepositoryImpl implements AuthRepository {
         role: role,
         gender: gender,
         profileImageUrl: profileImageUrl,
+        preferredLanguage: preferredLanguage,
       );
       await _storage.saveAccessToken(tokens['accessToken']!);
       await _storage.saveRefreshToken(tokens['refreshToken']!);
@@ -68,6 +83,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<Either<Failure, void>> sendOtp({required String phone}) async {
+    if (phone.contains('@')) return const Left(emailOtpUnsupported);
     try {
       await _remote.sendOtp(phone: phone);
       return const Right(null);
@@ -128,12 +144,116 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Either<Failure, void>> updateLanguage({required String language}) async {
+  Future<Either<Failure, void>> updateLanguage({
+    required String language,
+  }) async {
     try {
       await _remote.updateLanguage(language: language);
       return const Right(null);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> resetPassword({
+    required String identifier,
+    required String code,
+    required String newPassword,
+  }) async {
+    if (identifier.contains('@')) return const Left(emailOtpUnsupported);
+    try {
+      await _remote.resetPassword(
+        phone: identifier,
+        code: code,
+        newPassword: newPassword,
+      );
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> uploadAvatar(String path) async {
+    try {
+      await _remote.uploadAvatar(path);
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> createProviderProfile(
+    Map<String, dynamic> profile, {
+    List<String> staff = const [],
+  }) async {
+    try {
+      await _remote.createProviderProfile(profile);
+      for (final name in staff) {
+        await _remote.addStaff(name);
+      }
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> uploadVerificationDocuments({
+    required String idFront,
+    required String idBack,
+    required String selfie,
+  }) async {
+    try {
+      await _remote.uploadVerificationDocuments(
+        idFront: idFront,
+        idBack: idBack,
+        selfie: selfie,
+      );
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, ({String version, String content})>> latestTerms(
+    String type,
+  ) => _guard(() async {
+    final t = await _remote.latestTerms(type);
+    return (
+      version: t['version'] as String,
+      content: t['contentEn'] as String? ?? '',
+    );
+  });
+
+  @override
+  Future<Either<Failure, void>> acceptTerms(String version) =>
+      _guard(() => _remote.acceptTerms(version));
+
+  @override
+  Future<Either<Failure, void>> updatePreferences({
+    required double minKm,
+    required double maxKm,
+  }) => _guard(() => _remote.updatePreferences(minKm: minKm, maxKm: maxKm));
+
+  static Future<Either<Failure, T>> _guard<T>(Future<T> Function() call) async {
+    try {
+      return Right(await call());
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
     } on NetworkException catch (e) {
       return Left(NetworkFailure(e.message));
     }

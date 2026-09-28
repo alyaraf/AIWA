@@ -7,7 +7,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
+import '../../../../shared/widgets/press_scale.dart';
 import '../widgets/step_header.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class RoleChoicePage extends StatefulWidget {
   const RoleChoicePage({super.key});
@@ -19,28 +21,20 @@ class RoleChoicePage extends StatefulWidget {
 class _RoleChoicePageState extends State<RoleChoicePage> {
   String? _selectedRole;
 
-  static const _roles = [
+  List<_RoleOption> _roles(AppLocalizations l) => [
     _RoleOption(
       id: 'CUSTOMER',
       icon: Icons.auto_awesome_outlined,
-      title: "I'm here to book",
-      subtitle: 'Find a barber, hairdresser, nail artist, or spa near you.',
-      perks: [
-        'Browse verified providers',
-        'Cash on visit',
-        'Track your booking live',
-      ],
+      title: l.authRoleCustomerTitle,
+      subtitle: l.authRoleCustomerSub,
+      perks: [l.authRolePerkBrowse, l.authRolePerkCash, l.authRolePerkTrack],
     ),
     _RoleOption(
       id: 'PROVIDER',
       icon: Icons.work_outline_rounded,
-      title: "I'm offering services",
-      subtitle: 'Get bookings from customers in your area.',
-      perks: [
-        'ID verification required',
-        'Manage your services & hours',
-        'Cash payouts',
-      ],
+      title: l.authRoleProviderTitle,
+      subtitle: l.authRoleProviderSub,
+      perks: [l.authRolePerkId, l.authRolePerkManage, l.authRolePerkPayouts],
     ),
   ];
 
@@ -56,7 +50,7 @@ class _RoleChoicePageState extends State<RoleChoicePage> {
   Widget build(BuildContext context) {
     return AuthStepScaffold(
       bottom: AiwaButton(
-        label: 'Continue',
+        label: AppLocalizations.of(context).commonContinue,
         fullWidth: true,
         size: AiwaButtonSize.lg,
         onPressed: _selectedRole != null
@@ -66,19 +60,19 @@ class _RoleChoicePageState extends State<RoleChoicePage> {
       children: [
         AiwaIconButton(icon: Icons.arrow_back_rounded, onTap: _back),
         const SizedBox(height: 22),
-        const EyebrowLabel('Welcome to AIWA'),
+        EyebrowLabel(AppLocalizations.of(context).authWelcomeToAiwa),
         const SizedBox(height: 6),
         Text(
-          'How will you\nbe using AIWA?',
+          AppLocalizations.of(context).authHowUsing,
           style: AppTextStyles.h1.copyWith(fontSize: 30, height: 1.05),
         ),
         const SizedBox(height: 8),
         Text(
-          'You can change this later from your profile.',
+          AppLocalizations.of(context).authChangeLater,
           style: AppTextStyles.bodySm.copyWith(color: AppColors.ink2),
         ),
         const SizedBox(height: 22),
-        ..._roles.map(
+        ..._roles(AppLocalizations.of(context)).map(
           (role) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _RoleCard(
@@ -107,7 +101,7 @@ class _RoleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sub = active ? AppColors.rose300 : AppColors.ink3;
-    return GestureDetector(
+    return PressScale(
       onTap: onTap,
       child: AnimatedContainer(
         duration: AppTheme.dur2,
@@ -167,7 +161,7 @@ class _RoleCard extends StatelessWidget {
                 ),
                 if (active)
                   Icon(
-                    Icons.check_circle_rounded,
+                    Icons.check_circle_outline_rounded,
                     size: 20,
                     color: AppColors.bone,
                   ),
@@ -175,7 +169,7 @@ class _RoleCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Padding(
-              padding: const EdgeInsets.only(left: 54),
+              padding: const EdgeInsetsDirectional.only(start: 54),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: role.perks

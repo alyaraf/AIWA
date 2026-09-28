@@ -1,3 +1,4 @@
+// ponytail: stale pre-fix copy of config/SecurityConfig (still has /auth/** wildcard), ships as a resource, delete this file
 package com.aiwa.config;
 
 import com.aiwa.security.JwtAuthFilter;

@@ -29,13 +29,12 @@ class HomeLoaded extends HomeState {
     List<ProviderSummaryEntity>? trending,
     bool? hasMore,
     String? selectedCategory,
-  }) =>
-      HomeLoaded(
-        providers: providers ?? this.providers,
-        trending: trending ?? this.trending,
-        hasMore: hasMore ?? this.hasMore,
-        selectedCategory: selectedCategory ?? this.selectedCategory,
-      );
+  }) => HomeLoaded(
+    providers: providers ?? this.providers,
+    trending: trending ?? this.trending,
+    hasMore: hasMore ?? this.hasMore,
+    selectedCategory: selectedCategory ?? this.selectedCategory,
+  );
 
   @override
   List<Object?> get props => [providers, trending, hasMore, selectedCategory];

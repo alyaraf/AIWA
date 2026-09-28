@@ -14,6 +14,7 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../providers/domain/usecases/save_provider_usecase.dart';
 import '../../domain/entities/provider_summary_entity.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// 200px carousel card — home "Trending near you".
 class ProviderCard extends StatelessWidget {
@@ -48,9 +49,9 @@ class ProviderCard extends StatelessWidget {
                     initial: provider.businessName,
                   ),
                   if (provider.isVerified)
-                    Positioned(
+                    PositionedDirectional(
                       top: 8,
-                      left: 8,
+                      start: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 7,
@@ -70,7 +71,7 @@ class ProviderCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 3),
                             Text(
-                              'Verified',
+                              AppLocalizations.of(context).providerVerified,
                               style: AppTextStyles.labelSm.copyWith(
                                 fontSize: 10,
                                 color: AppColors.gold700,
@@ -80,10 +81,13 @@ class ProviderCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  Positioned(
-                    right: 8,
+                  PositionedDirectional(
+                    end: 8,
                     bottom: 8,
-                    child: SaveHeartButton(providerId: provider.id.toString()),
+                    child: SaveHeartButton(
+                      providerId: provider.id.toString(),
+                      initiallySaved: provider.saved,
+                    ),
                   ),
                 ],
               ),
@@ -93,7 +97,12 @@ class ProviderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  EyebrowLabel(provider.categoryLabel, fontSize: 10),
+                  EyebrowLabel(
+                    AppLocalizations.of(
+                      context,
+                    ).category(provider.primaryCategory),
+                    fontSize: 10,
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     provider.businessName,
@@ -104,7 +113,9 @@ class ProviderCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   RatingMeta(
                     rating: provider.averageRating,
-                    distance: provider.distanceText,
+                    distance: AppLocalizations.of(
+                      context,
+                    ).distance(provider.distanceKm),
                   ),
                 ],
               ),
@@ -180,12 +191,16 @@ class CoverImage extends StatelessWidget {
   /// Large profile cover: steeper gradient plus a second, gold glow.
   final bool hero;
 
+  /// Two-stop override for the non-hero gradient (Saved: plum500 -> plum900).
+  final List<Color>? colors;
+
   const CoverImage({
     super.key,
     this.url,
     required this.initial,
     this.showInitial = false,
     this.hero = false,
+    this.colors,
   });
 
   @override
@@ -195,8 +210,14 @@ class CoverImage extends StatelessWidget {
         gradient: LinearGradient(
           begin: hero ? const Alignment(-0.35, -1) : Alignment.topLeft,
           end: hero ? const Alignment(0.35, 1) : Alignment.bottomRight,
-          colors: [AppColors.plum500, AppColors.plum700, AppColors.plum900],
-          stops: hero ? const [0, 0.5, 1] : const [0, 0.6, 1],
+          colors:
+              colors ??
+              [AppColors.plum500, AppColors.plum700, AppColors.plum900],
+          stops: colors != null
+              ? null
+              : hero
+              ? const [0, 0.5, 1]
+              : const [0, 0.6, 1],
         ),
       ),
       child: Stack(
@@ -235,6 +256,7 @@ class CoverImage extends StatelessWidget {
                   fontSize: 48,
                   color: AppColors.bone.withOpacity(0.9),
                   height: 1,
+                  letterSpacing: 0,
                 ),
               ),
             ),
@@ -258,12 +280,20 @@ class RatingMeta extends StatelessWidget {
   final String distance;
   final bool openNow;
 
+  /// Home says 'Open now' (the default), Discover says 'Open'.
+  final String? openLabel;
+
+  /// Space on each side of the separator dots (Home trending 6, rows 8).
+  final double gap;
+
   const RatingMeta({
     super.key,
     this.rating,
     this.reviews,
     this.distance = '',
     this.openNow = false,
+    this.openLabel,
+    this.gap = 6,
   });
 
   @override
@@ -279,8 +309,8 @@ class RatingMeta extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.star_rounded, size: 12, color: AppColors.gold500),
-            const SizedBox(width: 2),
+            Icon(Icons.star_rounded, size: 11, color: AppColors.gold500),
+            const SizedBox(width: 3),
             Text(
               reviews != null
                   ? '${rating!.toStringAsFixed(1)} ($reviews)'
@@ -292,18 +322,21 @@ class RatingMeta extends StatelessWidget {
       );
     } else {
       parts.add(
-        Text('New', style: style.copyWith(fontWeight: FontWeight.w600)),
+        Text(
+          AppLocalizations.of(context).providerNew,
+          style: style.copyWith(fontWeight: FontWeight.w600),
+        ),
       );
     }
     if (distance.isNotEmpty) {
-      parts.add(const MetaDot());
+      parts.add(MetaDot(gap: gap));
       parts.add(Text(distance, style: style));
     }
     if (openNow) {
-      parts.add(const MetaDot());
+      parts.add(MetaDot(gap: gap));
       parts.add(
         Text(
-          'Open now',
+          openLabel ?? AppLocalizations.of(context).homeOpenNow,
           style: style.copyWith(
             color: AppColors.success700,
             fontWeight: FontWeight.w600,

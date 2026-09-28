@@ -1,9 +1,12 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
 import 'aiwa_icon_button.dart';
 import 'eyebrow_label.dart';
+import 'press_scale.dart';
 
 /// Standard mobile screen chrome from the design kit:
 /// [ScreenHeader], [PageTitle], [StickyBar], [SettingsRow], [InlineBanner],
@@ -12,6 +15,7 @@ import 'eyebrow_label.dart';
 /// Back button + eyebrow + serif title — `ScreenHeader` in the kit.
 class ScreenHeader extends StatelessWidget {
   final String? eyebrow;
+  final Color? eyebrowColor;
   final String title;
   final VoidCallback? onBack;
   final Widget? trailing;
@@ -19,15 +23,18 @@ class ScreenHeader extends StatelessWidget {
   /// Small accent text after the title, e.g. "· 3 new".
   final String? titleSuffix;
   final double titleSize;
+  final double titleHeight;
 
   const ScreenHeader({
     super.key,
     this.eyebrow,
+    this.eyebrowColor,
     required this.title,
     this.onBack,
     this.trailing,
     this.titleSuffix,
     this.titleSize = 22,
+    this.titleHeight = 1.1,
   });
 
   @override
@@ -50,14 +57,16 @@ class ScreenHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (eyebrow != null) EyebrowLabel(eyebrow!),
+                if (eyebrow != null)
+                  EyebrowLabel(eyebrow!, color: eyebrowColor),
                 const SizedBox(height: 2),
                 Text.rich(
                   TextSpan(
                     text: title,
                     style: AppTextStyles.h3.copyWith(
                       fontSize: titleSize,
-                      height: 1.1,
+                      height: titleHeight,
+                      letterSpacing: 0,
                     ),
                     children: [
                       if (titleSuffix != null)
@@ -74,7 +83,7 @@ class ScreenHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing != null) trailing!,
+          if (trailing != null) ...[const SizedBox(width: 12), trailing!],
         ],
       ),
     );
@@ -88,12 +97,16 @@ class PageTitle extends StatelessWidget {
   final Widget? trailing;
   final double bottom;
 
+  /// Null keeps h1's tracking; some kit titles use none (BOOK-C4).
+  final double? letterSpacing;
+
   const PageTitle({
     super.key,
     required this.eyebrow,
     required this.title,
     this.trailing,
     this.bottom = 10,
+    this.letterSpacing,
   });
 
   @override
@@ -116,7 +129,11 @@ class PageTitle extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   title,
-                  style: AppTextStyles.h1.copyWith(fontSize: 28, height: 1.05),
+                  style: AppTextStyles.h1.copyWith(
+                    fontSize: 28,
+                    height: 1.05,
+                    letterSpacing: letterSpacing,
+                  ),
                 ),
               ],
             ),
@@ -144,7 +161,8 @@ class StickyBar extends StatelessWidget {
         AppTheme.gutter,
         14,
         AppTheme.gutter,
-        14 + MediaQuery.paddingOf(context).bottom,
+        // states.jsx:431 bottom 32 already includes the home indicator.
+        math.max(32, 14 + MediaQuery.paddingOf(context).bottom),
       ),
       child: child,
     );
@@ -162,6 +180,12 @@ class SettingsRow extends StatelessWidget {
   final bool boxed;
   final bool showDivider;
 
+  /// Replaces the chevron, e.g. an expand arrow or a toggle.
+  final Widget? right;
+
+  /// Gold icon tile — the kit's `tone="gold"`.
+  final bool gold;
+
   const SettingsRow({
     super.key,
     required this.icon,
@@ -172,26 +196,29 @@ class SettingsRow extends StatelessWidget {
     this.danger = false,
     this.boxed = false,
     this.showDivider = true,
+    this.right,
+    this.gold = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final (tileBg, tileFg) = danger
+        ? (AppColors.danger100, AppColors.danger700)
+        : gold
+        ? (AppColors.gold100, AppColors.gold700)
+        : (AppColors.plum100, AppColors.plum700);
     final row = Row(
       children: [
         Container(
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: danger ? AppColors.danger100 : AppColors.plum100,
-            borderRadius: BorderRadius.circular(10),
+            color: tileBg,
+            borderRadius: BorderRadius.circular(boxed ? 11 : 10),
           ),
-          child: Icon(
-            icon,
-            size: 17,
-            color: danger ? AppColors.danger700 : AppColors.plum700,
-          ),
+          child: Icon(icon, size: 17, color: tileFg),
         ),
-        const SizedBox(width: 14),
+        SizedBox(width: boxed ? 13 : 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,7 +226,8 @@ class SettingsRow extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.body.copyWith(
-                  fontWeight: FontWeight.w500,
+                  fontSize: boxed ? 14 : null,
+                  fontWeight: boxed ? FontWeight.w600 : FontWeight.w500,
                   color: danger ? AppColors.danger700 : AppColors.ink,
                   height: 1.3,
                 ),
@@ -217,12 +245,24 @@ class SettingsRow extends StatelessWidget {
         ),
         if (value != null)
           Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: Text(value!, style: AppTextStyles.meta),
+            padding: EdgeInsetsDirectional.only(start: boxed ? 13 : 14),
+            child: Text(
+              value!,
+              style: boxed
+                  ? AppTextStyles.meta.copyWith(fontSize: 12.5)
+                  : AppTextStyles.meta,
+            ),
           ),
-        if (!danger && onTap != null) ...[
-          const SizedBox(width: 6),
-          Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.ink3),
+        if (right != null) ...[
+          SizedBox(width: boxed ? 13 : 14),
+          right!,
+        ] else if (onTap != null && (boxed || !danger)) ...[
+          SizedBox(width: boxed ? 13 : 14),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: boxed ? 17 : 16,
+            color: boxed ? AppColors.ink4 : AppColors.ink3,
+          ),
         ],
       ],
     );
@@ -268,6 +308,9 @@ class InlineBanner extends StatelessWidget {
   final String? action;
   final VoidCallback? onAction;
 
+  /// Sign-in error box (auth-screens.jsx:942): tighter padding, radius 10.
+  final bool compact;
+
   const InlineBanner({
     super.key,
     this.tone = BannerTone.info,
@@ -276,6 +319,7 @@ class InlineBanner extends StatelessWidget {
     this.body,
     this.action,
     this.onAction,
+    this.compact = false,
   });
 
   @override
@@ -315,60 +359,72 @@ class InlineBanner extends StatelessWidget {
         break;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      padding: compact
+          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+          : const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(compact ? 10 : 14),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Icon(icon ?? defaultIcon, size: 16, color: fg),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (title != null)
-                  Text(
-                    title!,
-                    style: AppTextStyles.label.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                    ),
-                  ),
-                if (title != null && body != null) const SizedBox(height: 2),
-                if (body != null)
-                  Text(
-                    body!,
-                    style: AppTextStyles.micro.copyWith(
-                      fontSize: 12.5,
-                      color: fg,
-                      height: 1.5,
-                    ),
-                  ),
-              ],
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(
+                icon ?? defaultIcon,
+                size: compact ? 14 : 16,
+                color: fg,
+              ),
             ),
-          ),
-          if (action != null)
-            GestureDetector(
-              onTap: onAction,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(
-                  action!,
-                  style: AppTextStyles.labelSm.copyWith(
-                    color: fg,
-                    fontWeight: FontWeight.w700,
+            SizedBox(width: compact ? 8 : 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (title != null)
+                    Text(
+                      title!,
+                      style: AppTextStyles.label.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                  if (title != null && body != null) const SizedBox(height: 2),
+                  if (body != null)
+                    Text(
+                      body!,
+                      style: AppTextStyles.micro.copyWith(
+                        fontSize: 12.5,
+                        color: fg.withValues(alpha: .92),
+                        height: 1.5,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (action != null)
+              // alignSelf: center (states.jsx:165).
+              Align(
+                child: PressScale(
+                  onTap: onAction,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 10),
+                    child: Text(
+                      action!,
+                      style: AppTextStyles.labelSm.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -376,8 +432,8 @@ class InlineBanner extends StatelessWidget {
 
 /// "That's everything" divider at the end of a list — `EndOfList`.
 class EndOfList extends StatelessWidget {
-  final String label;
-  const EndOfList({super.key, this.label = "That's everything"});
+  final String? label;
+  const EndOfList({super.key, this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -389,7 +445,7 @@ class EndOfList extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(
-              label,
+              label ?? AppLocalizations.of(context).endOfList,
               style: AppTextStyles.micro.copyWith(
                 fontSize: 11.5,
                 color: AppColors.ink4,
@@ -403,17 +459,110 @@ class EndOfList extends StatelessWidget {
   }
 }
 
+/// Page picker with a 3-page window — `Pagination` in states.jsx.
+class AiwaPagination extends StatelessWidget {
+  final int page;
+  final int totalPages;
+  final ValueChanged<int> onPage;
+  final bool compact;
+
+  const AiwaPagination({
+    super.key,
+    required this.page,
+    required this.totalPages,
+    required this.onPage,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (totalPages <= 1) return const SizedBox.shrink();
+    final from = (page - 1).clamp(1, (totalPages - 2).clamp(1, totalPages));
+    final to = (from + 2).clamp(1, totalPages);
+
+    Widget box({
+      required Widget child,
+      required bool selected,
+      VoidCallback? onTap,
+    }) => Semantics(
+      button: true,
+      enabled: onTap != null,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Opacity(
+          opacity: onTap == null && !selected ? .5 : 1,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 32),
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 9),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.plum700 : AppColors.paper,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? Colors.transparent : AppColors.divider,
+              ),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+
+    Widget chevron(IconData icon, int target, bool enabled) => box(
+      selected: false,
+      onTap: enabled ? () => onPage(target) : null,
+      child: Icon(
+        icon,
+        size: 15,
+        color: enabled ? AppColors.plum700 : AppColors.ink4,
+      ),
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(top: compact ? 14 : 18, bottom: compact ? 4 : 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        spacing: 6,
+        children: [
+          chevron(Icons.chevron_left_rounded, page - 1, page > 1),
+          for (var n = from; n <= to; n++)
+            box(
+              selected: n == page,
+              onTap: () => onPage(n),
+              child: Text(
+                '$n',
+                style: AppTextStyles.label.copyWith(
+                  color: n == page ? AppColors.paper : AppColors.ink2,
+                ),
+              ),
+            ),
+          if (totalPages > from + 2)
+            Text(
+              '…',
+              style: AppTextStyles.meta.copyWith(color: AppColors.ink4),
+            ),
+          chevron(Icons.chevron_right_rounded, page + 1, page < totalPages),
+        ],
+      ),
+    );
+  }
+}
+
 /// 3px separator dot used between meta items (rating · distance · open).
 class MetaDot extends StatelessWidget {
   final Color? color;
-  const MetaDot({super.key, this.color});
+
+  /// Horizontal margin on each side of the dot.
+  final double gap;
+  const MetaDot({super.key, this.color, this.gap = 6});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 3,
       height: 3,
-      margin: const EdgeInsets.symmetric(horizontal: 6),
+      margin: EdgeInsets.symmetric(horizontal: gap),
       decoration: BoxDecoration(
         color: color ?? AppColors.ink3,
         shape: BoxShape.circle,
@@ -462,29 +611,40 @@ class AiwaWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          'AIWA',
-          style: AppTextStyles.display.copyWith(
-            fontSize: size,
-            height: 1,
-            letterSpacing: -0.02 * size,
-            color: color ?? AppColors.plum900,
+    // Laid out like the 320x100 SVG (prototype.jsx:5-12), [size] = height.
+    return SizedBox(
+      width: size * 3.2,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            child: Text(
+              'AIWA',
+              style: AppTextStyles.display.copyWith(
+                fontSize: size * 0.84,
+                height: 1,
+                letterSpacing: -2 * size / 100,
+                color: color ?? AppColors.plum900,
+              ),
+            ),
           ),
-        ),
-        Container(
-          width: size * 0.14,
-          height: size * 0.14,
-          margin: EdgeInsets.only(left: size * 0.08, bottom: size * 0.1),
-          decoration: BoxDecoration(
-            color: dotColor ?? AppColors.rose500,
-            shape: BoxShape.circle,
+          Positioned(
+            left: size * 3.01,
+            top: size * 0.62,
+            child: Container(
+              width: size * 0.12,
+              height: size * 0.12,
+              decoration: BoxDecoration(
+                color: dotColor ?? AppColors.rose500,
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

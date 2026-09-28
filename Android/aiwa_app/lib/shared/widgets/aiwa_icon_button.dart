@@ -1,5 +1,7 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import 'press_scale.dart';
 
 enum AiwaIconButtonVariant { paper, plum, rose, glass }
 
@@ -58,44 +60,54 @@ class AiwaIconButton extends StatelessWidget {
           ]
         : null;
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: bg,
-          border: border,
-          boxShadow: shadow,
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            Icon(
-              icon,
-              size: (size * 0.45).roundToDouble(),
-              color: iconColor ?? fg,
-            ),
-            if (dot)
-              Positioned(
-                top: size * 0.15,
-                right: size * 0.18,
-                child: Container(
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: AppColors.rose500,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.paper, width: 2),
-                  ),
+    Widget button = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: bg,
+        border: border,
+        boxShadow: shadow,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Icon(
+            icon,
+            size: (size * 0.45).roundToDouble(),
+            color: iconColor ?? fg,
+          ),
+          if (dot)
+            PositionedDirectional(
+              top: size * 0.15,
+              end: size * 0.18,
+              child: Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: AppColors.rose500,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.paper, width: 2),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
+    );
+    if (variant == AiwaIconButtonVariant.glass) {
+      // backdropFilter: blur(8px) (components.jsx:80).
+      button = ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: button,
+        ),
+      );
+    }
+    return PressScale(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: button,
     );
   }
 }

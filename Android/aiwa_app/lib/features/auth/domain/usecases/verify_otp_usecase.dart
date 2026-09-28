@@ -9,6 +9,5 @@ class VerifyOtpUseCase {
   Future<Either<Failure, void>> call({
     required String phone,
     required String code,
-  }) =>
-      _repository.verifyOtp(phone: phone, code: code);
+  }) => _repository.verifyOtp(phone: phone, code: code);
 }

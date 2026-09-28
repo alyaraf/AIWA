@@ -16,14 +16,13 @@ class GetNearbyProvidersUseCase {
     String sort = 'distance',
     int page = 0,
     int size = 20,
-  }) =>
-      _repository.getNearbyProviders(
-        lat: lat,
-        lng: lng,
-        radiusKm: radiusKm,
-        category: category,
-        sort: sort,
-        page: page,
-        size: size,
-      );
+  }) => _repository.getNearbyProviders(
+    lat: lat,
+    lng: lng,
+    radiusKm: radiusKm,
+    category: category,
+    sort: sort,
+    page: page,
+    size: size,
+  );
 }

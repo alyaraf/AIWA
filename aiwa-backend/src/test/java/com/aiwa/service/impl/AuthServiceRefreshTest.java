@@ -32,7 +32,7 @@ class AuthServiceRefreshTest {
     private final TotpService totpService = mock(TotpService.class);
 
     private final AuthServiceImpl service =
-            new AuthServiceImpl(userRepo, encoder, authManager, jwtUtils, otpService, blacklist, totpService);
+            new AuthServiceImpl(userRepo, mock(com.aiwa.repository.ProviderProfileRepository.class), encoder, authManager, jwtUtils, otpService, blacklist, totpService);
 
     private void primeToken(String identifier) {
         when(blacklist.isBlacklisted("refresh")).thenReturn(false);

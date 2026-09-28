@@ -14,6 +14,7 @@ class ReviewRepositoryImpl implements ReviewRepository {
     required double rating,
     String? comment,
     List<String> tags = const [],
+    String? direction,
   }) async {
     try {
       await _remote.submitReview(
@@ -21,6 +22,7 @@ class ReviewRepositoryImpl implements ReviewRepository {
         rating: rating,
         comment: comment,
         tags: tags,
+        direction: direction,
       );
       return const Right(null);
     } on ServerException catch (e) {

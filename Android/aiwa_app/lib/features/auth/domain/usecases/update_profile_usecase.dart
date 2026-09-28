@@ -11,10 +11,9 @@ class UpdateProfileUseCase {
     String? fullName,
     String? email,
     String? profileImageUrl,
-  }) =>
-      _repository.updateProfile(
-        fullName: fullName,
-        email: email,
-        profileImageUrl: profileImageUrl,
-      );
+  }) => _repository.updateProfile(
+    fullName: fullName,
+    email: email,
+    profileImageUrl: profileImageUrl,
+  );
 }

@@ -29,6 +29,8 @@ class AppTheme {
 
   /// "Soft door" easing from the design tokens.
   static const Curve easeSoft = Cubic(.32, .72, 0, 1);
+  static const Curve easeBounce = Cubic(.34, 1.56, .64, 1);
+  static const Duration dur1 = Duration(milliseconds: 120);
   static const Duration dur2 = Duration(milliseconds: 200);
   static const Duration dur3 = Duration(milliseconds: 320);
 
@@ -43,7 +45,7 @@ class AppTheme {
     borderRadius: const BorderRadius.vertical(top: Radius.circular(radiusXl)),
     boxShadow: [
       BoxShadow(
-        color: AppColors.plum700.withOpacity(0.14),
+        color: AppColors.plum900.withOpacity(0.20),
         blurRadius: 32,
         offset: const Offset(0, -12),
       ),
@@ -85,21 +87,31 @@ class AppTheme {
 
   static List<BoxShadow> get shadow3 => [
     BoxShadow(
-      color: AppColors.plum700.withOpacity(0.18),
+      color: AppColors.plum700.withOpacity(0.14),
       blurRadius: 32,
       offset: const Offset(0, 12),
+    ),
+    BoxShadow(
+      color: AppColors.ink.withOpacity(0.06),
+      blurRadius: 10,
+      offset: const Offset(0, 4),
     ),
   ];
 
   static OutlineInputBorder inputBorder(Color color) => OutlineInputBorder(
     borderRadius: BorderRadius.circular(14),
     borderSide: BorderSide(color: color, width: 1.5),
+    // No floating labels; the default 4px gap pushes text past the 14px pad.
+    gapPadding: 0,
   );
 
   static ThemeData get light {
     final base = ThemeData.light(useMaterial3: true);
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.bone,
+      // No ripple anywhere in the kit; rows tint to hover (states.jsx:16).
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: AppColors.hover,
       canvasColor: AppColors.bone,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.plum700,
@@ -210,8 +222,11 @@ class AppTheme {
         thumbColor: AppColors.plum700,
         overlayColor: AppColors.plum700.withOpacity(0.12),
       ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: AppColors.plum700,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: SoftDoorTransitionsBuilder(),
+          TargetPlatform.iOS: SoftDoorTransitionsBuilder(),
+        },
       ),
       dividerTheme: DividerThemeData(
         color: AppColors.divider,
@@ -226,6 +241,48 @@ class AppTheme {
           side: BorderSide(color: AppColors.divider, width: 1),
         ),
         margin: EdgeInsets.zero,
+      ),
+    );
+  }
+}
+
+/// Push = slide in from 8% (aiwa-slide-in); the page underneath eases to
+/// .98 and back up on pop (aiwa-fade-in). 320ms soft door both ways.
+class SoftDoorTransitionsBuilder extends PageTransitionsBuilder {
+  const SoftDoorTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => AppTheme.dur3;
+
+  @override
+  Duration get reverseTransitionDuration => AppTheme.dur3;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final soft = CurvedAnimation(parent: animation, curve: AppTheme.easeSoft);
+    return ScaleTransition(
+      scale: Tween(begin: 1.0, end: .98).animate(
+        CurvedAnimation(parent: secondaryAnimation, curve: AppTheme.easeSoft),
+      ),
+      child: DualTransitionBuilder(
+        animation: animation,
+        forwardBuilder: (_, a, c) => SlideTransition(
+          position: Tween(
+            begin: const Offset(.08, 0),
+            end: Offset.zero,
+          ).animate(soft),
+          child: c,
+        ),
+        // The prototype drops the popped screen; fade it so it doesn't
+        // cover the one being revealed for 320ms.
+        reverseBuilder: (_, a, c) => FadeTransition(opacity: soft, child: c),
+        child: child,
       ),
     );
   }

@@ -1,0 +1,5387 @@
+# AIWA — Flutter vs. prototype fidelity audit
+
+Source of truth: `AIWA-Prototype.html` (its 21 bundled JSX modules are byte-identical to `design_handoff_aiwa_app/ui_kits/aiwa-app/*.jsx`, so prototype citations point at those files). Flutter citations point at `Android/aiwa_app/`. Each area was audited by one agent, then re-checked by an adversarial verifier that opened both cited lines; 4 findings were refuted and removed.
+
+> **Prototype colours:** `theme.jsx` applies `MALE_THEME` at load, so the default rendered palette is charcoal `#2E2A26` / stone `#B5A898` / off-white `#F5F2ED`; picking female at signup swaps to mauve `#6B3A3A` / dusty rose `#C4837A` / blush `#FDF6F4`. The plum/rose/gold hexes in `tokens/colors_and_type.css` are base tokens that the runtime overwrites.
+
+## 1. Summary
+
+| Scope | Entries | ✅ Implemented | ⚠️ Deviates | ❌ Missing | Fidelity |
+|---|---|---|---|---|---|
+| Everything in the prototype (incl. admin web panel, toasts, states, components) | 303 | 8 | 105 | 190 | **20%** |
+| Mobile apps only (customer + provider + shared; admin excluded) | 257 | 8 | 105 | 144 | **24%** |
+| Mobile screens, tabs, sheets & dialogs only (no toasts/states/components) | 99 | 1 | 38 | 60 | **20%** |
+
+Fidelity = (implemented + 0.5 × deviates) ÷ entries; unreachable prototype code (legacy `LoginScreen`, admin `AdminPlaceholder`) is excluded. Findings after verification: **61 critical**, **95 major**, **275 minor** (plus 190 missing entries).
+
+Per area:
+
+| Area | Entries | ✅ | ⚠️ | ❌ | Fidelity |
+|---|---|---|---|---|---|
+| Design system & shared components | 38 | 3 | 30 | 5 | 47% |
+| Customer sign-in / sign-up | 24 | 1 | 17 | 6 | 40% |
+| Onboarding tail & provider onboarding | 21 | 0 | 7 | 14 | 17% |
+| Customer discovery | 22 | 2 | 17 | 3 | 48% |
+| Customer booking lifecycle | 64 | 1 | 18 | 45 | 16% |
+| Customer account, notifications & system | 37 | 0 | 5 | 32 | 7% |
+| Provider app | 51 | 1 | 11 | 39 | 13% |
+| Admin web panel | 46 | 0 | 0 | 46 | 0% |
+
+Area auditor notes (written before verification, so their entry counts can differ slightly from the table above, which is authoritative):
+
+- **Design system & shared components:** Most of the Flutter design-system layer matches the prototype closely. Both gender palettes match theme.jsx exactly for all 34 tokens, and the spacing, radii and soft-door easing/200/320ms tokens also match. Btn, Avatar, Chip, StatusPill, Eyebrow, SectionHeader, EndOfList, SkeletonCard and ConfirmSheet are near pixel-level ports. The biggest gaps are in global behaviour. Screens use the platform-default route transition, and tab switches use NoTransitionPage, instead of the 320ms soft-door animation. The Toast is a bottom Material SnackBar with no success check. OfflineBanner, Toggle, SuccessSheet and Pagination are missing, and connectivity_plus is never used. Four RefreshIndicators break the 'no spinners' rule. ConfirmSheet and other modal sheets open on the shell navigator, so the tab bar stays above them and tappable. The CSS h3/h4/price type tokens are not honoured, icons are Material instead of Lucide, and only AiwaButton gives press feedback (there is no focus ring). For RTL, the prototype itself renders English-only LTR and Flutter matches that. However, Arabic font stacks are not configured and the chosen language never reaches the backend. GuestLockedView sends users to role choice instead of the auth gate (critical).
+- **Customer sign-in / sign-up:** I inventoried 25 prototype entries in the customer sign-in / sign-up area. 24 of them are reachable. The 25th is the legacy LoginScreen: no route renders it, so it should not be built and is left out of the score. The Flutter screens that exist (splash, role choice, auth choice, phone entry, OTP, account setup, make-it-yours, StepHeader) mostly match the prototype's layout, copy and gender-aware tokens. Several flow steps are broken or missing: 'Forgot password?' only shows a 'coming soon' SnackBar, so all 3 reset steps and their toast are missing. Email sign-up skips the OTP step. Make-it-yours registers the account and jumps straight to Home instead of going to Terms, then Preferences, then the permission screens. Provider sign-in skips the pending-verification gate. And because every auth page listens to the same AuthBloc, tapping Resend pushes a second OTP page. The main visual gaps are the missing avatar upload, the wrong 'Man' Warm Stone swatch (#8A8074 instead of #B5A898), 'Man' being preselected where the prototype preselects 'Woman', the 'Unauthorized. Please sign in again.' message on a wrong password, and the lack of any toast component.
+- **Onboarding tail & provider onboarding:** I audited 18 prototype items in the onboarding tail. 7 exist in Flutter but deviate and 11 are missing entirely, so none match on all 8 dimensions. The three provider screens (business, verification, pending) are close visually and use theme-aware tokens that resolve to the right male and female hexes. Their flows are broken, though: the business details and ID photos are never sent to the backend, and the upload slots are toggles with no file picker. Customer and provider signup both skip Terms and Preferences: Flutter registers the account and goes straight to Home or Pending. There are no permission priming screens (location, notifications, camera, contacts), no shared SystemScreen shell, no Terms re-accept screen and no onboarding toasts. The main Android manifest also declares no location, camera or notification permissions.
+- **Customer discovery:** The customer discovery area has 22 prototype entries. 2 match exactly (Discover EndOfList footer, Provider Gallery tab), 17 deviate and 3 are missing: FlagProviderSheet, its 'flag received' toast, and StaffPickerScreen for shop-type providers. The Flutter code is well tokenised and follows the prototype closely: it uses the gender-aware AppColors getters, the same type scale, and shared equivalents of Chip, IconBtn, EmptyState, SkeletonList and EndOfList. The serious problems are all flow problems. Five are critical: (1) the Report chip is missing, so the flag flow cannot be reached; (2) Book now never branches to the staff picker and skips booking-type; (3) the auth gate drops the booking the user was making and lands on Home after sign-in; (4) Saved 'Book again' opens /booking directly instead of the provider page; (5) the shared GuestLockedView CTA pushes /role-choice instead of the auth gate. The main visual and data gaps are: 'Open now'/'Open' is never shown, 'Fixed price'/'Starts at'/'From' labels are missing on services, a Discover search ignores the selected category, the share button and the Bookings tab badge are missing, the empty-state actions are incomplete, and the Home category grid overflows by about 3px on 360dp devices.
+- **Customer booking lifecycle:** The customer booking lifecycle has 61 prototype entries. Flutter has the scheduled booking form, the confirmation screen, My Bookings (Upcoming/Past), the review screen and a generic cancel confirm sheet. It has none of these: Booking type, the Book Now availability sheets, Tracking (all six statuses, the safety card and SOS stages, venue check-in, the travel fee), Chat, Complaint, Payment confirm, Proposed time, Rejected, Expired booking or Slot conflict. So the flow dead-ends after Confirmation and cards cannot be tracked. The Flutter data layer also sends and reads field names the backend does not use (scheduledDate/scheduledTime/customerNote, provider.fullName/providerProfile). Because of this, creating a booking fails and booking cards and the confirmation render blank provider names and times. Colours come from a central, gender-aware AppColors that matches theme.jsx hex for hex. The main design-system gaps are Material SnackBars in place of the kit Toast, Material icons in place of Lucide, and sheet scrim/shadow colours.
+- **Customer account, notifications & system:** This partition covers 31 prototype surfaces: the Profile tab and its guest state, account sub-screens (Personal info, Saved addresses, address add/edit, Safety & policies, Trusted contacts with its empty state and add form), 5 sheets, 6 toasts, the Notifications inbox and preferences, WhatsApp support, 7 system/recovery screens and the offline banner. 4 have a Flutter counterpart and all 4 deviate (Profile tab, guest-locked Profile, sign-out sheet, Notifications inbox). The Profile tab shows only 3 of the 10 prototype rows (Notifications, Language, Sign out) plus two Flutter-only rows (App palette, Email), and it has no stats tiles, so 7 account destinations (every one except Notifications, Language and Sign out) cannot be reached. Notification rows do nothing when tapped (no routing to Tracking or Terms re-accept) and keep their unread styling after being marked read. There is also no global 401/403/404/423 routing: api_client.dart throws inside a Dio interceptor, Dio 5.9.2 re-wraps the error, so the repositories' ServerException/NetworkException catches never fire. Both gender palettes' colour tokens and the Latin font families match the prototype exactly. The shared layer is missing Arabic fonts and localization delegates, the top Toast, the Toggle and the SystemScreen shell.
+- **Provider app:** The prototype's provider app has 48 distinct screens, tabs, sheets, banners, toasts and states. In Flutter, only one matches (the pending-requests callout) and 11 exist with deviations. Flutter's whole provider app is a single standalone DashboardPage at /provider-dashboard. It merges the Today dashboard with a Pending/Upcoming/Done/Cancelled filter row and has no tab bar. Services, Schedule, Profile (vacation toggle, verified banner), Wallet, Business info, Gallery, Reviews, Staff, booking detail, travel-fee quote, the cancel-with-penalty sheet, payment confirmation, rate-customer and all 9 provider toasts are missing. Several things that do exist are broken at the data layer. The stats call goes to /provider/stats, which the backend does not have (it only exposes /provider/dashboard), so the dashboard always falls into its error state. Decline sends the reason as a JSON body, but the backend requires a query parameter. The backend ignores the status filter. BookingModel reads the provider's name and the scheduledDate/scheduledTime keys, but the backend sends customer, bookingDate and startTime. The theme layer (AppColors male/female palettes, AppTextStyles families) matches theme.jsx and components.jsx exactly, so the gap is missing screens and wiring, not tokens. The prototype's "Preview states" menu only renders for the customer role, so it adds no provider states.
+- **Admin web panel:** The prototype's desktop admin panel breaks down into 44 inventory entries: the sidebar shell, 11 sections, 4 sub-views, 3 modals, 3 confirm sheets, 4 modal tabs, 9 states and banners, and 5 shared admin primitives. None of them exist in the Flutter app. In Android/aiwa_app/lib, a case-insensitive grep for 'admin' finds only an unused `UserEntity.isAdmin` getter (user_entity.dart:38) and two strings on provider-facing screens. The Flutter project has no web/ target, and sign_in_page.dart:66-69 and splash_page.dart:70-73 send an ADMIN account to the customer home. aiwa-backend has no admin web UI (no static/ or templates/), but it does have a broad admin REST API under /api (dashboard, verification, complaints, flags/warn, users/admins with permission tiers, bookings force-cancel/resolve-dispute/chat, review moderation, moderation cases, settlements, commission and booking-rules settings, support settings, terms publish, audit, analytics). The admin panel can be built mostly against existing endpoints. The main backend gaps are 30-day metric deltas, booking search/dispute filter/export, audit export, a flag-dismiss endpoint, dispute evidence and history, and terms drafts.
+
+## 2. Coverage table
+
+### Design system & shared components
+
+| # | Prototype screen | Kind | How to reach it | Flutter file | Status | Notes |
+|---|---|---|---|---|---|---|
+| 1 | **Color tokens & runtime gender palettes** `DS-01`<br><sub>ui_kits/aiwa-app/theme.jsx:12-66; ui_kits/aiwa-app/components.jsx:4-16; tokens/colors_and_type.css:20-88</sub> | component | Global: every screen reads the global aiwa object (MALE_THEME applied at load, theme.jsx:66) | [Android/aiwa_app/lib/core/theme/app_colors.dart](Android/aiwa_app/lib/core/theme/app_colors.dart)<br>[Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) | ✅ | All 34 tokens match hex-for-hex in both palettes (app_colors.dart:62-135 vs theme.jsx:12-52). The AppColors static getters (app_colors.dart:143-201) swap at runtime the same way the mutated global aiwa object does. The base plum palette is not defined in Flut… |
+| 2 | **Typography: font families & type scale** `DS-02`<br><sub>tokens/colors_and_type.css:96-122,183-275; ui_kits/aiwa-app/components.jsx:17-19; README.md:30-34</sub> | component | Global: all text | [Android/aiwa_app/lib/core/theme/app_text_styles.dart](Android/aiwa_app/lib/core/theme/app_text_styles.dart)<br>[Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)<br>[Android/aiwa_app/pubspec.yaml](Android/aiwa_app/pubspec.yaml) | ⚠️ | 5 finding(s). prototype.html does not link colors_and_type.css, so the rendered prototype uses the inline JSX sizes. The Flutter h3 (DM Serif 22) matches JSX usage but not the CSS token. |
+| 3 | **Spacing, radii & elevation tokens** `DS-03`<br><sub>tokens/colors_and_type.css:127-159; README.md:36-39</sub> | component | Global | [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) | ⚠️ | 3 finding(s). Spacing and radii match (app_theme.dart:10-28). shadow-1 and shadow-2 match in geometry, but their tint follows the theme (AppColors.plum700, male #2E2A26) instead of the literal rgb(74,31,56). |
+| 4 | **Motion tokens & keyframes** `DS-04`<br><sub>tokens/colors_and_type.css:166-174; ui_kits/aiwa-app/prototype.html:16-43; ui_kits/aiwa-app/states.jsx:10-19; README.md…</sub> | component | Global | [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart) | ⚠️ | 2 finding(s). aiwa-pulse is defined twice: prototype.html:35-38 (scale 1 to 1.05) and states.jsx:12 (opacity .55 to .9). The states.jsx version is injected later at runtime, so it wins. heart-pop (prototype.html:30-34) is not referenced by any JSX. |
+| 5 | **Icon (Lucide helper)** `DS-05`<br><sub>ui_kits/aiwa-app/components.jsx:22-41; README.md:49</sub> | component | Global: every &lt;Icon name=...> | [Android/aiwa_app/pubspec.yaml](Android/aiwa_app/pubspec.yaml)<br>[Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)<br>[Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart) | ⚠️ | 2 finding(s).  |
+| 6 | **Btn (pill button, 6 variants x 3 sizes)** `DS-06`<br><sub>ui_kits/aiwa-app/components.jsx:44-72; ui_kits/aiwa-app/prototype.html:41-42</sub> | component | Global, e.g. Splash -> English -> Role choice -> Continue | [Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart) | ⚠️ | 1 finding(s). Size and variant tables match exactly (aiwa_button.dart:141-191). Flutter-only additions: `light` variant, `loading` pulse, disabled opacity .45. |
+| 7 | **IconBtn (round icon button)** `DS-07`<br><sub>ui_kits/aiwa-app/components.jsx:75-94</sub> | component | Global, e.g. any ScreenHeader back button; Home -> notifications bell (dot) | [Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart) | ⚠️ | 2 finding(s).  |
+| 8 | **Avatar (initial + gradient, verified badge)** `DS-08`<br><sub>ui_kits/aiwa-app/components.jsx:97-127</sub> | component | Global, e.g. Discover -> provider rows; Profile header | [Android/aiwa_app/lib/shared/widgets/aiwa_avatar.dart](Android/aiwa_app/lib/shared/widgets/aiwa_avatar.dart) | ⚠️ | 1 finding(s). Gradients (aiwa_avatar.dart:117-128), text color rule (:40-43), initial (:44), and badge size, clamp and position (:45,70-88) all match. Icons.check matches the Lucide check glyph. Flutter-only: imageUrl via CachedNetworkImage (:48-61). (verifie… |
+| 9 | **Chip (default / active / tonal)** `DS-09`<br><sub>ui_kits/aiwa-app/components.jsx:130-144</sub> | component | Discover -> category & sort chips | [Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart](Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart) | ⚠️ | 1 finding(s).  |
+| 10 | **StatusPill (booking status)** `DS-10`<br><sub>ui_kits/aiwa-app/components.jsx:147-172</sub> | component | Bookings tab -> booking cards; Tracking | [Android/aiwa_app/lib/shared/widgets/status_pill.dart](Android/aiwa_app/lib/shared/widgets/status_pill.dart) | ⚠️ | 1 finding(s). All 11 mappings and labels match. Flutter also accepts backend enums (accepted, on_the_way, in_progress, no_show). |
+| 11 | **Stars (rating)** `DS-11`<br><sub>ui_kits/aiwa-app/components.jsx:175-185</sub> | component | Provider profile -> reviews; Review screen | [Android/aiwa_app/lib/shared/widgets/star_rating.dart](Android/aiwa_app/lib/shared/widgets/star_rating.dart) | ⚠️ | 4 finding(s).  |
+| 12 | **Eyebrow label** `DS-12`<br><sub>ui_kits/aiwa-app/components.jsx:188-190; tokens/colors_and_type.css:250-257</sub> | component | Global, e.g. Discover header 'Find someone new' | [Android/aiwa_app/lib/shared/widgets/eyebrow_label.dart](Android/aiwa_app/lib/shared/widgets/eyebrow_label.dart)<br>[Android/aiwa_app/lib/core/theme/app_text_styles.dart](Android/aiwa_app/lib/core/theme/app_text_styles.dart) | ✅ | eyebrow_label.dart:22-31 uppercases the text and scales letterSpacing 0.14*size. AppTextStyles.eyebrow (:56-62) adds a harmless 'smcp' feature. |
+| 13 | **SectionHeader** `DS-13`<br><sub>ui_kits/aiwa-app/components.jsx:193-200</sub> | component | Home -> 'Trending' / 'Available now' sections | [Android/aiwa_app/lib/shared/widgets/section_header.dart](Android/aiwa_app/lib/shared/widgets/section_header.dart) | ⚠️ | 1 finding(s).  |
+| 14 | **Customer bottom TabBar (+ visibility rule)** `DS-14`<br><sub>ui_kits/aiwa-app/components.jsx:203-237; ui_kits/aiwa-app/prototype.jsx:564-573,721,736</sub> | component | Splash -> Browse as guest -> Home (visible only on home/discover/bookings/saved/profile) | [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart) | ⚠️ | 4 finding(s). Visibility rule matches: only the 5 tab roots are inside ShellRoute (app_router.dart:145-179), and every other route is top-level, which hides the bar. Glyphs are close equivalents (home_outlined, search_rounded, event_available_outlined, favori… |
+| 15 | **Skeleton / SkeletonCard / SkeletonList (shimmer loading)** `DS-15`<br><sub>ui_kits/aiwa-app/states.jsx:24-55</sub> | state | Discover (first 620ms, prototype.jsx:136-137,201) | [Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart](Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart) | ⚠️ | 1 finding(s). ProviderCardShimmer (loading_shimmer.dart:37-75) matches SkeletonCard geometry exactly. In both runtime palettes hover == cream (male #EBE5DA, female #F8E8E3), so the prototype shimmer actually renders as a flat cream block. |
+| 16 | **SkeletonTile** `DS-16`<br><sub>ui_kits/aiwa-app/states.jsx:57-65</sub> | state | Home carousels while loading (primitive; not mounted by any prototype screen) | [Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart](Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart) | ⚠️ | 1 finding(s).  |
+| 17 | **SkeletonRows (table skeleton)** `DS-17`<br><sub>ui_kits/aiwa-app/states.jsx:67-77</sub> | state | Admin tables only (no mobile screen mounts it) | — | ❌ |  |
+| 18 | **EmptyState** `DS-18`<br><sub>ui_kits/aiwa-app/states.jsx:80-107</sub> | state | Saved (no favorites, prototype.jsx:299-303); Discover no results (:202-208) | [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart) | ⚠️ | 4 finding(s).  |
+| 19 | **ErrorState** `DS-19`<br><sub>ui_kits/aiwa-app/states.jsx:110-125; README.md:112</sub> | state | Any failed request (primitive; not mounted by any prototype screen) | [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart) | ⚠️ | 2 finding(s).  |
+| 20 | **OfflineBanner** `DS-20`<br><sub>ui_kits/aiwa-app/states.jsx:128-145; ui_kits/aiwa-app/prototype.jsx:519,586,759,782</sub> | banner | Prototype header 'Preview states' -> Offline banner (overlays any customer screen) | — | ❌ |  |
+| 21 | **InlineBanner** `DS-21`<br><sub>ui_kits/aiwa-app/states.jsx:148-168</sub> | banner | Sign in (lockout notice); provider verification notice; used 19x across prototype screens | [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 3 finding(s). The tone table and default icons map correctly (screen_chrome.dart:285-316). |
+| 22 | **ValidatedInput (per-field validated text input)** `DS-22`<br><sub>ui_kits/aiwa-app/states.jsx:171-206; README.md:115 (auth forms use Field/TextInput, ui_kits/aiwa-app/auth-screens.jsx:1…</sub> | component | Profile -> Personal info / Saved addresses -> Add address (19 usages) | [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart) | ⚠️ | 7 finding(s). AiwaTextField mirrors the auth-only Field+TextInput pair (eyebrow label, 'Optional' tag). It does not mirror the README-designated ValidatedInput primitive. |
+| 23 | **Toggle (switch)** `DS-23`<br><sub>ui_kits/aiwa-app/states.jsx:209-224</sub> | component | Profile -> Saved addresses -> Add address -> 'Set as default' (account-screens.jsx:190) | — | ❌ |  |
+| 24 | **ConfirmSheet (destructive / neutral confirm)** `DS-24`<br><sub>ui_kits/aiwa-app/states.jsx:227-257; ui_kits/aiwa-app/prototype.jsx:756-758</sub> | sheet | Profile -> Sign out (prototype.jsx:756-758); Bookings -> cancel | [Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart)<br>[Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) | ⚠️ | 5 finding(s). Structure, sizes, icons (warning_amber / help_outline) and buttons match (confirm_sheet.dart:42-130). Flutter-only: optional reason `input` field (:21-22, 87-104). |
+| 25 | **SuccessSheet** `DS-25`<br><sub>ui_kits/aiwa-app/states.jsx:260-288; README.md:117</sub> | sheet | All success terminals (primitive; no prototype screen currently mounts it) | — | ❌ |  |
+| 26 | **Pagination** `DS-26`<br><sub>ui_kits/aiwa-app/states.jsx:291-318; README.md:118</sub> | component | Admin bookings monitor / audit log (admin-modules.jsx:107,314); no mobile screen mounts it | — | ❌ |  |
+| 27 | **EndOfList** `DS-27`<br><sub>ui_kits/aiwa-app/states.jsx:320-328</sub> | component | Discover -> end of results ('N providers in range', prototype.jsx:232) | [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ✅ | screen_chrome.dart:378-404 matches the padding, gap, divider lines, label size, color and default copy. |
+| 28 | **ScreenHeader** `DS-28`<br><sub>ui_kits/aiwa-app/states.jsx:413-424</sub> | component | Profile -> Personal info / Safety & policies / Trusted contacts (account-screens.jsx:25,88,241) | [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 2 finding(s). Top padding is safe-area top + 14 instead of a fixed 60 inside the iOS frame, which is an equivalent adaptation. Flutter-only params: titleSuffix, titleSize. |
+| 29 | **StickyBar** `DS-29`<br><sub>ui_kits/aiwa-app/states.jsx:427-435</sub> | component | Personal info -> Save; Address form -> Save (account-screens.jsx:64,202) | [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 1 finding(s).  |
+| 30 | **SettingsRow** `DS-30`<br><sub>ui_kits/aiwa-app/states.jsx:438-461 (plus ProfileScreen row, prototype.jsx:383-398)</sub> | component | Profile -> Safety & policies (account-screens.jsx:95,108-109) | [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 3 finding(s). The default (non-boxed) mode reproduces the ProfileScreen row exactly (prototype.jsx:383-398: 14x4 padding, tile radius 10, 15/500, chevron hidden on danger). `boxed: true` is unused in lib/features. |
+| 31 | **Interaction state classes (press / row-hover / focus ring)** `DS-31`<br><sub>ui_kits/aiwa-app/prototype.html:41-43; ui_kits/aiwa-app/states.jsx:16-18; README.md:123</sub> | state | Global: any button tap; keyboard focus on Toggle / Pagination / OfflineBanner Retry | [Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart](Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)<br>[Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart) | ⚠️ | 3 finding(s).  |
+| 32 | **Toast overlay** `DS-32`<br><sub>ui_kits/aiwa-app/prototype.jsx:20-39,735; ui_kits/aiwa-app/prototype.html:26-29</sub> | toast | Sign in -> Continue shows the toast 'Welcome back, Layla.' (prototype.jsx:621); also address saved, review submitted, etc. | [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)<br>[Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart](Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart)<br>[Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart) | ⚠️ | 5 finding(s). There is no shared toast widget. Screens call ScaffoldMessenger.showSnackBar, styled by snackBarTheme (app_theme.dart:185-193). |
+| 33 | **Screen transitions (push / pop / tab switch)** `DS-33`<br><sub>ui_kits/aiwa-app/prototype.jsx:547-560,564-573,726-731; ui_kits/aiwa-app/prototype.html:16-25; README.md:42,144</sub> | component | Home -> tap provider (push); back (pop); tap another tab (reset) | [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)<br>[Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) | ⚠️ | 3 finding(s).  |
+| 34 | **Gender theme swap** `DS-34`<br><sub>ui_kits/aiwa-app/theme.jsx:57-68; ui_kits/aiwa-app/prototype.jsx:525-526,535,595-606,639-646,724; ui_kits/aiwa-app/auth…</sub> | state | Splash -> English -> Customer -> Sign up -> Phone -> OTP -> Account setup -> Avatar & gender (live preview) -> Terms -> Preferences -> Save (handleSavePrefs) | [Android/aiwa_app/lib/core/theme/theme_controller.dart](Android/aiwa_app/lib/core/theme/theme_controller.dart)<br>[Android/aiwa_app/lib/app.dart](Android/aiwa_app/lib/app.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart)<br>[Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart) | ⚠️ | 1 finding(s). The mechanism is faithful: static AppColors palette plus ThemeController.mode, and _ThemedApp marks the whole tree dirty (app.dart:63-72). Flutter-only additions: SharedPreferences persistence (theme_controller.dart:14-40), re-applying the gende… |
+| 35 | **Wordmark / logo assets / app icon** `DS-35`<br><sub>ui_kits/aiwa-app/prototype.jsx:5-13,53; assets/logo-wordmark.svg; assets/logo-wordmark-arabic.svg; assets/logo-monogram…</sub> | component | App launcher icon -> Splash (Wordmark height 56) | [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart)<br>[Android/aiwa_app/pubspec.yaml](Android/aiwa_app/pubspec.yaml)<br>[Android/aiwa_app/assets/](Android/aiwa_app/assets/)<br>[Android/aiwa_app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png](Android/aiwa_app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png)<br>[Android/aiwa_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png](Android/aiwa_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png) | ⚠️ | 5 finding(s). logo-wordmark.svg and logo-wordmark-arabic.svg depend on external CSS classes ('wm ink', 'ar ink', 'dot') and have no embedded fill or font, so they cannot be dropped in as-is. logo-monogram.svg is self-contained. The Arabic wordmark is not moun… |
+| 36 | **GuestLockedScreen (shared guest gate)** `DS-36`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:11-25; ui_kits/aiwa-app/prototype.jsx:698-711</sub> | state | Splash -> Browse as guest -> Home -> tap Bookings / Saved / Profile tab | [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart)<br>[Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)<br>[Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart)<br>[Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart) | ⚠️ | 3 finding(s). Layout, spacing (18/8/8) and button match. Callers add bottom padding 90 so the button clears the frosted tab bar. |
+| 37 | **RTL / Arabic localization** `DS-RTL`<br><sub>ui_kits/aiwa-app/prototype.jsx:71-78,537,613; ui_kits/aiwa-app/flow-screens.jsx:135; ui_kits/aiwa-app/account-screens.j…</sub> | state | Splash -> 'العربية' (stores preferredLanguage AR, UI stays English LTR) | [Android/aiwa_app/lib/app.dart](Android/aiwa_app/lib/app.dart)<br>[Android/aiwa_app/lib/core/theme/app_text_styles.dart](Android/aiwa_app/lib/core/theme/app_text_styles.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/bloc/auth_event.dart](Android/aiwa_app/lib/features/auth/presentation/bloc/auth_event.dart)<br>[Android/aiwa_app/pubspec.yaml](Android/aiwa_app/pubspec.yaml) | ⚠️ | 3 finding(s). What the prototype does: grep over the loaded JSX finds no dir=, lang or isAr logic. Choosing Arabic only sets signup.preferredLanguage='AR' (prototype.jsx:613), and every screen stays English LTR (prototype.html:3 lang="en"; tokens CSS is not e… |
+| 38 | **Shell back behaviour (pop / root no-op)** `DS-V01`<br><sub>ui_kits/aiwa-app/prototype.jsx:552-560,564-580</sub> | state | Any customer screen -> system back (Escape/Backspace in the web prototype) | [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)<br>[Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart) | ⚠️ | 1 finding(s). This comes from the CustomerApp shell's stack helpers, not from a separate screen. The Escape/Backspace binding is desktop-prototype tooling; the Flutter counterpart is the Android system back / iOS edge swipe. |
+
+### Customer sign-in / sign-up
+
+| # | Prototype screen | Kind | How to reach it | Flutter file | Status | Notes |
+|---|---|---|---|---|---|---|
+| 39 | **Splash - language picker + Browse as guest** `AUTH-01`<br><sub>ui_kits/aiwa-app/prototype.jsx:44-86 (SplashScreen); route case prototype.jsx:612-614</sub> | screen | App launch (CustomerApp initial stack [{name:'splash'}], prototype.jsx:506); also reset('splash') after sign-out / delete account / session expired | [Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart) | ⚠️ | 3 finding(s).  |
+| 40 | **Wordmark (AIWA serif logotype + dot)** `AUTH-02`<br><sub>ui_kits/aiwa-app/prototype.jsx:5-13 (Wordmark)</sub> | component | Splash hero (prototype.jsx:53, height 56). Also used in the admin header (admin-screens.jsx:66), which is out of scope. | [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 2 finding(s).  |
+| 41 | **LoginScreen (legacy phone login)** `AUTH-03`<br><sub>ui_kits/aiwa-app/prototype.jsx:88-124 (LoginScreen)</sub> | screen | UNREACHABLE. No renderScreen case in CustomerApp (prototype.jsx:610-718) or ProviderApp renders it. auth-screens.jsx:10 and :161 say PhoneEntryScreen replaces … | — | ➖ unreachable | Status is 'missing' only because no Flutter counterpart exists, and none is needed. |
+| 42 | **Role choice - How will you be using AIWA?** `AUTH-04`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:83-158 (RoleChoiceScreen); route prototype.jsx:615</sub> | screen | Splash -> English / العربية -> Role choice | [Android/aiwa_app/lib/features/auth/presentation/pages/role_choice_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/role_choice_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart) | ⚠️ | 1 finding(s).  |
+| 43 | **Auth choice - Create account vs I already have an account (customer & provider copy)** `AUTH-05`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:762-848 (AuthChoiceScreen); route prototype.jsx:616-618</sub> | screen | Splash -> language -> Role choice -> Continue -> Auth choice. 'I'm here to book' shows the customer copy; 'I'm offering services' shows the provider copy. | [Android/aiwa_app/lib/features/auth/presentation/pages/auth_choice_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/auth_choice_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 3 finding(s).  |
+| 44 | **Sign in - phone mode** `AUTH-06`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:854-981 (SignInScreen); route prototype.jsx:619-626</sub> | screen | Splash -> language -> Role choice -> Continue -> Auth choice -> 'I already have an account' | [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart](Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart) | ⚠️ | 6 finding(s).  |
+| 45 | **Sign in - email mode** `AUTH-07`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:894-923</sub> | tab | Auth choice -> I already have an account -> tap 'Email' | [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart) | ⚠️ | 1 finding(s). (verifier: Email mode autofocuses the email field (sign_in_page.dart:153), which immediately draws the plum700 focus border (aiwa_text_field.dart:119-121). The prototype's autofocused TextInput keeps the divider border (auth-screens.jsx:39, 50, … |
+| 46 | **Sign in - wrong credentials error** `AUTH-08`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:867-876, 941-946</sub> | state | Sign in -> submit a password that doesn't match (the prototype uses the literal password 'wrong') | [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)<br>[Android/aiwa_app/lib/core/errors/failures.dart](Android/aiwa_app/lib/core/errors/failures.dart)<br>[Android/aiwa_app/lib/features/auth/data/repositories/auth_repository_impl.dart](Android/aiwa_app/lib/features/auth/data/repositories/auth_repository_impl.dart) | ⚠️ | 3 finding(s).  |
+| 47 | **Toast - 'Welcome back, Layla.'** `AUTH-09`<br><sub>ui_kits/aiwa-app/prototype.jsx:621 (setToast) + Toast component prototype.jsx:20-39</sub> | toast | Sign in -> valid credentials -> Home (the toast overlays the new screen) | — | ❌ |  |
+| 48 | **Phone entry - phone mode (sign-up step 1)** `AUTH-10`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:164-221 (PhoneEntryScreen); route prototype.jsx:627</sub> | screen | Auth choice -> Create an account (or Sign in -> 'Create an account') | [Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart](Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart) | ⚠️ | 2 finding(s).  |
+| 49 | **Phone entry - email mode** `AUTH-11`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:169-175, 206-208, 215; prototype.jsx:627-630</sub> | tab | Phone entry -> tap 'Email' | [Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart) | ⚠️ | 2 finding(s).  |
+| 50 | **OTP - enter the 6-digit code (countdown running)** `AUTH-12`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:226-303 (OTPScreen); route prototype.jsx:628-631</sub> | screen | Phone entry -> Send code -> OTP | [Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart) | ⚠️ | 7 finding(s).  |
+| 51 | **OTP - resend available (timer at 0)** `AUTH-13`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:249, 281-288</sub> | state | OTP -> wait 45 s | [Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart) | ⚠️ | 2 finding(s).  |
+| 52 | **Account setup - name, optional email, password** `AUTH-14`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:308-384 (AccountSetupScreen); route prototype.jsx:637-638</sub> | screen | OTP -> Verify -> Account setup | [Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart) | ⚠️ | 1 finding(s).  |
+| 53 | **Account setup - inline validation errors** `AUTH-15`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:316-319, 335, 341, 373</sub> | state | Account setup -> type a single name, an invalid email, or a password under 6 characters | [Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart) | ⚠️ | 3 finding(s).  |
+| 54 | **Password strength meter** `AUTH-16`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:321-323, 358-372</sub> | component | Account setup -> type in Password | [Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart) | ⚠️ | 1 finding(s).  |
+| 55 | **Make it yours - avatar + gender (sign-up step 4)** `AUTH-17`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:389-476 (AvatarGenderScreen); route prototype.jsx:639-646</sub> | screen | Account setup -> Continue -> Make it yours | [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart)<br>[Android/aiwa_app/lib/core/theme/theme_controller.dart](Android/aiwa_app/lib/core/theme/theme_controller.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart](Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart) | ⚠️ | 4 finding(s).  |
+| 56 | **Make it yours - photo selected** `AUTH-18`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:402-408, 421, 432, 440, 472</sub> | state | Make it yours -> tap the avatar or 'Upload a photo' -> pick an image | — | ❌ |  |
+| 57 | **Gender pick -> live palette swap** `AUTH-19`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:389-400, 444-468; theme.jsx:12-66; prototype.jsx:535, 639-642</sub> | state | Make it yours -> tap Woman / Man | [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart)<br>[Android/aiwa_app/lib/core/theme/theme_controller.dart](Android/aiwa_app/lib/core/theme/theme_controller.dart)<br>[Android/aiwa_app/lib/core/theme/app_colors.dart](Android/aiwa_app/lib/core/theme/app_colors.dart)<br>[Android/aiwa_app/lib/app.dart](Android/aiwa_app/lib/app.dart) | ⚠️ | 2 finding(s).  |
+| 58 | **Forgot password - step 1: where to send the code** `AUTH-20`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:135-168 (ForgotPasswordScreen step 1); route prototype.jsx:625, 632</sub> | sub-screen | Sign in -> Forgot password? | — | ❌ |  |
+| 59 | **Forgot password - step 2: enter the code** `AUTH-21`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:169-182</sub> | sub-screen | Forgot password step 1 -> Send reset code | — | ❌ | 1 finding(s).  |
+| 60 | **Forgot password - step 3: set a new password** `AUTH-22`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:183-202</sub> | sub-screen | Forgot password step 2 -> Verify | — | ❌ |  |
+| 61 | **Toast - 'Password reset. Please sign in.'** `AUTH-23`<br><sub>ui_kits/aiwa-app/prototype.jsx:632 (`onDone={() => { setToast('Password reset. Please sign in.'); pop(); }}`); Toast pr…</sub> | toast | Forgot password step 3 -> Reset password -> back on Sign in | — | ❌ |  |
+| 62 | **StepHeader (back + progress + 'Step n of N' + title)** `AUTH-24`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:59-78</sub> | component | Used on Phone entry, OTP, Account setup and Make it yours (plus the provider steps) | [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart) | ✅ | The subtitle only accepts a String, so OTP can't render the bold identifier (see AUTH-12-F3). |
+| 63 | **Field + TextInput (form atoms)** `AUTH-25`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:19-57</sub> | component | Every auth form (Sign in, Phone entry, Account setup) | [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart)<br>[Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart) | ⚠️ | 2 finding(s).  |
+
+### Onboarding tail & provider onboarding
+
+| # | Prototype screen | Kind | How to reach it | Flutter file | Status | Notes |
+|---|---|---|---|---|---|---|
+| 64 | **Terms & safety policy (signup)** `ONB-01`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:13-73; prototype.jsx:652-655</sub> | screen | Customer: Splash -> Continue -> Role choice (I'm here to book) -> Create account -> Phone entry -> OTP -> Account setup -> Avatar/gender -> Terms. Provider: ..… | — | ❌ | 1 finding(s). No /terms route in Android/aiwa_app/lib/core/router/app_router.dart:29-55. ApiConstants.termsLatest/termsAccept (api_constants.dart:77-78) exist but nothing calls them. |
+| 65 | **Preferences (area, min/max search radius, language, theme commit)** `ONB-02`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:78-157; prototype.jsx:595-606 (handleSavePrefs), 656</sub> | screen | ... Avatar/gender -> Terms -> tick agreement -> Agree & continue -> Preferences (customer and provider) | — | ❌ | 3 finding(s). UserEntity already models searchRadiusMinKm, searchRadiusMaxKm and preferredLanguage (user_entity.dart:12-16). ApiConstants.mePreferences '/auth/me/preferences' and meLanguage '/auth/me/language' (api_constants.dart:14-15) are unused. Home is ha… |
+| 66 | **Toast 'Account created. Verification in review.'** `ONB-03`<br><sub>ui_kits/aiwa-app/prototype.jsx:600-602; Toast at prototype.jsx:20-39</sub> | toast | Provider signup: ... Provider verification -> Terms -> Preferences -> Save preferences -> toast over Provider pending | — | ❌ | 1 finding(s). Flutter goes to pending silently: provider_verification_page.dart:50-51 `context.go(AppRoutes.providerPending);`. The only feedback is the bottom SnackBar theme (app_theme.dart:185-193), used for errors. |
+| 67 | **SystemScreen (shared full-screen system message shell)** `ONB-04`<br><sub>ui_kits/aiwa-app/system-screens.jsx:9-36</sub> | component | Not a route by itself. It wraps Session expired, Account locked, Not found, Forbidden and Permission denied (Preview states menu / error flows). | — | ❌ | 1 finding(s). No equivalent in lib/shared/widgets. The closest is GuestLockedView (guest_locked_view.dart:26-70): 64px icon, h2 24, one CTA. Different sizes and no tone map. |
+| 68 | **Permission priming — location (onboarding route 'perm-location')** `ONB-05`<br><sub>ui_kits/aiwa-app/system-screens.jsx:73-79, 103-132; prototype.jsx:604, 657</sub> | screen | Customer signup: ... Terms -> Preferences -> Save preferences -> reset('perm-location'). Both Allow and Deny -> reset('perm-notifications'). | [Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart) | ❌ | 2 finding(s). Instead of priming, HomePage._loadData asks for the OS permission cold on first load (home_page.dart:64-69) and swallows every error (home_page.dart:80 `} catch (_) {}`). |
+| 69 | **Permission priming — notifications (onboarding route 'perm-notifications')** `ONB-06`<br><sub>ui_kits/aiwa-app/system-screens.jsx:80-86, 103-132; prototype.jsx:608, 658</sub> | screen | Customer signup: ... Preferences -> perm-location (Allow or Choose my area manually) -> perm-notifications. Both buttons run finishOnboarding: reset('home') + … | — | ❌ | 1 finding(s). Nothing in lib/ requests notification permission (grep for Permission.notification / requestNotificationsPermission found nothing). permission_handler ^11.3.1 and flutter_local_notifications ^17.2.3 are declared in pubspec.yaml but unused. POST_… |
+| 70 | **Permission priming — camera** `ONB-07`<br><sub>ui_kits/aiwa-app/system-screens.jsx:87-93, 103-132; prototype.jsx:684</sub> | screen | No caller in the prototype. It renders only through route 'permission' with s.kind === 'camera' (prototype.jsx:684), and the Preview-states dispatcher pushes '… | — | ❌ | 1 finding(s). The Flutter verification page never opens the camera or a file picker (see ONB-15). The main manifest has no CAMERA and Info.plist has no NSCameraUsageDescription / NSPhotoLibraryUsageDescription, which image_picker requires on iOS. |
+| 71 | **Permission priming — contacts (trusted contact)** `ONB-08`<br><sub>ui_kits/aiwa-app/system-screens.jsx:94-100, 103-132; prototype.jsx:684</sub> | screen | No caller in the prototype: only route 'permission' with kind 'contacts'. Its copy fits Profile -> Trusted contacts -> Add (the SOS feature). | — | ❌ | 1 finding(s). There is no trusted-contacts feature, no contacts plugin in pubspec.yaml, and no READ_CONTACTS permission. |
+| 72 | **Permission priming — in-app re-prompt (Preview states -> 'Permission priming', route 'permission')** `ONB-09`<br><sub>ui_kits/aiwa-app/prototype.jsx:589, 684, 791</sub> | state | Any customer screen -> Preview states menu -> 'Permission priming' -> push('permission') -> PermissionPrimingScreen kind 'location'. Allow and Deny both pop ba… | — | ❌ | 1 finding(s). No mid-app re-prompt exists. home_page.dart:66-79 silently falls back to Cairo coordinates when permission is denied. |
+| 73 | **Terms re-accept (policy updated)** `ONB-10`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:207-226; prototype.jsx:636, 713; notification seed customer-extras.jsx:107</sub> | screen | Home -> bell -> Notifications -> tap 'Terms & policies updated' (type 'terms') -> push('terms-reaccept') -> Agree & continue -> toast + pop | [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart) | ❌ | 1 finding(s). Notifications only mark a TERMS notification as read (notifications_page.dart:134-141). The TERMS type changes only the icon (notifications_page.dart:186-188 Icons.description_outlined). There is no forced gate, although UserEntity carries terms… |
+| 74 | **Toast 'Thanks — terms accepted.'** `ONB-11`<br><sub>ui_kits/aiwa-app/prototype.jsx:636; Toast prototype.jsx:20-39</sub> | toast | Notifications -> Terms & policies updated -> Terms re-accept -> Agree & continue -> toast over Notifications (after pop) | — | ❌ | 1 finding(s). Depends on ONB-10 and the shared toast helper (ONB-03). |
+| 75 | **Provider business — 'Set up your studio' (Individual default)** `ONB-12`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:481-622; prototype.jsx:647-648</sub> | screen | Splash -> Continue -> Role choice (I'm offering services) -> Set up a new studio -> Phone entry -> OTP -> Account setup -> Avatar/gender -> Provider business (… | [Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart) | ⚠️ | 7 finding(s).  |
+| 76 | **Provider business — Shop / salon variant (staff members)** `ONB-13`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:533-555</sub> | state | Provider business -> tap 'Shop / salon' tile | [Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart) | ⚠️ | 2 finding(s).  |
+| 77 | **Provider business — GPS status card (locked / no GPS)** `ONB-14`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:588-610, 497, 615</sub> | state | Provider business -> Studio address section (tap 'Use GPS') | [Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart) | ⚠️ | 2 finding(s).  |
+| 78 | **UploadSlot — empty (tap to upload)** `ONB-15`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:627-656</sub> | component | Provider verification -> any of 'National ID — front' / 'National ID — back' / 'Live selfie' | [Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart) | ⚠️ | 3 finding(s).  |
+| 79 | **UploadSlot — uploaded state (photo preview, tap to replace)** `ONB-16`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:637-643, 657-663</sub> | state | Provider verification -> tap a slot -> choose an image | [Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart) | ⚠️ | 4 finding(s).  |
+| 80 | **Provider verification — 'Verify your identity'** `ONB-17`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:668-710; prototype.jsx:649-650</sub> | screen | ... Avatar/gender -> Provider business -> Continue -> Provider verification (Step 6 of 6) | [Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 4 finding(s).  |
+| 81 | **Provider pending — 'We're reviewing your documents.'** `ONB-18`<br><sub>ui_kits/aiwa-app/auth-screens.jsx:715-756; prototype.jsx:600-602, 622, 651</sub> | screen | Provider signup: ... Verification -> Terms -> Preferences -> Save preferences (toast) -> Provider pending. Also: Auth choice (provider) -> Sign in -> provider-… | [Android/aiwa_app/lib/features/auth/presentation/pages/provider_pending_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_pending_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)<br>[Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) | ⚠️ | 6 finding(s).  |
+| 82 | **Terms — agree checkbox gating (unchecked / checked)** `ONB-V01`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:14, 52-70</sub> | state | Signup ... Avatar/gender (customer) or Provider verification (provider) -> Terms -> tap the checkbox or its label | — | ❌ |  |
+| 83 | **Preferences — search radius min/max range pair** `ONB-V02`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:81-82, 110-127</sub> | component | ... Terms -> Agree & continue -> Preferences -> 'Search radius' section | — | ❌ |  |
+| 84 | **Preferences — App language pills (English / العربية)** `ONB-V03`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:83, 129-149</sub> | component | ... Terms -> Agree & continue -> Preferences -> 'App language' section | — | ❌ |  |
+
+### Customer discovery
+
+| # | Prototype screen | Kind | How to reach it | Flutter file | Status | Notes |
+|---|---|---|---|---|---|---|
+| 85 | **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** `DISC-01`<br><sub>ui_kits/aiwa-app/screens.jsx:67-179 (HomeScreen); prototype.jsx:659 (case 'home')</sub> | screen | Splash -> Browse as guest -> Home; or Sign in -> Home; or Tab bar -> Home | [Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart)<br>[Android/aiwa_app/lib/features/home/presentation/widgets/category_tile.dart](Android/aiwa_app/lib/features/home/presentation/widgets/category_tile.dart)<br>[Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart)<br>[Android/aiwa_app/lib/features/home/presentation/widgets/provider_list_item.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_list_item.dart)<br>[Android/aiwa_app/lib/shared/widgets/section_header.dart](Android/aiwa_app/lib/shared/widgets/section_header.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 16 finding(s). Greeting is time-based ('Good morning/afternoon/evening') and uses the signed-in first name (home_page.dart:86-91,150-152). That is acceptable dynamic behaviour against the prototype's static 'Good evening, Layla'. |
+| 86 | **Discover (search, category chips, sort, result list)** `DISC-02`<br><sub>ui_kits/aiwa-app/prototype.jsx:129-233 (DiscoverScreen); prototype.jsx:660 (case 'discover')</sub> | screen | Tab bar -> Discover; Home -> category tile -> Discover; Book Now check sheet -> 'See alternatives' -> Discover | [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart)<br>[Android/aiwa_app/lib/features/home/presentation/widgets/provider_list_item.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_list_item.dart)<br>[Android/aiwa_app/lib/features/home/presentation/bloc/home_bloc.dart](Android/aiwa_app/lib/features/home/presentation/bloc/home_bloc.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart](Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 12 finding(s).  |
+| 87 | **Discover - loading skeleton** `DISC-03`<br><sub>ui_kits/aiwa-app/prototype.jsx:136-138,201; states.jsx:24-55 (Skeleton, SkeletonCard, SkeletonList)</sub> | state | Tab bar -> Discover (first 620ms), or type a query (380ms) | [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart](Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart) | ⚠️ | 1 finding(s).  |
+| 88 | **Discover - empty results** `DISC-04`<br><sub>ui_kits/aiwa-app/prototype.jsx:202-208; states.jsx:80-107 (EmptyState)</sub> | state | Discover -> type a query or pick a category/filter that returns 0 providers | [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart) | ⚠️ | 4 finding(s).  |
+| 89 | **Discover - active filter chips** `DISC-05`<br><sub>ui_kits/aiwa-app/prototype.jsx:183-192</sub> | state | Discover -> filter button -> set a minimum rating or max price -> close the sheet | [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart) | ⚠️ | 2 finding(s).  |
+| 90 | **Discover - Filters bottom sheet (rating / price)** `DISC-06`<br><sub>ui_kits/aiwa-app/prototype.jsx:235-282</sub> | sheet | Tab bar -> Discover -> sliders button in the search pill | [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart)<br>[Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) | ⚠️ | 3 finding(s).  |
+| 91 | **Discover - end-of-list footer** `DISC-07`<br><sub>ui_kits/aiwa-app/prototype.jsx:232; states.jsx:320-328 (EndOfList)</sub> | component | Discover -> scroll to the bottom of a non-empty result list | [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ✅ |  |
+| 92 | **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** `DISC-08`<br><sub>ui_kits/aiwa-app/screens.jsx:184-244,314-321 (ProviderScreen); prototype.jsx:661-667 (case 'provider')</sub> | screen | Home -> Trending card or Available now row -> Provider; Discover -> result row -> Provider; Saved -> card or 'Book again' -> Provider; Rejected -> alternative … | [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart)<br>[Android/aiwa_app/lib/features/providers/presentation/bloc/provider_bloc.dart](Android/aiwa_app/lib/features/providers/presentation/bloc/provider_bloc.dart)<br>[Android/aiwa_app/lib/features/providers/domain/entities/provider_detail_entity.dart](Android/aiwa_app/lib/features/providers/domain/entities/provider_detail_entity.dart)<br>[Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart) | ⚠️ | 16 finding(s).  |
+| 93 | **Provider profile - Services tab** `DISC-09`<br><sub>ui_kits/aiwa-app/screens.jsx:246-268</sub> | tab | Provider profile -> Services tab (default) | [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart)<br>[Android/aiwa_app/lib/features/providers/domain/entities/provider_detail_entity.dart](Android/aiwa_app/lib/features/providers/domain/entities/provider_detail_entity.dart) | ⚠️ | 5 finding(s).  |
+| 94 | **Provider profile - Reviews tab** `DISC-10`<br><sub>ui_kits/aiwa-app/screens.jsx:270-293</sub> | tab | Provider profile -> Reviews tab | [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/star_rating.dart](Android/aiwa_app/lib/shared/widgets/star_rating.dart) | ⚠️ | 4 finding(s).  |
+| 95 | **Provider profile - Gallery tab** `DISC-11`<br><sub>ui_kits/aiwa-app/screens.jsx:295-311</sub> | tab | Provider profile -> Gallery tab | [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart) | ✅ |  |
+| 96 | **FlagProviderSheet (report a provider)** `DISC-12`<br><sub>ui_kits/aiwa-app/customer-extras.jsx:432-491; mounted at prototype.jsx:742-750</sub> | sheet | Provider profile -> 'Report' chip | — | ❌ |  |
+| 97 | **Toast - 'Thanks — flag received. Our team reviews every report.'** `DISC-13`<br><sub>ui_kits/aiwa-app/prototype.jsx:746-749 (setToast); Toast at prototype.jsx:20-39</sub> | toast | Provider profile -> Report -> choose a reason -> Submit flag | — | ❌ |  |
+| 98 | **StaffPickerScreen ('Pick your stylist.' - shop-type providers)** `DISC-14`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:56-98; prototype.jsx:664,668-671</sub> | screen | Provider profile (shop-type, e.g. Layla Beauty or Maadi Hammam) -> 'Book now' or a service '+' -> Staff picker -> (guest) Auth gate or (signed in) Booking type | — | ❌ |  |
+| 99 | **AuthGateScreen ('Sign in to book.')** `DISC-15`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:27-54; prototype.jsx:665,669,672</sub> | screen | Guest -> Provider profile -> Book now or service '+' (individual provider) -> Auth gate; Guest -> Staff picker -> pick -> Auth gate; Guest-locked tab -> 'Sign … | [Android/aiwa_app/lib/features/auth/presentation/pages/auth_gate_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/auth_gate_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart) | ⚠️ | 3 finding(s).  |
+| 100 | **Saved (favorites list)** `DISC-16`<br><sub>ui_kits/aiwa-app/prototype.jsx:290-337 (SavedScreen); prototype.jsx:706-708 (case 'saved')</sub> | screen | Tab bar -> Saved (signed in) | [Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart)<br>[Android/aiwa_app/lib/features/saved/presentation/bloc/saved_bloc.dart](Android/aiwa_app/lib/features/saved/presentation/bloc/saved_bloc.dart)<br>[Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart) | ⚠️ | 6 finding(s).  |
+| 101 | **Saved - empty state ('No favorites yet')** `DISC-17`<br><sub>ui_kits/aiwa-app/prototype.jsx:299-303; states.jsx:80-107</sub> | state | Tab bar -> Saved with no saved providers (or after un-hearting all of them) | [Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart) | ⚠️ | 1 finding(s).  |
+| 102 | **GuestLockedScreen (shared guest gate for Bookings / Saved / Profile)** `DISC-18`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:11-25</sub> | component | Splash -> Browse as guest -> tap the Bookings, Saved or Profile tab | [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart) | ⚠️ | 2 finding(s).  |
+| 103 | **Bookings tab - guest locked variant** `DISC-19`<br><sub>ui_kits/aiwa-app/prototype.jsx:698-699</sub> | state | Splash -> Browse as guest -> Bookings tab | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart) | ⚠️ | 2 finding(s).  |
+| 104 | **Saved tab - guest locked variant** `DISC-20`<br><sub>ui_kits/aiwa-app/prototype.jsx:706-707</sub> | state | Splash -> Browse as guest -> Saved tab | [Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart) | ⚠️ | 2 finding(s).  |
+| 105 | **Profile tab - guest locked variant** `DISC-21`<br><sub>ui_kits/aiwa-app/prototype.jsx:709-710</sub> | state | Splash -> Browse as guest -> Profile tab (or the Home avatar in Flutter) | [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart) | ⚠️ | 2 finding(s).  |
+| 106 | **Customer bottom tab bar + onTabChange behaviour** `DISC-22`<br><sub>ui_kits/aiwa-app/components.jsx:203-237 (TabBar); prototype.jsx:564-573 (onTabChange), 721, 736</sub> | component | Any customer tab root (home, discover, bookings, saved, profile) | [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart) | ⚠️ | 3 finding(s).  |
+
+### Customer booking lifecycle
+
+| # | Prototype screen | Kind | How to reach it | Flutter file | Status | Notes |
+|---|---|---|---|---|---|---|
+| 107 | **Booking type choice (Now or later)** `BOOK-01`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:162-221; prototype.jsx:686-691</sub> | screen | Home -> provider card -> Provider profile -> service '+' or 'Book now' (individual provider; shops go via Staff picker, guests via Auth gate) -> Booking type | — | ❌ |  |
+| 108 | **Book Now availability check - checking state (and AVAILABLE pass-through)** `BOOK-02`<br><sub>ui_kits/aiwa-app/system-screens.jsx:228-260; prototype.jsx:763-768</sub> | sheet | Booking type -> tap 'Book now' card | — | ❌ |  |
+| 109 | **Book Now blocked - OFFLINE** `BOOK-03`<br><sub>ui_kits/aiwa-app/system-screens.jsx:221, 261-273; screens.jsx:13</sub> | sheet | Maadi Hammam (bookNowStatus OFFLINE) -> Staff picker -> Booking type -> Book now; or Preview states 'Book Now - offline' | — | ❌ |  |
+| 110 | **Book Now blocked - BUSY** `BOOK-04`<br><sub>ui_kits/aiwa-app/system-screens.jsx:222, 261-273; screens.jsx:17</sub> | sheet | Omar - Barbier (bookNowStatus BUSY) -> Booking type -> Book now; or Preview states 'Book Now - busy' | — | ❌ |  |
+| 111 | **Book Now blocked - VACATION** `BOOK-05`<br><sub>ui_kits/aiwa-app/system-screens.jsx:223, 261-273; screens.jsx:18</sub> | sheet | Mariam Lashes (vacationMode, bookNowStatus VACATION) -> Booking type -> Book now; or Preview states 'Book Now - vacation' | — | ❌ |  |
+| 112 | **Book Now blocked - SETTLEMENT_PAUSED** `BOOK-06`<br><sub>ui_kits/aiwa-app/system-screens.jsx:224, 261-273; prototype.jsx:787</sub> | sheet | Preview states 'Book Now - provider paused' only (no seed provider uses it) | — | ❌ |  |
+| 113 | **Book Now blocked - NOT_APPROVED (defined, not reachable in prototype)** `BOOK-07`<br><sub>ui_kits/aiwa-app/system-screens.jsx:225</sub> | sheet | Not reachable. Defined in BOOK_NOW_BLOCKS, but no seed provider or Preview state uses it | — | ❌ |  |
+| 114 | **Booking screen - scheduled (date & slot picker + CTA)** `BOOK-08`<br><sub>ui_kits/aiwa-app/screens.jsx:329-465; prototype.jsx:692</sub> | screen | Provider profile -> Booking type -> 'Pick a date & time slot' (or Book Now sheet -> 'Choose a scheduled time') | [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart)<br>[Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart](Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart)<br>[Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart](Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart)<br>[Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart) | ⚠️ | 10 finding(s).  |
+| 115 | **Booking screen - Book Now mode variant** `BOOK-09`<br><sub>ui_kits/aiwa-app/screens.jsx:336, 405-408, 420; prototype.jsx:692, 766</sub> | state | Booking type -> Book now -> availability AVAILABLE -> Booking screen (bookingMode 'now') | — | ❌ |  |
+| 116 | **Booking screen - 'Where' home vs salon toggle** `BOOK-10`<br><sub>ui_kits/aiwa-app/screens.jsx:403-419</sub> | component | Booking screen (scheduled) -> Where section | — | ❌ |  |
+| 117 | **Booking screen - saved address selector (Home / Work / Add new address)** `BOOK-11`<br><sub>ui_kits/aiwa-app/screens.jsx:335, 420-438; customer-extras-2.jsx:179-182</sub> | component | Booking screen -> Where -> 'At my address' (or always in Book Now mode) | — | ❌ |  |
+| 118 | **Booking screen - Cash on visit payment card** `BOOK-12`<br><sub>ui_kits/aiwa-app/screens.jsx:443-453</sub> | component | Booking screen -> Payment section | [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart) | ⚠️ | 2 finding(s).  |
+| 119 | **Slot conflict sheet ('Someone booked that slot.')** `BOOK-13`<br><sub>ui_kits/aiwa-app/system-screens.jsx:150-186; prototype.jsx:760-762, 783</sub> | sheet | Booking screen -> Confirm booking when the slot was just taken (409); or Preview states 'Slot just taken' | — | ❌ |  |
+| 120 | **Booking confirmed ('You said aiwa. We told Nadia.')** `BOOK-14`<br><sub>ui_kits/aiwa-app/screens.jsx:470-494; prototype.jsx:692-693</sub> | screen | Booking screen -> Confirm booking | [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_confirmed_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_confirmed_page.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart) | ⚠️ | 7 finding(s).  |
+| 121 | **Tracking - Pending** `BOOK-15`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:226-233, 235-485 (pending branches 250-256, 262, 442-469, 479); prototype.jsx:692, 694</sub> | state | Booking confirmed (scheduled) -> 'View my bookings' -> Tracking; or Bookings -> Upcoming -> tap b2 'Gel Manicure' (pending) / 'Track' | — | ❌ |  |
+| 122 | **Tracking - Accepted (confirmed)** `BOOK-16`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:228, 252, 262, 378-389; prototype.jsx:513, 634, 700-704</sub> | state | Bookings -> Upcoming -> b1 'Haircut & Style' (confirmed, home) -> Tracking; also after Book Now booking or Proposed time 'Accept new time' | — | ❌ |  |
+| 123 | **Tracking - On the way** `BOOK-17`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:229, 253, 339-356; prototype.jsx:713</sub> | state | Notifications -> 'Nadia is on the way' (opens Tracking with status onway); or Tracking -> provider taps on-the-way | — | ❌ |  |
+| 124 | **Tracking - Arrived** `BOOK-18`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:230, 254, 339</sub> | state | Tracking (on the way) -> provider marks arrived | — | ❌ |  |
+| 125 | **Tracking - In progress** `BOOK-19`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:231, 255, 305</sub> | state | Tracking (arrived) -> provider starts service | — | ❌ |  |
+| 126 | **Tracking - Completed (confirm cash payment + review)** `BOOK-20`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:232, 263, 317, 427-439, 480; prototype.jsx:694</sub> | state | Tracking (in progress) -> provider marks complete | — | ❌ |  |
+| 127 | **Tracking - provider contact card (call + chat entry)** `BOOK-21`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:329-337; prototype.jsx:694 (onChat -> push('chat'))</sub> | component | Any Tracking state | — | ❌ |  |
+| 128 | **Tracking - home-service safety card (live location + ID, SOS button)** `BOOK-22`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:339-356</sub> | component | Tracking in On the way / Arrived / In progress for a home (non-venue) booking | — | ❌ |  |
+| 129 | **Tracking - SOS stage 1: alerting** `BOOK-23`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:357-363</sub> | banner | Tracking (home service, on the way/arrived/in progress) -> SOS button | — | ❌ |  |
+| 130 | **Tracking - SOS stage 2: support notified** `BOOK-24`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:364-370</sub> | banner | SOS alerting -> request succeeds | — | ❌ |  |
+| 131 | **Tracking - SOS stage 3: incident logged** `BOOK-25`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:371-376</sub> | banner | SOS notified -> 'I'm safe' | — | ❌ |  |
+| 132 | **Tracking - venue check-in card** `BOOK-26`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:378-389</sub> | component | Tracking for a venue booking (e.g. b2 Gel Manicure) in Accepted / On the way / Arrived | — | ❌ |  |
+| 133 | **Tracking - travel fee quote (accept / decline) + total row** `BOOK-27`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:442-475</sub> | state | Tracking (pending) -> provider quotes a travel fee (prototype demo button) | — | ❌ |  |
+| 134 | **Tracking - travel fee declined ('No problem - no fee applied.')** `BOOK-28`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:265-281</sub> | state | Tracking (pending) -> travel fee card -> Decline | — | ❌ |  |
+| 135 | **Cancel booking sheet (with reasons)** `BOOK-29`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:490-549; prototype.jsx:694, 737-741</sub> | sheet | Tracking (Pending/Accepted) -> 'Cancel booking' | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart)<br>[Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart](Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart)<br>[Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_event.dart](Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_event.dart) | ⚠️ | 8 finding(s).  |
+| 136 | **Proposed time - provider suggested a different time (active countdown)** `BOOK-30`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:9-68; prototype.jsx:633-635</sub> | screen | Tracking (pending) -> 'Demo: provider proposes new time' (in production: push/notification when the provider proposes) | — | ❌ |  |
+| 137 | **Proposed time - offer expired** `BOOK-31`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:41-45, 54-58</sub> | state | Proposed time -> countdown reaches 00:00 | — | ❌ |  |
+| 138 | **Booking rejected - reason + alternatives** `BOOK-32`<br><sub>ui_kits/aiwa-app/customer-extras.jsx:343-427; prototype.jsx:635, 702, 716</sub> | screen | Bookings -> Past -> rejected card 'See alternatives'; or Proposed time -> Decline | — | ❌ |  |
+| 139 | **Expired booking ('No answer in time.')** `BOOK-33`<br><sub>ui_kits/aiwa-app/system-screens.jsx:189-215; prototype.jsx:681, 703, 790</sub> | screen | Bookings -> Past -> b8 'Russian Volume Lashes' (expired) card tap; or Preview states 'Booking expired' | — | ❌ |  |
+| 140 | **Leave a review ('How was it?')** `BOOK-34`<br><sub>ui_kits/aiwa-app/customer-extras.jsx:15-95; prototype.jsx:694, 712</sub> | screen | Tracking (completed) -> 'Leave a review' (Flutter: Bookings -> Past -> completed card -> 'Leave a review') | [Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart](Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart)<br>[Android/aiwa_app/lib/features/reviews/presentation/bloc/review_bloc.dart](Android/aiwa_app/lib/features/reviews/presentation/bloc/review_bloc.dart)<br>[Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart) | ⚠️ | 6 finding(s).  |
+| 141 | **Complaint ('Open a complaint / What happened?')** `BOOK-35`<br><sub>ui_kits/aiwa-app/customer-extras.jsx:177-258; prototype.jsx:694, 714</sub> | screen | Tracking (any status) -> 'Report a problem' | — | ❌ |  |
+| 142 | **Chat with provider (masked number)** `BOOK-36`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:100-177; prototype.jsx:673, 694</sub> | screen | Tracking -> provider card message-circle button | — | ❌ |  |
+| 143 | **Chat - report message sheet + '[message removed by admin]' state** `BOOK-37`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:116-119, 137-141, 156-160, 172-174</sub> | sheet | Chat -> 'Report' under a provider message | — | ❌ |  |
+| 144 | **Payment confirm (customer) - 'Did you pay {provider} in cash?'** `BOOK-38`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:82-106; prototype.jsx:694-697</sub> | screen | Tracking (completed) -> 'Confirm your cash payment' row -> 'Confirm' | — | ❌ |  |
+| 145 | **Payment confirm - paid / confirmed state** `BOOK-39`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:108-140; prototype.jsx:696</sub> | state | Payment confirm -> 'Yes, I paid - confirm' | — | ❌ |  |
+| 146 | **Payment confirm - unpaid / dispute form** `BOOK-40`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:142-160; prototype.jsx:697</sub> | state | Payment confirm -> 'No / something's wrong' | — | ❌ |  |
+| 147 | **My Bookings - Upcoming tab** `BOOK-41`<br><sub>ui_kits/aiwa-app/screens.jsx:499-597 (upcoming 501-503, 532-579); prototype.jsx:698-705</sub> | tab | Tab bar -> Bookings (Upcoming is default) | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)<br>[Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart](Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart) | ⚠️ | 9 finding(s).  |
+| 148 | **My Bookings - Past tab** `BOOK-42`<br><sub>ui_kits/aiwa-app/screens.jsx:501-503, 552-590</sub> | tab | Bookings -> 'Past' | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart) | ⚠️ | 4 finding(s).  |
+| 149 | **Bookings - cancelled reason card (incl. provider-penalty variant)** `BOOK-43`<br><sub>ui_kits/aiwa-app/screens.jsx:52-53, 58-59, 552-564</sub> | state | Bookings -> Past -> b4 (cancelled by You) / b7 (cancelled by Provider, penalty) | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)<br>[Android/aiwa_app/lib/features/bookings/domain/entities/booking_entity.dart](Android/aiwa_app/lib/features/bookings/domain/entities/booking_entity.dart) | ⚠️ | 3 finding(s).  |
+| 150 | **Bookings - no-show reason card** `BOOK-44`<br><sub>ui_kits/aiwa-app/screens.jsx:56-57, 552-564</sub> | state | Bookings -> Past -> b6 'Classic Pedicure' (noshow) | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart) | ⚠️ | 1 finding(s).  |
+| 151 | **Bookings - rejected reason card + 'See alternatives'** `BOOK-45`<br><sub>ui_kits/aiwa-app/screens.jsx:54-55, 565-573, 586-590; prototype.jsx:702</sub> | state | Bookings -> Past -> b5 'Beard Trim' (rejected) | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart) | ⚠️ | 2 finding(s).  |
+| 152 | **Bookings - expired card in Past (tappable)** `BOOK-46`<br><sub>ui_kits/aiwa-app/screens.jsx:60-61, 503, 535; components.jsx:158</sub> | state | Bookings -> Past -> b8 'Russian Volume Lashes' | — | ⚠️ | 1 finding(s). (verifier: The Past tab renders state.bookings unfiltered (my_bookings_page.dart:179-181), and the backend ignores ?status=, so EXPIRED bookings do appear as _BookingCard entries. StatusPill 'expired' matches the prototype (cream/ink3/ink4, stat… |
+| 153 | **Bookings - Upcoming empty state ('Nothing booked yet')** `BOOK-47`<br><sub>ui_kits/aiwa-app/screens.jsx:522-531; states.jsx:80-107</sub> | state | Bookings -> Upcoming with no live bookings | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart) | ⚠️ | 4 finding(s).  |
+| 154 | **Bookings - Past empty state ('No past appointments')** `BOOK-48`<br><sub>ui_kits/aiwa-app/screens.jsx:522-531</sub> | state | Bookings -> Past with no finished bookings | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart) | ⚠️ | 1 finding(s).  |
+| 155 | **Bookings - guest locked state** `BOOK-49`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:11-25; prototype.jsx:698-699</sub> | state | Splash -> Continue as guest -> tab bar Bookings | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart) | ⚠️ | 3 finding(s).  |
+| 156 | **Booking data model (MY_BOOKINGS seed fields)** `BOOK-50`<br><sub>ui_kits/aiwa-app/screens.jsx:48-62</sub> | component | Backs Bookings list, Tracking, Confirmed, Review | [Android/aiwa_app/lib/features/bookings/domain/entities/booking_entity.dart](Android/aiwa_app/lib/features/bookings/domain/entities/booking_entity.dart)<br>[Android/aiwa_app/lib/features/bookings/data/models/booking_model.dart](Android/aiwa_app/lib/features/bookings/data/models/booking_model.dart) | ⚠️ | 2 finding(s).  |
+| 157 | **StatusPill (booking statuses)** `BOOK-51`<br><sub>ui_kits/aiwa-app/components.jsx:147-172</sub> | component | Booking cards (Bookings tab) | [Android/aiwa_app/lib/shared/widgets/status_pill.dart](Android/aiwa_app/lib/shared/widgets/status_pill.dart) | ✅ |  |
+| 158 | **Toast component (success toast)** `BOOK-52`<br><sub>ui_kits/aiwa-app/prototype.jsx:20-39, 735</sub> | component | Any customer action that calls setToast(...) | [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) | ⚠️ | 4 finding(s).  |
+| 159 | **Toast - 'Booking placed. Waiting to confirm.'** `BOOK-53`<br><sub>ui_kits/aiwa-app/prototype.jsx:692</sub> | toast | Booking screen (scheduled) -> Confirm booking | — | ❌ |  |
+| 160 | **Toast - 'Provider is on the way.'** `BOOK-54`<br><sub>ui_kits/aiwa-app/prototype.jsx:692</sub> | toast | Book Now -> Booking screen -> Confirm booking | — | ❌ |  |
+| 161 | **Toast - 'Booking cancelled. Reason: {reason}'** `BOOK-55`<br><sub>ui_kits/aiwa-app/prototype.jsx:737-741</sub> | toast | Tracking -> Cancel booking -> pick reason -> Cancel | [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart) | ⚠️ | 2 finding(s).  |
+| 162 | **Toast - 'Thanks - your review is live.'** `BOOK-56`<br><sub>ui_kits/aiwa-app/prototype.jsx:712</sub> | toast | Review -> Submit review | [Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart](Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart) | ⚠️ | 1 finding(s).  |
+| 163 | **Toast - 'Complaint submitted. We will reach out via WhatsApp.'** `BOOK-57`<br><sub>ui_kits/aiwa-app/prototype.jsx:714</sub> | toast | Tracking -> Report a problem -> Submit complaint | — | ❌ |  |
+| 164 | **Toast - 'New time confirmed - your calendar and reminders are updated.'** `BOOK-58`<br><sub>ui_kits/aiwa-app/prototype.jsx:634</sub> | toast | Proposed time -> Accept new time | — | ❌ |  |
+| 165 | **Toast - 'Payment confirmed. Receipt sent.'** `BOOK-59`<br><sub>ui_kits/aiwa-app/prototype.jsx:696</sub> | toast | Payment confirm -> Yes, I paid -> Rate your provider | — | ❌ |  |
+| 166 | **Toast - 'Reported as unpaid. AIWA support has been notified.'** `BOOK-60`<br><sub>ui_kits/aiwa-app/prototype.jsx:697</sub> | toast | Payment confirm -> No / something's wrong -> Submit as unpaid | — | ❌ |  |
+| 167 | **Toast - 'Rebooked for {time}.'** `BOOK-61`<br><sub>ui_kits/aiwa-app/prototype.jsx:760-762</sub> | toast | Slot conflict sheet -> pick alternative -> Book {time} | — | ❌ |  |
+| 168 | **Proposed time - countdown under 2 minutes (urgent)** `BOOK-V01`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:47-50</sub> | state | Tracking (pending) -> provider proposes new time -> Proposed time, while secondsLeft &lt; 120 | — | ❌ |  |
+| 169 | **Slot conflict sheet - alternative selected** `BOOK-V02`<br><sub>ui_kits/aiwa-app/system-screens.jsx:151, 170-181</sub> | state | Booking -> Confirm booking (slot taken) -> Slot conflict sheet -> tap an alternative chip | — | ❌ |  |
+| 170 | **Cancel sheet - 'Something else' selected with note field** `BOOK-V03`<br><sub>ui_kits/aiwa-app/flow-screens.jsx:519-539</sub> | state | Tracking (pending/accepted) -> Cancel booking -> tap 'Something else' | — | ❌ |  |
+
+### Customer account, notifications & system
+
+| # | Prototype screen | Kind | How to reach it | Flutter file | Status | Notes |
+|---|---|---|---|---|---|---|
+| 171 | **Profile tab (signed-in customer)** `ACCT-01`<br><sub>ui_kits/aiwa-app/prototype.jsx:342-402 (ProfileScreen); case 'profile' prototype.jsx:709-711</sub> | screen | Splash -> sign in / sign up -> Home -> bottom tab bar 'Profile' | [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)<br>[Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart) | ⚠️ | 10 finding(s).  |
+| 172 | **Profile tab - guest-locked state** `ACCT-02`<br><sub>ui_kits/aiwa-app/prototype.jsx:709-710; customer-extras-2.jsx:11-25 (GuestLockedScreen)</sub> | state | Splash -> Browse as guest -> bottom tab 'Profile' | [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart) | ⚠️ | 3 finding(s).  |
+| 173 | **Sign-out confirm sheet** `ACCT-03`<br><sub>ui_kits/aiwa-app/prototype.jsx:756-758; states.jsx:227-257 (ConfirmSheet)</sub> | sheet | Profile tab -> 'Sign out' row | [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart)<br>[Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) | ⚠️ | 2 finding(s).  |
+| 174 | **Delete account sheet (type DELETE to confirm)** `ACCT-04`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:217-248; mounted prototype.jsx:751-755</sub> | sheet | Profile tab -> 'Delete account' row | — | ❌ |  |
+| 175 | **Toast: 'Account deleted. Sorry to see you go.'** `ACCT-05`<br><sub>ui_kits/aiwa-app/prototype.jsx:751-754; Toast component prototype.jsx:20-39</sub> | toast | Profile -> Delete account -> type DELETE -> 'Delete account' | — | ❌ |  |
+| 176 | **Saved addresses list** `ACCT-06`<br><sub>ui_kits/aiwa-app/customer-extras-2.jsx:179-215 (AddressesScreen, SAVED_ADDRESSES); prototype.jsx:674</sub> | sub-screen | Profile tab -> 'Saved addresses' | — | ❌ |  |
+| 177 | **New address form (add mode)** `ACCT-07`<br><sub>ui_kits/aiwa-app/account-screens.jsx:116-215 (AddressFormScreen, existing=null); prototype.jsx:674-677</sub> | sub-screen | Profile -> Saved addresses -> 'Add new address' | — | ❌ |  |
+| 178 | **Edit address form (edit mode)** `ACCT-08`<br><sub>ui_kits/aiwa-app/account-screens.jsx:121-215 (existing != null); prototype.jsx:674-677</sub> | sub-screen | Profile -> Saved addresses -> pencil icon on an address | — | ❌ |  |
+| 179 | **Delete address confirm sheet** `ACCT-09`<br><sub>ui_kits/aiwa-app/account-screens.jsx:210-212</sub> | sheet | Profile -> Saved addresses -> pencil -> 'Delete this address' | — | ❌ |  |
+| 180 | **Toast: 'Address added.'** `ACCT-10`<br><sub>ui_kits/aiwa-app/prototype.jsx:676 (editAddress == null); Toast prototype.jsx:20-39</sub> | toast | Profile -> Saved addresses -> Add new address -> valid form -> 'Add address' | — | ❌ |  |
+| 181 | **Toast: 'Address updated.'** `ACCT-11`<br><sub>ui_kits/aiwa-app/prototype.jsx:676 (editAddress != null)</sub> | toast | Profile -> Saved addresses -> pencil -> 'Save address' | — | ❌ |  |
+| 182 | **Toast: 'Address deleted.'** `ACCT-12`<br><sub>ui_kits/aiwa-app/prototype.jsx:677</sub> | toast | Profile -> Saved addresses -> pencil -> Delete this address -> 'Delete' | — | ❌ |  |
+| 183 | **Personal info (edit profile)** `ACCT-13`<br><sub>ui_kits/aiwa-app/account-screens.jsx:7-73 (EditProfileScreen); prototype.jsx:678</sub> | sub-screen | Profile tab -> 'Personal info' | — | ❌ |  |
+| 184 | **Toast: 'Profile updated.'** `ACCT-14`<br><sub>ui_kits/aiwa-app/prototype.jsx:678</sub> | toast | Profile -> Personal info -> edit a field -> 'Save changes' | — | ❌ |  |
+| 185 | **Safety & policies** `ACCT-15`<br><sub>ui_kits/aiwa-app/account-screens.jsx:75-114 (POLICY_DOCS, SafetyPoliciesScreen); prototype.jsx:679</sub> | sub-screen | Profile tab -> 'Safety & policies' | — | ❌ |  |
+| 186 | **Trusted contacts (list)** `ACCT-16`<br><sub>ui_kits/aiwa-app/account-screens.jsx:217-295 (TrustedContactsScreen, TRUSTED_SEED); prototype.jsx:680</sub> | sub-screen | Profile tab -> 'Trusted contacts' (value '1 saved') | — | ❌ |  |
+| 187 | **Trusted contacts - empty state** `ACCT-17`<br><sub>ui_kits/aiwa-app/account-screens.jsx:246-250</sub> | state | Profile -> Trusted contacts with 0 contacts (e.g. after removing the seeded 'Mona Kamal') | — | ❌ |  |
+| 188 | **Trusted contacts - add contact inline form** `ACCT-18`<br><sub>ui_kits/aiwa-app/account-screens.jsx:268-279</sub> | state | Profile -> Trusted contacts -> 'Add another contact' (or 'Add a contact' from the empty state) | — | ❌ |  |
+| 189 | **Remove trusted contact confirm sheet** `ACCT-19`<br><sub>ui_kits/aiwa-app/account-screens.jsx:289-292</sub> | sheet | Profile -> Trusted contacts -> trash icon on a contact | — | ❌ |  |
+| 190 | **Notifications inbox (customer)** `ACCT-20`<br><sub>ui_kits/aiwa-app/customer-extras.jsx:100-172 (NOTIFICATIONS, NotificationsScreen); prototype.jsx:713</sub> | sub-screen | Home -> bell icon (screens.jsx:76) or Profile tab -> 'Notifications' | [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart)<br>[Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_bloc.dart](Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_bloc.dart)<br>[Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_state.dart](Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_state.dart)<br>[Android/aiwa_app/lib/features/notifications/domain/entities/notification_entity.dart](Android/aiwa_app/lib/features/notifications/domain/entities/notification_entity.dart)<br>[Android/aiwa_app/lib/features/notifications/data/repositories/notification_repository_impl.dart](Android/aiwa_app/lib/features/notifications/data/repositories/notification_repository_impl.dart)<br>[Android/aiwa_app/lib/core/network/api_client.dart](Android/aiwa_app/lib/core/network/api_client.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)<br>[Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) | ⚠️ | 8 finding(s).  |
+| 191 | **Notification preferences (channels + quiet hours)** `ACCT-21`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:70-133 (NOTIF_CHANNELS, NotificationPreferencesScreen); prototype.jsx:685</sub> | sub-screen | Profile tab -> 'Notification preferences' | — | ❌ |  |
+| 192 | **WhatsApp support ('Talk to AIWA')** `ACCT-22`<br><sub>ui_kits/aiwa-app/customer-extras.jsx:263-338 (WhatsAppSupportScreen); prototype.jsx:715</sub> | sub-screen | Profile tab -> 'WhatsApp support'; also Account locked -> 'Contact support' | — | ❌ |  |
+| 193 | **Toast: 'Opening WhatsApp…'** `ACCT-23`<br><sub>ui_kits/aiwa-app/prototype.jsx:715</sub> | toast | Profile -> WhatsApp support -> 'Open WhatsApp' | — | ❌ |  |
+| 194 | **Session expired** `ACCT-24`<br><sub>ui_kits/aiwa-app/system-screens.jsx:9-44 (SystemScreen, SessionExpiredScreen); prototype.jsx:682; Preview states item p…</sub> | screen | Any authenticated request returns 401 and the refresh fails (prototype: Preview states -> 'Session expired') | — | ❌ | 1 finding(s).  |
+| 195 | **Account locked** `ACCT-25`<br><sub>ui_kits/aiwa-app/system-screens.jsx:46-53 (AccountLockedScreen); prototype.jsx:683; Preview states prototype.jsx:789</sub> | screen | Sign-in or any request returns 423 / suspended account (prototype: Preview states -> 'Account locked') | — | ❌ |  |
+| 196 | **Forbidden (no access)** `ACCT-26`<br><sub>ui_kits/aiwa-app/system-screens.jsx:63-69 (ForbiddenScreen; defined and exported at :281 but not mounted by CustomerApp)</sub> | screen | API returns 403 / deep link into another role's area (not wired in the prototype) | — | ❌ |  |
+| 197 | **Not found** `ACCT-27`<br><sub>ui_kits/aiwa-app/system-screens.jsx:55-61 (NotFoundScreen; defined but not mounted)</sub> | screen | API 404 / stale deep link / cancelled booking link (not wired in the prototype) | — | ❌ |  |
+| 198 | **Permission denied - location** `ACCT-28`<br><sub>ui_kits/aiwa-app/system-screens.jsx:135-147 (PermissionDeniedScreen kind='location'; defined but not mounted)</sub> | screen | User denies the OS location permission (after the location priming screen) | — | ❌ |  |
+| 199 | **Permission denied - camera** `ACCT-29`<br><sub>ui_kits/aiwa-app/system-screens.jsx:135-147 (kind='camera'; defined but not mounted)</sub> | screen | Provider signup -> verification (ID / selfie) -> camera permission denied | — | ❌ |  |
+| 200 | **Permission denied - notifications** `ACCT-30`<br><sub>ui_kits/aiwa-app/system-screens.jsx:135-147 (kind='notifications'; defined but not mounted)</sub> | screen | Onboarding notification priming -> OS notification permission denied | — | ❌ |  |
+| 201 | **Offline banner** `ACCT-31`<br><sub>ui_kits/aiwa-app/states.jsx:127-145 (OfflineBanner); mounted prototype.jsx:759; Preview states 'Offline banner' prototy…</sub> | banner | Any screen while the device loses connectivity (prototype: Preview states -> 'Offline banner'); 'Retry' hides it | — | ❌ |  |
+| 202 | **Personal info - saving state ('Saving…')** `ACCT-V01`<br><sub>ui_kits/aiwa-app/account-screens.jsx:15, 66-69; toast wiring prototype.jsx:678</sub> | state | Profile tab -> Personal info -> edit a field -> 'Save changes' | — | ❌ |  |
+| 203 | **Personal info - inline validation errors** `ACCT-V02`<br><sub>ui_kits/aiwa-app/account-screens.jsx:17-21, 35-38; states.jsx:171-206 (ValidatedInput)</sub> | state | Profile tab -> Personal info -> clear or garble a field, then leave it (blur) | — | ❌ |  |
+| 204 | **Address form - validation error state** `ACCT-V03`<br><sub>ui_kits/aiwa-app/account-screens.jsx:132-134, 174-176, 204</sub> | state | Profile -> Saved addresses -> Add new address (or pencil) -> leave Street or Building invalid and blur | — | ❌ |  |
+| 205 | **Safety & policies - expanded policy (accordion open)** `ACCT-V04`<br><sub>ui_kits/aiwa-app/account-screens.jsx:85, 95-103</sub> | state | Profile tab -> Safety & policies -> tap any policy row (e.g. 'Terms of service') | — | ❌ |  |
+| 206 | **Notification preferences - quiet hours off** `ACCT-V05`<br><sub>ui_kits/aiwa-app/flow-additions-v3.jsx:81, 110-129</sub> | state | Profile tab -> Notification preferences -> toggle 'Mute non-urgent notifications' off | — | ❌ |  |
+| 207 | **Notifications inbox - all read (after 'Mark all read')** `ACCT-V06`<br><sub>ui_kits/aiwa-app/customer-extras.jsx:112-113, 123, 126-130, 144, 158, 163</sub> | state | Profile tab (or Home bell) -> Notifications -> 'Mark all read' | [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart)<br>[Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_bloc.dart](Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_bloc.dart)<br>[Android/aiwa_app/lib/features/notifications/domain/entities/notification_entity.dart](Android/aiwa_app/lib/features/notifications/domain/entities/notification_entity.dart) | ⚠️ | 1 finding(s).  |
+
+### Provider app
+
+| # | Prototype screen | Kind | How to reach it | Flutter file | Status | Notes |
+|---|---|---|---|---|---|---|
+| 208 | **ProviderTabBar (Today / Bookings / Services / Schedule / Profile)** `PROV-01`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:562-596; ui_kits/aiwa-app/prototype.jsx:465-471,485</sub> | component | Provider app -> visible on every tab root (today, bookings, services, schedule, profile); hidden on pushed screens | [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)<br>[Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart) | ❌ | Only the customer ShellPage tab bar exists (shell_page.dart:36-103). DashboardPage is a standalone GoRoute (app_router.dart:223-226) with no bottom navigation, so no other provider tab can be reached. |
+| 209 | **Provider post-sign-in / session-restore routing** `PROV-02`<br><sub>ui_kits/aiwa-app/prototype.jsx:619-626,651</sub> | state | Splash -> English -> I'm a provider -> Sign in -> (submit) -> provider-pending; approved provider = ProviderApp 'today' | [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart)<br>[Android/aiwa_app/lib/features/auth/presentation/pages/provider_pending_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_pending_page.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart) | ⚠️ | 2 finding(s).  |
+| 210 | **Provider Today dashboard (hero header + stat tiles + section structure)** `PROV-03`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:35-139; ui_kits/aiwa-app/prototype.jsx:437</sub> | screen | Provider app -> Today tab (default tab) | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)<br>[Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart)<br>[Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart](Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart)<br>[Android/aiwa_app/lib/core/constants/api_constants.dart](Android/aiwa_app/lib/core/constants/api_constants.dart) | ⚠️ | 8 finding(s).  |
+| 211 | **Pending booking requests callout** `PROV-04`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:74-86</sub> | banner | Provider app -> Today tab (shown only when pending > 0) | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart) | ✅ | _PendingCallout (dashboard_page.dart:397-470) matches padding, radius, colours, border (warn500.withOpacity(0.2) = hex 33) and copy, with a singular form for n=1. Flutter adds onTap -> DashboardFilterStatusEvent('PENDING') (dashboard_page.dart:131-133); the p… |
+| 212 | **'New requests' section and booking request card (Decline / Accept)** `PROV-05`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:88-113</sub> | component | Provider app -> Today tab -> New requests list | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)<br>[Android/aiwa_app/lib/features/bookings/data/models/booking_model.dart](Android/aiwa_app/lib/features/bookings/data/models/booking_model.dart)<br>[Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart](Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart) | ⚠️ | 10 finding(s).  |
+| 213 | **'Confirmed today' section (today's confirmed bookings)** `PROV-06`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:115-131</sub> | component | Provider app -> Today tab -> below New requests | — | ❌ | DashboardPage has no today list; the 'Upcoming' filter shows ACCEPTED bookings as full action cards instead. |
+| 214 | **'Confirmed today' empty state** `PROV-07`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:132-136</sub> | state | Provider app -> Today tab (no non-pending bookings today) | — | ❌ |  |
+| 215 | **Provider Bookings screen (header + Pending/Upcoming/Past tab row + list)** `PROV-08`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:145-190; ui_kits/aiwa-app/prototype.jsx:438</sub> | screen | Provider app -> Bookings tab | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)<br>[Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart)<br>[Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart](Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart) | ⚠️ | 5 finding(s). There is no Bookings screen; the tab row lives inside DashboardPage under the hero (dashboard_page.dart:136,293-333). |
+| 216 | **Bookings tab: Pending** `PROV-09`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:147-148,171-186</sub> | tab | Provider app -> Bookings tab -> Pending (default) | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart) | ⚠️ | 3 finding(s). Flutter equivalent: DashboardPage filter 'PENDING' (dashboard_page.dart:39), which is also the default (dashboard_bloc.dart:41). |
+| 217 | **Bookings tab: Upcoming** `PROV-10`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:149-150,171-186</sub> | tab | Provider app -> Bookings tab -> Upcoming | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart) | ⚠️ | 4 finding(s). Flutter equivalent: filter 'ACCEPTED' labelled 'Upcoming' (dashboard_page.dart:40). |
+| 218 | **Bookings tab: Past** `PROV-11`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:151,159,171-186</sub> | tab | Provider app -> Bookings tab -> Past | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart) | ⚠️ | 3 finding(s). Flutter equivalent: filter 'COMPLETED' labelled 'Done' (dashboard_page.dart:41). A separate 'Cancelled' tab is Flutter-only. |
+| 219 | **Bookings list empty state** `PROV-12`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:170</sub> | state | Provider app -> Bookings tab -> any tab with no bookings | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart) | ⚠️ | 3 finding(s).  |
+| 220 | **Booking request detail — Review & respond (pending)** `PROV-13`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:195-349; ui_kits/aiwa-app/prototype.jsx:454-460</sub> | sub-screen | Provider app -> Today (New requests card) or Bookings (any row) -> Booking detail | — | ❌ | No provider booking-detail route or page exists. Actions are only available as inline buttons on dashboard cards. |
+| 221 | **Booking detail — job progress stepper and status-advance action bar** `PROV-14`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:199-209,233-245,350-360</sub> | state | Provider app -> Booking detail -> after Accept (or opening a confirmed booking) | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)<br>[Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart) | ⚠️ | 8 finding(s). Flutter approximates this with inline sm buttons on dashboard cards (dashboard_page.dart:593-682). |
+| 222 | **Quote a travel fee sheet** `PROV-15`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:210-220,362-393</sub> | sheet | Provider app -> Booking detail (pending, home service with address, no fee yet) -> 'Quote a travel fee instead' | — | ❌ |  |
+| 223 | **Travel-fee state banners (no address / quote sent / fee accepted)** `PROV-16`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:295-329</sub> | banner | Provider app -> Booking detail (home service) | — | ❌ |  |
+| 224 | **Propose a different time + toast 'Alternative time sent to customer.'** `PROV-17`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:347; ui_kits/aiwa-app/prototype.jsx:458</sub> | toast | Provider app -> Booking detail (pending, no quote pending) -> 'Propose a different time instead' -> toast + back | — | ❌ |  |
+| 225 | **ProviderCancelSheet — cancelling after accepting (penalty warning)** `PROV-18`<br><sub>ui_kits/aiwa-app/provider-extras.jsx:124-164; ui_kits/aiwa-app/prototype.jsx:486-490</sub> | sheet | Provider app -> Booking detail (accepted / on the way / arrived) -> Cancel | — | ❌ |  |
+| 226 | **Toast 'Booking cancelled. Penalty applied to your ledger.'** `PROV-19`<br><sub>ui_kits/aiwa-app/prototype.jsx:486-490</sub> | toast | Provider app -> Booking detail -> Cancel -> pick reason -> 'Cancel + accept penalty' | — | ❌ |  |
+| 227 | **PaymentConfirmScreen (provider role) — 'Did {customer} pay in cash?'** `PROV-20`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:82-106; ui_kits/aiwa-app/prototype.jsx:448-452</sub> | screen | Provider app -> Booking detail (in progress) -> Mark completed -> Payment confirm | — | ❌ | Flutter completes directly from the card (see PROV-14-F1). |
+| 228 | **PaymentConfirm — 'Cash received · job closed' state** `PROV-21`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:108-140</sub> | state | Provider app -> Payment confirm -> 'Yes, cash received' | — | ❌ |  |
+| 229 | **PaymentConfirm — dispute form state** `PROV-22`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:142-160</sub> | state | Provider app -> Payment confirm -> 'Mark unpaid or disputed' | — | ❌ |  |
+| 230 | **Toast 'Marked as disputed. Admin has been notified.'** `PROV-23`<br><sub>ui_kits/aiwa-app/prototype.jsx:452</sub> | toast | Provider app -> Payment confirm -> dispute -> 'Submit as disputed' -> Bookings tab | — | ❌ |  |
+| 231 | **RateCustomerScreen (two-way rating)** `PROV-24`<br><sub>ui_kits/aiwa-app/provider-extras.jsx:84-122; ui_kits/aiwa-app/prototype.jsx:453</sub> | screen | Provider app -> Payment confirm -> 'Cash received' -> 'Rate {customer}' | — | ❌ |  |
+| 232 | **Toast 'Rating submitted. Slot freed — next booking notified.'** `PROV-25`<br><sub>ui_kits/aiwa-app/prototype.jsx:453</sub> | toast | Provider app -> Rate customer -> Submit rating -> Bookings tab | — | ❌ |  |
+| 233 | **Provider Services tab** `PROV-26`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:401-430; ui_kits/aiwa-app/prototype.jsx:439</sub> | screen | Provider app -> Services tab | — | ❌ |  |
+| 234 | **Provider Schedule tab (weekly availability)** `PROV-27`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:435-459,472-474; ui_kits/aiwa-app/prototype.jsx:440</sub> | screen | Provider app -> Schedule tab | — | ❌ |  |
+| 235 | **Travel buffer stepper** `PROV-28`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:436,460-471</sub> | component | Provider app -> Schedule tab -> below the week list | — | ❌ |  |
+| 236 | **Provider Profile tab** `PROV-29`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:482-557; ui_kits/aiwa-app/prototype.jsx:441</sub> | screen | Provider app -> Profile tab | — | ❌ | features/profile/presentation/pages/profile_page.dart is the customer profile and is not reachable from DashboardPage. |
+| 237 | **Vacation / offline mode toggle** `PROV-30`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:483,508-522</sub> | component | Provider app -> Profile tab -> Vacation / offline card | — | ❌ |  |
+| 238 | **Verified provider banner** `PROV-31`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:524-533</sub> | banner | Provider app -> Profile tab | — | ❌ |  |
+| 239 | **Provider sign-out ConfirmSheet** `PROV-32`<br><sub>ui_kits/aiwa-app/prototype.jsx:491-493; ui_kits/aiwa-app/states.jsx:227-257; ui_kits/aiwa-app/provider-screens.jsx:493</sub> | sheet | Provider app -> Profile tab -> Sign out | [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)<br>[Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart) | ⚠️ | 3 finding(s).  |
+| 240 | **Toast 'Signed out.'** `PROV-33`<br><sub>ui_kits/aiwa-app/prototype.jsx:491</sub> | toast | Provider app -> Profile -> Sign out -> Sign out | — | ❌ | Flutter navigates to splash silently (dashboard_page.dart:90-91). |
+| 241 | **Provider Wallet (commission & settlement)** `PROV-34`<br><sub>ui_kits/aiwa-app/provider-extras.jsx:8-82; ui_kits/aiwa-app/prototype.jsx:442</sub> | sub-screen | Provider app -> Profile tab -> Wallet & settlement | — | ❌ |  |
+| 242 | **Wallet — blocked (over negative limit) state** `PROV-35`<br><sub>ui_kits/aiwa-app/provider-extras.jsx:16-19,35,40-45,54</sub> | state | Provider app -> Profile -> Wallet (balance &lt;= limit) | — | ❌ |  |
+| 243 | **Business info (edit) screen with validation** `PROV-36`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:9-66; ui_kits/aiwa-app/prototype.jsx:443</sub> | sub-screen | Provider app -> Profile tab -> Business info | — | ❌ |  |
+| 244 | **Business info — re-review notice banner** `PROV-37`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:55-56</sub> | banner | Provider app -> Profile -> Business info (above the sticky bar) | — | ❌ |  |
+| 245 | **Toast 'Business info saved.'** `PROV-38`<br><sub>ui_kits/aiwa-app/prototype.jsx:443</sub> | toast | Provider app -> Profile -> Business info -> Save changes | — | ❌ |  |
+| 246 | **Gallery manager (grid, cover badge, count, add tile)** `PROV-39`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:68-175; ui_kits/aiwa-app/prototype.jsx:444</sub> | sub-screen | Provider app -> Profile tab -> Gallery | — | ❌ |  |
+| 247 | **Gallery — upload progress card with cancel** `PROV-40`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:86-100,111-125</sub> | state | Provider app -> Gallery -> Add tile (or 'Upload first photo') | — | ❌ |  |
+| 248 | **Gallery — moderation-hidden photo overlay + warning banner** `PROV-41`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:74,135-142,162-166</sub> | state | Provider app -> Gallery (a photo hidden by moderation) | — | ❌ |  |
+| 249 | **Gallery — delete photo ConfirmSheet** `PROV-42`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:169-172</sub> | sheet | Provider app -> Gallery -> tile x button | — | ❌ |  |
+| 250 | **Gallery — empty state** `PROV-43`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:127-130</sub> | state | Provider app -> Gallery (0 photos) | — | ❌ |  |
+| 251 | **Provider Reviews screen (summary, distribution, filters, list)** `PROV-44`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:177-275; ui_kits/aiwa-app/prototype.jsx:445</sub> | sub-screen | Provider app -> Profile tab -> Reviews | — | ❌ |  |
+| 252 | **Reviews — reply composer (char count) and posted reply block** `PROV-45`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:187-198,246-268</sub> | component | Provider app -> Reviews -> 'Reply publicly' | — | ❌ |  |
+| 253 | **Reviews — filter empty state** `PROV-46`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:228-229</sub> | state | Provider app -> Reviews -> a filter with no matches (e.g. Needs reply when all are answered) | — | ❌ |  |
+| 254 | **Staff & availability (shop plan)** `PROV-47`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:8-80; ui_kits/aiwa-app/prototype.jsx:446</sub> | sub-screen | Provider app -> Profile tab -> Staff & availability | — | ❌ |  |
+| 255 | **Provider notifications inbox (PROVIDER_NOTIFICATIONS)** `PROV-48`<br><sub>ui_kits/aiwa-app/customer-extras.jsx:110-172,501-508; ui_kits/aiwa-app/prototype.jsx:441,447</sub> | sub-screen | Provider app -> Profile tab -> Notifications | [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart)<br>[Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart) | ⚠️ | 2 finding(s). The generic NotificationsPage (/notifications) matches the kit closely, but no provider screen links to it. |
+| 256 | **Booking detail — travel-fee quote pending (action bar locked)** `PROV-V01`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:198,213,215-220,295-307,318-323,340-348</sub> | state | Provider app -> Booking detail (pending home-service booking with an address) -> 'Quote a travel fee instead' -> Send quote | — | ❌ |  |
+| 257 | **Booking detail — read-only state for completed / past bookings** `PROV-V02`<br><sub>ui_kits/aiwa-app/provider-screens.jsx:196-203,224-231,233,340,350; ui_kits/aiwa-app/prototype.jsx:438</sub> | state | Provider app -> Bookings tab -> Past -> tap a completed row | — | ❌ |  |
+| 258 | **Business info — validation error / unsaved (Save disabled) state** `PROV-V03`<br><sub>ui_kits/aiwa-app/provider-manage.jsx:18-23,29-31,40,59-63; ui_kits/aiwa-app/states.jsx:171-206</sub> | state | Provider app -> Profile -> Business info -> clear Business name or Base address and blur (or open without editing) | — | ❌ |  |
+
+### Admin web panel
+
+| # | Prototype screen | Kind | How to reach it | Flutter file | Status | Notes |
+|---|---|---|---|---|---|---|
+| 259 | **Admin panel shell (sidebar + main area)** `ADMIN-01`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:48-135</sub> | component | Prototype role switcher 'Admin' (prototype.jsx:797, rendered at prototype.jsx:900 &lt;AdminPanel />) -> desktop web panel | — | ❌ | Flutter has no admin UI. The only admin artifacts are Android/aiwa_app/lib/features/auth/domain/entities/user_entity.dart:38 `bool get isAdmin => role == 'ADMIN';` (never referenced) and admin mentions in provider copy (provider_pending_page.dart:112 'Admin r… |
+| 260 | **Admin Dashboard** `ADMIN-02`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:140-309</sub> | screen | Admin panel -> sidebar 'Dashboard' (default route, admin-screens.jsx:49) | — | ❌ |  |
+| 261 | **Verifications queue** `ADMIN-03`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:314-362</sub> | screen | Admin panel -> sidebar 'Verifications' (also Dashboard 'Needs attention' / quick link) | — | ❌ |  |
+| 262 | **Verification detail (ID + business review)** `ADMIN-04`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:367-459</sub> | sub-screen | Admin -> Verifications -> click a row / 'Review' | — | ❌ |  |
+| 263 | **Verification detail — Approve selected** `ADMIN-05`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:369,451</sub> | state | Admin -> Verifications -> row -> click 'Approve provider' | — | ❌ |  |
+| 264 | **Verification detail — Reject with reason** `ADMIN-06`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:441-452</sub> | state | Admin -> Verifications -> row -> click 'Reject with reason' | — | ❌ |  |
+| 265 | **Complaints list** `ADMIN-07`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:464-522</sub> | screen | Admin -> sidebar 'Complaints' (or Dashboard Needs attention / quick link) | — | ❌ |  |
+| 266 | **Flags list (Trust & safety)** `ADMIN-08`<br><sub>ui_kits/aiwa-app/admin-extras.jsx:154-193</sub> | screen | Admin -> sidebar 'Flags' (badge 3) | — | ❌ |  |
+| 267 | **Flags — expanded review row (warn / suspend-ban / dismiss)** `ADMIN-09`<br><sub>ui_kits/aiwa-app/admin-extras.jsx:172-187</sub> | state | Admin -> Flags -> 'Review' on a row | — | ❌ |  |
+| 268 | **Users & providers list** `ADMIN-10`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:527-622</sub> | screen | Admin -> sidebar 'Users & providers' (or Dashboard quick link 'Manage users') | — | ❌ |  |
+| 269 | **Users — row action menu** `ADMIN-11`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:600-614</sub> | overlay | Admin -> Users & providers -> row '…' (more-horizontal) | — | ❌ |  |
+| 270 | **Users — 'Blocked' last-super-admin banner** `ADMIN-12`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:534-541,618</sub> | banner | Admin -> Users -> Admins -> '…' on the only active SUPER_ADMIN -> Deactivate | — | ❌ |  |
+| 271 | **Add admin modal (AddAdminSheet)** `ADMIN-13`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:624-705</sub> | modal | Admin -> Users & providers -> 'Add admin' | — | ❌ |  |
+| 272 | **Add admin — validation error state** `ADMIN-14`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:640-647,696</sub> | state | Admin -> Users -> Add admin -> 'Create admin' with invalid input | — | ❌ |  |
+| 273 | **Bookings monitor** `ADMIN-15`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:20-112</sub> | screen | Admin -> sidebar 'Bookings' (or Dashboard 'payment dispute to resolve') | — | ❌ |  |
+| 274 | **Bookings — expanded row detail** `ADMIN-16`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:82-103</sub> | state | Admin -> Bookings -> click a booking row | — | ❌ |  |
+| 275 | **Bookings — dispute resolved banner** `ADMIN-17`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:96,108-109</sub> | banner | Admin -> Bookings -> expand disputed row -> Resolve dispute -> Confirm resolution | — | ❌ |  |
+| 276 | **Bookings — no results empty state** `ADMIN-18`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:65-67</sub> | state | Admin -> Bookings -> search/filter with no matches | — | ❌ |  |
+| 277 | **Payment dispute resolution modal (DisputeResolutionSheet)** `ADMIN-19`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:320-413</sub> | modal | Admin -> Bookings -> expand disputed row (BK-2838) -> 'Resolve dispute' | — | ❌ |  |
+| 278 | **Dispute modal — Evidence tab** `ADMIN-20`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:355-362</sub> | tab | Dispute resolution modal -> 'Evidence' chip (default) | — | ❌ |  |
+| 279 | **Dispute modal — Chat tab** `ADMIN-21`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:363-375</sub> | tab | Dispute resolution modal -> 'Chat' chip | — | ❌ |  |
+| 280 | **Dispute modal — History tab** `ADMIN-22`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:376-388</sub> | tab | Dispute resolution modal -> 'History' chip | — | ❌ |  |
+| 281 | **Reviews moderation queue** `ADMIN-23`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:122-175</sub> | screen | Admin -> sidebar 'Reviews' | — | ❌ |  |
+| 282 | **Reviews moderation — 'Queue is clear' empty state** `ADMIN-24`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:141-143</sub> | state | Admin -> Reviews -> after every item is handled (or search has no match) | — | ❌ |  |
+| 283 | **Content moderation (gallery images / reviews)** `ADMIN-25`<br><sub>ui_kits/aiwa-app/admin-extras.jsx:108-146</sub> | screen | Admin -> sidebar 'Moderation' | — | ❌ |  |
+| 284 | **Settlements (commission oversight)** `ADMIN-26`<br><sub>ui_kits/aiwa-app/admin-extras.jsx:6-106</sub> | screen | Admin -> sidebar 'Settlements' (or Dashboard 'provider with overdue settlement') | — | ❌ |  |
+| 285 | **Settlements — commission rate inline edit** `ADMIN-27`<br><sub>ui_kits/aiwa-app/admin-extras.jsx:16-24,44-58</sub> | state | Admin -> Settlements -> pencil on 'Commission rate' tile | — | ❌ |  |
+| 286 | **Settlements — Suspend provider confirm** `ADMIN-28`<br><sub>ui_kits/aiwa-app/admin-extras.jsx:100-103; states.jsx:227-257</sub> | dialog | Admin -> Settlements -> ban icon on a row | — | ❌ |  |
+| 287 | **Settlement detail (ledger + confirm payout)** `ADMIN-29`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:165-231</sub> | sub-screen | Admin -> Settlements -> row 'View' (or 'Send reminder' on overdue rows) | — | ❌ |  |
+| 288 | **Settlement detail — payout confirmed state** `ADMIN-30`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:167,187,209-215</sub> | state | Admin -> Settlements -> View -> 'Confirm payout received' (or open an already 'settled' row) | — | ❌ |  |
+| 289 | **Settlement detail — Suspend account confirm** `ADMIN-31`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:221,225-228</sub> | dialog | Admin -> Settlements -> View -> 'Suspend account' | — | ❌ |  |
+| 290 | **Settlement detail — 'Account suspended' banner** `ADMIN-32`<br><sub>ui_kits/aiwa-app/flow-additions-v4.jsx:218-219</sub> | banner | Admin -> Settlements -> View -> Suspend account -> confirm (or open a suspended provider) | — | ❌ |  |
+| 291 | **Audit log** `ADMIN-33`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:276-317</sub> | screen | Admin -> sidebar 'Audit log' (or Dashboard 'View full audit log') | — | ❌ |  |
+| 292 | **Audit log — no results empty state** `ADMIN-34`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:302-303</sub> | state | Admin -> Audit log -> search with no matches | — | ❌ |  |
+| 293 | **Policies & support — Terms & policies tab** `ADMIN-35`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:178-233</sub> | tab | Admin -> sidebar 'Policies & support' (default tab 'terms') | — | ❌ |  |
+| 294 | **Policies & support — Booking rules tab** `ADMIN-36`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:235-255</sub> | tab | Admin -> Policies & support -> 'Booking rules' chip | — | ❌ |  |
+| 295 | **Policies & support — Support settings tab** `ADMIN-37`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:257-266</sub> | tab | Admin -> Policies & support -> 'Support' chip | — | ❌ |  |
+| 296 | **Publish new terms version confirm** `ADMIN-38`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:187,198,268-271; states.jsx:227-257</sub> | dialog | Admin -> Policies & support -> 'Publish new version' | — | ❌ |  |
+| 297 | **Admin placeholder ('Coming next')** `ADMIN-39`<br><sub>ui_kits/aiwa-app/admin-screens.jsx:707-721</sub> | state | Unreachable. Defined but never rendered: AdminPanel routes every sidebar id to a real screen (admin-screens.jsx:119-131), and grep finds no other reference. | — | ➖ unreachable |  |
+| 298 | **TableToolbar (search + filters + Export CSV)** `ADMIN-40`<br><sub>ui_kits/aiwa-app/states.jsx:330-356</sub> | component | Used by Bookings, Reviews and Audit log | — | ❌ |  |
+| 299 | **AdminHeader (section eyebrow + title + right slot)** `ADMIN-41`<br><sub>ui_kits/aiwa-app/states.jsx:358-369</sub> | component | Used by Bookings, Reviews, Policies and Audit log (older screens inline their own header) | — | ❌ |  |
+| 300 | **Admin table shell (AdminCard + AdminTableHead + AdminTableRow)** `ADMIN-42`<br><sub>ui_kits/aiwa-app/states.jsx:371-395</sub> | component | Used by Bookings, Reviews, Audit log and Policies | — | ❌ |  |
+| 301 | **Tag (status/permission chip)** `ADMIN-43`<br><sub>ui_kits/aiwa-app/states.jsx:397-410</sub> | component | Used across admin (permissions, dispute, live version, audit action, queue count) | — | ❌ |  |
+| 302 | **Pagination** `ADMIN-44`<br><sub>ui_kits/aiwa-app/states.jsx:290-318</sub> | component | Bookings (4 pages), Audit log (6 pages) | — | ❌ |  |
+| 303 | **Bookings — expanded row 'Payment disputed' banner (pre-resolution)** `ADMIN-V01`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:95; states.jsx:148-168</sub> | banner | Admin -> sidebar 'Bookings' -> click the disputed row BK-2838 (dispute: true) -> expanded panel, before any resolution | — | ❌ | The original inventory listed the post-resolution banner (ADMIN-17) as its own entry but left this pre-resolution sibling inside ADMIN-16. Grep of Android/aiwa_app/lib for 'admin' finds no admin UI. |
+| 304 | **Bookings — expanded row cancellation/penalty flag banner** `ADMIN-V02`<br><sub>ui_kits/aiwa-app/admin-modules.jsx:94; admin-modules.jsx:11</sub> | banner | Admin -> sidebar 'Bookings' -> click row BK-2839 (status cancelled, flag set) -> expanded panel | — | ❌ | Data-driven variant of the expanded row. ADMIN-16 mentions it only in passing. |
+| 305 | **Admin table loading skeleton (SkeletonRows)** `ADMIN-V03`<br><sub>ui_kits/aiwa-app/states.jsx:24-34,67-77</sub> | state | Not mounted by any prototype screen (grep finds only its definition at states.jsx:67). README.md:110 designates it as the loading placeholder for admin tables. | — | ❌ | ADMIN-42 buildNotes mention SkeletonRows only in passing. It is a distinct loading state that the prototype defines for admin tables but never renders. |
+
+## 3. Screen inventory — key UI elements
+
+<details><summary>Expand the full element list for every prototype entry</summary>
+
+
+#### Design system & shared components
+
+- **Color tokens & runtime gender palettes** (`DS-01`, component, shared) — Global: every screen reads the global aiwa object (MALE_THEME applied at load, theme.jsx:66)  
+  Source: ui_kits/aiwa-app/theme.jsx:12-66; ui_kits/aiwa-app/components.jsx:4-16; tokens/colors_and_type.css:20-88  
+  Elements: 34 color tokens (plum/rose/gold/ink/surfaces/lines/semantic); MALE_THEME charcoal #2E2A26 / stone #B5A898 / off-white #F5F2ED; FEMALE_THEME mauve #6B3A3A / dusty rose #C4837A / blush #FDF6F4; Base plum palette overwritten at load
+- **Typography: font families & type scale** (`DS-02`, component, shared) — Global: all text  
+  Source: tokens/colors_and_type.css:96-122,183-275; ui_kits/aiwa-app/components.jsx:17-19; README.md:30-34  
+  Elements: DM Serif Display display/h1/h2; Plus Jakarta Sans body/UI; JetBrains Mono data; h3/h4 = sans 600 20/17px; eyebrow 11/600/0.14em uppercase; price serif 20 tnum; line-heights 1.1/1.25/1.5/1.65
+- **Spacing, radii & elevation tokens** (`DS-03`, component, shared) — Global  
+  Source: tokens/colors_and_type.css:127-159; README.md:36-39  
+  Elements: 4pt spacing s-1..s-10; radii 4/8/12/18/24/999 + inputs 14; shadow-1..4 + shadow-card (plum-tinted)
+- **Motion tokens & keyframes** (`DS-04`, component, shared) — Global  
+  Source: tokens/colors_and_type.css:166-174; ui_kits/aiwa-app/prototype.html:16-43; ui_kits/aiwa-app/states.jsx:10-19; README.md:41-43  
+  Elements: ease-soft (.32,.72,0,1); ease-out/in/bounce; dur 120/200/320/480; keyframes slide-in/fade-in/toast/heart-pop/pulse/shimmer/pop/drop
+- **Icon (Lucide helper)** (`DS-05`, component, shared) — Global: every &lt;Icon name=...>  
+  Source: ui_kits/aiwa-app/components.jsx:22-41; README.md:49  
+  Elements: Lucide UMD glyphs; default size 18; stroke currentColor, 2px stroke
+- **Btn (pill button, 6 variants x 3 sizes)** (`DS-06`, component, shared) — Global, e.g. Splash -> English -> Role choice -> Continue  
+  Source: ui_kits/aiwa-app/components.jsx:44-72; ui_kits/aiwa-app/prototype.html:41-42  
+  Elements: variants primary/accent/secondary/ghost/danger/dark; sizes sm 8x14/13, md 12x20/15, lg 15x26/16; 600 weight, lh 1, radius 999; transition all 200ms soft; global press scale .96
+- **IconBtn (round icon button)** (`DS-07`, component, shared) — Global, e.g. any ScreenHeader back button; Home -> notifications bell (dot)  
+  Source: ui_kits/aiwa-app/components.jsx:75-94  
+  Elements: variants paper/plum/rose/glass; size 40, icon round(size*.45); notification dot 9px rose500; shadow 0 1px 2px
+- **Avatar (initial + gradient, verified badge)** (`DS-08`, component, shared) — Global, e.g. Discover -> provider rows; Profile header  
+  Source: ui_kits/aiwa-app/components.jsx:97-127  
+  Elements: palettes plum/rose/gold/cream 135deg gradients; DM Serif initial size*.42; verified gold500 badge clamp 14-22 with 2px white border
+- **Chip (default / active / tonal)** (`DS-09`, component, shared) — Discover -> category & sort chips  
+  Source: ui_kits/aiwa-app/components.jsx:130-144  
+  Elements: padding 7x13, radius 999; 13px/500; active plum700/#fff, tonal plum100/plum700, default #fff/ink2/divider; icon 13, gap 6
+- **StatusPill (booking status)** (`DS-10`, component, shared) — Bookings tab -> booking cards; Tracking  
+  Source: ui_kits/aiwa-app/components.jsx:147-172  
+  Elements: 11 statuses with bg/fg/dot; padding 5x10, 12px/600, dot 7
+- **Stars (rating)** (`DS-11`, component, shared) — Provider profile -> reviews; Review screen  
+  Source: ui_kits/aiwa-app/components.jsx:175-185  
+  Elements: 5 polygon stars, gap 1; filled gold500, empty stroke ink4 / no fill; integer n &lt;= value
+- **Eyebrow label** (`DS-12`, component, shared) — Global, e.g. Discover header 'Find someone new'  
+  Source: ui_kits/aiwa-app/components.jsx:188-190; tokens/colors_and_type.css:250-257  
+  Elements: 11px / 600 / 0.14em; uppercase; ink3 default, color prop
+- **SectionHeader** (`DS-13`, component, shared) — Home -> 'Trending' / 'Available now' sections  
+  Source: ui_kits/aiwa-app/components.jsx:193-200  
+  Elements: padding 0 22, marginTop 22, marginBottom 12; DM Serif 22 plum900 -0.01em lh 1.1; action 13/600 plum700 button
+- **Customer bottom TabBar (+ visibility rule)** (`DS-14`, component, customer) — Splash -> Browse as guest -> Home (visible only on home/discover/bookings/saved/profile)  
+  Source: ui_kits/aiwa-app/components.jsx:203-237; ui_kits/aiwa-app/prototype.jsx:564-573,721,736  
+  Elements: 5 tabs house/search/calendar-check/heart/user; frosted rgba(255,255,255,.94) blur 20, top hairline; active pill plum100 radius 14 maxWidth 80; labels 11/600; Bookings badge dot rose500 8px; padding 8 4 26
+- **Skeleton / SkeletonCard / SkeletonList (shimmer loading)** (`DS-15`, state, shared) — Discover (first 620ms, prototype.jsx:136-137,201)  
+  Source: ui_kits/aiwa-app/states.jsx:24-55  
+  Elements: gradient cream to hover to cream, 320px, 1.25s linear; card 64x64 r16 + bars 62%/40%/78%; list gap 10
+- **SkeletonTile** (`DS-16`, state, shared) — Home carousels while loading (primitive; not mounted by any prototype screen)  
+  Source: ui_kits/aiwa-app/states.jsx:57-65  
+  Elements: default 132x168 r18; bars 72% h11, 46% h10, gap 8
+- **SkeletonRows (table skeleton)** (`DS-17`, state, shared) — Admin tables only (no mobile screen mounts it)  
+  Source: ui_kits/aiwa-app/states.jsx:67-77  
+  Elements: cols x rows grid; first col 80%, others 58%, h12; row padding 16x22, divider bottom
+- **EmptyState** (`DS-18`, state, shared) — Saved (no favorites, prototype.jsx:299-303); Discover no results (:202-208)  
+  Source: ui_kits/aiwa-app/states.jsx:80-107  
+  Elements: 64/52 icon circle, tones plum/rose/gold; pop-in 320ms soft; DS title 22/19; body 13.5 ink3 max 270; primary + ghost sm actions max 250; column gap 3
+- **ErrorState** (`DS-19`, state, shared) — Any failed request (primitive; not mounted by any prototype screen)  
+  Source: ui_kits/aiwa-app/states.jsx:110-125; README.md:112  
+  Elements: danger100 circle + triangle-alert; default title/body; Try again (rotate-cw) primary; Contact support ghost sm
+- **OfflineBanner** (`DS-20`, banner, shared) — Prototype header 'Preview states' -> Offline banner (overlays any customer screen)  
+  Source: ui_kits/aiwa-app/states.jsx:128-145; ui_kits/aiwa-app/prototype.jsx:519,586,759,782  
+  Elements: plum900 bar at top, zIndex 90; wifi-off 15 rose300; 'No connection — showing saved data' 12.5/500 bone; Retry pill rgba(250,245,238,.16) 11.5/700; aiwa-drop 260ms
+- **InlineBanner** (`DS-21`, banner, shared) — Sign in (lockout notice); provider verification notice; used 19x across prototype screens  
+  Source: ui_kits/aiwa-app/states.jsx:148-168  
+  Elements: tones info/warn/danger/success/plum/gold; padding 11x13, radius 14, gap 10; icon 16; title 13/700, body 12.5 lh1.5 opacity .92; action 12/700, alignSelf center
+- **ValidatedInput (per-field validated text input)** (`DS-22`, component, shared) — Profile -> Personal info / Saved addresses -> Add address (19 usages)  
+  Source: ui_kits/aiwa-app/states.jsx:171-206; README.md:115 (auth forms use Field/TextInput, ui_kits/aiwa-app/auth-screens.jsx:19-56)  
+  Elements: label 12.5/600 ink2 + ' · optional'; mono counter n/max in label row; 13x14 padding, radius 14, 1.5px divider/danger border; icon turns danger on error + trailing circle-alert; error shown only after blur; hint 11.5 ink4; multiline 86px
+- **Toggle (switch)** (`DS-23`, component, shared) — Profile -> Saved addresses -> Add address -> 'Set as default' (account-screens.jsx:190)  
+  Source: ui_kits/aiwa-app/states.jsx:209-224  
+  Elements: 42x24 pill; on plum700 (warn500 tone) / off divider; 18px white knob, shadow 0 1 3 rgba(42,19,32,.25); left 3 to 21, 200ms soft; focus ring
+- **ConfirmSheet (destructive / neutral confirm)** (`DS-24`, sheet, shared) — Profile -> Sign out (prototype.jsx:756-758); Bookings -> cancel  
+  Source: ui_kits/aiwa-app/states.jsx:227-257; ui_kits/aiwa-app/prototype.jsx:756-758  
+  Elements: barrier rgba(42,19,32,.48) fade 200ms; bone sheet radius 24, padding 18 22 34, slide-in 300ms; handle 40x4; 46px tone circle + icon 21; eyebrow, DS title 23 lh1.12, body 13.5 ink2; secondary + danger/primary lg buttons
+- **SuccessSheet** (`DS-25`, sheet, shared) — All success terminals (primitive; no prototype screen currently mounts it)  
+  Source: ui_kits/aiwa-app/states.jsx:260-288; README.md:117  
+  Elements: centered bone sheet radius 24; 58px success100 circle + check 27, pop 340ms bounce; title 24 DS, body 13.5 ink2 max 280; primary lg 'Done' + ghost sm secondary
+- **Pagination** (`DS-26`, component, shared) — Admin bookings monitor / audit log (admin-modules.jsx:107,314); no mobile screen mounts it  
+  Source: ui_kits/aiwa-app/states.jsx:291-318; README.md:118  
+  Elements: 32x32 radius 10 buttons; current page plum700/#fff; 3-page window + ellipsis; disabled prev/next opacity .5
+- **EndOfList** (`DS-27`, component, shared) — Discover -> end of results ('N providers in range', prototype.jsx:232)  
+  Source: ui_kits/aiwa-app/states.jsx:320-328  
+  Elements: hairlines either side; 11.5 ink4 label; padding 18 4 6, gap 10; default "That's everything"
+- **ScreenHeader** (`DS-28`, component, shared) — Profile -> Personal info / Safety & policies / Trusted contacts (account-screens.jsx:25,88,241)  
+  Source: ui_kits/aiwa-app/states.jsx:413-424  
+  Elements: padding 60 22 8; IconBtn arrow-left; eyebrow + DS 22 title lh 1.1, mt 2; right slot
+- **StickyBar** (`DS-29`, component, shared) — Personal info -> Save; Address form -> Save (account-screens.jsx:64,202)  
+  Source: ui_kits/aiwa-app/states.jsx:427-435  
+  Elements: paper bg, top hairline; padding 14 22 32; flex row, gap 10; sticky bottom, bleeds -22
+- **SettingsRow** (`DS-30`, component, shared) — Profile -> Safety & policies (account-screens.jsx:95,108-109)  
+  Source: ui_kits/aiwa-app/states.jsx:438-461 (plus ProfileScreen row, prototype.jsx:383-398)  
+  Elements: boxed paper card radius 14, padding 13x14, gap 13; 36px tile radius 11, tone plum/gold/danger; label 14/600, sub 11.5 ink3, value 12.5 ink3; right slot; chevron 17 ink4 when onTap; row-hover
+- **Interaction state classes (press / row-hover / focus ring)** (`DS-31`, state, shared) — Global: any button tap; keyboard focus on Toggle / Pagination / OfflineBanner Retry  
+  Source: ui_kits/aiwa-app/prototype.html:41-43; ui_kits/aiwa-app/states.jsx:16-18; README.md:123  
+  Elements: button:active scale .96 at 120ms soft; [role=button]/div[onclick] transition; aiwa-row-hover #F0E8DC; aiwa-focusable 2px #7E3A5C outline, offset 2; aiwa-press .97 (unused)
+- **Toast overlay** (`DS-32`, toast, shared) — Sign in -> Continue shows the toast 'Welcome back, Layla.' (prototype.jsx:621); also address saved, review submitted, etc.  
+  Source: ui_kits/aiwa-app/prototype.jsx:20-39,735; ui_kits/aiwa-app/prototype.html:26-29  
+  Elements: top 56, left/right 16, zIndex 200; bg rgba(42,19,32,.96), bone text, radius 14, padding 12x16; 26px success500 circle with white check 15; 13px/500; shadow 0 12px 32px rgba(74,31,56,.3), blur 8; aiwa-toast 320ms, auto-dismiss 2800ms
+- **Screen transitions (push / pop / tab switch)** (`DS-33`, component, shared) — Home -> tap provider (push); back (pop); tap another tab (reset)  
+  Source: ui_kits/aiwa-app/prototype.jsx:547-560,564-573,726-731; ui_kits/aiwa-app/prototype.html:16-25; README.md:42,144  
+  Elements: forward: aiwa-slide-in translateX(8%) to 0, 320ms cubic-bezier(.32,.72,0,1); back: aiwa-fade-in scale .98 to 1, 320ms; tab switch resets the stack (intended fade; rendered slide because reset() sets 'forward')
+- **Gender theme swap** (`DS-34`, state, shared) — Splash -> English -> Customer -> Sign up -> Phone -> OTP -> Account setup -> Avatar & gender (live preview) -> Terms -> Preferences -> Save (handleSavePrefs)  
+  Source: ui_kits/aiwa-app/theme.jsx:57-68; ui_kits/aiwa-app/prototype.jsx:525-526,535,595-606,639-646,724; ui_kits/aiwa-app/auth-screens.jsx:389-400  
+  Elements: applyAiwaTheme mutates the global aiwa; live preview on AvatarGender (useLayoutEffect); default signup.gender 'FEMALE'; handleSavePrefs applies and bumps themeKey to remount the tree
+- **Wordmark / logo assets / app icon** (`DS-35`, component, shared) — App launcher icon -> Splash (Wordmark height 56)  
+  Source: ui_kits/aiwa-app/prototype.jsx:5-13,53; assets/logo-wordmark.svg; assets/logo-wordmark-arabic.svg; assets/logo-monogram.svg; README.md:45-48  
+  Elements: SVG 320x100, text 84 DM Serif ls -2, rose dot r6 at (307,68); width = height x 3.2; monogram: #2A1320 rounded square rx28, bone 'A', rose dot; Arabic wordmark أيوة
+- **GuestLockedScreen (shared guest gate)** (`DS-36`, state, customer) — Splash -> Browse as guest -> Home -> tap Bookings / Saved / Profile tab  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:11-25; ui_kits/aiwa-app/prototype.jsx:698-711  
+  Elements: 64px plum100 circle + icon 28; eyebrow 'Browsing as guest'; DS 24 title, body 13.5 ink2 max 280; primary lg 'Sign in or create account' pushes auth-gate
+- **RTL / Arabic localization** (`DS-RTL`, state, shared) — Splash -> 'العربية' (stores preferredLanguage AR, UI stays English LTR)  
+  Source: ui_kits/aiwa-app/prototype.jsx:71-78,537,613; ui_kits/aiwa-app/flow-screens.jsx:135; ui_kits/aiwa-app/account-screens.jsx:61; tokens/colors_and_type.css:96-101,277-286; ui_kits/aiwa-app/prototype.html:3; README.md:4,31-32  
+  Elements: Arabic language button: direction rtl, Markazi Text 20/500, arrow-left; preferredLanguage 'AR' sent with signup; token rules: IBM Plex Sans Arabic body, Markazi display 500, ls 0 under [dir=rtl]/[lang=ar]; no dir= or translated copy anywhere in JSX
+- **Shell back behaviour (pop / root no-op)** (`DS-V01`, state, customer) — Any customer screen -> system back (Escape/Backspace in the web prototype)  
+  Source: ui_kits/aiwa-app/prototype.jsx:552-560,564-580  
+  Elements: pop() removes a screen only when the stack has more than one entry; reset() on tab change / onboarding end leaves a one-entry stack; Escape/Backspace keydown calls pop(); direction 'back' makes the revealed screen play aiwa-fade-in
+
+#### Customer sign-in / sign-up
+
+- **Splash - language picker + Browse as guest** (`AUTH-01`, screen, customer) — App launch (CustomerApp initial stack [{name:'splash'}], prototype.jsx:506); also reset('splash') after sign-out / delete account / session expired  
+  Source: ui_kits/aiwa-app/prototype.jsx:44-86 (SplashScreen); route case prototype.jsx:612-614  
+  Elements: 160deg plum700->plum900 gradient (male #2E2A26 / female #6B3A3A) with two hardcoded radial glows rgba(231,186,182,.5) and rgba(216,185,138,.3); Wordmark height 56, bone text, rose500 dot; 'Beauty & grooming, near you.' DM Serif Display 34, lh 1.05, maxWidth 280; 'Trusted barbers, hairdressers, nail artists, and spas — one tap away.' 14px rose300; Eyebrow 'Choose your language' rose300; English pill: bone bg, plum900 text 15/600, arrow-right 18; العربية pill: Markazi Text 20/500, direction rtl, arrow-left, rgba(250,245,238,.12) bg, .25 border; 'Browse as guest →' 13/600 rose300 link -> Home as guest (preferredLanguage EN)
+- **Wordmark (AIWA serif logotype + dot)** (`AUTH-02`, component, shared) — Splash hero (prototype.jsx:53, height 56). Also used in the admin header (admin-screens.jsx:66), which is out of scope.  
+  Source: ui_kits/aiwa-app/prototype.jsx:5-13 (Wordmark)  
+  Elements: SVG viewBox 320x100, width = height*3.2; text 'AIWA' DM Serif Display fontSize 84, letterSpacing -2, baseline y=74; dot: circle cx=307 cy=68 r=6, colour = dot prop (rose500)
+- **LoginScreen (legacy phone login)** (`AUTH-03`, screen, customer) — UNREACHABLE. No renderScreen case in CustomerApp (prototype.jsx:610-718) or ProviderApp renders it. auth-screens.jsx:10 and :161 say PhoneEntryScreen replaces it.  
+  Source: ui_kits/aiwa-app/prototype.jsx:88-124 (LoginScreen)  
+  Elements: back IconBtn; Eyebrow 'Welcome to AIWA'; h1 30 'What's your phone number?'; 'We'll text you a code to confirm.'; 🇪🇬 +20 box + phone input with plum700 border; terms / safety policy line; 'Send code' button
+- **Role choice - How will you be using AIWA?** (`AUTH-04`, screen, customer) — Splash -> English / العربية -> Role choice  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:83-158 (RoleChoiceScreen); route prototype.jsx:615  
+  Elements: back IconBtn; Eyebrow 'Welcome to AIWA'; h1 30 'How will you be using AIWA?'; 'You can change this later from your profile.'; Customer card: sparkles, 'I'm here to book', sub, 3 perks; Provider card: briefcase, 'I'm offering services', sub, 3 perks; active card: plum700 fill, bone title, rose300 sub/perks, check-circle; Continue lg (opacity .45 until a role is picked)
+- **Auth choice - Create account vs I already have an account (customer & provider copy)** (`AUTH-05`, screen, customer) — Splash -> language -> Role choice -> Continue -> Auth choice. 'I'm here to book' shows the customer copy; 'I'm offering services' shows the provider copy.  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:762-848 (AuthChoiceScreen); route prototype.jsx:616-618  
+  Elements: top-50% hero gradient plus glows rgba(231,186,182,.45) / rgba(216,185,138,.25); glass back IconBtn; Eyebrow 'Customer · Welcome' / 'Provider · Welcome' in rose300; h1 32 bone 'Beauty & grooming, near you.' / 'Run your beauty studio with AIWA.'; sub in rose300; 80px spacer; card 'Create an account' / 'Set up a new studio' with plum700 tile, sparkles/briefcase, 'Takes about a minute.' / 'ID verification required.', shadow; card 'I already have an account' with plum100 tile, log-in icon, 'Sign in with phone or email.'; footer: shield-check + 'Protected by AIWA's safety policy'
+- **Sign in - phone mode** (`AUTH-06`, screen, customer) — Splash -> language -> Role choice -> Continue -> Auth choice -> 'I already have an account'  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:854-981 (SignInScreen); route prototype.jsx:619-626  
+  Elements: back IconBtn; Eyebrow 'Welcome back' / 'Provider sign in'; h1 30 'Sign in to AIWA'; 'Use the number and password you signed up with.'; Phone/Email pill toggle; Field 'Phone number': 🇪🇬 +20 box + input (placeholder 100 555 8821); Field 'Password': lock icon, eye toggle; 'Remember me' checkbox (on by default); 'Forgot password?' link; Sign in lg (disabled until ≥9 digits and password ≥6); 'New to AIWA? Create an account'
+- **Sign in - email mode** (`AUTH-07`, tab, customer) — Auth choice -> I already have an account -> tap 'Email'  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:894-923  
+  Elements: Email segment active (paper bg, plum900, shadow 0 1px 3px); sub 'Use the email and password you signed up with.'; Field 'Email' with mail icon, placeholder 'you@example.com', autoFocus; switching tabs clears the error
+- **Sign in - wrong credentials error** (`AUTH-08`, state, customer) — Sign in -> submit a password that doesn't match (the prototype uses the literal password 'wrong')  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:867-876, 941-946  
+  Elements: danger100 box, radius 10, padding 10x12, gap 8; alert-circle 14 in danger700; 12.5px danger700 text "That phone/email and password don't match."; cleared on any input change or tab switch
+- **Toast - 'Welcome back, Layla.'** (`AUTH-09`, toast, customer) — Sign in -> valid credentials -> Home (the toast overlays the new screen)  
+  Source: ui_kits/aiwa-app/prototype.jsx:621 (setToast) + Toast component prototype.jsx:20-39  
+  Elements: anchored at the top (top 56, 16px sides); rgba(42,19,32,.96) background, radius 14, padding 12x16, blur 8; 26px success500 circle with a white 15px check; 13px/500 bone text; shadow 0 12px 32px rgba(74,31,56,.3); aiwa-toast slide-down 320ms, auto-dismiss after 2800ms
+- **Phone entry - phone mode (sign-up step 1)** (`AUTH-10`, screen, customer) — Auth choice -> Create an account (or Sign in -> 'Create an account')  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:164-221 (PhoneEntryScreen); route prototype.jsx:627  
+  Elements: StepHeader 'Step 1 of 4' (6 for provider) "What's your phone number?" / "We'll send a 6-digit code to confirm."; Phone/Email pill toggle (cream track, padding 4, gap 4); 🇪🇬 +20 box + phone TextInput (placeholder 100 555 8821); terms / safety policy line 11.5 ink3 with plum700 600 words; Send code lg (disabled until ≥9 digits)
+- **Phone entry - email mode** (`AUTH-11`, tab, customer) — Phone entry -> tap 'Email'  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:169-175, 206-208, 215; prototype.jsx:627-630  
+  Elements: title "What's your email?"; mail TextInput, autoFocus, placeholder 'you@example.com'; Send code (valid on /.+@.+\..+/) -> OTP step 2 showing the email address
+- **OTP - enter the 6-digit code (countdown running)** (`AUTH-12`, screen, customer) — Phone entry -> Send code -> OTP  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:226-303 (OTPScreen); route prototype.jsx:628-631  
+  Elements: StepHeader 'Step 2 of 4' 'Enter the code'; sub 'We sent a 6-digit code to &lt;strong plum900>+20 100 555 8821&lt;/strong>.'; 6 full-width boxes (aspect 1:1.15, DM Serif 28 plum900, border plum700 once filled, radius 14); 'Resend code in 0:45' with the time in JetBrains Mono; cream tip box with info icon; Verify lg (disabled until 6 digits)
+- **OTP - resend available (timer at 0)** (`AUTH-13`, state, customer) — OTP -> wait 45 s  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:249, 281-288  
+  Elements: 'Resend code' text button, plum700 600 13; tap: timer resets to 45, digits clear, first box focused
+- **Account setup - name, optional email, password** (`AUTH-14`, screen, customer) — OTP -> Verify -> Account setup  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:308-384 (AccountSetupScreen); route prototype.jsx:637-638  
+  Elements: StepHeader 'Step 3 of 4' 'Set up your account' / "A name and a password — that's it. We'll add the rest later."; Field 'Full name': user icon, 'e.g. Layla Hassan', hint 'Your real name — providers see it on bookings.'; Field 'Email' marked Optional (phone sign-ups only): mail icon, hint 'For receipts and account recovery.'; Field 'Password': lock, eye toggle, hint 'At least 6 characters.', strength meter; Continue (disabled until valid)
+- **Account setup - inline validation errors** (`AUTH-15`, state, customer) — Account setup -> type a single name, an invalid email, or a password under 6 characters  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:316-319, 335, 341, 373  
+  Elements: 'Enter your first and last name'; "Doesn't look like a valid email"; 'At least 6 characters'; 11.5px danger700 line under the input, no icon, hint still shown, border unchanged; Continue stays disabled
+- **Password strength meter** (`AUTH-16`, component, customer) — Account setup -> type in Password  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:321-323, 358-372  
+  Elements: 4 bars (height 4, radius 2, gap 4); colour warn500 / info500 / success500 for length ≥6 / ≥8 / ≥12; label Weak / Okay / Good / Strong 11/600, right-aligned, min width 48; sits directly under the input (marginTop 8), above the error and hint
+- **Make it yours - avatar + gender (sign-up step 4)** (`AUTH-17`, screen, customer) — Account setup -> Continue -> Make it yours  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:389-476 (AvatarGenderScreen); route prototype.jsx:639-646  
+  Elements: StepHeader 'Step 4 of 4' 'Make it yours' / 'Add a photo, pick your palette. You can change both later.'; 128px tappable avatar: plum500->plum900 gradient, camera 36, 3px paper border, shadow 0 6px 18px; 38px plum700 '+' badge with 3px bone border; 'Upload a photo' link that opens the image picker; Field "I'm signing up as" + hint 'This sets the palette of your app.'; Woman / Man palette cards; CTA 'Continue without a photo' -> Terms
+- **Make it yours - photo selected** (`AUTH-18`, state, customer) — Make it yours -> tap the avatar or 'Upload a photo' -> pick an image  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:402-408, 421, 432, 440, 472  
+  Elements: circle shows the photo as a cover image; badge icon switches to a pencil; link reads 'Replace photo'; CTA reads 'Continue'
+- **Gender pick -> live palette swap** (`AUTH-19`, state, customer) — Make it yours -> tap Woman / Man  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:389-400, 444-468; theme.jsx:12-66; prototype.jsx:535, 639-642  
+  Elements: two cards with 3 swatches: Woman #6B3A3A/#C4837A/#FDF6F4, Man #2E2A26/#B5A898/#F5F2ED; selected card: plum100 background, 1.5px plum700 border; picking a card re-themes the whole app immediately; Woman is preselected (signup.gender 'FEMALE')
+- **Forgot password - step 1: where to send the code** (`AUTH-20`, sub-screen, customer) — Sign in -> Forgot password?  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:135-168 (ForgotPasswordScreen step 1); route prototype.jsx:625, 632  
+  Elements: back IconBtn (step 1 pops back to Sign in); Eyebrow 'Reset password'; h1 28 'Where should we send the code?'; Phone/Email pill toggle (no active shadow); single input with phone/mail icon 17 plum700, placeholder '100 555 8821' / 'you@example.com'; 'Send reset code' lg (opacity .45 until non-empty)
+- **Forgot password - step 2: enter the code** (`AUTH-21`, sub-screen, customer) — Forgot password step 1 -> Send reset code  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:169-182  
+  Elements: back -> step 1; Eyebrow 'Enter the code'; h1 'Check your messages.' / 'Check your inbox.'; input with key-round icon, JetBrains Mono 15, placeholder '6-digit code'; Verify enabled at ≥4 characters
+- **Forgot password - step 3: set a new password** (`AUTH-22`, sub-screen, customer) — Forgot password step 2 -> Verify  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:183-202  
+  Elements: back -> step 2; Eyebrow 'Almost done'; h1 'Set a new password.'; two lock inputs: 'New password' / 'Confirm password'; 'Reset password' enabled when ≥6 characters and both match -> onDone
+- **Toast - 'Password reset. Please sign in.'** (`AUTH-23`, toast, customer) — Forgot password step 3 -> Reset password -> back on Sign in  
+  Source: ui_kits/aiwa-app/prototype.jsx:632 (`onDone={() => { setToast('Password reset. Please sign in.'); pop(); }}`); Toast prototype.jsx:20-39  
+  Elements: same dark top toast with a success check badge; 'Password reset. Please sign in.'; auto-dismiss after 2.8 s
+- **StepHeader (back + progress + 'Step n of N' + title)** (`AUTH-24`, component, shared) — Used on Phone entry, OTP, Account setup and Make it yours (plus the provider steps)  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:59-78  
+  Elements: 40px paper back IconBtn; progress row: 3px bars, gap 6, radius 2, plum700 done / divider pending, 18px below the back button; Eyebrow 'Step n of N' 16px below; h1 DM Serif 28 plum900, lh 1.08, -0.02em, margin 6/8; sub 13.5 ink2 lh 1.55
+- **Field + TextInput (form atoms)** (`AUTH-25`, component, shared) — Every auth form (Sign in, Phone entry, Account setup)  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:19-57  
+  Elements: Eyebrow label + 'Optional' tag (10/500 ink3), 6px gap; input row: padding 13x14, radius 14, paper, 1.5px divider border, leading icon 17 plum700 with 10px gap, 15px body text, optional suffix; hint 11.5 ink3, mt 5, lh 1.4; error 11.5 danger700 with alert-circle 12, gap 4; field bottom margin 14
+
+#### Onboarding tail & provider onboarding
+
+- **Terms & safety policy (signup)** (`ONB-01`, screen, customer) — Customer: Splash -> Continue -> Role choice (I'm here to book) -> Create account -> Phone entry -> OTP -> Account setup -> Avatar/gender -> Terms. Provider: ... Avatar/gender -> Provider business -> Provider verification -> Submit for review -> Terms  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:13-73; prototype.jsx:652-655  
+  Elements: Back IconBtn arrow-left (pop); Eyebrow 'Step 1 of 2'; DM Serif 30/1.05 h1 'A few promises / before you start.'; Sub 14 ink2 'AIWA's customer terms & safety policy in plain words.'; 4 cards (paper, 1px divider, radius 16, padding 14, gap 14) with 36px radius-10 plum100 icon tiles: shield-check 'Verified providers only', lock 'Your data stays private', flag 'You can always flag or complain', banknote 'Cash only — for now'; 22px radius-6 checkbox (2px ink4 border -> plum700 fill + white check, 180ms) with 13px ink2 text; 'customer terms' / 'safety policy' in plum700 w600; Primary lg full 'Agree & continue' at opacity .45 and pointer-events none until checked; On accept: acceptedTermsVersion 'v1.0.2' + termsAcceptedAt stored, push('preferences')
+- **Preferences (area, min/max search radius, language, theme commit)** (`ONB-02`, screen, customer) — ... Avatar/gender -> Terms -> tick agreement -> Agree & continue -> Preferences (customer and provider)  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:78-157; prototype.jsx:595-606 (handleSavePrefs), 656  
+  Elements: Back IconBtn; Eyebrow 'Last step'; h1 30 'Where should we / look for providers?'; Sub 'We use these to tune the providers we show you. Change them any time from Profile.'; 'Your area' input: map-pin 18 plum700, default 'Maadi, Cairo', padding 13/14, 1.5px divider, radius 14, 'Use GPS' text button 12 w600 plum700; 'Search radius' eyebrow with DM Serif 18 plum900 '{min}–{max} km' readout; Two range inputs side by side (1–25, step 1, accentColor plum700) coupled so min &lt;= max; 11px ink3 'Min · n km' / 'Max · n km'; 'App language' two equal pills: 'English' (Plus Jakarta 14 w600) / 'العربية' (Markazi Text 18); active plum700 bg + bone text, inactive paper + 1.5 divider, radius 14, padding 12/14; Spacer (min 28) then Primary lg 'Save preferences'; handleSavePrefs: applyAiwaTheme(gender) + themeKey bump; provider -> toast + reset('provider-pending'); customer -> reset('perm-location'); Gender is a pass-through from Avatar/gender (useStateF(initialGender)) with no UI control on this screen
+- **Toast 'Account created. Verification in review.'** (`ONB-03`, toast, provider) — Provider signup: ... Provider verification -> Terms -> Preferences -> Save preferences -> toast over Provider pending  
+  Source: ui_kits/aiwa-app/prototype.jsx:600-602; Toast at prototype.jsx:20-39  
+  Elements: Top toast (top 56, left/right 16), rgba(42,19,32,.96), radius 14, padding 12/16; 26px success500 circle with white check 15; 13px w500 bone message; Auto-dismiss after 2800ms, aiwa-toast slide-down 320ms
+- **SystemScreen (shared full-screen system message shell)** (`ONB-04`, component, shared) — Not a route by itself. It wraps Session expired, Account locked, Not found, Forbidden and Permission denied (Preview states menu / error flows).  
+  Source: ui_kits/aiwa-app/system-screens.jsx:9-36  
+  Elements: bone bg, padding 76/26/34, centred column with flex spacers above and below; 72px circle icon (tone map: plum -> plum100/plum700, danger -> danger100/danger700, warn -> warn100/warn700, info -> info100/info700), icon 31, aiwa-pop 340ms cubic-bezier(.34,1.56,.64,1); Eyebrow in tone fg; DM Serif 27/1.1, -0.01em, plum900, margin 7/9; Body 14 ink2 lh 1.6, maxWidth 290; children slot; Primary lg full + ghost sm full, gap 9
+- **Permission priming — location (onboarding route 'perm-location')** (`ONB-05`, screen, customer) — Customer signup: ... Terms -> Preferences -> Save preferences -> reset('perm-location'). Both Allow and Deny -> reset('perm-notifications').  
+  Source: ui_kits/aiwa-app/system-screens.jsx:73-79, 103-132; prototype.jsx:604, 657  
+  Elements: bone bg, padding 76/26/34, flex spacers, left-aligned; 66x66 radius-22 plum700 tile, bone map-pin icon 29, aiwa-pop animation; Eyebrow rose700 'One quick permission' (male #5C544D / female #6B3A3A); DM Serif 29/1.07, -0.02em, 'Find beauty pros near you.'; Body 14 ink2 lh 1.6 'AIWA uses your location to show providers within your chosen radius and to share live arrival updates during a home visit.'; 3 check rows (22px success100 circle, success700 check 12, 13.5 ink2, gap 11, marginTop 22): 'Only used while the app is open' / 'Never shared with other customers' / 'You can pick an area manually instead'; Primary lg 'Allow location' + ghost sm 'Choose my area manually' (gap 9)
+- **Permission priming — notifications (onboarding route 'perm-notifications')** (`ONB-06`, screen, customer) — Customer signup: ... Preferences -> perm-location (Allow or Choose my area manually) -> perm-notifications. Both buttons run finishOnboarding: reset('home') + setTab('home').  
+  Source: ui_kits/aiwa-app/system-screens.jsx:80-86, 103-132; prototype.jsx:608, 658  
+  Elements: plum700 66px tile with bell icon; Eyebrow rose700 'Stay in the loop'; Title 'Know the moment you’re confirmed.'; Body 'We’ll tell you when a provider accepts, when they’re on the way, and when it’s time for your appointment.'; Points: 'Booking updates only by default' / 'Set quiet hours any time' / 'Turn off individual channels in settings'; Primary lg 'Turn on notifications' + ghost sm 'Not now'; finishOnboarding -> Home tab with the tab bar
+- **Permission priming — camera** (`ONB-07`, screen, provider) — No caller in the prototype. It renders only through route 'permission' with s.kind === 'camera' (prototype.jsx:684), and the Preview-states dispatcher pushes 'permission' with no kind (prototype.jsx:589 `else push(k);`). Its copy fits the moment before the ID or selfie capture on Provider verification.  
+  Source: ui_kits/aiwa-app/system-screens.jsx:87-93, 103-132; prototype.jsx:684  
+  Elements: camera icon tile; Eyebrow 'Verification step'; Title 'We need your camera.'; Body 'To verify providers we capture your national ID and a live selfie. This keeps every customer safe.'; Points: 'Documents are encrypted and private' / 'Reviewed only by our verification team' / 'Never shown on your public profile'; Primary 'Open camera' + ghost 'Upload from files instead'
+- **Permission priming — contacts (trusted contact)** (`ONB-08`, screen, customer) — No caller in the prototype: only route 'permission' with kind 'contacts'. Its copy fits Profile -> Trusted contacts -> Add (the SOS feature).  
+  Source: ui_kits/aiwa-app/system-screens.jsx:94-100, 103-132; prototype.jsx:684  
+  Elements: user-round-plus icon tile; Eyebrow 'Safety feature'; Title 'Add a trusted contact.'; Body 'If you ever press SOS during a home service, we alert this person instantly with your live location.'; Points: 'Only contacted if you trigger SOS' / 'You choose exactly who' / 'Change or remove them any time'; Primary 'Choose a contact' + ghost 'Enter manually'
+- **Permission priming — in-app re-prompt (Preview states -> 'Permission priming', route 'permission')** (`ONB-09`, state, customer) — Any customer screen -> Preview states menu -> 'Permission priming' -> push('permission') -> PermissionPrimingScreen kind 'location'. Allow and Deny both pop back to the screen underneath.  
+  Source: ui_kits/aiwa-app/prototype.jsx:589, 684, 791  
+  Elements: Same location priming UI as ONB-05; Pushed on top of the current stack, not a reset; onAllow={pop} / onDeny={pop}
+- **Terms re-accept (policy updated)** (`ONB-10`, screen, customer) — Home -> bell -> Notifications -> tap 'Terms & policies updated' (type 'terms') -> push('terms-reaccept') -> Agree & continue -> toast + pop  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:207-226; prototype.jsx:636, 713; notification seed customer-extras.jsx:107  
+  Elements: No back button; Eyebrow rose700 'Policies updated'; DM Serif 28/1.08 'We've updated our terms.'; Body 14 ink2 lh 1.55 'AIWA's terms & safety policy changed on May 20, 2026 — mainly around cancellation penalties and provider verification. Please re-accept to keep booking.'; cream box (padding 14, radius 14, 12.5 ink2): '&lt;strong>v1.1.0&lt;/strong> — Adds provider-cancel penalties, home-service safety requirements, and commission settlement terms.'; Spacer, then Primary lg 'Agree & continue'
+- **Toast 'Thanks — terms accepted.'** (`ONB-11`, toast, customer) — Notifications -> Terms & policies updated -> Terms re-accept -> Agree & continue -> toast over Notifications (after pop)  
+  Source: ui_kits/aiwa-app/prototype.jsx:636; Toast prototype.jsx:20-39  
+  Elements: Top toast, dark rgba(42,19,32,.96), success check badge, 13 w500 bone text 'Thanks — terms accepted.', 2800ms
+- **Provider business — 'Set up your studio' (Individual default)** (`ONB-12`, screen, provider) — Splash -> Continue -> Role choice (I'm offering services) -> Set up a new studio -> Phone entry -> OTP -> Account setup -> Avatar/gender -> Provider business (Step 5 of 6)  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:481-622; prototype.jsx:647-648  
+  Elements: StepHeader: back, 6 progress segments (5 filled), 'Step 5 of 6', 'Set up your studio', 'Customers will see this on your profile.'; Business name field (store icon, 'e.g. Nadia Studio'); Business type 2-col tiles Individual (user) / Shop / salon (store) + hint 'Shops can add staff members with their own calendars.'; Short bio textarea (Optional, 84px, maxLength 240, right-aligned n/240 counter, hint '2–3 lines on what makes you stand out.'); Primary category 4x2 grid: Hair, Nails, Spa, Makeup, Lashes, Skin, Massage, Other + hint 'Pick the one you do most.'; Studio address field (map-pin, default 'Maadi, Cairo', 'Use GPS' suffix) + GPS status card; Sticky paper bar with 1px top divider: Primary lg 'Continue' (disabled .45 until name >= 2 chars and a category is picked)
+- **Provider business — Shop / salon variant (staff members)** (`ONB-13`, state, provider) — Provider business -> tap 'Shop / salon' tile  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:533-555  
+  Elements: Field 'Staff members' + 'Optional' tag; Staff name rows (user icon, placeholder 'Staff member N name'), gap 8; Remove 'x' button (danger700, 16px, padding 8), shown only when more than one row; Dashed 'Add staff member' button (1.5px dashed divider, radius 12, padding 10, plum700 13 w600, plus 14); Hint 'Add the team who'll take bookings. You can add more later.'
+- **Provider business — GPS status card (locked / no GPS)** (`ONB-14`, state, provider) — Provider business -> Studio address section (tap 'Use GPS')  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:588-610, 497, 615  
+  Elements: Card: marginTop 8, padding 12, paper, 1px dashed divider, radius 12, gap 10; 36px radius-10 tile: success100/success700 + check when locked; warn100/warn700 + map-pin when not; Title 12.5 w600 ink: 'GPS locked — 30.0444, 31.2357' or 'No GPS — tap "Use GPS"'; Sub 11 ink3 'Customers nearby can find you'; Initial state: locked (useStateA(true))
+- **UploadSlot — empty (tap to upload)** (`ONB-15`, component, provider) — Provider verification -> any of 'National ID — front' / 'National ID — back' / 'Live selfie'  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:627-656  
+  Elements: Card: minHeight 110, padding 14, paper, 1.5px dashed divider, radius 14, row gap 12; 48px radius-12 plum100 tile with a 22px plum700 icon (credit-card or camera); Label 14 w600 ink + hint 11.5 ink3 lh 1.4 (marginTop 2); upload icon 18 plum700; Tap opens a hidden &lt;input type=file accept=image/*> and reads the file
+- **UploadSlot — uploaded state (photo preview, tap to replace)** (`ONB-16`, state, provider) — Provider verification -> tap a slot -> choose an image  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:637-643, 657-663  
+  Elements: The chosen photo as a center/cover background, padding 0, 1.5px solid plum700 border, radius 14, minHeight 110; Bottom overlay linear-gradient(to top, rgba(42,19,32,.7), transparent 60%); Caption: check-circle 14 + '{label} uploaded · tap to replace' (bone 12 w600); Tap reopens the file chooser (replace)
+- **Provider verification — 'Verify your identity'** (`ONB-17`, screen, provider) — ... Avatar/gender -> Provider business -> Continue -> Provider verification (Step 6 of 6)  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:668-710; prototype.jsx:649-650  
+  Elements: StepHeader 6/6 'Verify your identity' + sub 'Upload your national ID and a live selfie. AIWA reviews every provider before they can take bookings.'; 3 UploadSlots (ID front, ID back, Live selfie), gap 10; Private-docs note: plum100 box, padding 14, radius 14, 12px plum700 lh 1.5, shield-check 16, gap 8; Sticky bar Primary lg 'Submit for review', disabled .45 until all 3 are set; Submit -> push('terms')
+- **Provider pending — 'We're reviewing your documents.'** (`ONB-18`, screen, provider) — Provider signup: ... Verification -> Terms -> Preferences -> Save preferences (toast) -> Provider pending. Also: Auth choice (provider) -> Sign in -> provider-pending (prototype.jsx:622).  
+  Source: ui_kits/aiwa-app/auth-screens.jsx:715-756; prototype.jsx:600-602, 622, 651  
+  Elements: Full-bleed linear-gradient(160deg, plum700 -> plum900) (flat in both themes: male #2E2A26, female #6B3A3A); Radial glow rgba(231,186,182,.45) at 30% 25%, transparent at 60%; 72px radius-22 glass tile (rgba white .16, 1px rgba white .18, backdrop blur 8) with hourglass 34; Eyebrow rose300 'Verification submitted'; DM Serif 34/1.05 bone 'We're reviewing / your documents.'; Body 14 rose300 lh 1.6 with bold bone 'under 24 hours'; 3 status rows (rgba white .08 bg, .12 border, radius 12, padding 12): check-circle rose300 x2, hourglass gold300 'Admin review in progress'; Accent lg 'Explore the app while you wait' -> reset('home') + setTab('home'); Footnote 11.5 rose300 centred 'You can browse, but bookings open after verification.'
+- **Terms — agree checkbox gating (unchecked / checked)** (`ONB-V01`, state, customer) — Signup ... Avatar/gender (customer) or Provider verification (provider) -> Terms -> tap the checkbox or its label  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:14, 52-70  
+  Elements: Unchecked: 22x22 radius-6 box, 2px aiwa.ink4 border (male #A39A8E / female #B59A99), transparent fill; 'Agree & continue' at opacity .45 with pointer-events none (flow-screens.jsx:68); Checked: aiwa.plum700 fill and border (male #2E2A26 / female #6B3A3A, base #4A1F38) with white check 14; transition all 180ms cubic-bezier(.32,.72,0,1); Both the box (:53) and the label text (:62) toggle the state; Label 13px ink2 lh 1.5: 'I've read and agree to the AIWA customer terms and safety policy.' with 'customer terms' / 'safety policy' in plum700 w600 (no link handler); Row gap 10, alignItems flex-start, box marginTop 1, row marginTop 18
+- **Preferences — search radius min/max range pair** (`ONB-V02`, component, customer) — ... Terms -> Agree & continue -> Preferences -> 'Search radius' section  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:81-82, 110-127  
+  Elements: Header row justify space-between, align baseline, marginBottom 10: Eyebrow 'Search radius' + DM Serif Display 18 plum900 '{min}–{max} km'; Two &lt;input type=range> side by side, flex 1 each, gap 10, min 1 max 25 step 1, accentColor plum700 (male #2E2A26 / female #6B3A3A); Coupled: moving min above max pushes max up (:118), moving max below min pushes min down (:121); Captions row 11px ink3 marginTop 4: 'Min · {n} km' left, 'Max · {n} km' right; Defaults 1 and 5 km; saved as searchRadiusMinKm / searchRadiusMaxKm
+- **Preferences — App language pills (English / العربية)** (`ONB-V03`, component, customer) — ... Terms -> Agree & continue -> Preferences -> 'App language' section  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:83, 129-149  
+  Elements: Eyebrow 'App language' marginBottom 10; Two flex-1 buttons, gap 8, padding 12/14, radius 14, fontWeight 600; 'English' in Plus Jakarta Sans 14; 'العربية' in Markazi Text 18; Active: plum700 bg (male #2E2A26 / female #6B3A3A), bone text (male #F5F2ED / female #FDF6F4), 1.5px transparent border; Inactive: paper #FFFFFF bg, ink text (male #2E2A26 / female #2E2026), 1.5px divider border (male #D8CFC2 / female #EFDCD6); Default 'en' (flow-screens.jsx:83); the value is sent with onSave (:152)
+
+#### Customer discovery
+
+- **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** (`DISC-01`, screen, customer) — Splash -> Browse as guest -> Home; or Sign in -> Home; or Tab bar -> Home  
+  Source: ui_kits/aiwa-app/screens.jsx:67-179 (HomeScreen); prototype.jsx:659 (case 'home')  
+  Elements: Eyebrow 'Good evening, Layla' + DM Serif 26 headline 'Who's making you / feel new tonight?'; IconBtn bell with rose dot -> notifications; Avatar 42 rose; Search pill: search icon, 'Service or provider', divider, map-pin 'Maadi'; Hero promo card: plum700->plum900 gradient, radial glow, eyebrow 'This week · 20% off', 'Bridal lookbook season', body, accent sm 'Explore →'; SectionHeader 'Categories' / 'See all' + 4x2 category tiles (44px tinted icon squares); SectionHeader 'Trending near you' / 'View map' + 200px carousel cards (Verified pill, glass heart 32, category eyebrow, name, star rating · distance); SectionHeader 'Available now' + row cards (avatar 52 verified, name, category, rating (reviews) · distance · 'Open now', 'From EGP n')
+- **Discover (search, category chips, sort, result list)** (`DISC-02`, screen, customer) — Tab bar -> Discover; Home -> category tile -> Discover; Book Now check sheet -> 'See alternatives' -> Discover  
+  Source: ui_kits/aiwa-app/prototype.jsx:129-233 (DiscoverScreen); prototype.jsx:660 (case 'discover')  
+  Elements: Eyebrow 'Find someone new' + DM Serif 28 'Discover'; Search input 'Search providers, services, locations' with clear 'x' and sliders-horizontal filter button (filled plum700 when filters are active); Category chips: All, Hair (scissors), Nails (hand), Spa (leaf), Lashes (eye); Sort row: 'Sort' + Nearest / Top rated / Price chips + 'N found'; Result rows: avatar 56 verified, DM Serif 18 name, category, star rating · distance · 'Open', chevron-right; EndOfList '{n} providers in range'
+- **Discover - loading skeleton** (`DISC-03`, state, customer) — Tab bar -> Discover (first 620ms), or type a query (380ms)  
+  Source: ui_kits/aiwa-app/prototype.jsx:136-138,201; states.jsx:24-55 (Skeleton, SkeletonCard, SkeletonList)  
+  Elements: SkeletonList count 4 inside '14px 22px 0'; SkeletonCard: paper, radius 18, border divider, padding 14, 64x64 r16 block + 3 lines (62%/14, 40%/11, 78%/11, gap 8); Shimmer: linear-gradient cream -> hover -> cream, 320px, 1.25s linear infinite; 'N found' hidden while loading
+- **Discover - empty results** (`DISC-04`, state, customer) — Discover -> type a query or pick a category/filter that returns 0 providers  
+  Source: ui_kits/aiwa-app/prototype.jsx:202-208; states.jsx:80-107 (EmptyState)  
+  Elements: search-x icon in a 64px plum100 circle (pop-in animation); Title: 'No match for “{query}”' or 'Nothing in this category nearby'; Body: 'Try a different spelling, or browse by category instead.' or 'No providers within your radius match these filters yet.'; Primary: 'Clear search & filters' (query or filters) or 'Widen my radius'; Secondary ghost sm: 'Notify me when someone joins'
+- **Discover - active filter chips** (`DISC-05`, state, customer) — Discover -> filter button -> set a minimum rating or max price -> close the sheet  
+  Source: ui_kits/aiwa-app/prototype.jsx:183-192  
+  Elements: Wrap of tonal chips below the category row; '★ 4.0+ ×' clears the rating; 'Under EGP 1500 ×' clears the price
+- **Discover - Filters bottom sheet (rating / price)** (`DISC-06`, sheet, customer) — Tab bar -> Discover -> sliders button in the search pill  
+  Source: ui_kits/aiwa-app/prototype.jsx:235-282  
+  Elements: Scrim rgba(42,19,32,.45) fade 220ms; sheet slides in over 320ms; Bone sheet, 24 top radius, padding 18/22/36, shadow 0 -12 32 rgba(0,0,0,.18), 40x4 handle; 'Filters' DM Serif 22 + 'Reset' 13 w600 plum700; 'Minimum rating' eyebrow + value ('Any' or 'x.x★') DM Serif 18; range 0-5 step .5; 'Any' / '5.0'; 'Max price' + 'EGP n'; range 100-2500 step 50; 'EGP 100' / 'EGP 2,500+'; Primary full lg 'Show N provider(s)'
+- **Discover - end-of-list footer** (`DISC-07`, component, customer) — Discover -> scroll to the bottom of a non-empty result list  
+  Source: ui_kits/aiwa-app/prototype.jsx:232; states.jsx:320-328 (EndOfList)  
+  Elements: Hairline divider - '{n} providers in range' (11.5 ink4) - hairline divider; Padding 18/4/6, gap 10
+- **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** (`DISC-08`, screen, customer) — Home -> Trending card or Available now row -> Provider; Discover -> result row -> Provider; Saved -> card or 'Book again' -> Provider; Rejected -> alternative -> Provider  
+  Source: ui_kits/aiwa-app/screens.jsx:184-244,314-321 (ProviderScreen); prototype.jsx:661-667 (case 'provider')  
+  Elements: 280px cover: 160deg plum500->plum700->plum900 gradient + rose and gold radial glows; Glass back button; glass share-2 and heart at top right (gap 8); Eyebrow category (rose300), DM Serif 32 name, meta row: gold500 ★ rating (reviews) · map-pin '1.2 km · Maadi' · gold300 badge-check 'Verified'; Bone body card with 28 top radius overlapping by 24; bio 14 ink2; Chips: Call (phone), WhatsApp (message-circle), Directions (map), Report (flag) -> FlagProviderSheet; Tabs Services / Reviews / Gallery (14 w600, 2px plum700 underline); White sticky CTA: 'Starts at' eyebrow + 'EGP n' DM Serif 22 + primary lg 'Book now' (calendar-check)
+- **Provider profile - Services tab** (`DISC-09`, tab, customer) — Provider profile -> Services tab (default)  
+  Source: ui_kits/aiwa-app/screens.jsx:246-268  
+  Elements: Rows: name 15 w600; meta 12 ink3 'duration · Fixed price' or 'duration · Starts at'; Right: 'From' eyebrow 9 (non-fixed only) above 'EGP 1,200' DM Serif 18; 34px outlined plus button -> onBook(service); 16px vertical padding, divider between rows
+- **Provider profile - Reviews tab** (`DISC-10`, tab, customer) — Provider profile -> Reviews tab  
+  Source: ui_kits/aiwa-app/screens.jsx:270-293  
+  Elements: Cream summary card: DM Serif 38 rating + Stars + 'Based on N reviews'; Review rows: avatar 38, name 14 w600, time 11 ink3, Stars 11, text 13 ink2 lh1.55
+- **Provider profile - Gallery tab** (`DISC-11`, tab, customer) — Provider profile -> Gallery tab  
+  Source: ui_kits/aiwa-app/screens.jsx:295-311  
+  Elements: 3-column grid, gap 6, square tiles, radius 12; Placeholder gradients + caption 'Placeholder gallery — replace with provider uploads' (a handoff note)
+- **FlagProviderSheet (report a provider)** (`DISC-12`, sheet, customer) — Provider profile -> 'Report' chip  
+  Source: ui_kits/aiwa-app/customer-extras.jsx:432-491; mounted at prototype.jsx:742-750  
+  Elements: Scrim rgba(42,19,32,.45) + backdrop blur 2px; bone sheet, 24 radius, padding 18/22/36, 40x4 handle; Eyebrow rose700 'Flag {providerName}'; title DM Serif 22 'Tell us what's wrong'; Helper 12.5 ink3 'Flags are anonymous. Our team reviews every report and acts on the provider if confirmed.'; Six reason rows (13/14 padding, radius 12, 1.5px border; selected = plum100 background + plum700 border + check): Misleading profile or gallery / Inappropriate or unsafe behavior / Refused to honor agreed price / Identity feels suspicious / Spam or fake account / Other; 'Other' shows a 70px textarea 'Help us understand'; Cancel (secondary) + 'Submit flag' (danger), which requires a reason
+- **Toast - 'Thanks — flag received. Our team reviews every report.'** (`DISC-13`, toast, customer) — Provider profile -> Report -> choose a reason -> Submit flag  
+  Source: ui_kits/aiwa-app/prototype.jsx:746-749 (setToast); Toast at prototype.jsx:20-39  
+  Elements: Top-anchored (top 56, 16px sides), rgba(42,19,32,.96) background, radius 14, shadow 0 12 32; 26px success500 circle with a check + 13px w500 bone text; Slides down (aiwa-toast 320ms); auto-dismisses after 2800ms
+- **StaffPickerScreen ('Pick your stylist.' - shop-type providers)** (`DISC-14`, screen, customer) — Provider profile (shop-type, e.g. Layla Beauty or Maadi Hammam) -> 'Book now' or a service '+' -> Staff picker -> (guest) Auth gate or (signed in) Booking type  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:56-98; prototype.jsx:664,668-671  
+  Elements: Back IconBtn; eyebrow = provider name; DM Serif 28 'Pick your stylist.' (lh 1.05, -0.02em); Body 14 ink2 'This is a shop with multiple staff — your booking will be tied to whoever you pick.'; Staff cards: paper, 1.5px divider border, radius 18, padding 14, gap 14; Avatar 50 verified; DM Serif 18 name; 12 ink3 role; chevron-right 18; 'No preference' card: cream background, 1.5px dashed divider border, 50px plum100 circle with a shuffle icon, 'First available staff member'
+- **AuthGateScreen ('Sign in to book.')** (`DISC-15`, screen, customer) — Guest -> Provider profile -> Book now or service '+' (individual provider) -> Auth gate; Guest -> Staff picker -> pick -> Auth gate; Guest-locked tab -> 'Sign in or create account' (prototype)  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:27-54; prototype.jsx:665,669,672  
+  Elements: Back IconBtn; Eyebrow rose700 'One quick step'; DM Serif 30 'Sign in to book.'; Body 14 ink2 'Browsing is open to everyone. Booking needs an account so providers can reach you.'; Three check perks (14px plum700 check, 13.5 ink2): 'Your booking history in one place', 'Live status + safety tracking', 'Save favorite providers'; Primary full lg 'Create account' + secondary full lg 'I already have an account', both of which continue to booking-type
+- **Saved (favorites list)** (`DISC-16`, screen, customer) — Tab bar -> Saved (signed in)  
+  Source: ui_kits/aiwa-app/prototype.jsx:290-337 (SavedScreen); prototype.jsx:706-708 (case 'saved')  
+  Elements: Eyebrow 'Your favorites' + DM Serif 28 'Saved' (padding bottom 18); Cards: 110x110 gradient tile with a DM Serif 48 initial; category eyebrow 10; DM Serif 18 name; ★ rating; plum100 'Book again' pill (11.5 w700); Filled rose500 heart (20px, padding 14) removes the item; Card tap opens the provider; 'Book again' opens the provider (onRebook)
+- **Saved - empty state ('No favorites yet')** (`DISC-17`, state, customer) — Tab bar -> Saved with no saved providers (or after un-hearting all of them)  
+  Source: ui_kits/aiwa-app/prototype.jsx:299-303; states.jsx:80-107  
+  Elements: Rose-tone heart icon; 'No favorites yet'; 'Tap the heart on any provider to save them here and book again in one tap.'; Primary 'Browse providers'
+- **GuestLockedScreen (shared guest gate for Bookings / Saved / Profile)** (`DISC-18`, component, customer) — Splash -> Browse as guest -> tap the Bookings, Saved or Profile tab  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:11-25  
+  Elements: Vertically centred: 64px plum100 circle with a 28px icon; Eyebrow 'Browsing as guest'; DM Serif 24 title; 13.5 ink2 body (maxWidth 280); Bottom primary full lg 'Sign in or create account' -> push('auth-gate')
+- **Bookings tab - guest locked variant** (`DISC-19`, state, customer) — Splash -> Browse as guest -> Bookings tab  
+  Source: ui_kits/aiwa-app/prototype.jsx:698-699  
+  Elements: Icon calendar-check; Title 'See your bookings'; Body 'Sign in to view and track your bookings.'; CTA 'Sign in or create account' -> auth-gate
+- **Saved tab - guest locked variant** (`DISC-20`, state, customer) — Splash -> Browse as guest -> Saved tab  
+  Source: ui_kits/aiwa-app/prototype.jsx:706-707  
+  Elements: Icon heart; Title 'Save your favorites'; Body 'Sign in to save providers you love and book them faster next time.'; CTA -> auth-gate
+- **Profile tab - guest locked variant** (`DISC-21`, state, customer) — Splash -> Browse as guest -> Profile tab (or the Home avatar in Flutter)  
+  Source: ui_kits/aiwa-app/prototype.jsx:709-710  
+  Elements: Icon user; Title 'Your profile'; Body 'Sign in to manage your account, addresses, and notifications.'; CTA -> auth-gate
+- **Customer bottom tab bar + onTabChange behaviour** (`DISC-22`, component, customer) — Any customer tab root (home, discover, bookings, saved, profile)  
+  Source: ui_kits/aiwa-app/components.jsx:203-237 (TabBar); prototype.jsx:564-573 (onTabChange), 721, 736  
+  Elements: Tabs in order: Home (house), Discover (search), Bookings (calendar-check, rose badge dot), Saved (heart), Profile (user); Active tab: plum100 pill, plum700 icon and label; inactive: ink3; Re-tapping the active tab does nothing; switching tabs resets that tab's stack with a fade (scale .98 -> 1, 320ms); Hidden on pushed screens
+
+#### Customer booking lifecycle
+
+- **Booking type choice (Now or later)** (`BOOK-01`, screen, customer) — Home -> provider card -> Provider profile -> service '+' or 'Book now' (individual provider; shops go via Staff picker, guests via Auth gate) -> Booking type  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:162-221; prototype.jsx:686-691  
+  Elements: Back IconBtn arrow-left; Eyebrow 'How do you want to book'; h1 'Now, or later?' DM Serif 30 plum900 (male #2E2A26 / female #6B3A3A); Body '{providerName} accepts both same-day requests and scheduled bookings.'; Book now card: plum700 bg, radius 22, radial glow, Eyebrow rose300 'Book now', 'Get someone on the way' 26px, clock 'Est. arrival 25-40 min', map-pin 'Comes to you'; Schedule card: paper, 1.5px divider border, 'Pick a date & time slot', calendar 'Up to 14 days out', check-circle 'Provider confirms slot'; Cream info note (info icon): 'Either way, payment is cash on visit. Online payment is coming in a future version.'; Now -> BookNowCheckSheet; Schedule -> BookingScreen (scheduled)
+- **Book Now availability check - checking state (and AVAILABLE pass-through)** (`BOOK-02`, sheet, customer) — Booking type -> tap 'Book now' card  
+  Source: ui_kits/aiwa-app/system-screens.jsx:228-260; prototype.jsx:763-768  
+  Elements: Bottom sheet: bone bg, top radius 24, 40x4 handle, scrim rgba(42,19,32,.48), not dismissable while checking; 46px plum100 circle, 'radar' icon plum700 with aiwa-pulse 1.1s; 'Checking availability...' DM Serif 19 plum900; 'Confirming {providerName} can take this right now.' 12.5 ink3; After 850ms with no block reason: sheet closes, bookingMode='now', push BookingScreen
+- **Book Now blocked - OFFLINE** (`BOOK-03`, sheet, customer) — Maadi Hammam (bookNowStatus OFFLINE) -> Staff picker -> Booking type -> Book now; or Preview states 'Book Now - offline'  
+  Source: ui_kits/aiwa-app/system-screens.jsx:221, 261-273; screens.jsx:13  
+  Elements: 46px warn100 circle, wifi-off icon warn700 21px; Eyebrow warn700 'Not online'; h2 DM Serif 23 '{n} is offline right now.'; Body 13.5 ink2: 'They'll show as available again the moment they come back online. You can try Book Now later, or pick a scheduled time now.'; 'Choose a scheduled time' primary lg icon calendar -> BookingScreen (scheduled); 'See other providers nearby' secondary lg icon search -> Discover tab
+- **Book Now blocked - BUSY** (`BOOK-04`, sheet, customer) — Omar - Barbier (bookNowStatus BUSY) -> Booking type -> Book now; or Preview states 'Book Now - busy'  
+  Source: ui_kits/aiwa-app/system-screens.jsx:222, 261-273; screens.jsx:17  
+  Elements: clock icon on warn100 circle; Eyebrow 'Fully booked'; Title '{n} is busy with another client.'; Body 'Every Book Now slot is taken for the next stretch. A scheduled slot later today is usually faster than waiting.'; Same two CTAs as OFFLINE
+- **Book Now blocked - VACATION** (`BOOK-05`, sheet, customer) — Mariam Lashes (vacationMode, bookNowStatus VACATION) -> Booking type -> Book now; or Preview states 'Book Now - vacation'  
+  Source: ui_kits/aiwa-app/system-screens.jsx:223, 261-273; screens.jsx:18  
+  Elements: palmtree icon; Eyebrow 'On vacation'; Title '{n} is on vacation.'; Body 'They've paused all bookings for now. We'll show them again as soon as they're back.'; Same two CTAs
+- **Book Now blocked - SETTLEMENT_PAUSED** (`BOOK-06`, sheet, customer) — Preview states 'Book Now - provider paused' only (no seed provider uses it)  
+  Source: ui_kits/aiwa-app/system-screens.jsx:224, 261-273; prototype.jsx:787  
+  Elements: banknote icon; Eyebrow 'Temporarily paused'; Title '{n} can't take new bookings right now.'; Body 'They're settling an outstanding balance with AIWA. This clears automatically once that's paid - try again soon.'; Same two CTAs
+- **Book Now blocked - NOT_APPROVED (defined, not reachable in prototype)** (`BOOK-07`, sheet, customer) — Not reachable. Defined in BOOK_NOW_BLOCKS, but no seed provider or Preview state uses it  
+  Source: ui_kits/aiwa-app/system-screens.jsx:225  
+  Elements: shield-alert icon; Eyebrow 'Unavailable'; Title '{n} isn't taking bookings.'; Body 'This provider, staff member, or service is temporarily inactive. Try another provider nearby.'
+- **Booking screen - scheduled (date & slot picker + CTA)** (`BOOK-08`, screen, customer) — Provider profile -> Booking type -> 'Pick a date & time slot' (or Book Now sheet -> 'Choose a scheduled time')  
+  Source: ui_kits/aiwa-app/screens.jsx:329-465; prototype.jsx:692  
+  Elements: Header: back IconBtn, Eyebrow 'Book a service', h2 'Pick a time' 22; Summary card: Avatar 44 (provider palette, verified), name DM Serif 17, '{service} · {duration}' 12 ink3, price DM Serif 18; Eyebrow 'Date · May 2026' + 5 equal day chips (Mon 18-Fri 22); Eyebrow 'Available slots' + 4-col grid, unavailable slots struck through; Where section (BOOK-10/11); Payment cash card (BOOK-12); Sticky CTA: 'Total · cash' 13 ink3 + 'EGP 350' DM Serif 22 + 'Confirm booking' primary lg -> toast + ConfirmedScreen
+- **Booking screen - Book Now mode variant** (`BOOK-09`, state, customer) — Booking type -> Book now -> availability AVAILABLE -> Booking screen (bookingMode 'now')  
+  Source: ui_kits/aiwa-app/screens.jsx:336, 405-408, 420; prototype.jsx:692, 766  
+  Elements: Where: plum100 banner with house icon, 12.5 plum700 w600: 'Book Now always comes to your address - confirm which one below.'; Address list always shown (no salon option); On confirm: toast 'Provider is on the way.' and activeStatus 'confirmed'
+- **Booking screen - 'Where' home vs salon toggle** (`BOOK-10`, component, customer) — Booking screen (scheduled) -> Where section  
+  Source: ui_kits/aiwa-app/screens.jsx:403-419  
+  Elements: Eyebrow 'Where'; Two flex buttons: 'At my address' (house) / 'At the salon' (store); padding 12/10, radius 14, 13px w600; Selected: plum700 bg, #fff text/icon, transparent border. Unselected: #fff bg, ink text, plum700 icon, divider border
+- **Booking screen - saved address selector (Home / Work / Add new address)** (`BOOK-11`, component, customer) — Booking screen -> Where -> 'At my address' (or always in Book Now mode)  
+  Source: ui_kits/aiwa-app/screens.jsx:335, 420-438; customer-extras-2.jsx:179-182  
+  Elements: Address rows: 32px plum700 tile with house / briefcase icon #fff, label 13.5 w600, address 11.5 ink3; Selected: plum100 bg, 1.5px plum700 border, check icon plum700; Seed: Home '14 Road 9, Maadi, Cairo'; Work 'Smart Village, 6th of October'; Dashed 1.5px divider button '+ Add new address' plum700 12.5 w600 (no handler in prototype)
+- **Booking screen - Cash on visit payment card** (`BOOK-12`, component, customer) — Booking screen -> Payment section  
+  Source: ui_kits/aiwa-app/screens.jsx:443-453  
+  Elements: Eyebrow 'Payment'; Card #fff radius 14 padding 14 divider border; 36px gold100 tile, banknote icon gold700; 'Cash on visit' 14 w600 / 'Pay the provider directly after your service' 12 ink3; check icon success500 18
+- **Slot conflict sheet ('Someone booked that slot.')** (`BOOK-13`, sheet, customer) — Booking screen -> Confirm booking when the slot was just taken (409); or Preview states 'Slot just taken'  
+  Source: ui_kits/aiwa-app/system-screens.jsx:150-186; prototype.jsx:760-762, 783  
+  Elements: Bone sheet, radius 24, handle, scrim rgba(42,19,32,.48); 46px warn100 circle, calendar-x warn700; Eyebrow warn700 'Just taken'; h2 23 'Someone booked that slot.'; Body 'It went in the last moment. Here's what {providerName} still has free today.'; Alternative chips '1:30 PM' '3:00 PM' '5:30 PM' (selected plum700/#fff, radius 13); 'Pick another day' secondary lg / 'Book slot' -> 'Book {t}' primary lg, disabled .45 until picked; Toast 'Rebooked for {t}.'
+- **Booking confirmed ('You said aiwa. We told Nadia.')** (`BOOK-14`, screen, customer) — Booking screen -> Confirm booking  
+  Source: ui_kits/aiwa-app/screens.jsx:470-494; prototype.jsx:692-693  
+  Elements: 96px success100 circle, check 48 success700; Eyebrow rose700 'Booking placed'; h1 30: 'You said *aiwa*. We told Nadia.' (italic rose700 'aiwa'); Body 'Tuesday, May 19 at 12:30 PM. We'll ping you the moment she confirms - usually within 30 minutes.'; Summary card: Provider / Service / When / Total (DM Serif 20); 'View my bookings' primary lg -> Tracking; 'Add to calendar' ghost
+- **Tracking - Pending** (`BOOK-15`, state, customer) — Booking confirmed (scheduled) -> 'View my bookings' -> Tracking; or Bookings -> Upcoming -> tap b2 'Gel Manicure' (pending) / 'Track'  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:226-233, 235-485 (pending branches 250-256, 262, 442-469, 479); prototype.jsx:692, 694  
+  Elements: Gradient header linear-gradient(160deg, plum700, plum900), glass back IconBtn, Eyebrow rose300 'Tracking', title 'Pending' DM Serif 22; Live status card (rgba(255,255,255,.10), blur, radius 18): 54px bone circle, hourglass icon, 'Pending', hint 'Waiting for the provider to confirm.' rose300; Radio line 'Waiting for the provider to accept'; Dashed prototype-only 'simulate provider's next tap'; Provider card (BOOK-21); 6-step timeline (28px dots, 2px connectors, active plum700/bone, done plum100/check); 'Demo: provider quotes a travel fee' (BOOK-27); Footer: 'Cancel booking' secondary icon x -> CancelSheet; 'Demo: provider proposes new time' ghost calendar-clock -> Proposed time; 'Report a problem' ghost flag -> Complaint
+- **Tracking - Accepted (confirmed)** (`BOOK-16`, state, customer) — Bookings -> Upcoming -> b1 'Haircut & Style' (confirmed, home) -> Tracking; also after Book Now booking or Proposed time 'Accept new time'  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:228, 252, 262, 378-389; prototype.jsx:513, 634, 700-704  
+  Elements: Title/card 'Accepted', check-circle icon, hint 'Your booking is confirmed.'; Waiting line 'Updates when the provider heads out'; Timeline step 2 active, step 1 done (check); 'Cancel booking' still available (canCancel = pending|confirmed); Venue check-in card when location is 'venue' (BOOK-26); Report a problem
+- **Tracking - On the way** (`BOOK-17`, state, customer) — Notifications -> 'Nadia is on the way' (opens Tracking with status onway); or Tracking -> provider taps on-the-way  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:229, 253, 339-356; prototype.jsx:713  
+  Elements: 'On the way', navigation icon, hint 'Provider is heading to your address.'; Waiting line 'Updates when the provider arrives'; Home-service safety card with SOS (BOOK-22); Cancel hidden; Report a problem visible
+- **Tracking - Arrived** (`BOOK-18`, state, customer) — Tracking (on the way) -> provider marks arrived  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:230, 254, 339  
+  Elements: 'Arrived', map-pin icon, hint 'Provider has arrived at your door.'; Waiting line 'Updates when the provider starts the service'; Safety card + SOS still shown for home service
+- **Tracking - In progress** (`BOOK-19`, state, customer) — Tracking (arrived) -> provider starts service  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:231, 255, 305  
+  Elements: 'In progress', sparkles icon in a 54px circle pulsing (aiwa-pulse 1.6s); Hint 'Service is underway.'; Waiting line 'Updates when the provider marks it complete'; Safety card + SOS for home service
+- **Tracking - Completed (confirm cash payment + review)** (`BOOK-20`, state, customer) — Tracking (in progress) -> provider marks complete  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:232, 263, 317, 427-439, 480; prototype.jsx:694  
+  Elements: 'Completed', badge-check icon, hint 'Service done. Pay cash and rate.'; 'Updates automatically'; demo button hidden; Payment row: plum100 bg, radius 14, 36px paper tile banknote plum700, 'Confirm your cash payment' 14 w600 plum900, 'EGP 350 due to {p.name}' 12 ink3, Btn secondary sm 'Confirm' -> Payment confirm; 'Leave a review' primary icon star -> Review; 'Report a problem' ghost flag
+- **Tracking - provider contact card (call + chat entry)** (`BOOK-21`, component, customer) — Any Tracking state  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:329-337; prototype.jsx:694 (onChat -> push('chat'))  
+  Elements: Card overlaps header: margin '-20px 22px 0', paper, radius 18, padding 14; Avatar 48 (palette, verified); Name DM Serif 17 plum900; '{service} · {when}' 12 ink3; phone IconBtn 36 (no handler in prototype); message-circle IconBtn 36 -> ChatScreen
+- **Tracking - home-service safety card (live location + ID, SOS button)** (`BOOK-22`, component, customer) — Tracking in On the way / Arrived / In progress for a home (non-venue) booking  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:339-356  
+  Elements: Paper card radius 16 padding 14; 34px success100 tile, shield-check success700; 'Live location + ID shared' 13.5 w600 ink; 'Identity confirmed both ways. A trusted contact can follow along too.' 11.5 ink3; Full-width SOS button: danger100 bg, danger700 13.5 w700, radius 12, siren icon, 'SOS - alert a trusted contact & AIWA'
+- **Tracking - SOS stage 1: alerting** (`BOOK-23`, banner, customer) — Tracking (home service, on the way/arrived/in progress) -> SOS button  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:357-363  
+  Elements: danger100 bg, 1px danger500 @40% border, radius 14; loader icon danger700 18; 'Alerting your trusted contact and AIWA support...' 12.5 danger700; 'Simulate sent' pill (prototype-only)
+- **Tracking - SOS stage 2: support notified** (`BOOK-24`, banner, customer) — SOS alerting -> request succeeds  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:364-370  
+  Elements: warn100 bg, warn500 @40% border, shield-alert warn700; '**Support has been notified.** A trusted contact was alerted with your live location. Stay safe - a specialist may call shortly.'; 'I'm safe' text button warn700 11.5 w700 -> stage 3
+- **Tracking - SOS stage 3: incident logged** (`BOOK-25`, banner, customer) — SOS notified -> 'I'm safe'  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:371-376  
+  Elements: plum100 bg, divider border, radius 14; file-check icon plum700; 'Incident logged for admin review. Our trust & safety team will follow up within 24h.' 12.5 plum700
+- **Tracking - venue check-in card** (`BOOK-26`, component, customer) — Tracking for a venue booking (e.g. b2 Gel Manicure) in Accepted / On the way / Arrived  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:378-389  
+  Elements: Paper card radius 16; 34px plum100 tile, map-pin-check plum700; 'On-site service - check in when you arrive' 13.5 w600; 'Tap in at the venue to let {p.name} know you're there.' 11.5 ink3; Btn secondary sm 'Check in' (no handler in prototype)
+- **Tracking - travel fee quote (accept / decline) + total row** (`BOOK-27`, state, customer) — Tracking (pending) -> provider quotes a travel fee (prototype demo button)  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:442-475  
+  Elements: Card: paper, 1.5px gold500 border, radius 18, padding 16; 40px gold100 tile, car icon gold700; '{p.name} wants EGP 120 for travel' 14.5 w700; 'Total will be EGP 350 + EGP 120 = EGP 470.'; 'Decline' secondary sm / 'Accept & confirm' primary sm check -> status confirmed; Total row: cream, 'Service EGP 350 + travel EGP 120' ink3 / 'Total EGP 470' w700 plum900
+- **Tracking - travel fee declined ('No problem - no fee applied.')** (`BOOK-28`, state, customer) — Tracking (pending) -> travel fee card -> Decline  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:265-281  
+  Elements: Centred layout, 68px cream circle, calendar-x ink3; Eyebrow 'Booking cancelled'; h1 26 'No problem - no fee applied.'; 'You declined the EGP 120 travel fee, so this request was cancelled cleanly. Neither of you is penalized.'; 'Find another provider' primary lg icon search -> back to Bookings
+- **Cancel booking sheet (with reasons)** (`BOOK-29`, sheet, customer) — Tracking (Pending/Accepted) -> 'Cancel booking'  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:490-549; prototype.jsx:694, 737-741  
+  Elements: Scrim rgba(42,19,32,.45) + blur(2px); bone sheet radius 24, padding '18px 22px 36px', shadow '0 -12px 32px rgba(0,0,0,.18)'; Eyebrow 'Cancel your booking'; h2 22 'Why are you cancelling?'; 6 reason rows: 'Changed my mind', 'Found another provider', 'Wrong service / time', 'Price is too high', 'Provider not responsive', 'Something else' (selected plum100 bg, 1.5 plum700 border, check); 'Something else' -> textarea 'Tell us what happened (optional)' h70; 'Keep booking' secondary / 'Cancel' danger (md); confirm requires a reason; On confirm: toast 'Booking cancelled. Reason: {reason}' -> Bookings tab
+- **Proposed time - provider suggested a different time (active countdown)** (`BOOK-30`, screen, customer) — Tracking (pending) -> 'Demo: provider proposes new time' (in production: push/notification when the provider proposes)  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:9-68; prototype.jsx:633-635  
+  Elements: Back IconBtn; Eyebrow rose700 'New time proposed'; h1 28 '{providerName} suggested a different time.'; Body 'Your original slot wasn't available. Here's what they can offer instead.'; Card: 1.5px plum700 border, radius 18; calendar-clock tile; 'Thu, May 21 · 4:00 PM' DM Serif 20; 'Instead of Tue, May 19 · 12:30 PM'; Countdown 'Respond within MM:SS or this offer expires automatically.' (JetBrains Mono 700; danger700 under 2 min), 30:00 start; 'Accept new time' primary lg check -> toast + Tracking (Accepted); 'Decline & see alternatives' secondary lg -> Rejected screen
+- **Proposed time - offer expired** (`BOOK-31`, state, customer) — Proposed time -> countdown reaches 00:00  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:41-45, 54-58  
+  Elements: InlineBanner warn hourglass 'This offer expired' / 'You didn't respond in time, so the request was released automatically. Ask for another time or see who else is free.'; 'See alternative providers' primary lg search -> Rejected; 'Back to bookings' secondary lg -> pop
+- **Booking rejected - reason + alternatives** (`BOOK-32`, screen, customer) — Bookings -> Past -> rejected card 'See alternatives'; or Proposed time -> Decline  
+  Source: ui_kits/aiwa-app/customer-extras.jsx:343-427; prototype.jsx:635, 702, 716  
+  Elements: Header back, Eyebrow rose700 'Booking rejected', h2 22 '{name} couldn't take this one.'; Reason card: danger100, 32px paper tile x icon danger700, 'Reason from {first}', quoted reason 13 ink2; 'Book {first} at another time' card: calendar-clock tile, 'Next open slots for the same service', 3 slot buttons (Today 4:30 PM / Today 6:00 PM / Tomorrow 11:00 AM), 'See all times' primary icon calendar -> provider; SectionHeader 'Similar providers' / 'Other providers nearby' + provider rows (Avatar 48, rating, distance, 'Open now', 'Book' secondary sm) -> provider profile; Back -> Bookings tab
+- **Expired booking ('No answer in time.')** (`BOOK-33`, screen, customer) — Bookings -> Past -> b8 'Russian Volume Lashes' (expired) card tap; or Preview states 'Booking expired'  
+  Source: ui_kits/aiwa-app/system-screens.jsx:189-215; prototype.jsx:681, 703, 790  
+  Elements: Back IconBtn; 68px warn100 circle, hourglass warn700; Eyebrow warn700 'Request expired'; h1 27 'No answer in time.'; '{providerName} didn't respond within the booking window, so your request was released. You haven't been charged anything.'; InlineBanner plum sparkles 'Three providers nearby are free at the same time' / 'Same category, similar rating, all within your radius.'; 'See alternative providers' primary lg search -> Discover; 'Back to bookings' ghost sm
+- **Leave a review ('How was it?')** (`BOOK-34`, screen, customer) — Tracking (completed) -> 'Leave a review' (Flutter: Bookings -> Past -> completed card -> 'Leave a review')  
+  Source: ui_kits/aiwa-app/customer-extras.jsx:15-95; prototype.jsx:694, 712  
+  Elements: Header: Eyebrow 'Leave a review', h2 'How was it?'; Provider card: Avatar 64 (palette, verified), name DM Serif 20, 'Haircut & Style · Sun, May 17' 12 ink3; 5 star buttons 38px (gap 10 + padding 4), gold500 fill / ink4 stroke, scale .94 unselected; Adjective 'Tap a star' / Disappointing / Below expectations / Good / Great / Outstanding (DM Serif 18); Eyebrow 'Quick tags (optional)' + 6 chips; Eyebrow 'Tell others what stood out' + textarea h100 placeholder 'Optional - your review will be public on the provider's profile.'; Sticky 'Submit review' primary lg, .45 until rated -> toast + Bookings tab
+- **Complaint ('Open a complaint / What happened?')** (`BOOK-35`, screen, customer) — Tracking (any status) -> 'Report a problem'  
+  Source: ui_kits/aiwa-app/customer-extras.jsx:177-258; prototype.jsx:694, 714  
+  Elements: Header Eyebrow 'Open a complaint', h2 'What happened?'; About card: Avatar 36, 'About {name}', 'Booking #{id}', Eyebrow rose700 'Private'; Eyebrow 'Pick a category' + 6 rows with icon tiles and hints: Provider behavior (user-x), Service quality (thumbs-down), Pricing or billing (banknote), Safety concern (shield-alert), Provider didn't show (user-x), Something else (more-horizontal); Selected: plum100 bg, 1.5 plum700 border, plum700 tile with bone icon, check; Eyebrow 'Tell us more' + textarea h120 'Walk us through what happened. The more detail, the faster we can help.'; Cream privacy note with lock: 'Your name and contact info stay private. Only the AIWA support team will see this case.'; Sticky 'Submit complaint' .45 until category -> toast + pop
+- **Chat with provider (masked number)** (`BOOK-36`, screen, customer) — Tracking -> provider card message-circle button  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:100-177; prototype.jsx:673, 694  
+  Elements: cream bg; paper header with back, Avatar 36 verified, name 15 w600, 'Masked number · online' 11.5 success700 w600, phone IconBtn 36; InlineBanner plum eye: 'Admin can view this chat only if you submit a complaint or dispute a payment.'; Bubbles max 78%: me plum700/bone radius 16 (4 bottom-right); them paper/ink divider border (4 bottom-left); timestamp 10 @65%; 'Report' flag link under provider messages; Composer: pill input cream 1.5 divider 'Message...' + send IconBtn plum
+- **Chat - report message sheet + '[message removed by admin]' state** (`BOOK-37`, sheet, customer) — Chat -> 'Report' under a provider message  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:116-119, 137-141, 156-160, 172-174  
+  Elements: ConfirmSheet: eyebrow 'Report message', title 'Send this to admin review?', confirm 'Report message', icon flag, body 'Support reviews reported messages and can remove them. This doesn't notify the other person.'; Blocked bubble: cream bg, 1px dashed divider, ink4 12.5 italic, eye-off icon, '[message removed by admin]'
+- **Payment confirm (customer) - 'Did you pay {provider} in cash?'** (`BOOK-38`, screen, customer) — Tracking (completed) -> 'Confirm your cash payment' row -> 'Confirm'  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:82-106; prototype.jsx:694-697  
+  Elements: Back IconBtn; Eyebrow 'Confirm payment'; h1 26 'Did you pay {providerName} in cash?'; 'Total due · **EGP 350**' (plum900 bold); 'Yes, I paid - confirm' primary lg check; 'No / something's wrong' secondary lg alert-triangle
+- **Payment confirm - paid / confirmed state** (`BOOK-39`, state, customer) — Payment confirm -> 'Yes, I paid - confirm'  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:108-140; prototype.jsx:696  
+  Elements: Card paper radius 20 padding 20; 44px success100 circle check success700; 'Payment confirmed' 16 w700; 'Receipt sent to your email' 12.5 ink3; Rows: 'Cash collected' EGP 350; 'Booking status' 'Completed' success700; 'Rate your provider' primary lg star (onConfirmed: toast 'Payment confirmed. Receipt sent.' + pop; does not open Review); 'Undo - I tapped by mistake' ghost -> back to question
+- **Payment confirm - unpaid / dispute form** (`BOOK-40`, state, customer) — Payment confirm -> 'No / something's wrong'  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:142-160; prototype.jsx:697  
+  Elements: Eyebrow 'What happened?'; textarea h100 'Explain the payment issue...'; 'Submit as unpaid' danger lg, .45 until text entered; 'Back' ghost -> question; On submit: toast 'Reported as unpaid. AIWA support has been notified.' + pop
+- **My Bookings - Upcoming tab** (`BOOK-41`, tab, customer) — Tab bar -> Bookings (Upcoming is default)  
+  Source: ui_kits/aiwa-app/screens.jsx:499-597 (upcoming 501-503, 532-579); prototype.jsx:698-705  
+  Elements: Eyebrow 'Your appointments', h1 'Bookings' DM Serif 28; Underline tabs 'Upcoming' / 'Past' (14 w600, 2px plum700 underline); Cards (#fff, radius 18, padding 16, shadow '0 1px 2px rgba(74,31,56,.04)'): Avatar 42 (palette, verified), name DM Serif 18, service 12 ink3, StatusPill; Meta: calendar 'Tue, May 19 · 12:30 PM', map-pin '1.2 km'; Whole card tappable -> Tracking; 'Track' secondary sm -> Tracking; 'Directions' primary sm icon map
+- **My Bookings - Past tab** (`BOOK-42`, tab, customer) — Bookings -> 'Past'  
+  Source: ui_kits/aiwa-app/screens.jsx:501-503, 552-590  
+  Elements: Statuses completed / cancelled / rejected / noshow / expired; Completed: 'Re-book' ghost sm + 'Leave a review' primary sm star; Cancelled / no-show / rejected reason cards (BOOK-43..45); Expired card tappable -> Expired booking
+- **Bookings - cancelled reason card (incl. provider-penalty variant)** (`BOOK-43`, state, customer) — Bookings -> Past -> b4 (cancelled by You) / b7 (cancelled by Provider, penalty)  
+  Source: ui_kits/aiwa-app/screens.jsx:52-53, 58-59, 552-564  
+  Elements: danger100 box, radius 10, padding 10/12, x-circle 14 danger700; 'Cancelled by {cancelledBy || 'you'}' w600 + ' · {cancelledAt}' ink3; Quoted reason ink2, e.g. '"Changed my mind"'; Penalty line w600: 'Provider penalty applied for late cancellation.'
+- **Bookings - no-show reason card** (`BOOK-44`, state, customer) — Bookings -> Past -> b6 'Classic Pedicure' (noshow)  
+  Source: ui_kits/aiwa-app/screens.jsx:56-57, 552-564  
+  Elements: user-x icon; 'Marked no-show' + ' · Apr 14 · 7:42 PM'; Quoted reason '"Customer didn't show up"'
+- **Bookings - rejected reason card + 'See alternatives'** (`BOOK-45`, state, customer) — Bookings -> Past -> b5 'Beard Trim' (rejected)  
+  Source: ui_kits/aiwa-app/screens.jsx:54-55, 565-573, 586-590; prototype.jsx:702  
+  Elements: x-circle 'Rejected by provider'; Quoted reason '"Fully booked for this slot - try later today or one of these."'; 'See alternatives' secondary sm -> Rejected screen
+- **Bookings - expired card in Past (tappable)** (`BOOK-46`, state, customer) — Bookings -> Past -> b8 'Russian Volume Lashes'  
+  Source: ui_kits/aiwa-app/screens.jsx:60-61, 503, 535; components.jsx:158  
+  Elements: StatusPill 'Expired' (cream bg, ink3 text, ink4 dot); No reason box; Card tap -> Expired booking screen
+- **Bookings - Upcoming empty state ('Nothing booked yet')** (`BOOK-47`, state, customer) — Bookings -> Upcoming with no live bookings  
+  Source: ui_kits/aiwa-app/screens.jsx:522-531; states.jsx:80-107  
+  Elements: 64px plum100 circle, calendar-plus icon 27 plum700; 'Nothing booked yet' DM Serif 22; 'When you book a provider, it shows up here so you can track them on the way.' 13.5 ink3 max 270; 'Find a provider' primary (max 250)
+- **Bookings - Past empty state ('No past appointments')** (`BOOK-48`, state, customer) — Bookings -> Past with no finished bookings  
+  Source: ui_kits/aiwa-app/screens.jsx:522-531  
+  Elements: history icon; 'No past appointments'; 'Once an appointment is finished it moves here, ready to re-book in a tap.'; No action
+- **Bookings - guest locked state** (`BOOK-49`, state, customer) — Splash -> Continue as guest -> tab bar Bookings  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:11-25; prototype.jsx:698-699  
+  Elements: 64px plum100 circle, calendar-check plum700 28; Eyebrow 'Browsing as guest'; Title 'See your bookings' DM Serif 24; Body 'Sign in to view and track your bookings.' 13.5 ink2 max 280; 'Sign in or create account' primary lg -> Auth gate
+- **Booking data model (MY_BOOKINGS seed fields)** (`BOOK-50`, component, customer) — Backs Bookings list, Tracking, Confirmed, Review  
+  Source: ui_kits/aiwa-app/screens.jsx:48-62  
+  Elements: id, providerId, service, when, distance, status (pending/confirmed/onway/arrived/progress/completed/cancelled/rejected/noshow/expired); location 'home' | 'venue'; cancelledBy, cancelledAt, cancellationReason, penaltyApplied; rejectionReason
+- **StatusPill (booking statuses)** (`BOOK-51`, component, shared) — Booking cards (Bookings tab)  
+  Source: ui_kits/aiwa-app/components.jsx:147-172  
+  Elements: padding 5/10, radius 999, 12 w600, 7px dot, gap 6; pending warn, confirmed info, onway/arrived plum, progress rose, completed success, cancelled/rejected/disputed danger, noshow warn, expired cream/ink3/ink4
+- **Toast component (success toast)** (`BOOK-52`, component, shared) — Any customer action that calls setToast(...)  
+  Source: ui_kits/aiwa-app/prototype.jsx:20-39, 735  
+  Elements: Absolute top: 56, left/right 16, zIndex 200; bg rgba(42,19,32,.96), bone text 13 w500, radius 14, padding 12/16; 26px success500 circle with #fff check 15; Shadow '0 12px 32px rgba(74,31,56,.3)', blur(8px), aiwa-toast slide-down 320ms; Auto-dismiss 2800ms
+- **Toast - 'Booking placed. Waiting to confirm.'** (`BOOK-53`, toast, customer) — Booking screen (scheduled) -> Confirm booking  
+  Source: ui_kits/aiwa-app/prototype.jsx:692  
+  Elements: Success toast over ConfirmedScreen
+- **Toast - 'Provider is on the way.'** (`BOOK-54`, toast, customer) — Book Now -> Booking screen -> Confirm booking  
+  Source: ui_kits/aiwa-app/prototype.jsx:692  
+  Elements: Success toast after a Book Now booking
+- **Toast - 'Booking cancelled. Reason: {reason}'** (`BOOK-55`, toast, customer) — Tracking -> Cancel booking -> pick reason -> Cancel  
+  Source: ui_kits/aiwa-app/prototype.jsx:737-741  
+  Elements: Success toast, then reset to Bookings tab
+- **Toast - 'Thanks - your review is live.'** (`BOOK-56`, toast, customer) — Review -> Submit review  
+  Source: ui_kits/aiwa-app/prototype.jsx:712  
+  Elements: Success toast, then reset to Bookings tab
+- **Toast - 'Complaint submitted. We will reach out via WhatsApp.'** (`BOOK-57`, toast, customer) — Tracking -> Report a problem -> Submit complaint  
+  Source: ui_kits/aiwa-app/prototype.jsx:714  
+  Elements: Success toast, then pop back to Tracking
+- **Toast - 'New time confirmed - your calendar and reminders are updated.'** (`BOOK-58`, toast, customer) — Proposed time -> Accept new time  
+  Source: ui_kits/aiwa-app/prototype.jsx:634  
+  Elements: Success toast, then reset to Tracking (Accepted)
+- **Toast - 'Payment confirmed. Receipt sent.'** (`BOOK-59`, toast, customer) — Payment confirm -> Yes, I paid -> Rate your provider  
+  Source: ui_kits/aiwa-app/prototype.jsx:696  
+  Elements: Success toast, then pop to Tracking
+- **Toast - 'Reported as unpaid. AIWA support has been notified.'** (`BOOK-60`, toast, customer) — Payment confirm -> No / something's wrong -> Submit as unpaid  
+  Source: ui_kits/aiwa-app/prototype.jsx:697  
+  Elements: Success toast, then pop to Tracking
+- **Toast - 'Rebooked for {time}.'** (`BOOK-61`, toast, customer) — Slot conflict sheet -> pick alternative -> Book {time}  
+  Source: ui_kits/aiwa-app/prototype.jsx:760-762  
+  Elements: Success toast after picking an alternative slot
+- **Proposed time - countdown under 2 minutes (urgent)** (`BOOK-V01`, state, customer) — Tracking (pending) -> provider proposes new time -> Proposed time, while secondsLeft &lt; 120  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:47-50  
+  Elements: Countdown row turns aiwa.danger700 (male #2E2A26 / female #6B3A3A; base #8A2230) instead of ink3 (male #7A7268 / female #8A6F71); hourglass icon 14 plus 'Respond within MM:SS or this offer expires automatically.' 12.5px; MM:SS in fontMono (JetBrains Mono) weight 700; Accept / Decline CTAs unchanged
+- **Slot conflict sheet - alternative selected** (`BOOK-V02`, state, customer) — Booking -> Confirm booking (slot taken) -> Slot conflict sheet -> tap an alternative chip  
+  Source: ui_kits/aiwa-app/system-screens.jsx:151, 170-181  
+  Elements: Picked chip: plum700 bg (male #2E2A26 / female #6B3A3A), '#fff' text, transparent 1.5px border, radius 13, padding 11/16, 14px w600; Unpicked chips: paper bg, ink text, 1.5px divider border; Primary lg CTA label changes 'Book slot' -> 'Book {t}' and opacity .45 -> 1 (pointerEvents none until picked); Tap -> toast 'Rebooked for {t}.' and the sheet closes
+- **Cancel sheet - 'Something else' selected with note field** (`BOOK-V03`, state, customer) — Tracking (pending/accepted) -> Cancel booking -> tap 'Something else'  
+  Source: ui_kits/aiwa-app/flow-screens.jsx:519-539  
+  Elements: Selected row: plum100 bg, 1.5px plum700 border, 14px w500 plum900 text, check icon 16 plum700; Textarea below the list: marginTop 12, padding 12, radius 12, 1.5px divider border, paper bg, 13px, height 70, placeholder 'Tell us what happened (optional)'; 'Cancel' (danger md) is enabled because a reason is set
+
+#### Customer account, notifications & system
+
+- **Profile tab (signed-in customer)** (`ACCT-01`, screen, customer) — Splash -> sign in / sign up -> Home -> bottom tab bar 'Profile'  
+  Source: ui_kits/aiwa-app/prototype.jsx:342-402 (ProfileScreen); case 'profile' prototype.jsx:709-711  
+  Elements: Header gradient linear-gradient(160deg, plum700, plum900) (male #2E2A26 / female #6B3A3A) + radial glow rgba(231,186,182,.4) at 70% 30%; Avatar 'Layla' palette rose 64px; name 'Layla Hassan' DM Serif 24 lh1.1 bone; phone '+20 100 555 8821' 13px rose300; 3 stat tiles (12 Bookings / 3 Favorites / 5 Reviews): bg rgba(250,245,238,.12), radius 14, value DM Serif 22, label 11/600 uppercase 0.08em rose300; 10 rows (36px icon tile radius 10 plum100/plum700, label 15/500 ink, value 13 ink3, chevron-right 16 ink3 on non-danger rows): Personal info, Saved addresses, Trusted contacts '1 saved', Notifications, Notification preferences, Language 'English', Safety & policies, WhatsApp support, Sign out (danger), Delete account (danger); Row dividers 1px divider except last; list padding '20px 22px 0'; page paddingBottom 100
+- **Profile tab - guest-locked state** (`ACCT-02`, state, customer) — Splash -> Browse as guest -> bottom tab 'Profile'  
+  Source: ui_kits/aiwa-app/prototype.jsx:709-710; customer-extras-2.jsx:11-25 (GuestLockedScreen)  
+  Elements: 64px plum100 circle with 'user' icon 28 plum700; Eyebrow 'Browsing as guest'; h2 'Your profile' DM Serif 24 lh1.1 plum900; Body 'Sign in to manage your account, addresses, and notifications.' 13.5 ink2 maxWidth 280; Primary lg full 'Sign in or create account' -> push('auth-gate')
+- **Sign-out confirm sheet** (`ACCT-03`, sheet, customer) — Profile tab -> 'Sign out' row  
+  Source: ui_kits/aiwa-app/prototype.jsx:756-758; states.jsx:227-257 (ConfirmSheet)  
+  Elements: Scrim rgba(42,19,32,.48); bone sheet radius 24, padding '18px 22px 34px', shadow 0 -12px 32px rgba(42,19,32,.2), 40x4 handle; tone='neutral': 46px plum100 circle, 'log-out' icon plum700; Eyebrow 'Your account' plum700; title 'Sign out of AIWA?' DM Serif 23 lh1.12; Body 'Your bookings, saved providers and addresses all stay safe. You'll need a code to sign back in.'; Cancel (secondary lg) + 'Sign out' (primary lg) -> setIsGuest(false); reset('splash')
+- **Delete account sheet (type DELETE to confirm)** (`ACCT-04`, sheet, customer) — Profile tab -> 'Delete account' row  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:217-248; mounted prototype.jsx:751-755  
+  Elements: Scrim rgba(42,19,32,.5); bone sheet radius 24, padding '18px 22px 36px', shadow 0 -12px 32px rgba(0,0,0,.18), handle; Eyebrow "This can't be undone" danger700; h2 'Delete your account?' DM Serif 22; Body 'Your data will be anonymized and any active bookings cancelled. Type DELETE to confirm.'; Input placeholder 'DELETE' JetBrains Mono 14, radius 14, 1.5px divider border, paper bg; Cancel (secondary) + 'Delete account' (danger, opacity .5 until text === 'DELETE'); Confirm -> toast 'Account deleted. Sorry to see you go.' -> reset('splash')
+- **Toast: 'Account deleted. Sorry to see you go.'** (`ACCT-05`, toast, customer) — Profile -> Delete account -> type DELETE -> 'Delete account'  
+  Source: ui_kits/aiwa-app/prototype.jsx:751-754; Toast component prototype.jsx:20-39  
+  Elements: Top overlay at top:56, left/right 16, bg rgba(42,19,32,.96), radius 14, padding 12x16, shadow 0 12px 32px rgba(74,31,56,.3), blur 8; 26px success500 circle with white check 15; Message 13px/500 bone (Plus Jakarta Sans); Enters with aiwa-toast 320ms (opacity 0 -> 1, translateY -10 -> 0); auto-dismiss 2800ms
+- **Saved addresses list** (`ACCT-06`, sub-screen, customer) — Profile tab -> 'Saved addresses'  
+  Source: ui_kits/aiwa-app/customer-extras-2.jsx:179-215 (AddressesScreen, SAVED_ADDRESSES); prototype.jsx:674  
+  Elements: Header padding '60px 22px 8px': IconBtn arrow-left, Eyebrow 'Account', h2 'Saved addresses' DM Serif 22 lh1.1; Address cards: paper, radius 16, 1px divider, padding 14, gap 14; 40px plum100 tile radius 12 with house/briefcase icon 18; label 14/600 ink; address 12.5 ink3; pencil IconBtn 34 -> edit; Seed: Home '14 Road 9, Maadi, Cairo'; Work 'Smart Village, 6th of October'; Dashed 'Add new address' button (1.5px dashed divider, radius 16, plus 16, plum700 14/600) -> new address form
+- **New address form (add mode)** (`ACCT-07`, sub-screen, customer) — Profile -> Saved addresses -> 'Add new address'  
+  Source: ui_kits/aiwa-app/account-screens.jsx:116-215 (AddressFormScreen, existing=null); prototype.jsx:674-677  
+  Elements: ScreenHeader eyebrow 'Saved addresses', title 'New address'; Map placeholder 132px radius 18, gradient 150deg plum100 -> cream -> gold100, 26px grid at 50% opacity, 38px plum700 pin with shadow, 'Drop pin' pill (crosshair, rgba(255,255,255,.94)); Label segmented control Home/Work/Other (house/briefcase/map-pin): selected plum700 bg + white text; unselected paper + 1.5px divider; Street & area (signpost, placeholder 'e.g. Road 9, Maadi'; error 'Add the street and area so your provider can find you.' when &lt; 4 chars); Grid 1.4fr/1fr/1fr: Building (placeholder '14'; error 'Building number or name is required.'), Floor optional '3', Apt optional '7'; Nearest landmark optional (landmark icon, 'e.g. opposite Sakia', hint 'Helps providers find you faster on the first visit.'); Notes for the provider optional, multiline, maxLength 140 with mono counter, placeholder 'Gate code, parking, which bell to ring…'; Default address row: star tile + 'Default address' / 'Pre-selected on every home booking' + Toggle; StickyBar: Cancel (secondary lg) + 'Add address' (primary lg, opacity .45 until valid); Validation errors only after blur (ValidatedInput touched)
+- **Edit address form (edit mode)** (`ACCT-08`, sub-screen, customer) — Profile -> Saved addresses -> pencil icon on an address  
+  Source: ui_kits/aiwa-app/account-screens.jsx:121-215 (existing != null); prototype.jsx:674-677  
+  Elements: ScreenHeader title 'Edit address' (eyebrow 'Saved addresses'); All fields pre-filled from the existing address; Outlined danger button 'Delete this address' (trash-2 15, 1.5px danger100 border, danger700 14/600, radius 14, padding 13) -> delete ConfirmSheet; StickyBar primary label 'Save address'
+- **Delete address confirm sheet** (`ACCT-09`, sheet, customer) — Profile -> Saved addresses -> pencil -> 'Delete this address'  
+  Source: ui_kits/aiwa-app/account-screens.jsx:210-212  
+  Elements: ConfirmSheet tone danger, icon 'trash-2'; Eyebrow 'Remove address'; title 'Delete "&lt;label>"?'; Body 'Bookings already made to this address keep their details. You can add it again any time.'; Cancel + 'Delete' (danger) -> onDelete -> toast 'Address deleted.' + pop
+- **Toast: 'Address added.'** (`ACCT-10`, toast, customer) — Profile -> Saved addresses -> Add new address -> valid form -> 'Add address'  
+  Source: ui_kits/aiwa-app/prototype.jsx:676 (editAddress == null); Toast prototype.jsx:20-39  
+  Elements: Top toast (see ACCT-05) with message 'Address added.'; Screen pops back to Saved addresses
+- **Toast: 'Address updated.'** (`ACCT-11`, toast, customer) — Profile -> Saved addresses -> pencil -> 'Save address'  
+  Source: ui_kits/aiwa-app/prototype.jsx:676 (editAddress != null)  
+  Elements: Top toast with message 'Address updated.'; Pops back to Saved addresses
+- **Toast: 'Address deleted.'** (`ACCT-12`, toast, customer) — Profile -> Saved addresses -> pencil -> Delete this address -> 'Delete'  
+  Source: ui_kits/aiwa-app/prototype.jsx:677  
+  Elements: Top toast with message 'Address deleted.'; Pops back to Saved addresses
+- **Personal info (edit profile)** (`ACCT-13`, sub-screen, customer) — Profile tab -> 'Personal info'  
+  Source: ui_kits/aiwa-app/account-screens.jsx:7-73 (EditProfileScreen); prototype.jsx:678  
+  Elements: ScreenHeader eyebrow 'Account', title 'Personal info'; Avatar 68 rose + 'Change photo' (secondary sm, camera icon) + 'JPG or PNG · max 5 MB' 11.5 ink4; Full name (user icon, placeholder 'Your name', error 'Enter your full name.'); Mobile number (phone icon, hint 'Changing this sends a verification code to the new number.', error 'Enter a valid Egyptian mobile number.'); Email optional (mail icon, error 'That email doesn’t look right.'); 'Theme' 2-column picker: Mauve (swatches plum500 + rose300) / Charcoal (#3A3A3C + #8E8E93); selected plum100 bg + 1.5px plum700 border + check; SettingsRow 'Language' (globe) toggling English / العربية; StickyBar Cancel + 'Save changes' (disabled .45 until valid && dirty); label 'Saving…' for 550ms -> toast 'Profile updated.' + pop
+- **Toast: 'Profile updated.'** (`ACCT-14`, toast, customer) — Profile -> Personal info -> edit a field -> 'Save changes'  
+  Source: ui_kits/aiwa-app/prototype.jsx:678  
+  Elements: Top toast with message 'Profile updated.'; Pops back to Profile
+- **Safety & policies** (`ACCT-15`, sub-screen, customer) — Profile tab -> 'Safety & policies'  
+  Source: ui_kits/aiwa-app/account-screens.jsx:75-114 (POLICY_DOCS, SafetyPoliciesScreen); prototype.jsx:679  
+  Elements: ScreenHeader eyebrow 'Account', title 'Safety & policies'; InlineBanner success, circle-check: "You're up to date" / 'You accepted the current terms on 20 May 2026. We'll tell you if anything changes.'; 5 boxed SettingsRows with sub + chevron-down/up (accordion, one open at a time): Terms of service 'v1.1.0 · accepted 20 May 2026', Safety policy 'Home visits, ID checks, SOS', Cancellation policy 'Cutoffs, penalties, no-shows', Privacy policy 'What we store and for how long', Community conduct 'What we expect from everyone'; Expanded panel: cream bg radius 13, 12.5 ink2 lh1.6 text + ghost sm 'Download PDF' (download icon); SectionHeader 'Your safety tools'; gold-tone rows 'Trusted contacts' (sub 'Alerted if you press SOS', value '1 saved') and 'How SOS works' (siren, 'What happens when you press it')
+- **Trusted contacts (list)** (`ACCT-16`, sub-screen, customer) — Profile tab -> 'Trusted contacts' (value '1 saved')  
+  Source: ui_kits/aiwa-app/account-screens.jsx:217-295 (TrustedContactsScreen, TRUSTED_SEED); prototype.jsx:680  
+  Elements: ScreenHeader eyebrow 'Safety', title 'Trusted contacts'; InlineBanner warn, siren: 'Alerted the moment you press SOS' / 'They receive your live location by SMS. Nothing is shared with them at any other time.'; Contact card: paper radius 16, padding 13; Avatar gold 42; name 14/600; phone JetBrains Mono 12 ink3 ('+20 100 221 4477'); Tag gold 'Sister'; trash IconBtn 34; Dashed 'Add another contact' button (plus, plum700 14/600, radius 15)
+- **Trusted contacts - empty state** (`ACCT-17`, state, customer) — Profile -> Trusted contacts with 0 contacts (e.g. after removing the seeded 'Mona Kamal')  
+  Source: ui_kits/aiwa-app/account-screens.jsx:246-250  
+  Elements: EmptyState compact, tone gold, icon 'user-round-plus'; Title 'No trusted contact yet'; Body "Add someone you'd want alerted if you ever felt unsafe during a home service."; Primary action 'Add a contact' -> opens the inline add form
+- **Trusted contacts - add contact inline form** (`ACCT-18`, state, customer) — Profile -> Trusted contacts -> 'Add another contact' (or 'Add a contact' from the empty state)  
+  Source: ui_kits/aiwa-app/account-screens.jsx:268-279  
+  Elements: Card paper radius 18, padding 16, 1.5px plum700 border; Eyebrow 'New trusted contact' plum700; Name (user icon, autoFocus, placeholder 'Their full name', error 'Enter their name.'); Mobile number (phone icon, placeholder '+20 100 000 0000', error 'Enter a valid mobile number.'); Relationship optional (heart icon, placeholder 'Sister, friend, partner…'; defaults to 'Contact'); Cancel (secondary md) + 'Add contact' (primary md, opacity .45 until name >= 2 chars and phone >= 9 digits)
+- **Remove trusted contact confirm sheet** (`ACCT-19`, sheet, customer) — Profile -> Trusted contacts -> trash icon on a contact  
+  Source: ui_kits/aiwa-app/account-screens.jsx:289-292  
+  Elements: ConfirmSheet tone danger, icon 'user-round-minus'; Eyebrow 'Safety'; title 'Remove this contact?'; Body "They'll no longer be alerted if you press SOS during a home service."; Cancel + 'Remove' -> contact removed from list (no toast)
+- **Notifications inbox (customer)** (`ACCT-20`, sub-screen, customer) — Home -> bell icon (screens.jsx:76) or Profile tab -> 'Notifications'  
+  Source: ui_kits/aiwa-app/customer-extras.jsx:100-172 (NOTIFICATIONS, NotificationsScreen); prototype.jsx:713  
+  Elements: Header: IconBtn back, Eyebrow 'Inbox', h1 'Notifications' DM Serif 24 lh1.05 + '· N new' (Plus Jakarta 13/600 rose500, marginLeft 6); 'Mark all read' text button plum700 13/600, only when unread > 0; Groups 'Today' / 'Earlier' (Eyebrow, padding 0 22, marginTop 20, marginBottom 8); Row: padding 14/22, gap 12, unread bg plum100, 1px divider bottom, background transition 200ms; 38px paper tile radius 12 with 1px divider border, type icon 18 plum700 (navigation, check-circle, star, badge-check, message-circle, sparkles, file-text); Title 14 (700 unread / 600 read) lh1.2; time 11 ink3; body 12.5 ink2 lh1.45; 8px rose500 unread dot; 7 seeded customer items incl. 'Terms & policies updated'; Tap: mark read, then type 'terms' -> push('terms-reaccept'); otherwise -> setActiveStatus('onway') and push('tracking')
+- **Notification preferences (channels + quiet hours)** (`ACCT-21`, sub-screen, customer) — Profile tab -> 'Notification preferences'  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:70-133 (NOTIF_CHANNELS, NotificationPreferencesScreen); prototype.jsx:685  
+  Elements: Header eyebrow 'Account', title 'Notification preferences' (DM Serif 22); SectionHeader 'Channels'; 4 rows (paper, radius 14, padding 14, 34px plum100 tile radius 10): Push notifications (bell, on), SMS (message-square, on), WhatsApp (message-circle, on), Email (mail, off); Inline toggle 40x22: track plum700 when on / divider when off; 18px white knob at left 20/2 with shadow; SectionHeader 'Quiet hours'; row 'Mute non-urgent notifications' with toggle (default on); When on: two cards 'From' 22:00 / 'To' 08:00 (Eyebrow 10px, JetBrains Mono 15 time input); hidden when off
+- **WhatsApp support ('Talk to AIWA')** (`ACCT-22`, sub-screen, customer) — Profile tab -> 'WhatsApp support'; also Account locked -> 'Contact support'  
+  Source: ui_kits/aiwa-app/customer-extras.jsx:263-338 (WhatsAppSupportScreen); prototype.jsx:715  
+  Elements: Header eyebrow 'Support', title 'Talk to AIWA'; Hero card: gradient 160deg plum700 -> plum900, radius 22, padding 24x22, radial glow rgba(231,186,182,.35); 56px bone tile radius 18 with message-circle 28; h3 'Chat with a human on WhatsApp.' DM Serif 26; body rose300 13 'We answer in Arabic or English, usually within a few minutes during support hours.'; Accent lg button 'Open WhatsApp' (external-link) -> toast 'Opening WhatsApp…'; Contact card (paper, radius 18, padding 4): WhatsApp number +20 100 555 0000; Support hours Daily · 9 AM – 11 PM; Email fallback support@aiwa.app; Languages العربية · English; 32px plum100 tiles, labels 11/600 uppercase 0.08em ink3, values 14/500; Eyebrow 'Common questions' + 4 FAQ buttons (paper, radius 14, chevron-right): 'How do I cancel a booking?', 'When does the provider get paid?', "My provider didn't show up", 'How do I become a provider?'
+- **Toast: 'Opening WhatsApp…'** (`ACCT-23`, toast, customer) — Profile -> WhatsApp support -> 'Open WhatsApp'  
+  Source: ui_kits/aiwa-app/prototype.jsx:715  
+  Elements: Top toast with message 'Opening WhatsApp…'; Stays on the support screen
+- **Session expired** (`ACCT-24`, screen, shared) — Any authenticated request returns 401 and the refresh fails (prototype: Preview states -> 'Session expired')  
+  Source: ui_kits/aiwa-app/system-screens.jsx:9-44 (SystemScreen, SessionExpiredScreen); prototype.jsx:682; Preview states item prototype.jsx:788  
+  Elements: SystemScreen shell: bone bg, padding '76px 26px 34px', centred column, spacers above and below; 72px circle warn100 / warn700 with 'clock-alert' 31, aiwa-pop 340ms; Eyebrow 'Signed out' (warn700); h1 'Your session expired.' DM Serif 27/400 lh1.1 -0.01em plum900; Body 14 ink2 lh1.6 maxWidth 290: 'For your security we sign you out after a period of inactivity. Your bookings and saved providers are all still here.'; Primary lg full 'Sign in again' -> reset('splash')
+- **Account locked** (`ACCT-25`, screen, shared) — Sign-in or any request returns 423 / suspended account (prototype: Preview states -> 'Account locked')  
+  Source: ui_kits/aiwa-app/system-screens.jsx:46-53 (AccountLockedScreen); prototype.jsx:683; Preview states prototype.jsx:789  
+  Elements: SystemScreen tone danger: 72px danger100 circle, 'lock' danger700; Eyebrow 'Account locked'; Title 'This account is locked.'; Body 'Your account has been suspended by our team. Our support agents can explain why and what happens next.'; Primary lg 'Contact support' -> push('support'); ghost sm 'Back to sign in' -> reset('splash')
+- **Forbidden (no access)** (`ACCT-26`, screen, shared) — API returns 403 / deep link into another role's area (not wired in the prototype)  
+  Source: ui_kits/aiwa-app/system-screens.jsx:63-69 (ForbiddenScreen; defined and exported at :281 but not mounted by CustomerApp)  
+  Elements: SystemScreen tone danger, icon 'shield-x'; Eyebrow 'No access'; Title "You can't open this."; Body "This area belongs to a different kind of account. If you think that's wrong, contact support."; Primary lg 'Go back'
+- **Not found** (`ACCT-27`, screen, shared) — API 404 / stale deep link / cancelled booking link (not wired in the prototype)  
+  Source: ui_kits/aiwa-app/system-screens.jsx:55-61 (NotFoundScreen; defined but not mounted)  
+  Elements: SystemScreen tone plum, icon 'search-x'; Eyebrow 'Not found'; Title '${what} isn't available.' (default 'This page isn't available.'); Body 'It may have been cancelled, removed, or the link is out of date.'; Primary lg 'Go back'
+- **Permission denied - location** (`ACCT-28`, screen, customer) — User denies the OS location permission (after the location priming screen)  
+  Source: ui_kits/aiwa-app/system-screens.jsx:135-147 (PermissionDeniedScreen kind='location'; defined but not mounted)  
+  Elements: SystemScreen tone warn, icon 'circle-slash', eyebrow 'Permission needed'; Title 'Location is off.'; Body 'Turn it on in Settings, or pick your area manually and we’ll search from there.'; Primary lg 'Open Settings'; ghost sm 'Pick my area manually'
+- **Permission denied - camera** (`ACCT-29`, screen, provider) — Provider signup -> verification (ID / selfie) -> camera permission denied  
+  Source: ui_kits/aiwa-app/system-screens.jsx:135-147 (kind='camera'; defined but not mounted)  
+  Elements: SystemScreen tone warn, circle-slash, eyebrow 'Permission needed'; Title 'Camera access is off.'; Body 'Verification needs a live selfie. Enable the camera in Settings, or upload photos from your files.'; Primary 'Open Settings'; ghost 'Upload from files'
+- **Permission denied - notifications** (`ACCT-30`, screen, customer) — Onboarding notification priming -> OS notification permission denied  
+  Source: ui_kits/aiwa-app/system-screens.jsx:135-147 (kind='notifications'; defined but not mounted)  
+  Elements: SystemScreen tone warn, circle-slash, eyebrow 'Permission needed'; Title 'Notifications are off.'; Body 'You’ll still see every update in your in-app inbox, but we can’t alert you when a provider is on the way.'; Primary 'Open Settings'; ghost 'Use the in-app inbox' (-> Notifications inbox)
+- **Offline banner** (`ACCT-31`, banner, customer) — Any screen while the device loses connectivity (prototype: Preview states -> 'Offline banner'); 'Retry' hides it  
+  Source: ui_kits/aiwa-app/states.jsx:127-145 (OfflineBanner); mounted prototype.jsx:759; Preview states 'Offline banner' prototype.jsx:782  
+  Elements: Absolute top bar, zIndex 90, bg plum900, text bone, padding '52px 18px 11px' (below the status bar); wifi-off icon 15 rose300; 'No connection — showing saved data' 12.5/500; 'Retry' pill: bg rgba(250,245,238,.16), radius 999, padding 5x12, 11.5/700; Enters with aiwa-drop 260ms (translateY -14 -> 0, fade)
+- **Personal info - saving state ('Saving…')** (`ACCT-V01`, state, customer) — Profile tab -> Personal info -> edit a field -> 'Save changes'  
+  Source: ui_kits/aiwa-app/account-screens.jsx:15, 66-69; toast wiring prototype.jsx:678  
+  Elements: Primary StickyBar button label switches from 'Save changes' to 'Saving…' for 550 ms (account-screens.jsx:67-68); Button held at opacity .45 with pointerEvents none while saving (account-screens.jsx:66); After 550 ms: onSaved -> toast 'Profile updated.' + pop (prototype.jsx:678)
+- **Personal info - inline validation errors** (`ACCT-V02`, state, customer) — Profile tab -> Personal info -> clear or garble a field, then leave it (blur)  
+  Source: ui_kits/aiwa-app/account-screens.jsx:17-21, 35-38; states.jsx:171-206 (ValidatedInput)  
+  Elements: Errors appear only after blur (ValidatedInput touched, states.jsx:172-173); Field border 1.5px danger500 (male #2E2A26 / female #6B3A3A); leading icon turns danger500; trailing circle-alert 16 (states.jsx:195, 199); Error line 11.5 danger700 with circle-alert 11: 'Enter your full name.' (&lt;2 chars), 'Enter a valid Egyptian mobile number.' (&lt;9 digits), 'That email doesn’t look right.' (states.jsx:202); The error replaces the hint 'Changing this sends a verification code to the new number.' while shown; 'Save changes' stays at .45 until valid && dirty
+- **Address form - validation error state** (`ACCT-V03`, state, customer) — Profile -> Saved addresses -> Add new address (or pencil) -> leave Street or Building invalid and blur  
+  Source: ui_kits/aiwa-app/account-screens.jsx:132-134, 174-176, 204  
+  Elements: Street & area error 'Add the street and area so your provider can find you.' when trimmed length &lt; 4; Building error 'Building number or name is required.' when empty; Errors shown only after blur (ValidatedInput), red 1.5px danger500 border + circle-alert; StickyBar 'Add address' / 'Save address' at opacity .45 with pointerEvents none until both are valid (account-screens.jsx:204)
+- **Safety & policies - expanded policy (accordion open)** (`ACCT-V04`, state, customer) — Profile tab -> Safety & policies -> tap any policy row (e.g. 'Terms of service')  
+  Source: ui_kits/aiwa-app/account-screens.jsx:85, 95-103  
+  Elements: One row open at a time; tapping the open row closes it (setOpen(open === d.id ? null : d.id)); Right slot chevron-down becomes chevron-up, 17 ink4 (male #A39A8E / female #B59A99); Panel below the row: margin-top 7, padding 13x15, cream bg (male #EBE5DA / female #F8E8E3), radius 13, 12.5 ink2 lh1.6; Copy: 'This is the full text of the {title lowercased}, shown in the customer's language. It stays readable offline and records which version you accepted…'; Ghost sm 'Download PDF' button with download icon (no handler in the prototype)
+- **Notification preferences - quiet hours off** (`ACCT-V05`, state, customer) — Profile tab -> Notification preferences -> toggle 'Mute non-urgent notifications' off  
+  Source: ui_kits/aiwa-app/flow-additions-v3.jsx:81, 110-129  
+  Elements: Quiet-hours toggle off: track divider (male #D8CFC2 / female #EFDCD6), 18px white knob at left 2 (flow-additions-v3.jsx:114-115); The 'From' / 'To' time cards are removed entirely (rendered only when quietOn, flow-additions-v3.jsx:118); Default on first load is ON (22:00 to 08:00)
+- **Notifications inbox - all read (after 'Mark all read')** (`ACCT-V06`, state, customer) — Profile tab (or Home bell) -> Notifications -> 'Mark all read'  
+  Source: ui_kits/aiwa-app/customer-extras.jsx:112-113, 123, 126-130, 144, 158, 163  
+  Elements: '· N new' suffix hidden (unreadCount 0); 'Mark all read' button hidden; Every row background transparent (no plum100); Every title drops to weight 600; No rose500 unread dots
+
+#### Provider app
+
+- **ProviderTabBar (Today / Bookings / Services / Schedule / Profile)** (`PROV-01`, component, provider) — Provider app -> visible on every tab root (today, bookings, services, schedule, profile); hidden on pushed screens  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:562-596; ui_kits/aiwa-app/prototype.jsx:465-471,485  
+  Elements: 5 tabs: layout-dashboard 'Today', calendar-check 'Bookings' (8px rose500 badge dot, 2px #fff border), list 'Services', clock 'Schedule', user 'Profile'; Bar: rgba(255,255,255,.94) + backdropFilter blur(20px), top border divider, padding 8px 4px 26px, zIndex 30; Active item: plum100 pill, radius 14, padding 6px 10px, maxWidth 76; icon 22 + label 11/600 plum700; inactive ink3; Tab change = reset(t) with fade transition
+- **Provider post-sign-in / session-restore routing** (`PROV-02`, state, provider) — Splash -> English -> I'm a provider -> Sign in -> (submit) -> provider-pending; approved provider = ProviderApp 'today'  
+  Source: ui_kits/aiwa-app/prototype.jsx:619-626,651  
+  Elements: Sign-in as PROVIDER: setToast('Welcome back, Layla.') then reset('provider-pending'); ProviderPending 'continue' -> reset('home') (customer home); Approved provider lands on ProviderApp tab 'today'
+- **Provider Today dashboard (hero header + stat tiles + section structure)** (`PROV-03`, screen, provider) — Provider app -> Today tab (default tab)  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:35-139; ui_kits/aiwa-app/prototype.jsx:437  
+  Elements: Hero: linear-gradient(160deg, plum700, plum900) + radial rgba(231,186,182,.3) at 80% 20%; padding 68px 22px 26px; Eyebrow 'Hello, Nadia' rose300; h1 'Today's schedule.' DM Serif 26 / lh 1.1 / -0.01em bone; Avatar rose 44 verified on the right; 3 glass stat tiles rgba(250,245,238,.12) blur(8px) radius 14 padding 12px 14px: '3' TODAY, '1,730' EGP TODAY, star 4.9 / 312 REVIEWS (value DM Serif 24, label 11/600 .08em uppercase rose300); Then pending callout -> SectionHeader 'New requests' ('N pending') -> request cards -> SectionHeader 'Confirmed today' -> today rows; paddingBottom 100 for the tab bar
+- **Pending booking requests callout** (`PROV-04`, banner, provider) — Provider app -> Today tab (shown only when pending > 0)  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:74-86  
+  Elements: warn100 card, 1px warn500@20% border, radius 16, padding 14, margin 16px 22px 0; 36px warn500 circle with alarm-clock icon 18 #fff; '{n} new booking requests' 14/600 warn700; 'Reply within 30 minutes to keep your top rating.' 12 warn700 @.85; chevron-right 18 warn700
+- **'New requests' section and booking request card (Decline / Accept)** (`PROV-05`, component, provider) — Provider app -> Today tab -> New requests list  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:88-113  
+  Elements: SectionHeader 'New requests' with action '{n} pending'; Card #fff radius 18 padding 14 border divider shadow 0 1px 2px rgba(74,31,56,.04); whole card tappable -> booking-detail; Avatar plum 42; customer 15/600 ink; 'service · duration' 12 ink3; StatusPill pending; Divider row: calendar 13 ink3 + 'Today · 12:30 PM' 12 ink2; 'EGP 350' DM Serif 18 plum900; Decline (secondary sm) + Accept (primary sm, check icon), flex 1 each, gap 8
+- **'Confirmed today' section (today's confirmed bookings)** (`PROV-06`, component, provider) — Provider app -> Today tab -> below New requests  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:115-131  
+  Elements: SectionHeader 'Confirmed today'; Row card #fff radius 16 padding 14 border divider; 4px info500 left stripe (radius 4, stretches full height); Avatar rose 40; name 14/600 ink; service 12 ink3; Right: time JetBrains Mono 14/600 plum900 ('12:30 PM', 'Today · ' stripped); duration 11 ink3; Not tappable
+- **'Confirmed today' empty state** (`PROV-07`, state, provider) — Provider app -> Today tab (no non-pending bookings today)  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:132-136  
+  Elements: Centered text 'Nothing else on the books for today.' 13px ink3, padding 24
+- **Provider Bookings screen (header + Pending/Upcoming/Past tab row + list)** (`PROV-08`, screen, provider) — Provider app -> Bookings tab  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:145-190; ui_kits/aiwa-app/prototype.jsx:438  
+  Elements: Header padding 68px 22px 8px: Eyebrow 'Manage', h1 'Bookings' DM Serif 28 plum900 lh 1.05; Underline tab row gap 18, padding 14px 22px 0, border-bottom divider; tab 14/600, active plum700 + 2px plum700 underline, inactive ink3; List padding 14px 22px 0, gap 10; compact rows open booking-detail
+- **Bookings tab: Pending** (`PROV-09`, tab, provider) — Provider app -> Bookings tab -> Pending (default)  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:147-148,171-186  
+  Elements: Rows with status 'pending' only; Compact row + StatusPill 'Pending' + price; tap -> booking-detail
+- **Bookings tab: Upcoming** (`PROV-10`, tab, provider) — Provider app -> Bookings tab -> Upcoming  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:149-150,171-186  
+  Elements: Rows with status 'confirmed'; StatusPill 'Confirmed' (info palette); tap -> booking-detail (job progress)
+- **Bookings tab: Past** (`PROV-11`, tab, provider) — Provider app -> Bookings tab -> Past  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:151,159,171-186  
+  Elements: Rows with status 'completed'; StatusPill 'Completed' (success palette); tap -> booking-detail
+- **Bookings list empty state** (`PROV-12`, state, provider) — Provider app -> Bookings tab -> any tab with no bookings  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:170  
+  Elements: Plain centered text 'Nothing here yet.' 13px ink3, padding 40
+- **Booking request detail — Review & respond (pending)** (`PROV-13`, sub-screen, provider) — Provider app -> Today (New requests card) or Bookings (any row) -> Booking detail  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:195-349; ui_kits/aiwa-app/prototype.jsx:454-460  
+  Elements: Header: back IconBtn, Eyebrow 'Booking request', h2 'Review & respond' DM Serif 22, StatusPill(st); Customer card: Avatar plum 54, name DM Serif 20, badge-check gold500 'Verified' · '4 prior bookings', message-circle IconBtn; Home-service address card: map-pin tile plum100/plum700 34, 'HOME SERVICE ADDRESS' 11/600 uppercase, address 13.5 (or 'No address attached'); Details card: Service / Duration / Requested / Service price / Travel fee (pending) gold700 / 'Total · cash' DM Serif 22; Customer note cream card with Eyebrow 'Customer note'; Pending action bar (absolute bottom, #fff, top border, padding 14px 22px 32px): Decline secondary lg + Accept primary lg check (both dimmed while a quote is pending), ghost sm 'Quote a travel fee instead' (car), ghost sm 'Propose a different time instead' (calendar-clock); Accept -> in-place st='confirmed' (job progress); Decline -> pop
+- **Booking detail — job progress stepper and status-advance action bar** (`PROV-14`, state, provider) — Provider app -> Booking detail -> after Accept (or opening a confirmed booking)  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:199-209,233-245,350-360  
+  Elements: 'Job progress' card: home = Accepted / On the way / Arrived / In progress; venue = Accepted / In progress; 4px bars plum700 vs divider; labels 11px (current 700); Bottom bar note: 'Customer gets a push + live tracking starts.' / 'Customer is told you are at the door.' / 'Timer starts. Safety check-in stays on.' / 'Tap once the customer has arrived at your venue.' / 'Finish the job, then confirm the cash you received.'; Cancel (secondary lg, x icon; hidden once in progress) -> ProviderCancelSheet; Primary lg next action: 'On my way' (navigation), "I've arrived" (map-pin), 'Start service' (play); finally 'Mark completed' (check-check) -> payment-confirm
+- **Quote a travel fee sheet** (`PROV-15`, sheet, provider) — Provider app -> Booking detail (pending, home service with address, no fee yet) -> 'Quote a travel fee instead'  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:210-220,362-393  
+  Elements: Scrim rgba(42,19,32,.48); bone sheet radius 24, padding 18px 22px 34px, 40x4 handle; 46px gold100 circle with car icon gold700; Eyebrow gold700 'Quote a travel fee'; h2 DM Serif 23: "How much to reach {first name}'s address?"; address 13 ink2; pass-through note 12.5 ink3; Preset buttons EGP 80 / 120 / 180 (selected plum700 bg + #fff text; else #fff with 1.5px divider border; radius 12, 13.5/600); 'EGP' prefix + numeric input JetBrains Mono 18/600 in a 1.5px divider box radius 14 (default '120'); Cancel secondary lg + 'Send quote' primary lg (send icon); rejects values &lt;= 0
+- **Travel-fee state banners (no address / quote sent / fee accepted)** (`PROV-16`, banner, provider) — Provider app -> Booking detail (home service)  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:295-329  
+  Elements: warn InlineBanner triangle-alert 'No address attached' (home service, no address, pending); gold InlineBanner car 'Travel fee quote sent · EGP {n}' — 'Waiting on the customer to accept or decline...'; success InlineBanner check 'Travel fee accepted' — 'Locked in and added to the total...'; Details card gains a 'Travel fee (pending)' row in gold700 and an updated 'Total · cash'
+- **Propose a different time + toast 'Alternative time sent to customer.'** (`PROV-17`, toast, provider) — Provider app -> Booking detail (pending, no quote pending) -> 'Propose a different time instead' -> toast + back  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:347; ui_kits/aiwa-app/prototype.jsx:458  
+  Elements: Ghost sm button with calendar-clock icon; Toast (top, dark, green check) 'Alternative time sent to customer.' then pop()
+- **ProviderCancelSheet — cancelling after accepting (penalty warning)** (`PROV-18`, sheet, provider) — Provider app -> Booking detail (accepted / on the way / arrived) -> Cancel  
+  Source: ui_kits/aiwa-app/provider-extras.jsx:124-164; ui_kits/aiwa-app/prototype.jsx:486-490  
+  Elements: Scrim rgba(42,19,32,.45); bone sheet radius 24, padding 18px 22px 36px, shadow 0 -12px 32px rgba(0,0,0,.18); slide-in 320ms; Eyebrow danger700 'Cancelling after accepting'; h2 DM Serif 22 'This applies a penalty'; danger100 note 12.5 danger700 with alert-triangle: 'Cancelling an accepted booking affects your reliability score and adds a small penalty fee to your ledger.'; Reason list: Emergency / unavailable; Staff called in sick; Overbooked by mistake; Customer unreachable; Other (selected = plum100 bg + 1.5px plum700 border + check icon); 'Keep booking' secondary + 'Cancel + accept penalty' danger (no-op until a reason is picked)
+- **Toast 'Booking cancelled. Penalty applied to your ledger.'** (`PROV-19`, toast, provider) — Provider app -> Booking detail -> Cancel -> pick reason -> 'Cancel + accept penalty'  
+  Source: ui_kits/aiwa-app/prototype.jsx:486-490  
+  Elements: Top toast, then pop() back to the list
+- **PaymentConfirmScreen (provider role) — 'Did {customer} pay in cash?'** (`PROV-20`, screen, provider) — Provider app -> Booking detail (in progress) -> Mark completed -> Payment confirm  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:82-106; ui_kits/aiwa-app/prototype.jsx:448-452  
+  Elements: Back IconBtn; Eyebrow 'Close out this job'; h1 DM Serif 26 'Did {customer} pay in cash?'; 'Total due · EGP {amount}' 14 ink2 with plum900 strong; Primary full lg check 'Yes, cash received'; secondary full lg alert-triangle 'Mark unpaid or disputed'; Padding 70px 24px 120px
+- **PaymentConfirm — 'Cash received · job closed' state** (`PROV-21`, state, provider) — Provider app -> Payment confirm -> 'Yes, cash received'  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:108-140  
+  Elements: Paper card radius 20 padding 20; 44px success100 circle with check success700; 'Cash received · job closed' 16/700; 'Receipt sent to {customer}' 12.5 ink3; Rows: Cash collected EGP {amount}; 'AIWA commission (15%) · added to ledger' gold700 EGP {15%}; Booking status 'Completed' success700; Primary full lg star 'Rate {customer}' -> rate-customer; ghost 'Undo — I tapped by mistake' -> back to the question
+- **PaymentConfirm — dispute form state** (`PROV-22`, state, provider) — Provider app -> Payment confirm -> 'Mark unpaid or disputed'  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:142-160  
+  Elements: Eyebrow 'What happened?'; textarea placeholder 'Explain the payment issue…' (100px, radius 14, 1.5px divider, paper); Danger full lg 'Submit as disputed' (opacity .45 until text entered); ghost 'Back'
+- **Toast 'Marked as disputed. Admin has been notified.'** (`PROV-23`, toast, provider) — Provider app -> Payment confirm -> dispute -> 'Submit as disputed' -> Bookings tab  
+  Source: ui_kits/aiwa-app/prototype.jsx:452  
+  Elements: Toast then setTab('bookings') + reset('bookings')
+- **RateCustomerScreen (two-way rating)** (`PROV-24`, screen, provider) — Provider app -> Payment confirm -> 'Cash received' -> 'Rate {customer}'  
+  Source: ui_kits/aiwa-app/provider-extras.jsx:84-122; ui_kits/aiwa-app/prototype.jsx:453  
+  Elements: Header back IconBtn, Eyebrow 'Two-way rating', h2 'Rate {customer}' DM Serif 22; Paper card radius 18 padding 20px 18px: Avatar plum 64 centered; 5 tappable 36px stars (gold500 fill / ink4 stroke 1.8); Eyebrow 'Quick tags' + chips: On time, Respectful, Clear about needs, Paid in full, Late, Difficult to reach (multi-select); Sticky paper bar: primary full lg 'Submit rating' (opacity .45 until rating > 0)
+- **Toast 'Rating submitted. Slot freed — next booking notified.'** (`PROV-25`, toast, provider) — Provider app -> Rate customer -> Submit rating -> Bookings tab  
+  Source: ui_kits/aiwa-app/prototype.jsx:453  
+  Elements: Toast then setTab('bookings') + reset('bookings')
+- **Provider Services tab** (`PROV-26`, screen, provider) — Provider app -> Services tab  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:401-430; ui_kits/aiwa-app/prototype.jsx:439  
+  Elements: Header padding 68px 22px 10px: Eyebrow 'Your menu', h1 'Services' DM Serif 28; primary sm 'New' (plus) aligned bottom-right; Rows #fff radius 16 padding 14 border divider; inactive rows opacity .55; Name 15/600 ink; meta 12 ink3: '{d} min' · 'Fixed price' | 'Starts at' · 'Hidden' (danger700 600) with 3px dots; Price 'EGP 1,200' DM Serif 18 plum900; pencil IconBtn 34
+- **Provider Schedule tab (weekly availability)** (`PROV-27`, screen, provider) — Provider app -> Schedule tab  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:435-459,472-474; ui_kits/aiwa-app/prototype.jsx:440  
+  Elements: Eyebrow 'Weekly availability', h1 'Schedule' DM Serif 28; 7 day rows #fff radius 14 padding 14px 16px border: day 44w 13/600 uppercase .06em (plum900 open / ink4 closed); hours JetBrains Mono 14 '10:00 – 20:00' or 'Closed'; 40x22 toggle (on plum700 / off divider, 18px white knob); Tip card plum100 radius 14 12px plum700: 'Tip: Tap any day to add multiple time blocks, breaks, or one-off availability changes.'
+- **Travel buffer stepper** (`PROV-28`, component, provider) — Provider app -> Schedule tab -> below the week list  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:436,460-471  
+  Elements: Paper card radius 14 padding 14 border; car tile 36 radius 10 plum100/plum700; 'Travel buffer between bookings' 14/600; 'Blocks slots too close together for home visits.' 11.5 ink3; 28px round '−' / '+' buttons (1px divider, #fff, plum700); value JetBrains Mono 14/600 plum900 min-width 52 '{n} min'; Default 15, step 5, clamp 0–60
+- **Provider Profile tab** (`PROV-29`, screen, provider) — Provider app -> Profile tab  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:482-557; ui_kits/aiwa-app/prototype.jsx:441  
+  Elements: Hero gradient padding 68px 22px 24px + radial rgba(231,186,182,.4) at 70% 30%; Avatar rose 64 verified; 'Nadia Studio' DM Serif 24; 'Maadi · Hair · Color specialist' 13 rose300; Vacation/offline card (PROV-30) and Verified banner (PROV-31); Rows (36 tile radius 10 plum100/plum700, label 15/500, value 13 ink3, chevron 16 ink3, divider): Business info -> business-info; Gallery '12 photos' -> gallery; Staff & availability -> staff; Wallet & settlement -> wallet; Notifications -> provider-notifications; Reviews '4.9 · 312' -> reviews; Safety & policies; WhatsApp support; Sign out (danger, no chevron) -> sign-out ConfirmSheet
+- **Vacation / offline mode toggle** (`PROV-30`, component, provider) — Provider app -> Profile tab -> Vacation / offline card  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:483,508-522  
+  Elements: Paper card radius 14 padding 14 border; palmtree icon in 36 circle (off: plum100/plum700; on: warn100/warn700); 'Vacation / offline mode' 14/600; sub 11.5 ink3 toggles 'Pause new bookings temporarily.' &lt;-> "You're hidden from search."; 40x22 toggle: on warn500, off divider; 18px white knob with shadow 0 1px 2px rgba(0,0,0,.2)
+- **Verified provider banner** (`PROV-31`, banner, provider) — Provider app -> Profile tab  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:524-533  
+  Elements: success100 card, 1px success500@20% border, radius 14, padding 14; 36 circle success500 with badge-check white; 'Verified provider' 14/600 success700; 'Approved by AIWA on May 2, 2026.' 12 success700 @.85
+- **Provider sign-out ConfirmSheet** (`PROV-32`, sheet, provider) — Provider app -> Profile tab -> Sign out  
+  Source: ui_kits/aiwa-app/prototype.jsx:491-493; ui_kits/aiwa-app/states.jsx:227-257; ui_kits/aiwa-app/provider-screens.jsx:493  
+  Elements: ConfirmSheet tone 'neutral' (plum100/plum700 icon chip, primary confirm button), icon log-out; Eyebrow 'Provider account'; title 'Sign out of AIWA?'; Body: "Your bookings stay exactly as they are. You'll need your number and a code to sign back in."; Cancel secondary lg + 'Sign out' primary lg; confirm -> toast 'Signed out.'
+- **Toast 'Signed out.'** (`PROV-33`, toast, provider) — Provider app -> Profile -> Sign out -> Sign out  
+  Source: ui_kits/aiwa-app/prototype.jsx:491  
+  Elements: Top toast after confirming sign-out
+- **Provider Wallet (commission & settlement)** (`PROV-34`, sub-screen, provider) — Provider app -> Profile tab -> Wallet & settlement  
+  Source: ui_kits/aiwa-app/provider-extras.jsx:8-82; ui_kits/aiwa-app/prototype.jsx:442  
+  Elements: Header back IconBtn, Eyebrow 'Commission & settlement', h2 'Wallet' DM Serif 22; Hero card gradient radius 20 padding 20 + radial overlay: Eyebrow rose300 'Wallet balance owed to AIWA', 'EGP 128.40' DM Serif 38; 6px progress bar (track rgba(255,255,255,.18), fill rose300) = balance/limit; 'Negative limit EGP 500 — settle weekly to keep taking bookings.' 12 rose300; Two paper tiles: 'Next settlement' 'Sun, May 24' DM Serif 18 | 'Status' StatusPill (confirmed); SectionHeader 'Ledger'; rows paper radius 14 padding 12: 34 tile (settlement success100/success700 check, else plum100/plum700 banknote), label 13.5/600, when 11.5 ink3, amount DM Serif 15 ('+' success700 / '−' plum900); Primary full lg banknote 'Settle balance now'
+- **Wallet — blocked (over negative limit) state** (`PROV-35`, state, provider) — Provider app -> Profile -> Wallet (balance &lt;= limit)  
+  Source: ui_kits/aiwa-app/provider-extras.jsx:16-19,35,40-45,54  
+  Elements: Progress fill switches to danger500; danger InlineBanner ban 'Blocked from new bookings' — "You can still finish any job you've already accepted — completing those and settling this balance lifts the block automatically."; Status tile StatusPill 'cancelled'
+- **Business info (edit) screen with validation** (`PROV-36`, sub-screen, provider) — Provider app -> Profile tab -> Business info  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:9-66; ui_kits/aiwa-app/prototype.jsx:443  
+  Elements: ScreenHeader eyebrow 'Provider' title 'Business info'; ValidatedInput 'Business name' (store icon; error 'Business name is required.' when &lt; 2 chars); 'Short bio' multiline, maxLength 220 with counter, hint 'Shown at the top of your public profile.'; 'Primary category' chips Hair / Nails / Spa / Makeup / Lashes / Skin / Massage; 'Base address' (map-pin; error 'Add the area so customers can find you.'); Service radius slider 1–25 km (JetBrains Mono value plum700; '1 km' / '25 km' labels); 'Home-visit surcharge (EGP)' · optional, car icon, hint text; StickyBar: Cancel secondary lg + 'Save changes' primary lg (opacity .45 until valid && dirty)
+- **Business info — re-review notice banner** (`PROV-37`, banner, provider) — Provider app -> Profile -> Business info (above the sticky bar)  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:55-56  
+  Elements: info InlineBanner, badge-check icon, title 'Verified studio', body 'Changing your business name or address sends your profile for a quick re-review.'
+- **Toast 'Business info saved.'** (`PROV-38`, toast, provider) — Provider app -> Profile -> Business info -> Save changes  
+  Source: ui_kits/aiwa-app/prototype.jsx:443  
+  Elements: Toast then pop() to Profile
+- **Gallery manager (grid, cover badge, count, add tile)** (`PROV-39`, sub-screen, provider) — Provider app -> Profile tab -> Gallery  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:68-175; ui_kits/aiwa-app/prototype.jsx:444  
+  Elements: ScreenHeader eyebrow 'Provider' title 'Gallery' + Tag neutral '{n}/20'; Intro 13 ink3: 'Your best work, shown on your public profile. Drag to reorder — the first photo is your cover.'; Grid auto-fill minmax(96px,1fr) gap 9; square tiles radius 15 border; 'COVER' badge on the first visible photo (rgba(255,255,255,.92), plum700 9/700, radius 999); 24px x delete button rgba(42,19,32,.6) top-right; Dashed 1.5px divider 'Add' tile (plus 20, 11/600 plum700)
+- **Gallery — upload progress card with cancel** (`PROV-40`, state, provider) — Provider app -> Gallery -> Add tile (or 'Upload first photo')  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:86-100,111-125  
+  Elements: Paper card radius 15 padding 13: image-up tile 32 plum100/plum700; 'Uploading photo…' 13/600; percent JetBrains Mono 11 ink3; x cancel; 5px progress bar (cream track, plum700 fill, 130ms linear); On completion the new tile is appended
+- **Gallery — moderation-hidden photo overlay + warning banner** (`PROV-41`, state, provider) — Provider app -> Gallery (a photo hidden by moderation)  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:74,135-142,162-166  
+  Elements: Tile overlay rgba(42,19,32,.72) with eye-off 17 rose300 + 'Hidden by moderation' 9.5 bone; No COVER badge on a hidden first tile; warn InlineBanner eye-off 'One photo is hidden' — "Our team hid a photo that didn't match your services. Replace it or contact support if you disagree."
+- **Gallery — delete photo ConfirmSheet** (`PROV-42`, sheet, provider) — Provider app -> Gallery -> tile x button  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:169-172  
+  Elements: ConfirmSheet danger tone, icon trash-2, eyebrow 'Gallery', title 'Delete this photo?', confirm 'Delete'; Body "It's removed from your public profile straight away. This can't be undone."
+- **Gallery — empty state** (`PROV-43`, state, provider) — Provider app -> Gallery (0 photos)  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:127-130  
+  Elements: EmptyState icon images, title 'No photos yet', body 'Profiles with photos get noticeably more bookings. Add a few examples of your work.', action 'Upload first photo'
+- **Provider Reviews screen (summary, distribution, filters, list)** (`PROV-44`, sub-screen, provider) — Provider app -> Profile tab -> Reviews  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:177-275; ui_kits/aiwa-app/prototype.jsx:445  
+  Elements: ScreenHeader 'Provider' / 'Reviews'; Summary card paper radius 18 padding 18: average DM Serif 38 plum900, Stars 13, '{n} reviews' 11 ink3; 5→1 distribution rows (mono 10.5 digit, 5px cream track with gold500 fill, count ink4); Filter chips (h-scroll): All / Needs reply / 5 star / 4 star; Review cards paper radius 18 padding 15: Avatar plum 38, author 13.5/600, 'service · when' 11 ink3, Stars 13, body 13.5 ink2 lh 1.55, neutral Tags, secondary sm 'Reply publicly' (reply icon); EndOfList '{n} reviews total'
+- **Reviews — reply composer (char count) and posted reply block** (`PROV-45`, component, provider) — Provider app -> Reviews -> 'Reply publicly'  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:187-198,246-268  
+  Elements: Textarea 74px, radius 13, 1.5px plum700 border, bone bg, placeholder 'Thank them, or explain what happened…', maxLength 280, autofocus; Counter JetBrains Mono 10.5 ink4 '{n}/280'; ghost sm 'Cancel'; primary sm 'Post reply' (opacity .45 until non-blank); Posted reply: plum100 radius 13 block, corner-down-right icon + 'YOUR REPLY' 11/700 .04em plum700 + text 12.5 plum700; Only one composer open at a time
+- **Reviews — filter empty state** (`PROV-46`, state, provider) — Provider app -> Reviews -> a filter with no matches (e.g. Needs reply when all are answered)  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:228-229  
+  Elements: EmptyState compact, icon message-square, 'Nothing here', 'No reviews match this filter.'
+- **Staff & availability (shop plan)** (`PROV-47`, sub-screen, provider) — Provider app -> Profile tab -> Staff & availability  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:8-80; ui_kits/aiwa-app/prototype.jsx:446  
+  Elements: Header back IconBtn, Eyebrow 'Shop plan', h2 'Staff & availability' DM Serif 22, primary sm 'Add' (plus); Accordion cards paper radius 18 (first open by default): Avatar 44 verified, name DM Serif 17, role 12 ink3, chevron up/down; Expanded: Eyebrow 'Skills' + chips; 'Services & pricing' rows (13, price DM Serif plum900, divider); 'Weekly availability' rows (12.5; JetBrains Mono hours or 'Off'); secondary sm full pencil "Edit {name}'s schedule"
+- **Provider notifications inbox (PROVIDER_NOTIFICATIONS)** (`PROV-48`, sub-screen, provider) — Provider app -> Profile tab -> Notifications  
+  Source: ui_kits/aiwa-app/customer-extras.jsx:110-172,501-508; ui_kits/aiwa-app/prototype.jsx:441,447  
+  Elements: Header back IconBtn, Eyebrow 'Inbox', 'Notifications' DM Serif 24 + '· {n} new' 13/600 rose500, 'Mark all read' 13/600 plum700; Groups 'Today' / 'Earlier'; Rows padding 14px 22px, unread plum100 bg, divider; 38px paper icon tile radius 12; title 14 (700 unread / 600); time 11 ink3; body 12.5 ink2 lh 1.45; 8px rose500 unread dot; Seed: Settlement overdue (banknote), Gallery image hidden (image-off), Payment disputed (alert-triangle), New booking request (calendar-check), New review (star), Verification approved (badge-check); Tap marks read; onOpen is a no-op for providers
+- **Booking detail — travel-fee quote pending (action bar locked)** (`PROV-V01`, state, provider) — Provider app -> Booking detail (pending home-service booking with an address) -> 'Quote a travel fee instead' -> Send quote  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:198,213,215-220,295-307,318-323,340-348  
+  Elements: After 'Send quote', proposedFee is set and the sheet closes (provider-screens.jsx:215-220); Accept primary lg is dimmed with `opacity: .45, pointerEvents: 'none'` (:344); Decline receives `disabled={proposedFee !== null}` (:343), but Btn (components.jsx:44) ignores `disabled`, so Decline stays fully visible and tappable; 'Quote a travel fee instead' is hidden (canQuote false, :213/:346) and 'Propose a different time instead' is hidden (`!proposedFee`, :347); Details card gains a 'Travel fee (pending)' row in gold700 (male #2E2A26 / female #6B3A3A) and 'Total · cash' = price + quote (:295-307); gold InlineBanner car 'Travel fee quote sent · EGP {n}' (:318-323)
+- **Booking detail — read-only state for completed / past bookings** (`PROV-V02`, state, provider) — Provider app -> Bookings tab -> Past -> tap a completed row  
+  Source: ui_kits/aiwa-app/provider-screens.jsx:196-203,224-231,233,340,350; ui_kits/aiwa-app/prototype.jsx:438  
+  Elements: st = 'completed' is not in STEPS, so stepIdx = -1: no 'Job progress' card (:233) and no bottom action bar (neither `st === 'pending'` (:340) nor `stepIdx >= 0` (:350)); The header still reads Eyebrow 'Booking request' / h2 'Review & respond' (DM Serif 22, plum900), with StatusPill 'Completed' (success100/success700); Only the customer card, the address card (home service), the details card (Service / Duration / Requested / Service price / Total · cash) and the cream customer-note card are shown; Back IconBtn pops to Bookings
+- **Business info — validation error / unsaved (Save disabled) state** (`PROV-V03`, state, provider) — Provider app -> Profile -> Business info -> clear Business name or Base address and blur (or open without editing)  
+  Source: ui_kits/aiwa-app/provider-manage.jsx:18-23,29-31,40,59-63; ui_kits/aiwa-app/states.jsx:171-206  
+  Elements: ValidatedInput after blur: 1.5px danger500 border, leading icon turns danger500, trailing circle-alert 16 danger500 (states.jsx:189-199); Error line 11.5 danger700 with circle-alert 11: 'Business name is required.' (name &lt; 2 chars) / 'Add the area so customers can find you.' (address &lt; 4 chars); it replaces the 11.5 ink4 hint; Short bio counter JetBrains Mono 11 ink4 '{n}/220' (states.jsx:186); 'Save changes' primary lg at opacity .45 with pointerEvents none until `valid && dirty`, so a pristine form is also disabled (provider-manage.jsx:61)
+
+#### Admin web panel
+
+- **Admin panel shell (sidebar + main area)** (`ADMIN-01`, component, admin) — Prototype role switcher 'Admin' (prototype.jsx:797, rendered at prototype.jsx:900 &lt;AdminPanel />) -> desktop web panel  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:48-135  
+  Elements: Frame height 820, radius 18, shadow '0 24px 60px rgba(42,19,32,.22), 0 0 0 1px rgba(74,31,56,.08)', fontFamily Plus Jakarta Sans; Sidebar width 240, bg aiwa.plum900 -> male #2E2A26 / female #6B3A3A (base #2A1320), padding '24px 16px'; Wordmark height 22 color aiwa.bone (male #F5F2ED) dot aiwa.rose500 + 'Admin' badge 9px/700 uppercase letterSpacing .14em bg rose500 color plum900 radius 4; 11 nav buttons (icon 16, 13.5px): Dashboard (layout-dashboard), Verifications (badge-check, badge 4), Complaints (flag, badge 3), Flags (shield-alert, badge 3), Users & providers (users), Bookings (calendar-check), Reviews (star), Moderation (image-off), Settlements (banknote), Audit log (scroll-text), Policies & support (settings); Active item bg rgba(231,186,182,.16), color bone, weight 600; inactive color rgba(250,245,238,.62) weight 500; transition all 150ms; Count badge active: bg rose500 / fg plum900; inactive: bg rgba(231,186,182,.22) / fg rose300; 11px/700 radius 999; Footer: Avatar 32 palette rose + 'Admin · S. Mahmoud' 13/600 + 'Cairo HQ' 11px rgba(250,245,238,.55), top border rgba(250,245,238,.08); Main: flex 1, overflow auto, bg aiwa.bone; nav click resets activeVerification and activeSettlement sub-views
+- **Admin Dashboard** (`ADMIN-02`, screen, admin) — Admin panel -> sidebar 'Dashboard' (default route, admin-screens.jsx:49)  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:140-309  
+  Elements: Eyebrow 'Monday, May 18 · 2026' + h1 'Dashboard' DM Serif 36 plum900 lh 1 ls -0.02em; page padding '28px 36px'; Chip 'Last 30 days' (calendar) and primary sm 'Export' (download). Neither has a handler.; 4 stat tiles, grid repeat(4,1fr) gap 14, white radius 18 padding 18: Customers 12,840 +8.2% (users), Verified providers 486 +12 (badge-check), Bookings · 30d 3,217 +18.4% (calendar-check), GMV · 30d (EGP) 1.42M +22.6% (banknote). Value DM Serif 30. Delta 11px/600 success700 with trending-up icon. Icon square 30 radius 8 plum100/plum700.; 'Needs attention' card, 4 cells (grid auto-fit minmax 200px): badge-check gold '4 providers awaiting verification' -> verifications; flag danger '3 open complaint' -> complaints; triangle-alert danger '1 payment dispute to resolve' -> bookings; credit-card warn '1 provider with overdue settlement' -> settlements. Count in mono 13/700 on cream radius 7, chevron-right ink4.; 'Bookings · last 90 days' card: total 1,648 DM Serif 24; legend Completed plum700 / Cancelled rose500; 14 weekly stacked bars, height 180, gridlines at 25/50/75%, native title tooltip; mono 9.5px labels on every other week; 'Recent activity' feed: 6 items with 28px tone icon squares (success/info/danger/gold), text 13 ink, time 11 ink3; 'View full audit log' link -> audit; 3 quick-link cards: '4 providers awaiting review' / 'SLA target: 24h' (warn) -> verifications; '3 open complaints' / '2 marked high priority' (danger) -> complaints; 'Manage users' / '13,326 accounts' (info, user-cog) -> users
+- **Verifications queue** (`ADMIN-03`, screen, admin) — Admin panel -> sidebar 'Verifications' (also Dashboard 'Needs attention' / quick link)  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:314-362  
+  Elements: Eyebrow 'Queue · SLA 24h' + h1 'Verifications' DM Serif 36; Chips 'Pending (4)' (active), 'Approved (484)', 'Rejected (12)'. None has an onClick (static).; Table card white radius 18. Header row bg cream, 11px/600 uppercase .1em ink3, padding '14px 22px', cols Provider / Category / City / Documents / Submitted / '' on grid '2fr 1.4fr 1fr 1.6fr 0.8fr 1fr'; Row padding '16px 22px' 14px: Avatar 36 + name 600 ink; optional warn700 11px line with alert-triangle 'Selfie unclear — request reshoot'; category and city ink2; documents and submitted 12px ink3; primary sm 'Review'; Clicking anywhere on the row opens Verification detail
+- **Verification detail (ID + business review)** (`ADMIN-04`, sub-screen, admin) — Admin -> Verifications -> click a row / 'Review'  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:367-459  
+  Elements: 'Back to queue' link: arrow-left 14, plum700 13/600, marginBottom 18; Header: Avatar 64 + eyebrow 'Provider verification' + h1 name DM Serif 30 lh 1.05 + '{category} · {city} · Submitted {submitted}' 13 ink3; StatusPill 'pending' on the right; 'Identity documents': 3 tiles, grid repeat(3,1fr) gap 14: 'National ID — front' (id-card), 'National ID — back' (id-card), 'Live selfie' (scan-face). Preview 200px, linear-gradient(135deg, plum700, plum900) plus radial rgba(231,186,182,.25) glow, icon 40 and 'Encrypted preview' 11px uppercase. Footer label 13/600 + external-link 14; 'Business profile' card, 8 key/value rows: Owner full name, Business name, Category, City / district, Coordinates '30.0444, 31.2357 (verified via GPS)', Services declared '8 services · EGP 120–2,400', Gallery photos '12 uploaded', Accepted terms 'v1.0 · {submitted}'; 'Decision' card: textarea placeholder 'Internal note (visible to admins only)…' (cream bg, radius 10, min-height 90); full-width buttons 'Approve provider' (check), 'Reject with reason' (x), ghost 'Request more info' (no handler)
+- **Verification detail — Approve selected** (`ADMIN-05`, state, admin) — Admin -> Verifications -> row -> click 'Approve provider'  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:369,451  
+  Elements: 'Approve provider' changes from variant 'secondary' to 'primary' (setDecision('approve')); No confirmation, submission or toast in the prototype
+- **Verification detail — Reject with reason** (`ADMIN-06`, state, admin) — Admin -> Verifications -> row -> click 'Reject with reason'  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:441-452  
+  Elements: Eyebrow 'Rejection reason · sent to provider' appears; Textarea bg danger100, border `${aiwa.danger500}66` (40% alpha), text danger700, min-height 70, placeholder 'e.g. ID back image is unclear — please resubmit.'; 'Reject with reason' button becomes variant 'danger'
+- **Complaints list** (`ADMIN-07`, screen, admin) — Admin -> sidebar 'Complaints' (or Dashboard Needs attention / quick link)  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:464-522  
+  Elements: Eyebrow 'Customer reports' + h1 'Complaints'; Chips 'All (4)' (active), 'Open', 'In review', 'Resolved'. None has a handler.; Cols Customer / Provider / Subject / Priority / Status / When / '' on grid '1.4fr 1.4fr 2fr 1fr 1fr 0.8fr 1fr'; Priority pill: High danger100/danger700, Med warn100/warn700, Low info100/info700; 11px/700 padding '4px 9px' radius 999; Status pill: Open danger, In review warn, Resolved success; 11px/600; Ghost sm 'Open' button with no handler. No complaint-detail screen exists in the prototype.
+- **Flags list (Trust & safety)** (`ADMIN-08`, screen, admin) — Admin -> sidebar 'Flags' (badge 3)  
+  Source: ui_kits/aiwa-app/admin-extras.jsx:154-193  
+  Elements: Eyebrow 'Trust & safety' + h1 'Flags'; Cols Type / Flagged party / Reason / Reported by / '' on grid '1fr 1.6fr 2fr 1fr 1fr'; Type pill 'PROVIDER' plum100/plum700 or 'CUSTOMER' info100/info700, 11px/700; Name 600 ink, reason ink2, reporter ink3; Ghost sm 'Review' toggles the expanded row (openId)
+- **Flags — expanded review row (warn / suspend-ban / dismiss)** (`ADMIN-09`, state, admin) — Admin -> Flags -> 'Review' on a row  
+  Source: ui_kits/aiwa-app/admin-extras.jsx:172-187  
+  Elements: The row's bottom border is removed and the button label becomes 'Close'; Cream action strip, padding '14px 22px 20px': secondary sm 'Send warning', danger sm 'Suspend / ban', ghost sm 'Dismiss'. None has an onClick.
+- **Users & providers list** (`ADMIN-10`, screen, admin) — Admin -> sidebar 'Users & providers' (or Dashboard quick link 'Manage users')  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:527-622  
+  Elements: Eyebrow 'Accounts' + h1 'Users & providers'; Working filter chips All / Customers / Providers / Admins (filter by role); Primary sm 'Add admin' (user-plus) opens AddAdminSheet; Cols 'Name / email' / Role / Bookings / Joined / Status / '' on grid '2fr 1fr 1fr 1fr 1fr 1fr' gap 12; Avatar 36 + name 600 + email 12px ink3. Admins also show permission Tags: 'SUPER ADMIN' plum, 'FINANCE' gold, 'SUPPORT' info.; Role pill: PROVIDER plum100/plum700, ADMIN gold100/gold700, CUSTOMER info100/info700; Bookings in JetBrains Mono 600 ink2 ('—' for admins); joined 12px ink3; Status pill: Active success, Flagged warn, Suspended danger; more-horizontal IconBtn 32 opens the row menu
+- **Users — row action menu** (`ADMIN-11`, overlay, admin) — Admin -> Users & providers -> row '…' (more-horizontal)  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:600-614  
+  Elements: Popover top calc(100% + 4px), right 0, width 190, white, radius 14, shadow '0 16px 40px rgba(42,19,32,.18)', padding 6; 'View profile' (eye). Only closes the menu.; When active: 'Suspend' (customer/provider) or 'Deactivate' (admin), ban icon, danger700; When not active: 'Reactivate', check icon, success700; Suspend/Reactivate toggle status immediately with no confirmation; the menu doesn't close on outside click
+- **Users — 'Blocked' last-super-admin banner** (`ADMIN-12`, banner, admin) — Admin -> Users -> Admins -> '…' on the only active SUPER_ADMIN -> Deactivate  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:534-541,618  
+  Elements: InlineBanner tone warn, icon shield-alert, title 'Blocked'; Body 'Can’t deactivate {name} — they’re the last active super admin.'; Action 'Dismiss' clears it; shown under the table with marginTop 14
+- **Add admin modal (AddAdminSheet)** (`ADMIN-13`, modal, admin) — Admin -> Users & providers -> 'Add admin'  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:624-705  
+  Elements: Overlay fixed, rgba(42,19,32,.45), centered, zIndex 200; clicking the backdrop closes it; Card width 420 (max 90vw), bg bone, radius 20, padding '26px 26px 24px', shadow '0 24px 60px rgba(42,19,32,.3)'; Eyebrow 'Admin accounts' + h2 'Create admin user' DM Serif 26; Fields (label 12/600 ink2): Full name 'e.g. Mona Farouk'; Email 'admin@aiwa.com'; Phone '(optional)' '100 555 0000'; Password 'At least 12 characters'; Confirm password 'Re-enter password'. Inputs: cream bg, 1.5px divider border, radius 12, padding '12px 14px', 14px.; Permissions multi-select cards: Support 'Chat moderation, complaints, flags'; Finance 'Payment disputes, settlements'; Super admin 'Create admins, manage permissions'. Selected: plum100 bg, 1.5px plum700 border, filled 18px checkbox with check. Default ['SUPPORT'].; Footer: secondary 'Cancel' + primary 'Create admin' (user-plus), each flex 1; On success the new row is appended with joined 'Today' and status active
+- **Add admin — validation error state** (`ADMIN-14`, state, admin) — Admin -> Users -> Add admin -> 'Create admin' with invalid input  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:640-647,696  
+  Elements: Error box 12.5px danger700 on danger100, radius 10, padding '8px 12px'; Messages: 'Enter a valid name and email.', 'Password must be at least 12 characters.', 'Passwords do not match.', 'Select at least one permission.'
+- **Bookings monitor** (`ADMIN-15`, screen, admin) — Admin -> sidebar 'Bookings' (or Dashboard 'payment dispute to resolve')  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:20-112  
+  Elements: AdminHeader eyebrow 'Operations', title 'Bookings monitor', right Tag danger '1 open dispute'; 4 stat AdminCards (grid auto-fit minmax 150px): Today 38 'bookings'; In progress 6 'right now'; Disputes 1 'need review'; Cancel rate 4.2% 'last 7 days'. Value DM Serif 27.; TableToolbar: search 'Search booking, customer, provider…' (matches id, customer, provider, service); filter chips All / Disputes / Cancelled / No-show / Completed; secondary 'Export CSV'; Table BK_TEMPLATE, cols Ref / Customer / Provider / Service / When / Amount / Status. Ref mono 11.5 plum700 600; amount mono 12.5 plum900; StatusPill + Tag danger 'Dispute'; Clicking a row toggles the expanded detail; search or filter change resets to page 1; Pagination totalPages 4
+- **Bookings — expanded row detail** (`ADMIN-16`, state, admin) — Admin -> Bookings -> click a booking row  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:82-103  
+  Elements: Cream panel, padding '16px 22px 20px'; 4 facts (eyebrow 9.5 + mono 13): Payment (DISPUTED / CASH_CONFIRMED / UNPAID), Commission ('EGP {amount*0.15}' or 'Withheld'), Location 'Home service', Created; Warn InlineBanner showing r.flag, e.g. 'Provider cancelled — penalty applied'; Danger InlineBanner 'Payment disputed' / 'Customer reports the cash payment was not made. Commission is withheld until resolved.'; Buttons: secondary 'View chat' (messages-square, no handler); primary 'Resolve dispute' (scale), shown when disputed and unresolved, opens DisputeResolutionSheet; danger 'Force cancel' (x), shown for pending/confirmed/progress, no handler and no confirm
+- **Bookings — dispute resolved banner** (`ADMIN-17`, banner, admin) — Admin -> Bookings -> expand disputed row -> Resolve dispute -> Confirm resolution  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:96,108-109  
+  Elements: InlineBanner tone success, icon check, title 'Resolved · {outcome}' (Paid / Unpaid / No-show / Cancel); Body 'Both parties were notified and the audit log was updated.'; 'Resolve dispute' button and danger dispute banner are hidden
+- **Bookings — no results empty state** (`ADMIN-18`, state, admin) — Admin -> Bookings -> search/filter with no matches  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:65-67  
+  Elements: EmptyState compact, icon calendar-search, title 'No bookings match'; Body 'Try a different search term or clear the filters.'; Primary 'Clear filters' resets the query and sets filter to 'All'
+- **Payment dispute resolution modal (DisputeResolutionSheet)** (`ADMIN-19`, modal, admin) — Admin -> Bookings -> expand disputed row (BK-2838) -> 'Resolve dispute'  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:320-413  
+  Elements: Overlay fixed rgba(42,19,32,.5), zIndex 220, centered; clicking the backdrop closes it; Card width 560 (max 92vw), maxHeight 86vh with scroll, bg bone, radius 22, padding '26px 26px 24px'; Eyebrow danger700 'Payment dispute · {id}'; h2 '{customer} vs. {provider}' DM Serif 25; sub '{service} · EGP {amount} · {when}' 13 ink3; Chip tabs Evidence / Chat / History; resets to Evidence when the booking changes; 'Resolution' label 11.5/700 uppercase; 2x2 outcome cards: Mark as paid (banknote) 'Commission is charged as usual.'; Mark as unpaid (circle-slash) 'No commission charged.'; Record no-show (user-x) 'Applies the standard no-show penalty.'; Cancel booking (x) 'Voids the booking entirely, with reason logged.'; Selected card: plum100 bg, 1.5px plum700 border, plum700 icon; Footer: secondary 'Cancel' + primary 'Confirm resolution' (check), disabled at opacity .45 with pointer-events none until an outcome is picked
+- **Dispute modal — Evidence tab** (`ADMIN-20`, tab, admin) — Dispute resolution modal -> 'Evidence' chip (default)  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:355-362  
+  Elements: Cream panel, radius 14, padding 16, 13px ink2; camera icon 15 plum700 + bold 'No photo evidence submitted'; Copy: 'Neither party attached a receipt or photo. Resolve using the chat transcript and booking history, or ask both parties for more detail before deciding.'
+- **Dispute modal — Chat tab** (`ADMIN-21`, tab, admin) — Dispute resolution modal -> 'Chat' chip  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:363-375  
+  Elements: Cream panel, padding 14, gap 9; Customer bubble left: bg paper with divider border, ink text. Provider bubble right: bg plum700, bone text. Max width 80%, radius 13, 12.5px; Sender label 10px/700 uppercase at opacity .7; timestamp 10px at opacity .6
+- **Dispute modal — History tab** (`ADMIN-22`, tab, admin) — Dispute resolution modal -> 'History' chip  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:376-388  
+  Elements: Timeline of 8px plum700 dots; Events: 'Booking created', 'Provider accepted', 'Service completed', 'Payment disputed'; label 13/600 ink, time 11.5 ink3
+- **Reviews moderation queue** (`ADMIN-23`, screen, admin) — Admin -> sidebar 'Reviews'  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:122-175  
+  Elements: AdminHeader eyebrow 'Content review', title 'Reviews moderation', right Tag warn '{n} in queue'; TableToolbar: search 'Search reviews…'; filter chips Reported (default) / Low rating / All (they only change the active chip, no filtering); 'Export CSV'; AdminCard per review, padding 18: Avatar 44 plum; author 14/600 -> arrow-right -> subject 13.5 ink2; Stars 12; time 11.5 ink4; Tag danger with reason ('Abusive language', 'Suspected fake review', 'Provider disputes accuracy', 'Customer requested removal'); Italic quoted body 13.5 ink2 lh 1.55; Actions column: danger sm 'Remove review' (trash-2), secondary sm 'Hide only' (eye-off), ghost sm 'Keep · dismiss'. All three remove the item from the queue.; Info InlineBanner (calculator icon): 'Removing this review recalculates the provider's average rating immediately.'
+- **Reviews moderation — 'Queue is clear' empty state** (`ADMIN-24`, state, admin) — Admin -> Reviews -> after every item is handled (or search has no match)  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:141-143  
+  Elements: AdminCard wrapping EmptyState: icon shield-check, tone gold (gold100/gold700), title 'Queue is clear'; Body 'Every reported review has been handled. New reports appear here automatically.'
+- **Content moderation (gallery images / reviews)** (`ADMIN-25`, screen, admin) — Admin -> sidebar 'Moderation'  
+  Source: ui_kits/aiwa-app/admin-extras.jsx:108-146  
+  Elements: Eyebrow 'Content review' + h1 'Moderation'; Card list gap 12; cards white, radius 16, padding 16; Image item: 88x88 radius 12 thumb, linear-gradient(135deg, plum500, plum900). Review item: 88x88 danger100 square with message-square-warning 28 danger700; Provider 14/600; reason 12.5 warn700 (e.g. 'Reported: unrelated / low quality photo'); italic review text 12.5 ink2; time 11 ink3; Actions: danger sm 'Hide image' (eye-off) or 'Remove review' (trash-2); ghost sm 'Dismiss report'. No handlers.
+- **Settlements (commission oversight)** (`ADMIN-26`, screen, admin) — Admin -> sidebar 'Settlements' (or Dashboard 'provider with overdue settlement')  
+  Source: ui_kits/aiwa-app/admin-extras.jsx:6-106  
+  Elements: Eyebrow 'Commission oversight' + h1 'Settlements'; primary sm 'Export ledger' (download); Tile 'Commission rate': 15% DM Serif 26 + pencil IconBtn 26 + 'of completed cash bookings'; Tile 'Commission owed': 'EGP {sum}' + 'across {n} providers'; Table, minWidth 780 with horizontal scroll, cols Provider / Commission / Balance owed / Status / Due / ''; Row: provider 600 + optional Tag danger 'Suspended'; '{rate}%' + 'EGP {gross} gross' 11 ink4; balance mono, danger700 when negative ('—' when 0); status pill Within limit (info) / Overdue (danger) / Settled (success); due 12 ink3; Row actions: overdue rows get danger sm 'Send reminder', others ghost sm 'View'. Both call onOpen and open Settlement detail. ban IconBtn 32 opens the suspend confirm.; Warn InlineBanner (triangle-alert) 'Applies to new bookings only' / 'Changing the rate doesn't recalculate past ledger entries — each keeps the rate that was live when it was created.'
+- **Settlements — commission rate inline edit** (`ADMIN-27`, state, admin) — Admin -> Settlements -> pencil on 'Commission rate' tile  
+  Source: ui_kits/aiwa-app/admin-extras.jsx:16-24,44-58  
+  Elements: Number input width 64, min 0 / max 50 / step 0.5, DM Serif 22 plum900, 1.5px plum700 border, radius 8, autoFocus; '%' suffix; check IconBtn 28 saves, x IconBtn 28 cancels; Validation 0 &lt; n &lt;= 50, otherwise it silently reverts to the old value
+- **Settlements — Suspend provider confirm** (`ADMIN-28`, dialog, admin) — Admin -> Settlements -> ban icon on a row  
+  Source: ui_kits/aiwa-app/admin-extras.jsx:100-103; states.jsx:227-257  
+  Elements: ConfirmSheet tone danger, icon ban, eyebrow 'Provider account', title 'Suspend {provider}?'; Body 'They're immediately hidden from search and can't accept new bookings. Existing accepted jobs can still be completed. This can be reversed from Users & providers.'; Buttons: secondary lg 'Cancel' + danger lg 'Suspend account'; Sheet: bone bg, top radius 24, 40x4 handle, 46px danger100 icon circle, DM Serif 23 title, overlay rgba(42,19,32,.48); After confirm the row shows Tag danger 'Suspended' and the ban icon disappears
+- **Settlement detail (ledger + confirm payout)** (`ADMIN-29`, sub-screen, admin) — Admin -> Settlements -> row 'View' (or 'Send reminder' on overdue rows)  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:165-231  
+  Elements: 'Back to settlements' link: arrow-left, plum700 13/600; Eyebrow 'Settlement detail' + h1 provider DM Serif 30 + 'Due {due}' 13 ink3; StatusPill: completed if confirmed, cancelled if overdue, confirmed otherwise; Grid 1.4fr / 1fr. 'Ledger entries' card (cream header 11px uppercase). Rows: label 13.5/500 + '{when} · EGP {gross} gross · 15% commission' 11.5 ink3; amount mono danger700 '−EGP 52.50'; Right card: 'Commission rate' 15% DM Serif 26 + 'Set platform-wide in Settlements' 10.5 ink4; 'Total owed' 'EGP {balance}' DM Serif 30; Primary full 'Confirm payout received' (banknote); ghost full sm 'Send reminder'; divider; danger full sm 'Suspend account' (ban)
+- **Settlement detail — payout confirmed state** (`ADMIN-30`, state, admin) — Admin -> Settlements -> View -> 'Confirm payout received' (or open an already 'settled' row)  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:167,187,209-215  
+  Elements: The button is replaced by check-circle 16 + 'Settlement confirmed' success700 13/600; StatusPill changes to 'completed'
+- **Settlement detail — Suspend account confirm** (`ADMIN-31`, dialog, admin) — Admin -> Settlements -> View -> 'Suspend account'  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:221,225-228  
+  Elements: ConfirmSheet eyebrow 'Provider account', title 'Suspend {provider}?', confirm 'Suspend account', icon ban, tone danger; Same body copy as ADMIN-28
+- **Settlement detail — 'Account suspended' banner** (`ADMIN-32`, banner, admin) — Admin -> Settlements -> View -> Suspend account -> confirm (or open a suspended provider)  
+  Source: ui_kits/aiwa-app/flow-additions-v4.jsx:218-219  
+  Elements: InlineBanner tone danger, icon ban, title 'Account suspended'; Body 'Hidden from search, can't accept new bookings.'; replaces the 'Suspend account' button
+- **Audit log** (`ADMIN-33`, screen, admin) — Admin -> sidebar 'Audit log' (or Dashboard 'View full audit log')  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:276-317  
+  Elements: AdminHeader eyebrow 'Accountability', title 'Audit log'; TableToolbar: search 'Search actor, action, target…' (no filters) + 'Export CSV'; AU_TEMPLATE '1.1fr 1.4fr 1.3fr 1.1fr .9fr', cols Admin / Action / Target / When / IP; Actor 600 ink; action Tag with tone per action (PROVIDER_APPROVED success, REVIEW_REMOVED danger, ADMIN_CREATED info, SETTLEMENT_CONFIRMED success, USER_SUSPENDED danger, IMAGE_HIDDEN warn, POLICY_PUBLISHED info); target mono 12 ink2; time 12 ink3; IP mono 11.5 ink4; Pagination totalPages 6 (search doesn't reset the page)
+- **Audit log — no results empty state** (`ADMIN-34`, state, admin) — Admin -> Audit log -> search with no matches  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:302-303  
+  Elements: EmptyState compact, icon file-search, title 'No entries match', body 'Try a different search term.'
+- **Policies & support — Terms & policies tab** (`ADMIN-35`, tab, admin) — Admin -> sidebar 'Policies & support' (default tab 'terms')  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:178-233  
+  Elements: AdminHeader eyebrow 'Platform', title 'Policies & support', right primary sm 'Publish new version' (upload), shown on all tabs; Chip tabs 'Terms & policies' / 'Booking rules' / 'Support'; Grid minmax(0,1.5fr) / minmax(0,1fr) gap 16; Draft card: eyebrow 'Current draft · v1.2.0'; textarea height 300, bone bg, 1.5px divider border, radius 13, 13.5px lh 1.6; secondary sm 'Save draft' (save), ghost sm 'Preview' (eye). No handlers.; Version history card, cream header: v1.1.0 + Tag success 'Live' ('Provider cancel penalties, home-service safety, commission terms', '20 May 2026 · AIWA Admin'), v1.0.2 ('Clarified no-show handling'), v1.0.0 ('Initial launch terms'). Version in mono 12.5/600.
+- **Policies & support — Booking rules tab** (`ADMIN-36`, tab, admin) — Admin -> Policies & support -> 'Booking rules' chip  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:235-255  
+  Elements: AdminCard padding 20, maxWidth 560; Range sliders (accentColor plum700), value mono 14/600 plum700 + unit 11 ink3: 'Free cancellation cutoff' 4 'hours before' (1–24) hint 'Cancelling later applies the customer penalty.'; 'Provider cancel penalty' 15 '% of service price' (0–50) hint 'Debited to the provider ledger on late cancellation.'; 'Provider response window' 30 'minutes' (5–120) hint 'Requests auto-expire after this.'; Warn InlineBanner 'Applies to new bookings only' / 'Existing bookings keep the rules that were live when they were created.'; Primary 'Save booking rules' (check), no handler
+- **Policies & support — Support settings tab** (`ADMIN-37`, tab, admin) — Admin -> Policies & support -> 'Support' chip  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:257-266  
+  Elements: AdminCard padding 20, maxWidth 560; ValidatedInput 'WhatsApp support number' '+20 100 555 0000' (message-circle), hint 'Shown on the WhatsApp support screen in both apps.'; ValidatedInput 'Support hours' 'Daily · 9:00 AM – 11:00 PM' (clock); onChange is a no-op in the prototype; ValidatedInput 'Escalation email' 'urgent@aiwa.com' (mail), hint 'Receives SOS incidents and payment disputes immediately.'; Inputs: paper bg, 1.5px divider border, radius 14, 15px, label 12.5/600 ink2, hint 11.5 ink4; Primary 'Save support settings' (check)
+- **Publish new terms version confirm** (`ADMIN-38`, dialog, admin) — Admin -> Policies & support -> 'Publish new version'  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:187,198,268-271; states.jsx:227-257  
+  Elements: ConfirmSheet tone neutral (plum100/plum700 icon circle, primary confirm), icon upload; Eyebrow 'Publish v1.2.0', title 'Notify every user to re-accept?'; Body 'All customers and providers will be asked to accept the new terms the next time they open the app. This cannot be undone.'; Buttons: secondary 'Not yet' + primary 'Publish & notify'; confirm only closes the sheet in the prototype
+- **Admin placeholder ('Coming next')** (`ADMIN-39`, state, admin) — Unreachable. Defined but never rendered: AdminPanel routes every sidebar id to a real screen (admin-screens.jsx:119-131), and grep finds no other reference.  
+  Source: ui_kits/aiwa-app/admin-screens.jsx:707-721  
+  Elements: Eyebrow 'Coming next' + h1 {title} DM Serif 36; White card, padding 60, 64px plum100 circle with icon 28; 'This section is on the roadmap.' 15/600 ink2 + paragraph 13 ink3 maxWidth 360
+- **TableToolbar (search + filters + Export CSV)** (`ADMIN-40`, component, admin) — Used by Bookings, Reviews and Audit log  
+  Source: ui_kits/aiwa-app/states.jsx:330-356  
+  Elements: Search pill: paper bg, 1px divider border, radius 999, padding '8px 13px', minWidth 220, flex '0 1 300px', search icon 15 ink3, 13.5px input, clear 'x' button when the query isn't empty; Filter Chips row (wraps); Right slot + secondary sm 'Export CSV' (download), marginLeft auto; Wraps onto multiple lines, gap 10, marginBottom 14
+- **AdminHeader (section eyebrow + title + right slot)** (`ADMIN-41`, component, admin) — Used by Bookings, Reviews, Policies and Audit log (older screens inline their own header)  
+  Source: ui_kits/aiwa-app/states.jsx:358-369  
+  Elements: Eyebrow + h1 DM Serif Display 400, 34px, lh 1, letterSpacing -0.02em, plum900, margin '5px 0 0'; Right slot flex gap 8; container marginBottom 22, flex-wrap, align flex-end
+- **Admin table shell (AdminCard + AdminTableHead + AdminTableRow)** (`ADMIN-42`, component, admin) — Used by Bookings, Reviews, Audit log and Policies  
+  Source: ui_kits/aiwa-app/states.jsx:371-395  
+  Elements: AdminCard: paper bg, radius 18, 1px divider border, overflow hidden, overflowX auto (horizontal scroll at narrow widths); Head: grid by template, gap 12, minWidth 720, padding '13px 22px', cream bg, 10.5px/600 uppercase .1em ink3; Row: minWidth 720, padding '15px 22px', 13px, bottom border divider (none on the last row); clickable rows get the .aiwa-row-hover class, cursor pointer, background transition 150ms cubic-bezier(.32,.72,0,1)
+- **Tag (status/permission chip)** (`ADMIN-43`, component, admin) — Used across admin (permissions, dispute, live version, audit action, queue count)  
+  Source: ui_kits/aiwa-app/states.jsx:397-410  
+  Elements: Tones: plum, rose, gold, info, success, warn, danger (bg *100 / fg *700), neutral (cream / ink3); padding '3px 9px', radius 999, 11px/700 Plus Jakarta Sans, nowrap
+- **Pagination** (`ADMIN-44`, component, admin) — Bookings (4 pages), Audit log (6 pages)  
+  Source: ui_kits/aiwa-app/states.jsx:290-318  
+  Elements: Prev/next 32x32, radius 10, 1px divider border, paper bg; chevron icons 15; disabled uses ink4 and opacity .5; A 3-number window; active page plum700 bg with #fff text, others paper with ink2, 13/600; Ellipsis '…' when more pages exist; hidden when totalPages &lt;= 1
+- **Bookings — expanded row 'Payment disputed' banner (pre-resolution)** (`ADMIN-V01`, banner, admin) — Admin -> sidebar 'Bookings' -> click the disputed row BK-2838 (dispute: true) -> expanded panel, before any resolution  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:95; states.jsx:148-168  
+  Elements: Conditional: `{r.dispute && !resolved[r.id] && <InlineBanner tone="danger" title="Payment disputed" body="Customer reports the cash payment was not made. Commission is withheld until resolved." style={{ marginBottom: 12 }} />}` (admin-modules.jsx:95); InlineBanner shell: flex gap 10, padding '11px 13px', radius 14, bg aiwa.danger100 -> male #E8E2D9 / female #F2D9D3 (base #F5DDE0); default icon 'octagon-alert' 16 in aiwa.danger700 -> male #2E2A26 / female #6B3A3A (base #8A2230); Title 'Payment disputed' 13px/700 danger700, marginBottom 2; body 12.5px lh 1.5 opacity .92 danger700; Shown together with facts Payment 'DISPUTED' and Commission 'Withheld' (admin-modules.jsx:85-86), row Tag danger 'Dispute', and the primary sm 'Resolve dispute' (scale) button; Disappears once resolved[r.id] is set. ADMIN-17's success banner 'Resolved · {outcome}' replaces it.
+- **Bookings — expanded row cancellation/penalty flag banner** (`ADMIN-V02`, banner, admin) — Admin -> sidebar 'Bookings' -> click row BK-2839 (status cancelled, flag set) -> expanded panel  
+  Source: ui_kits/aiwa-app/admin-modules.jsx:94; admin-modules.jsx:11  
+  Elements: Conditional: `{r.flag && <InlineBanner tone="warn" body={r.flag} style={{ marginBottom: 12 }} />}` (admin-modules.jsx:94); data flag 'Provider cancelled — penalty applied' (admin-modules.jsx:11); Body only, no title. Default warn icon 'triangle-alert' 16. bg aiwa.warn100 -> male #EBE5DA / female #F8E4DE (base #F6E8CC); fg aiwa.warn700 -> male #2E2A26 / female #6B3A3A (base #8A5A1F); 12.5px lh 1.5 opacity .92; The same expanded panel shows StatusPill 'cancelled', Payment 'UNPAID', Commission 'Withheld', only the secondary 'View chat' button, and no 'Force cancel' (status is not pending/confirmed/progress)
+- **Admin table loading skeleton (SkeletonRows)** (`ADMIN-V03`, state, admin) — Not mounted by any prototype screen (grep finds only its definition at states.jsx:67). README.md:110 designates it as the loading placeholder for admin tables.  
+  Source: ui_kits/aiwa-app/states.jsx:24-34,67-77  
+  Elements: Rows: `display: 'grid', gridTemplateColumns: repeat(${cols}, 1fr), gap: 12, padding: '16px 22px', borderBottom: 1px solid divider`; defaults cols 5, rows 5 (states.jsx:67-77); Cells: Skeleton h 12, radius 6; first column w '80%', others '58%'; Shimmer: `linear-gradient(90deg, cream 0%, hover 50%, cream 100%)`, backgroundSize '320px 100%', animation 'aiwa-shimmer 1.25s linear infinite' (states.jsx:24-34); Runtime colors: cream/hover male #EBE5DA/#EBE5DA, female #F8E8E3/#F8E8E3 (identical, so the sweep is invisible under both runtime themes); base #F6F0E6/#F0E8DC; README.md:110: 'No spinners anywhere — shimmer/pulse only.'
+
+</details>
+
+## 4. Per-screen findings
+
+Each finding: prototype value (quoted, file:line) → Flutter value (file:line) → fix. Tags: ✔ verified, ✎ corrected by verifier, ＋ added by verifier.
+
+### Design system & shared components
+
+#### ✅ Color tokens & runtime gender palettes — `DS-01`
+
+Prototype: ui_kits/aiwa-app/theme.jsx:12-66; ui_kits/aiwa-app/components.jsx:4-16; tokens/colors_and_type.css:20-88 · Flutter: [Android/aiwa_app/lib/core/theme/app_colors.dart](Android/aiwa_app/lib/core/theme/app_colors.dart), [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | ✅ | — | — | — | — | — |
+
+No deviations found.
+
+
+#### ⚠️ Typography: font families & type scale — `DS-02`
+
+Prototype: tokens/colors_and_type.css:96-122,183-275; ui_kits/aiwa-app/components.jsx:17-19; README.md:30-34 · Flutter: [Android/aiwa_app/lib/core/theme/app_text_styles.dart](Android/aiwa_app/lib/core/theme/app_text_styles.dart), [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart), [Android/aiwa_app/pubspec.yaml](Android/aiwa_app/pubspec.yaml)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | ⚠️ | — | — | — | — | — |
+
+- **[MINOR · tokens] CSS h3/h4 token styles (sans 600 20/17) have no Flutter equivalent; Flutter h3/h4 are serif** `DS-02-F1` ✎
+  - Prototype: tokens/colors_and_type.css:212-227: h3 = var(--font-body) 600 20px lh 1.25 ls -0.005em; h4 = var(--font-body) 600 17px lh 1.25. These classes are never rendered: prototype.html:9-11 links only Google Fonts, the token CSS is not bundled, and JSX titles are inline DM Serif 22 (components.jsx:196, states.jsx:97, :419).
+  - Flutter: app_text_styles.dart:30-38: h3 = _serif(fontSize: 22, height: 1.15, letterSpacing: -0.22); h4 = _serif(fontSize: 18, height: 1.2). app_theme.dart:124-125 maps headlineSmall/titleLarge to them. No sans 600 20/17 style exists.
+  - Fix: Add the token styles without remapping the serif titles: `static TextStyle get h3Sans => _sans(fontSize: 20, fontWeight: FontWeight.w600, height: 1.25, letterSpacing: -0.1, color: AppColors.ink); static TextStyle get h4Sans => _sans(fontSize: 17, fontWeight: FontWeight.w600, height: 1.25, color: AppColors.ink);` in app_text_styles.dart. Keep AppTextStyles.h3 (DM Serif 22), because it matches the rendered JSX titles. Only remap titleLarge/titleMedium (app_theme.dart:124-125) after checking which Material widgets read them.
+- **[MINOR · tokens] price style is 22px with no tracking (token is 20px, -0.02em)** `DS-02-F2` ✔
+  - Prototype: tokens/colors_and_type.css:259-266 .price: font-display 400, var(--fs-h3)=20px, letter-spacing -0.02em, tnum
+  - Flutter: app_text_styles.dart:64-69 price = _serif(fontSize: 22, height: 1, tabularFigures); no letterSpacing
+  - Fix: `static TextStyle get price => _serif(fontSize: 20, color: AppColors.ink, letterSpacing: -0.4, fontFeatures: const [FontFeature.tabularFigures()]);`
+- **[MINOR · tokens] body-sm color, meta line-height and paragraph 1.65 line-height are off** `DS-02-F3` ✔
+  - Prototype: css:238-242 .body-sm 14px lh 1.55 color var(--color-fg-2)=ink2; css:244-248 .meta 13px lh 1.45 ink3; css:229-236 p lh var(--lh-loose)=1.65
+  - Flutter: app_text_styles.dart:47-48 bodySm color AppColors.ink; :50-51 meta height 1.4; there is no 1.65 paragraph style (bodyLg/body use 1.5)
+  - Fix: Set bodySm color to AppColors.ink2 and meta height to 1.45, and add `static TextStyle get paragraph => _sans(fontSize: 16, height: 1.65, color: AppColors.ink);`
+- **[MINOR · tokens] Heading letter-spacing baked into h2/h3 leaks into titles that have none** `DS-02-F4` ✔
+  - Prototype: README.md:31 headlines -0.02em. JSX titles in ScreenHeader/EmptyState/ErrorState/ConfirmSheet/GuestLocked set no letterSpacing (states.jsx:97,117,248,419; customer-extras-2.jsx:19)
+  - Flutter: app_text_styles.dart:23-35 h2 letterSpacing -0.01*26, h3 -0.01*22. They are reused through copyWith in screen_chrome.dart:58, empty_state.dart:69,162, confirm_sheet.dart:75, guest_locked_view.dart:45, so these titles render -0.22 to -0.26px tighter.
+  - Fix: Use h2 letterSpacing -0.02*26 per README. For the shared chrome titles, pass `letterSpacing: 0` in copyWith, or add a `titleSerif` style with no tracking.
+- **[MINOR · tokens] Fonts are fetched at runtime and not bundled** `DS-02-F5` ✔
+  - Prototype: tokens/styles.css:7 loads DM Serif Display ital 0/1, Plus Jakarta 400-800, JetBrains 400/600, Markazi 400-600, IBM Plex Arabic 400-600. AIWA-Prototype.html is a self-contained offline bundle.
+  - Flutter: pubspec.yaml:45-46 google_fonts: ^6.2.1; pubspec.yaml:78-83 has no fonts: section or font assets; app_text_styles.dart:106 aiwaUseGoogleFonts = true fetches over the network
+  - Fix: Bundle the TTFs (assets/google_fonts/…) and declare them in pubspec. Set `GoogleFonts.config.allowRuntimeFetching = false` in main.dart so the first offline launch does not fall back to Roboto/SF.
+
+#### ⚠️ Spacing, radii & elevation tokens — `DS-03`
+
+Prototype: tokens/colors_and_type.css:127-159; README.md:36-39 · Flutter: [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | ⚠️ | — | — | — | — | — |
+
+- **[MINOR · tokens] shadow3 is a single 0.18 layer instead of two layers** `DS-03-F1` ✔
+  - Prototype: css:153-154 --shadow-3: 0 12px 32px rgba(74,31,56,.14), 0 4px 10px rgba(26,19,22,.06)
+  - Flutter: app_theme.dart:86-92 shadow3 = [BoxShadow(color: plum700.withOpacity(0.18), blurRadius: 32, offset: Offset(0,12))]
+  - Fix: Use alpha 0.14 and add `BoxShadow(color: AppColors.ink.withOpacity(0.06), blurRadius: 10, offset: Offset(0, 4))`.
+- **[MINOR · tokens] shadow-4 and shadow-card are not defined** `DS-03-F2` ✔
+  - Prototype: css:155 --shadow-4: 0 24px 60px rgba(42,19,32,.22); css:158-159 --shadow-card: 0 2px 8px rgba(74,31,56,.05), 0 1px 2px rgba(26,19,22,.04)
+  - Flutter: Not defined in app_theme.dart (only shadow1-3 at :60-92)
+  - Fix: Add `static List<BoxShadow> get shadow4 => [BoxShadow(color: AppColors.plum900.withOpacity(.22), blurRadius: 60, offset: Offset(0,24))];` and a matching `shadowCard` getter.
+- **[MINOR · tokens] Sheet shadow is lighter than in the prototype** `DS-03-F3` ✔
+  - Prototype: ui_kits/aiwa-app/states.jsx:240 boxShadow '0 -12px 32px rgba(42,19,32,.2)'
+  - Flutter: app_theme.dart:44-50 sheetDecoration BoxShadow(plum700.withOpacity(0.14), blur 32, offset (0,-12))
+  - Fix: Use `AppColors.plum900.withOpacity(0.20)` in sheetDecoration.
+
+#### ⚠️ Motion tokens & keyframes — `DS-04`
+
+Prototype: tokens/colors_and_type.css:166-174; ui_kits/aiwa-app/prototype.html:16-43; ui_kits/aiwa-app/states.jsx:10-19; README.md:41-43 · Flutter: [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | ⚠️ | — | ⚠️ | — | — | — |
+
+- **[MINOR · tokens] Missing ease-out/ease-in/ease-bounce curves and dur-1/dur-4** `DS-04-F1` ✔
+  - Prototype: css:166-174 --ease-out (.22,.61,.36,1), --ease-in (.55,.055,.675,.19), --ease-bounce (.34,1.56,.64,1), --dur-1 120ms, --dur-4 480ms
+  - Flutter: app_theme.dart:31-33 has only easeSoft, dur2, dur3. aiwa_button.dart:116 hard-codes Duration(milliseconds: 120).
+  - Fix: Add `static const Curve easeOut = Cubic(.22,.61,.36,1), easeIn = Cubic(.55,.055,.675,.19), easeBounce = Cubic(.34,1.56,.64,1); static const Duration dur1 = Duration(milliseconds: 120), dur4 = Duration(milliseconds: 480);`
+- **[MINOR · interaction] No shared equivalents of the aiwa-pop / aiwa-drop / aiwa-toast keyframes** `DS-04-F2` ✔
+  - Prototype: states.jsx:13 aiwa-pop scale .86 to 1 + fade (EmptyState :95 at 320ms soft, SuccessSheet :277 at 340ms bounce); states.jsx:15 aiwa-drop translateY(-14) (OfflineBanner :135 at 260ms); prototype.html:26-29 aiwa-toast
+  - Flutter: No reusable transition widgets in lib/shared/widgets. grep finds ScaleTransition/AnimatedScale only in aiwa_button.dart:114 and review_page.dart:215.
+  - Fix: Add lib/shared/widgets/aiwa_motion.dart with `AiwaPopIn` (TweenAnimationBuilder scale .86 to 1 + opacity, dur3/easeSoft) and `AiwaDropIn` (Offset(0,-14) to 0), and reuse them in EmptyState, OfflineBanner and Toast.
+
+#### ⚠️ Icon (Lucide helper) — `DS-05`
+
+Prototype: ui_kits/aiwa-app/components.jsx:22-41; README.md:49 · Flutter: [Android/aiwa_app/pubspec.yaml](Android/aiwa_app/pubspec.yaml), [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart), [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | ⚠️ | ⚠️ | ✅ | — | — | — | — |
+
+- **[MINOR · components] Material Icons are used instead of Lucide** `DS-05-F1` ✎
+  - Prototype: README.md:49 'Icons: Lucide (24px stroke, 2px weight)'; e.g. 'triangle-alert' (states.jsx:116), 'octagon-alert' (:152), 'sparkles' (:154), 'rotate-cw' (:120), 'house' / 'calendar-check' (components.jsx:205, 207)
+  - Flutter: pubspec.yaml:9-70 has no Lucide package. The glyphs map to Icons.warning_amber_rounded (empty_state.dart:154), Icons.report_outlined (screen_chrome.dart:299), Icons.auto_awesome_outlined (:309), Icons.refresh_rounded (empty_state.dart:183), and Icons.home_outlined / Icons.event_available_outlined (shell_page.dart:43, :51).
+  - Fix: Add `lucide_icons_flutter` to pubspec and a lib/core/theme/aiwa_icons.dart alias map (e.g. `static const house = LucideIcons.house;`). Replace Icons.* with these aliases, starting with the shared widgets.
+- **[MINOR · tokens] Filled/rounded Material glyph weight instead of a 2px round-cap stroke** `DS-05-F2` ✔
+  - Prototype: components.jsx:34 svg.style.stroke = color (Lucide default stroke-width 2, round caps); Stars polygon stroke 2 (components.jsx:180)
+  - Flutter: Icons.star_rounded / star_outline_rounded (star_rating.dart:29-33), Icons.check (aiwa_avatar.dart:83): filled Material shapes
+  - Fix: This is resolved by adopting Lucide (F1). For stars, draw the Lucide polygon with a CustomPainter (strokeWidth 2, filled when active).
+
+#### ⚠️ Btn (pill button, 6 variants x 3 sizes) — `DS-06`
+
+Prototype: ui_kits/aiwa-app/components.jsx:44-72; ui_kits/aiwa-app/prototype.html:41-42 · Flutter: [Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | — | ⚠️ | ✅ | ✅ | — |
+
+- **[MINOR · interaction] Press scale is 0.97 instead of 0.96** `DS-06-F1` ✔
+  - Prototype: prototype.html:41-42 `button { transition: transform 120ms cubic-bezier(.32,.72,0,1) } button:active:not(:disabled) { transform: scale(.96); }` (.aiwa-press .97 at states.jsx:18 is not used by any JSX)
+  - Flutter: aiwa_button.dart:114-117 `AnimatedScale(scale: _pressed ? 0.97 : 1, duration: 120ms, curve: easeSoft)`
+  - Fix: Change 0.97 to 0.96 (or AppTheme.pressScale = 0.96) and use AppTheme.dur1 once it is added.
+
+#### ⚠️ IconBtn (round icon button) — `DS-07`
+
+Prototype: ui_kits/aiwa-app/components.jsx:75-94 · Flutter: [Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | — | ⚠️ | — | ✅ | — |
+
+- **[MINOR · tokens] Glass variant has no backdrop blur and uses a theme divider instead of the literal border** `DS-07-F1` ✔
+  - Prototype: components.jsx:80 glass: background 'rgba(255,255,255,.85)', backdropFilter 'blur(8px)', border '1px solid rgba(231,221,208,.7)'
+  - Flutter: aiwa_icon_button.dart:43-47 bg Colors.white.withOpacity(0.85), border AppColors.divider.withOpacity(0.7) (male #D8CFC2), no BackdropFilter
+  - Fix: Wrap the glass variant in `ClipOval(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8), child: …))`.
+- **[MINOR · interaction] No press feedback** `DS-07-F2` ✔
+  - Prototype: It is a &lt;button>, so the global `button:active{transform:scale(.96)}` applies (prototype.html:42)
+  - Flutter: aiwa_icon_button.dart:61-63 plain GestureDetector(onTap) with no scale or highlight
+  - Fix: Reuse a shared AiwaPressable (AnimatedScale 0.96, 120ms, easeSoft) wrapper, as in aiwa_button.dart:114-123.
+
+#### ⚠️ Avatar (initial + gradient, verified badge) — `DS-08`
+
+Prototype: ui_kits/aiwa-app/components.jsx:97-127 · Flutter: [Android/aiwa_app/lib/shared/widgets/aiwa_avatar.dart](Android/aiwa_app/lib/shared/widgets/aiwa_avatar.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
+
+- **[MINOR · components] Verified-badge check is a Material glyph sized by a different rule** `DS-08-V1` ＋
+  - Prototype: components.jsx:122 `<Icon name="check" size={Math.max(8, size * 0.18)} />`, a Lucide check with a 2px stroke inside the gold500 badge.
+  - Flutter: aiwa_avatar.dart:82-86 `Icon(Icons.check, size: badgeSize * 0.6)` with badgeSize = (size*0.32).clamp(14, 22) (:45). This gives 8.45 vs 8 at avatar size 44, 12.3 vs 11.5 at 64, and 13.2 vs 14.4 at 80. The glyph is the filled Material check.
+  - Fix: In aiwa_avatar.dart use `Icon(AiwaIcons.check, size: math.max(8, size * 0.18), color: AppColors.paper)` (the Lucide check from DS-05-F1).
+
+#### ⚠️ Chip (default / active / tonal) — `DS-09`
+
+Prototype: ui_kits/aiwa-app/components.jsx:130-144 · Flutter: [Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart](Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | — | ⚠️ | ✅ | ✅ | — |
+
+- **[MINOR · interaction] No press feedback** `DS-09-F1` ✔
+  - Prototype: Chip is a &lt;button> (components.jsx:135), so global active scale .96 applies (prototype.html:42)
+  - Flutter: aiwa_chip.dart:37-38 GestureDetector(onTap) with no scale
+  - Fix: Wrap in the shared AiwaPressable (scale 0.96/120ms/easeSoft).
+
+#### ⚠️ StatusPill (booking status) — `DS-10`
+
+Prototype: ui_kits/aiwa-app/components.jsx:147-172 · Flutter: [Android/aiwa_app/lib/shared/widgets/status_pill.dart](Android/aiwa_app/lib/shared/widgets/status_pill.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | — | ⚠️ | ✅ | — |
+
+- **[MINOR · states] Unknown status falls back to a neutral pill showing the raw value** `DS-10-F1` ✔
+  - Prototype: components.jsx:161 `const m = map[status] || map.pending;` shows the Pending pill
+  - Flutter: status_pill.dart:122-128 default shows cream/ink3/ink4 with the raw `status` string
+  - Fix: Return the 'pending' config in the default branch, or log the unknown enum and still show a known label.
+
+#### ⚠️ Stars (rating) — `DS-11`
+
+Prototype: ui_kits/aiwa-app/components.jsx:175-185 · Flutter: [Android/aiwa_app/lib/shared/widgets/star_rating.dart](Android/aiwa_app/lib/shared/widgets/star_rating.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | — | — | ⚠️ | ✅ | — |
+
+- **[MINOR · components] Rounded Material star glyphs instead of the Lucide polygon** `DS-11-F1` ✔
+  - Prototype: components.jsx:180 `<polygon points="12 2 15.09 8.26 …"/>` strokeWidth 2
+  - Flutter: star_rating.dart:29-33 Icons.star_half_rounded / star_rounded / star_outline_rounded
+  - Fix: Paint the polygon with a CustomPainter (or use the Lucide star from DS-05).
+- **[MINOR · tokens] Empty stars use divider instead of an ink4 outline** `DS-11-F2` ✔
+  - Prototype: components.jsx:180 empty: fill 'none', stroke aiwa.ink4 (male #A39A8E)
+  - Flutter: star_rating.dart:27,35 emptyColor = AppColors.divider (male #D8CFC2) applied to star_outline_rounded
+  - Fix: Default `inactiveColor` to AppColors.ink4.
+- **[MINOR · states] Half-star rendering differs from the prototype's integer fill** `DS-11-F3` ✔
+  - Prototype: components.jsx:179 `n <= value` so 4.8 shows 4 filled + 1 empty
+  - Flutter: star_rating.dart:23-25 shows a half star when the fraction is >= .5 (4.8 shows 4 + half)
+  - Fix: Match the prototype with `final filled = i + 1 <= value;`, or confirm half-stars as an intended enhancement.
+- **[MINOR · layout] No 1px gap between stars** `DS-11-F4` ✔
+  - Prototype: components.jsx:177 `display: 'inline-flex', gap: 1`
+  - Flutter: star_rating.dart:20-22 Row with no spacing
+  - Fix: Add `spacing: 1` to the Row (Flutter >=3.27) or wrap the icons in Padding(right: 1).
+
+#### ✅ Eyebrow label — `DS-12`
+
+Prototype: ui_kits/aiwa-app/components.jsx:188-190; tokens/colors_and_type.css:250-257 · Flutter: [Android/aiwa_app/lib/shared/widgets/eyebrow_label.dart](Android/aiwa_app/lib/shared/widgets/eyebrow_label.dart), [Android/aiwa_app/lib/core/theme/app_text_styles.dart](Android/aiwa_app/lib/core/theme/app_text_styles.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — |
+
+No deviations found.
+
+
+#### ⚠️ SectionHeader — `DS-13`
+
+Prototype: ui_kits/aiwa-app/components.jsx:193-200 · Flutter: [Android/aiwa_app/lib/shared/widgets/section_header.dart](Android/aiwa_app/lib/shared/widgets/section_header.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | — | ⚠️ | — | ✅ | — |
+
+- **[MINOR · interaction] Action is bare text with no press feedback and a tiny hit area** `DS-13-F1` ✔
+  - Prototype: components.jsx:197 action is a &lt;button> (global active scale .96, prototype.html:42)
+  - Flutter: section_header.dart:39-45 GestureDetector around a Text; hit area is the glyph box only, with no feedback
+  - Fix: Wrap the action in the shared AiwaPressable with `behavior: HitTestBehavior.opaque` and Padding(vertical: 6).
+
+#### ⚠️ Customer bottom TabBar (+ visibility rule) — `DS-14`
+
+Prototype: ui_kits/aiwa-app/components.jsx:203-237; ui_kits/aiwa-app/prototype.jsx:564-573,721,736 · Flutter: [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ⚠️ | — |
+
+- **[MINOR · components] Bookings badge dot is missing** `DS-14-F1` ✔
+  - Prototype: components.jsx:207 `badge: true`; :229 8x8 rose500 dot, top -2 right -4, border '2px solid #fff'
+  - Flutter: shell_page.dart:136-151 renders only the Icon and label; no badge
+  - Fix: Wrap the Icon in `Stack(clipBehavior: Clip.none, children:[Icon(...), if (badge) Positioned(top:-2, right:-4, child: Container(width:8,height:8, decoration: BoxDecoration(color: AppColors.rose500, shape: BoxShape.circle, border: Border.all(color: AppColors.paper, width: 2))))])`, driven by a pending-bookings count.
+- **[MINOR · layout] Active pill shrink-wraps its label instead of filling up to 80px** `DS-14-F2` ✔
+  - Prototype: components.jsx:225 button `flex: 1, maxWidth: 80`: each tab is about 77px wide on a 393px frame, so the plum100 pill is about 77px
+  - Flutter: shell_page.dart:126-131 Center > AnimatedContainer(constraints: maxWidth 80) is loose, so the pill is label width + 24 (about 54px for 'Home')
+  - Fix: `ConstrainedBox(constraints: const BoxConstraints(maxWidth: 80), child: SizedBox(width: double.infinity, child: AnimatedContainer(...)))`
+- **[MINOR · interaction] Tab items give no press feedback** `DS-14-F3` ✔
+  - Prototype: Tabs are &lt;button> elements (components.jsx:222), so global active scale .96 applies (prototype.html:42)
+  - Flutter: shell_page.dart:123-125 GestureDetector with no scale
+  - Fix: Use the shared AiwaPressable around _TabItem.
+- **[MINOR · responsive] Bottom padding is 8 + safe inset instead of 26** `DS-14-F4` ✔
+  - Prototype: components.jsx:216 `padding: '8px 4px 26px'`
+  - Flutter: shell_page.dart:78-83 `EdgeInsets.fromLTRB(4, 8, 4, 8 + MediaQuery.paddingOf(context).bottom)` gives 42 on a 34pt-inset iPhone and 8 on 3-button Android
+  - Fix: `bottom: math.max(26.0, MediaQuery.paddingOf(context).bottom)`
+
+#### ⚠️ Skeleton / SkeletonCard / SkeletonList (shimmer loading) — `DS-15`
+
+Prototype: ui_kits/aiwa-app/states.jsx:24-55 · Flutter: [Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart](Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | — | — | ✅ | ✅ | — |
+
+- **[MINOR · tokens] Shimmer highlights to white at 1.5s instead of hover at 1.25s** `DS-15-F1` ✔
+  - Prototype: states.jsx:28-30 `linear-gradient(90deg, ${aiwa.cream} 0%, ${aiwa.hover} 50%, ${aiwa.cream} 100%)`, `aiwa-shimmer 1.25s linear infinite`
+  - Flutter: loading_shimmer.dart:21-23 `Shimmer.fromColors(baseColor: AppColors.cream, highlightColor: AppColors.paper)` (package default period 1500ms)
+  - Fix: `Shimmer.fromColors(baseColor: AppColors.cream, highlightColor: AppColors.hover, period: const Duration(milliseconds: 1250), …)`
+
+#### ⚠️ SkeletonTile — `DS-16`
+
+Prototype: ui_kits/aiwa-app/states.jsx:57-65 · Flutter: [Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart](Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | — | — | ✅ | ✅ | — |
+
+- **[MINOR · layout] Default tile size is 200x110 instead of 132x168** `DS-16-F1` ✔
+  - Prototype: states.jsx:57 `SkeletonTile({ w = 132, h = 168 })`
+  - Flutter: loading_shimmer.dart:100 `this.width = 200, this.height = 110`; used with defaults at home_page.dart:443
+  - Fix: Change the defaults to 132/168. If the home carousel is really 200x110, pass explicit sizes at the call site.
+
+#### ⚠️ EmptyState — `DS-18`
+
+Prototype: ui_kits/aiwa-app/states.jsx:80-107 · Flutter: [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[MINOR · layout] Vertical rhythm is 3px tighter at each step** `DS-18-F1` ✔
+  - Prototype: states.jsx:90 column `gap: 3` plus icon mb 14, body mt 6, actions mt 18, giving 17/9/21
+  - Flutter: empty_state.dart:66,73,88 SizedBox 14 / 6 / 18
+  - Fix: Use SizedBox(height: 17), (9), (21).
+- **[MINOR · interaction] Icon circle has no pop-in animation** `DS-18-F2` ✔
+  - Prototype: states.jsx:95 `animation: 'aiwa-pop 320ms cubic-bezier(.32,.72,0,1)'` (scale .86 to 1, opacity 0 to 1)
+  - Flutter: empty_state.dart:60-65 static Container
+  - Fix: Wrap it in `TweenAnimationBuilder<double>(tween: Tween(begin: .86, end: 1), duration: AppTheme.dur3, curve: AppTheme.easeSoft, builder: (_, v, c) => Opacity(opacity: (v - .86) / .14, child: Transform.scale(scale: v, child: c)))`.
+- **[MINOR · components] Buttons hide unless a callback is also passed** `DS-18-F3` ✔
+  - Prototype: states.jsx:99-103 renders `action` / `secondary` whenever the label is set
+  - Flutter: empty_state.dart:86-87,93,99 require both actionLabel && onAction
+  - Fix: Render when the label is non-null, and pass onAction (possibly null, which makes it disabled).
+- **[MINOR · tokens] Title gets -0.22px tracking the prototype does not have** `DS-18-F4` ✔
+  - Prototype: states.jsx:97 h3 DM Serif 22/19, lh 1.15, no letterSpacing
+  - Flutter: empty_state.dart:69 AppTextStyles.h3.copyWith(fontSize: …) inherits letterSpacing -0.22 (app_text_styles.dart:34)
+  - Fix: Add `letterSpacing: 0` to the copyWith (see DS-02-F4).
+
+#### ⚠️ ErrorState — `DS-19`
+
+Prototype: ui_kits/aiwa-app/states.jsx:110-125; README.md:112 · Flutter: [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · components] ErrorState has no optional 'Contact support' secondary action** `DS-19-F1` ✎
+  - Prototype: states.jsx:110,121 `onSupport && <Btn variant="ghost" full size="sm">Contact support</Btn>`; README.md:112 'with Try-again and Contact-support'. No prototype screen mounts ErrorState, so the button is never rendered in the prototype.
+  - Flutter: empty_state.dart:121-133: ErrorState has only onRetry, with no onSupport parameter or button.
+  - Fix: Add `final VoidCallback? onSupport;` and, 8px below Try again, render `AiwaButton(label: 'Contact support', variant: AiwaButtonVariant.ghost, size: AiwaButtonSize.sm, fullWidth: true, onPressed: onSupport)` when it is non-null. Wire it to the WhatsApp support route wherever ErrorState is used.
+- **[MINOR · tokens] Title gets -0.22px tracking** `DS-19-F2` ✔
+  - Prototype: states.jsx:117 no letterSpacing
+  - Flutter: empty_state.dart:162 AppTextStyles.h3.copyWith(fontSize: …)
+  - Fix: Add `letterSpacing: 0`.
+
+#### ⚠️ InlineBanner — `DS-21`
+
+Prototype: ui_kits/aiwa-app/states.jsx:148-168 · Flutter: [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ⚠️ | — | ✅ | — | ✅ | — |
+
+- **[MINOR · tokens] Body text drops the .92 opacity** `DS-21-F1` ✔
+  - Prototype: states.jsx:163 body `fontSize: 12.5, color: t.fg, lineHeight: 1.5, opacity: .92`
+  - Flutter: screen_chrome.dart:345-353 body color fg at full opacity
+  - Fix: `color: fg.withOpacity(0.92)`
+- **[MINOR · layout] Action is top-aligned instead of vertically centred** `DS-21-F2` ✔
+  - Prototype: states.jsx:165 action `alignSelf: 'center'`
+  - Flutter: screen_chrome.dart:323-324 Row(crossAxisAlignment: start), and the action at :357-369 inherits it
+  - Fix: Wrap the action in `Align(alignment: Alignment.centerRight, heightFactor: null)` or use `IntrinsicHeight` + `Center`.
+- **[MINOR · layout] Action sits 8px from the text column instead of 10px** `DS-21-V1` ＋
+  - Prototype: states.jsx:159 container `display: 'flex', gap: 10`, which separates the text column (:161) from the action button (:165).
+  - Flutter: screen_chrome.dart:360-361 `Padding(padding: const EdgeInsets.only(left: 8), child: Text(action!...))`
+  - Fix: Change it to `EdgeInsets.only(left: 10)` so it matches the icon-to-text gap (SizedBox(width: 10) at :330).
+
+#### ⚠️ ValidatedInput (per-field validated text input) — `DS-22`
+
+Prototype: ui_kits/aiwa-app/states.jsx:171-206; README.md:115 (auth forms use Field/TextInput, ui_kits/aiwa-app/auth-screens.jsx:19-56) · Flutter: [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | — |
+
+- **[MAJOR · states] Error is not gated on blur (touched)** `DS-22-F1` ✔
+  - Prototype: states.jsx:172-173 `const [touched, setTouched] = useState(false); const show = touched && error;`, with setTouched on onBlur (:197-198); README.md:115 'per-field error shown on blur'
+  - Flutter: aiwa_text_field.dart:59,115-123,131 show the error whenever `error` is non-null; there is no focus/touched tracking
+  - Fix: Make it a StatefulWidget: `Focus(onFocusChange: (f) { if (!f) setState(() => _touched = true); }, child: TextFormField(...))` and use `hasError = _touched && error != null`.
+- **[MINOR · components] No trailing alert icon, and the prefix icon does not turn red on error** `DS-22-F2` ✔
+  - Prototype: states.jsx:195 icon color `show ? aiwa.danger500 : aiwa.plum700`; :199 `{show && <Icon name="circle-alert" size={16} color={aiwa.danger500} />}`
+  - Flutter: aiwa_text_field.dart:56-58 prefix is always AppColors.plum700; suffixIcon is caller-supplied only (:111)
+  - Fix: `suffixIcon: hasError ? Icon(Icons.error_outline, size: 16, color: AppColors.danger500) : suffixIcon` and a prefix color of `hasError ? AppColors.danger500 : AppColors.plum700`.
+- **[MINOR · tokens] Label, hint, counter and focus styling differ** `DS-22-F3` ✔
+  - Prototype: states.jsx:183 label 12.5/600 ink2 (sentence case); :186 counter fontMono 11 ink4 in the label row; :203 hint 11.5 ink4; :174 border divider (no focus color)
+  - Flutter: aiwa_text_field.dart:69 label `label!.toUpperCase()` with AppTextStyles.eyebrow (11/600/0.14em ink3); :165-169 counter in micro (Plus Jakarta 11, ink3) below the field; :161 hint in micro ink3; :119-121 focusedBorder plum700
+  - Fix: Add a `labelStyle` mode: `Text(label, style: AppTextStyles.labelSm.copyWith(fontSize: 12.5, color: AppColors.ink2))`. Move the counter into the label Row as `AppTextStyles.mono.copyWith(fontSize: 11, color: AppColors.ink4)`. Set hint color ink4. Keep the eyebrow mode for the auth Field usage.
+- **[MINOR · content] Optional marker copy and placement differ** `DS-22-F4` ✔
+  - Prototype: states.jsx:184 inline suffix ' · optional' in ink4 w400
+  - Flutter: aiwa_text_field.dart:71-79 right-aligned 'Optional' 10/500 ink3 (this is Field's style, auth-screens.jsx:23)
+  - Fix: In ValidatedInput mode, render `TextSpan(text: ' · optional', style: …ink4, w400)` after the label.
+- **[MINOR · states] Character counter does not update while typing** `DS-22-F5` ✔
+  - Prototype: states.jsx:186 counter re-renders on every change ((value||'').length)
+  - Flutter: aiwa_text_field.dart:165-169 StatelessWidget reads controller!.text.length only at build
+  - Fix: `ValueListenableBuilder<TextEditingValue>(valueListenable: controller!, builder: (_, v, __) => Text('${v.text.length}/$maxLength', …))`
+- **[MINOR · layout] No built-in 14px bottom margin; multiline padding and height differ** `DS-22-F6` ✔
+  - Prototype: states.jsx:180 wrapper marginBottom 14; :191 multiline padding '12px 14px'; :197 textarea height 86, lineHeight 1.5
+  - Flutter: aiwa_text_field.dart:61-174 has no bottom spacing; :124-127 multiline vertical padding 14; height comes from maxLines
+  - Fix: Add a `bottomSpacing = 14` SizedBox, and for multiline use vertical 12 with `minLines: 3` (about 86px at 15px x 1.5).
+- **[MINOR · tokens] Error row icon is 12px with a 4px gap instead of 11px with 5px** `DS-22-V1` ＋
+  - Prototype: states.jsx:202 error row `display: 'flex', gap: 5` with `<Icon name="circle-alert" size={11} />`, text 11.5 danger700.
+  - Flutter: aiwa_text_field.dart:135-140 `Icon(Icons.error_outline_rounded, size: 12, color: AppColors.danger700)`, `SizedBox(width: 4)`. This is the auth Field style (auth-screens.jsx:27-28), not the ValidatedInput style.
+  - Fix: In the ValidatedInput mode proposed in DS-22-F3, use `size: 11` and `SizedBox(width: 5)`.
+
+#### ⚠️ ConfirmSheet (destructive / neutral confirm) — `DS-24`
+
+Prototype: ui_kits/aiwa-app/states.jsx:227-257; ui_kits/aiwa-app/prototype.jsx:756-758 · Flutter: [Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart), [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[MAJOR · interaction] Sheet opens on the shell navigator, so the tab bar stays above the barrier and remains tappable** `DS-24-F1` ✔
+  - Prototype: prototype.jsx:756-758 ConfirmSheet is mounted at the app root; states.jsx:234 `position: absolute, inset: 0, zIndex: 140` covers the TabBar (zIndex 30, components.jsx:217)
+  - Flutter: confirm_sheet.dart:24-29 showModalBottomSheet without useRootNavigator. Callers profile_page.dart:101 and my_bookings_page.dart:96 sit inside the ShellRoute (app_router.dart:145-147), and ShellPage paints bottomNavigationBar over its body (shell_page.dart:16-22, extendBody: true). The bottom padding (:40) also absorbs the tab-bar height.
+  - Fix: Pass `useRootNavigator: true` in showConfirmSheet, and do the same in profile_page.dart:115 and search_page.dart:448.
+- **[MINOR · interaction] Enter animation differs** `DS-24-F2` ✔
+  - Prototype: states.jsx:236 barrier `aiwa-fade-in 200ms` (scale .98 to 1, prototype.html:20-23); :241 sheet `aiwa-slide-in 300ms cubic-bezier(.32,.72,0,1)` (translateX 8% to 0, prototype.html:16-19)
+  - Flutter: Default ModalBottomSheetRoute vertical slide-up with Material default duration/curve
+  - Fix: Pass `sheetAnimationStyle: AnimationStyle(duration: AppTheme.dur3, curve: AppTheme.easeSoft)` (Flutter >=3.22). Optionally wrap the content in a SlideTransition from Offset(.08,0) to match the prototype exactly.
+- **[MINOR · tokens] Barrier and shadow colors follow the theme instead of the plum literals** `DS-24-F3` ✔
+  - Prototype: states.jsx:234 barrier 'rgba(42,19,32,.48)'; :240 shadow '0 -12px 32px rgba(42,19,32,.2)'
+  - Flutter: confirm_sheet.dart:27 `AppColors.plum900.withOpacity(0.48)` (male #2E2A26); sheetDecoration shadow plum700 .14 (app_theme.dart:44-50)
+  - Fix: Decide on one approach. To match literally, use `const Color(0x7A2A1320)` for the barrier and the DS-03-F3 shadow; otherwise document the theme-aware choice.
+- **[MINOR · tokens] Title gets -0.22px tracking** `DS-24-F4` ✔
+  - Prototype: states.jsx:248 h2 23px lh 1.12, no letterSpacing
+  - Flutter: confirm_sheet.dart:75 `AppTextStyles.h3.copyWith(fontSize: 23, height: 1.12)`
+  - Fix: Add `letterSpacing: 0`.
+- **[MINOR · layout] Bottom padding is 24 + inset instead of 34** `DS-24-F5` ✔
+  - Prototype: states.jsx:240 padding '18px 22px 34px'
+  - Flutter: confirm_sheet.dart:36-41 bottom `24 + MediaQuery.paddingOf(ctx).bottom`
+  - Fix: `math.max(34.0, 24 + MediaQuery.paddingOf(ctx).bottom)` (after F1, so the inset no longer includes the tab bar).
+
+#### ✅ EndOfList — `DS-27`
+
+Prototype: ui_kits/aiwa-app/states.jsx:320-328 · Flutter: [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — |
+
+No deviations found.
+
+
+#### ⚠️ ScreenHeader — `DS-28`
+
+Prototype: ui_kits/aiwa-app/states.jsx:413-424 · Flutter: [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | — | ✅ | — | ✅ | — |
+
+- **[MINOR · tokens] Title gets -0.22px tracking** `DS-28-F1` ✔
+  - Prototype: states.jsx:419 h2 DM Serif 22 plum900 lh 1.1, no letterSpacing
+  - Flutter: screen_chrome.dart:58-61 `AppTextStyles.h3.copyWith(fontSize: titleSize, height: 1.1)` inherits -0.22
+  - Fix: Add `letterSpacing: 0`.
+- **[MINOR · layout] No 12px gap before the trailing slot** `DS-28-V1` ＋
+  - Prototype: states.jsx:415 `display: 'flex', alignItems: 'center', gap: 12`. The gap applies between the title block (:417) and `right` (:421).
+  - Flutter: screen_chrome.dart:77 `if (trailing != null) trailing!` directly after the Expanded title column, with no spacer. It is used with a trailing widget at notifications_page.dart:47.
+  - Fix: `if (trailing != null) ...[const SizedBox(width: 12), trailing!],`
+
+#### ⚠️ StickyBar — `DS-29`
+
+Prototype: ui_kits/aiwa-app/states.jsx:427-435 · Flutter: [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | — | — | — | ✅ | — |
+
+- **[MINOR · layout] Single child with no built-in row/gap, and different bottom padding** `DS-29-F1` ✔
+  - Prototype: states.jsx:431-432 `padding: '14px 22px 32px'`, `display: 'flex', gap: 10` (multiple buttons side by side)
+  - Flutter: screen_chrome.dart:132-151 takes `child`; padding bottom `14 + MediaQuery.paddingOf(context).bottom`
+  - Fix: Accept `List<Widget> children` and build `Row(children: children.expand((w) => [Expanded(child: w), const SizedBox(width: 10)]).toList()..removeLast())`. Use bottom `math.max(32.0, 14 + inset)`.
+
+#### ⚠️ SettingsRow — `DS-30`
+
+Prototype: ui_kits/aiwa-app/states.jsx:438-461 (plus ProfileScreen row, prototype.jsx:383-398) · Flutter: [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | — | ✅ | ⚠️ | ✅ | — |
+
+- **[MINOR · components] Missing `right` slot and gold tone; icon is required** `DS-30-F1` ✔
+  - Prototype: states.jsx:438 `SettingsRow({ icon, label, value, onTap, danger, tone, right, sub })`, tone 'gold' uses gold100/gold700 (:448-449, used at account-screens.jsx:108-109)
+  - Flutter: screen_chrome.dart:155-175 has `required this.icon` and no `tone` or `trailing` parameter
+  - Fix: Add `final Widget? trailing; final SettingsTone tone;`, map gold to AppColors.gold100/gold700, and make icon nullable.
+- **[MINOR · tokens] Boxed variant uses profile-row internals** `DS-30-F2` ✔
+  - Prototype: states.jsx:442-458 gap 13, tile radius 11, label 14/600 ink, value 12.5 ink3, chevron 17 ink4
+  - Flutter: screen_chrome.dart:186 tile radius 10; :194 gap 14; :201-205 label body 15/w500; :221 value meta 13; :225 chevron 16 ink3 (the same internals are used for boxed at :230-243)
+  - Fix: When `boxed`, use radius 11, gap 13, `AppTextStyles.body.copyWith(fontSize: 14, fontWeight: FontWeight.w600)`, value fontSize 12.5, and chevron 17 ink4.
+- **[MINOR · states] Danger rows lose the chevron, and a ripple is used instead of row hover** `DS-30-F3` ✔
+  - Prototype: states.jsx:458 chevron shown when `onTap && !right` (danger too); :441 `.aiwa-row-hover` gives background #F0E8DC (states.jsx:16), with no ripple
+  - Flutter: screen_chrome.dart:223 chevron only when `!danger && onTap != null` (correct for the ProfileScreen row but not for boxed); :245 InkWell draws the Material ripple
+  - Fix: In boxed mode show the chevron for danger rows too. Use `InkWell(splashFactory: NoSplash.splashFactory, highlightColor: AppColors.hover, …)`.
+
+#### ⚠️ Interaction state classes (press / row-hover / focus ring) — `DS-31`
+
+Prototype: ui_kits/aiwa-app/prototype.html:41-43; ui_kits/aiwa-app/states.jsx:16-18; README.md:123 · Flutter: [Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart](Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart), [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | — | — | ⚠️ | ⚠️ | — | — |
+
+- **[MINOR · interaction] Press scale exists only on AiwaButton** `DS-31-F1` ✎
+  - Prototype: prototype.html:41-42 `button:active:not(:disabled){transform:scale(.96)}` applies to &lt;button> elements only: IconBtn (components.jsx:83), Chip (:135), TabBar items (:222), the SectionHeader action (:197) and the InlineBanner action (states.jsx:165). Div cards get only a transform transition (prototype.html:43) with no :active rule, and the [data-card] hover (:50-52) is unused.
+  - Flutter: Only aiwa_button.dart:114-117 (0.97) gives press feedback. review_page.dart:215 AnimatedScale is a selected-star state (0.94), not a press. 43 of the 44 `GestureDetector(` call sites in lib/ (all except aiwa_button.dart:118) have no press feedback, including aiwa_icon_button.dart:61, aiwa_chip.dart:37, shell_page.dart:123, section_header.dart:39 and screen_chrome.dart:358.
+  - Fix: Create lib/shared/widgets/aiwa_pressable.dart: a StatefulWidget with AnimatedScale 0.96, 120ms and AppTheme.easeSoft, driven by onTapDown/Up/Cancel. Use it only in widgets that are &lt;button>s in the kit: AiwaIconButton, AiwaChip, _TabItem, the SectionHeader action, the InlineBanner action, and the splash language buttons. Leave div-style cards and rows without a press scale.
+- **[MINOR · states] No keyboard focus ring and no button semantics** `DS-31-F2` ✔
+  - Prototype: states.jsx:17 `.aiwa-focusable:focus-visible{outline:2px solid #7E3A5C;outline-offset:2px}` on Toggle (:212), Pagination (:304-315) and OfflineBanner Retry (:139); README.md:123 'required for … WCAG pass'
+  - Flutter: grep finds no Focus, FocusableActionDetector, Semantics( or tooltip in lib/. GestureDetector-based AiwaButton/AiwaIconButton/AiwaChip are neither focusable nor announced as buttons.
+  - Fix: In AiwaPressable use `FocusableActionDetector(onShowFocusHighlight: …, actions: {ActivateIntent: …})` and draw a 2px `AppColors.plum500` border with a 2px gap when focused. Wrap it in `Semantics(button: true, label: …)`, and require a semanticLabel on AiwaIconButton.
+- **[MINOR · states] Material ripple used where the prototype uses a hover tint** `DS-31-F3` ✔
+  - Prototype: states.jsx:16 `.aiwa-row-hover:hover{background:#F0E8DC !important}` with no ripple anywhere
+  - Flutter: screen_chrome.dart:245 and notifications_page.dart:207 use InkWell with the default M3 splash seeded from AppColors.plum700 (app_theme.dart:104-115)
+  - Fix: Set `splashFactory: NoSplash.splashFactory` in AppTheme.light and use `highlightColor: AppColors.hover` on row InkWells.
+
+#### ⚠️ Toast overlay — `DS-32`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:20-39,735; ui_kits/aiwa-app/prototype.html:26-29 · Flutter: [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart), [Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart](Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart), [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | — | ⚠️ | ⚠️ | ✅ | — |
+
+- **[MAJOR · layout] Toast appears at the bottom instead of the top** `DS-32-F1` ✔
+  - Prototype: prototype.jsx:27 `position: 'absolute', top: 56, left: 16, right: 16, zIndex: 200`
+  - Flutter: app_theme.dart:191 `behavior: SnackBarBehavior.floating` (bottom of the Scaffold); callers e.g. review_page.dart:91-93, my_bookings_page.dart:129
+  - Fix: Build lib/shared/widgets/aiwa_toast.dart with `showAiwaToast(String message)` that inserts an OverlayEntry into `rootNavigatorKey.currentState!.overlay`, positioned at `top: MediaQuery.paddingOf(ctx).top + 8, left: 16, right: 16`. Replace the success SnackBars with it.
+- **[MAJOR · components] Success check badge is missing** `DS-32-F2` ✔
+  - Prototype: prototype.jsx:33-35 26x26 circle `background: aiwa.success500` containing `<Icon name="check" size={15} color="#fff" />`, gap 10
+  - Flutter: SnackBar(content: Text(...)) only (e.g. review_page.dart:92)
+  - Fix: In the toast Row: `Container(width: 26, height: 26, decoration: BoxDecoration(color: AppColors.success500, shape: BoxShape.circle), child: const Icon(Icons.check, size: 15, color: Colors.white))`, then SizedBox(width: 10), then Expanded(Text).
+- **[MINOR · tokens] Text size, background, shadow and blur differ** `DS-32-F3` ✔
+  - Prototype: prototype.jsx:28-31,36 bg 'rgba(42,19,32,.96)', padding 12x16, shadow '0 12px 32px rgba(74,31,56,.3)', backdropFilter blur(8px), text 13/500 fontBody
+  - Flutter: app_theme.dart:186-190 bg AppColors.plum900.withOpacity(0.96) (male #2E2A26), text AppTextStyles.bodySm (14) w500 bone, default M3 elevation, no blur
+  - Fix: Use `AppTextStyles.meta.copyWith(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.bone)` and `BoxShadow(color: AppColors.plum700.withOpacity(.3), blurRadius: 32, offset: Offset(0,12))`, and wrap in BackdropFilter blur 8.
+- **[MINOR · interaction] Auto-dismiss is 4s (default) instead of 2.8s, with a different entrance** `DS-32-F4` ✔
+  - Prototype: prototype.jsx:22 `setTimeout(onClose, 2800)`; :30 `aiwa-toast 320ms cubic-bezier(.32,.72,0,1)` (opacity 0 to 1, translateY -10 to 0, prototype.html:26-29)
+  - Flutter: SnackBar default duration 4000ms and default slide-up; snackBarTheme sets no duration
+  - Fix: In showAiwaToast, animate with a SlideTransition from Offset(0,-10/h) plus FadeTransition over AppTheme.dur3 with easeSoft, and remove the entry after 2800ms.
+- **[MINOR · states] The same toast is used for error messages** `DS-32-F5` ✔
+  - Prototype: The toast is only used for success confirmations (every setToast call in prototype.jsx is a success message). Errors use ValidatedInput / InlineBanner / ErrorState (states.jsx).
+  - Flutter: showSnackBar(Text(state.message)) for failures at avatar_gender_page.dart:77, otp_page.dart:103, phone_entry_page.dart:77, provider_verification_page.dart:55, booking_page.dart:117, review_page.dart:97
+  - Fix: Route failures to an InlineBanner(tone: danger) or per-field errors, and keep showAiwaToast for success only (or add a danger variant with a triangle icon if a transient error is needed).
+
+#### ⚠️ Screen transitions (push / pop / tab switch) — `DS-33`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:547-560,564-573,726-731; ui_kits/aiwa-app/prototype.html:16-25; README.md:42,144 · Flutter: [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart), [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | — | — | ⚠️ | — | — | — |
+
+- **[MAJOR · interaction] Push/pop use the platform default route transition instead of the 320ms soft door** `DS-33-F1` ✔
+  - Prototype: prototype.jsx:730 `animation: ${direction === 'forward' ? 'aiwa-slide-in' : 'aiwa-fade-in'} 320ms cubic-bezier(.32,.72,0,1)`; prototype.html:16-23 slide-in translateX(8%) to 0 and fade-in scale(.98) to 1
+  - Flutter: All non-shell routes use `builder:` (app_router.dart:68-144,180-226), which gives the default MaterialPage. There is no pageTransitionsTheme in app_theme.dart:99-231, and AppTheme.dur3/easeSoft (:31-33) are never applied to routes.
+  - Fix: Add a helper and switch every route to pageBuilder: `CustomTransitionPage<void> softDoor(Widget child, GoRouterState s) => CustomTransitionPage(key: s.pageKey, child: child, transitionDuration: AppTheme.dur3, reverseTransitionDuration: AppTheme.dur3, transitionsBuilder: (_, a, __, c) => SlideTransition(position: Tween(begin: const Offset(.08, 0), end: Offset.zero).animate(CurvedAnimation(parent: a, curve: AppTheme.easeSoft)), child: c));`
+- **[MINOR · interaction] Tab switches have no animation (prototype slides the new tab root in)** `DS-33-F2` ✎
+  - Prototype: prototype.jsx:564-573 onTabChange calls setDirection('back') and then reset(). reset() (:556-560) calls setDirection('forward') in the same event, so the last update wins and the new tab root plays aiwa-slide-in (translateX 8% to 0) over 320ms cubic-bezier(.32,.72,0,1) (:730). The 'fade rather than slide' comment at :567 does not match what renders.
+  - Flutter: app_router.dart:151-176: all five ShellRoute children use NoTransitionPage, so the swap is instant.
+  - Fix: Use the DS-33-F1 softDoor CustomTransitionPage for the five ShellRoute children too: SlideTransition from Offset(.08, 0) to Offset.zero with AppTheme.dur3 and AppTheme.easeSoft. Use ScaleTransition .98 to 1 only if design confirms the :567 comment is the intended behaviour.
+- **[MINOR · interaction] Back navigation does not use the scale .98 to 1 reveal** `DS-33-F3` ✔
+  - Prototype: pop() sets direction 'back' (prototype.jsx:552-555), so the revealed screen plays aiwa-fade-in scale .98 to 1 over 320ms
+  - Flutter: The reverse of the platform push transition
+  - Fix: In the softDoor transitionsBuilder, use `secondaryAnimation` to scale the underlying page from .98 to 1 as it is revealed (ScaleTransition driven by ReverseAnimation(secondaryAnimation)).
+
+#### ⚠️ Gender theme swap — `DS-34`
+
+Prototype: ui_kits/aiwa-app/theme.jsx:57-68; ui_kits/aiwa-app/prototype.jsx:525-526,535,595-606,639-646,724; ui_kits/aiwa-app/auth-screens.jsx:389-400 · Flutter: [Android/aiwa_app/lib/core/theme/theme_controller.dart](Android/aiwa_app/lib/core/theme/theme_controller.dart), [Android/aiwa_app/lib/app.dart](Android/aiwa_app/lib/app.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart), [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | ✅ | — | ⚠️ | ⚠️ | — | — |
+
+- **[MAJOR · states] Gender step preselects MALE instead of FEMALE, so the live palette differs** `DS-34-F1` ✔
+  - Prototype: prototype.jsx:535 `gender: 'FEMALE'` feeds AvatarGenderScreen initialGender (prototype.jsx:639; auth-screens.jsx:389), and auth-screens.jsx:396-398 `useLayoutEffect(() => applyAiwaTheme(gender === 'FEMALE' ? 'female' : 'male'))`, so entering the step turns the app mauve
+  - Flutter: avatar_gender_page.dart:32-34 `late String _gender = ThemeController.mode.value == ThemeController.female ? 'FEMALE' : 'MALE';` defaults to MALE and nothing is applied on entry
+  - Fix: Initialize `_gender = 'FEMALE'` and call `ThemeController.applyGender('FEMALE', persist: false)` in initState (post-frame).
+
+#### ⚠️ Wordmark / logo assets / app icon — `DS-35`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:5-13,53; assets/logo-wordmark.svg; assets/logo-wordmark-arabic.svg; assets/logo-monogram.svg; README.md:45-48 · Flutter: [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart), [Android/aiwa_app/pubspec.yaml](Android/aiwa_app/pubspec.yaml), [Android/aiwa_app/assets/](Android/aiwa_app/assets/), [Android/aiwa_app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png](Android/aiwa_app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png), [Android/aiwa_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png](Android/aiwa_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | ⚠️ | ⚠️ | ⚠️ | — | — | — | — |
+
+- **[MAJOR · content] Launcher icons are the default Flutter logo** `DS-35-F1` ✔
+  - Prototype: assets/logo-monogram.svg: `<rect width="120" height="120" rx="28" fill="#2A1320">`, 'A' in DM Serif #FAF5EE, dot #C77B7E (README.md:48 'app-icon monogram')
+  - Flutter: android/app/src/main/res/mipmap-*/ic_launcher.png are the template files (442/544/721/1031/1443 bytes) showing the Flutter logo; ios AppIcon Icon-App-1024x1024@1x.png is also the Flutter logo
+  - Fix: Export logo-monogram.svg to a 1024px PNG and add `flutter_launcher_icons` with `adaptive_icon_background: '#2A1320'`. Run it for Android and iOS.
+- **[MAJOR · components] No logo assets are shipped (assets/ is empty)** `DS-35-F2` ✔
+  - Prototype: assets/logo-wordmark.svg, logo-wordmark-arabic.svg, logo-monogram.svg (README.md:46-48)
+  - Flutter: Android/aiwa_app/assets/{images,icons,animations} are empty folders (pubspec.yaml:80-83). There is no flutter_svg dependency. AiwaWordmark is code-drawn (screen_chrome.dart:456-490).
+  - Fix: Copy the monogram into assets/images and embed it via flutter_svg. Keep the wordmark code-drawn (the SVGs rely on external CSS); after F3 it is equivalent.
+- **[MINOR · tokens] Wordmark renders about 19% too large (size means font size, not box height)** `DS-35-F3` ✔
+  - Prototype: prototype.jsx:5-11 `Wordmark({ height = 56 })`: the SVG is 100 units high with text fontSize 84, so it renders about 47px text with a 6.7px dot (r6/100 x 56) at the text's right baseline
+  - Flutter: screen_chrome.dart:469-485 `fontSize: size`, dot `size * 0.14`; splash_page.dart:118-119 `AiwaWordmark(size: 56)` gives 56px text and a 7.8px dot
+  - Fix: Treat the parameter as height: `final fs = height * 0.84;` then `letterSpacing: -fs * 2 / 84`, dot diameter `height * 0.12`, and wrap it in `SizedBox(height: height, width: height * 3.2)`.
+- **[MINOR · content] App display name and native launch background are unbranded** `DS-35-F4` ✔
+  - Prototype: Brand name 'AIWA' (Wordmark aria-label, prototype.jsx:8); the splash uses the plum700 to plum900 gradient (prototype.jsx:47)
+  - Flutter: android/app/src/main/AndroidManifest.xml:3 `android:label="aiwa_app"`; ios/Runner/Info.plist:10 'Aiwa App'; android/app/src/main/res/drawable/launch_background.xml uses `@android:color/white`
+  - Fix: Set the label/CFBundleDisplayName to 'AIWA'. Use flutter_native_splash with color #2E2A26 (the male default) to avoid a white flash before SplashPage.
+- **[MINOR · layout] Wordmark dot is anchored to the text box bottom, not to the baseline** `DS-35-V1` ＋
+  - Prototype: prototype.jsx:9-10: the text baseline is y=74 and the dot is `<circle cx="307" cy="68" r="6">`, so the dot's bottom edge (68+6 = 74) sits exactly on the baseline after the final 'A'.
+  - Flutter: screen_chrome.dart:465-486 `Row(crossAxisAlignment: CrossAxisAlignment.end)` with the dot's `margin: EdgeInsets.only(left: size * 0.08, bottom: size * 0.1)` measured from the bottom of a height-1 Text box. That box extends below the baseline by DM Serif's descent share, so the dot's height depends on font metrics rather than the baseline (not verified on device).
+  - Fix: Use `Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, ...)` and drop the bottom margin. A child with no baseline is placed with its bottom on the baseline, which matches the SVG. Combine this with the DS-35-F3 sizing (fs = height*0.84, dot = height*0.12).
+
+#### ⚠️ GuestLockedScreen (shared guest gate) — `DS-36`
+
+Prototype: ui_kits/aiwa-app/customer-extras-2.jsx:11-25; ui_kits/aiwa-app/prototype.jsx:698-711 · Flutter: [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart), [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart), [Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart), [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | — | ✅ | — |
+
+- **[CRITICAL · interaction] CTA goes to role choice instead of the auth gate** `DS-36-F1` ✔
+  - Prototype: prototype.jsx:699,707,710 `onSignIn={() => push('auth-gate')}` opens AuthGateScreen ('Sign in to book.', Create account / I already have an account)
+  - Flutter: guest_locked_view.dart:65 `onPressed: () => context.push(AppRoutes.roleChoice)` (AppRoutes.authGate exists at app_router.dart:54,206)
+  - Fix: `onPressed: () => context.push(AppRoutes.authGate)` and let AuthGatePage continue into role choice / sign-in.
+- **[MINOR · content] Per-tab titles, bodies and icons differ from the prototype** `DS-36-F2` ✔
+  - Prototype: prototype.jsx:699 'See your bookings' / 'Sign in to view and track your bookings.' / calendar-check; :707 'Save your favorites' / 'Sign in to save providers you love and book them faster next time.' / heart; :710 'Your profile' / 'Sign in to manage your account, addresses, and notifications.' / user
+  - Flutter: my_bookings_page.dart:40-43 'Your bookings live here' / 'Sign in to book providers, track them on the way, and see your history.'; saved_page.dart:37-40 'Keep your favorites' / 'Sign in to save providers and book them again in one tap.'; profile_page.dart:33-36 'Make AIWA yours' / 'Sign in to manage your details, notifications and bookings.'
+  - Fix: Replace the title/body strings at those three call sites with the prototype copy (the icons already match in meaning).
+- **[MINOR · tokens] Title gets -0.26px tracking** `DS-36-F3` ✔
+  - Prototype: customer-extras-2.jsx:19 h2 DM Serif 24 lh 1.1, no letterSpacing
+  - Flutter: guest_locked_view.dart:45 `AppTextStyles.h2.copyWith(fontSize: 24, height: 1.1)` inherits -0.26
+  - Fix: Add `letterSpacing: 0`.
+
+#### ⚠️ RTL / Arabic localization — `DS-RTL`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:71-78,537,613; ui_kits/aiwa-app/flow-screens.jsx:135; ui_kits/aiwa-app/account-screens.jsx:61; tokens/colors_and_type.css:96-101,277-286; ui_kits/aiwa-app/prototype.html:3; README.md:4,31-32 · Flutter: [Android/aiwa_app/lib/app.dart](Android/aiwa_app/lib/app.dart), [Android/aiwa_app/lib/core/theme/app_text_styles.dart](Android/aiwa_app/lib/core/theme/app_text_styles.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart), [Android/aiwa_app/lib/features/auth/presentation/bloc/auth_event.dart](Android/aiwa_app/lib/features/auth/presentation/bloc/auth_event.dart), [Android/aiwa_app/pubspec.yaml](Android/aiwa_app/pubspec.yaml)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | ✅ | ⚠️ | — | — | ⚠️ |
+
+- **[MAJOR · interaction] The chosen language never reaches the backend** `DS-RTL-F2` ✔
+  - Prototype: prototype.jsx:537 signup.preferredLanguage; :613 `setSignup(p => ({ ...p, preferredLanguage: lang === 'ar' ? 'AR' : 'EN' }))` travels with the registration payload
+  - Flutter: splash_page.dart:52-55 writes SharedPreferences 'aiwa_language', which nothing reads (grep). AuthRegisterEvent (auth_event.dart:19-36) has no preferredLanguage, so the backend defaults to 'EN' (user_model.dart:31)
+  - Fix: Read 'aiwa_language' in the registration flow, or pass it via route extras, add `final String preferredLanguage;` to AuthRegisterEvent, and send it in the register request.
+- **[MINOR · tokens] No Arabic font fallback (IBM Plex Sans Arabic / Markazi Text) in the text styles** `DS-RTL-F1` ✎
+  - Prototype: tokens/colors_and_type.css:96-101 add Markazi Text / IBM Plex Sans Arabic to --font-display / --font-body, and :277-286 define RTL headings (Markazi 500, letter-spacing 0). The rendered prototype does not apply them: fontBody/fontDisp (components.jsx:17-18) contain no Arabic family, so Arabic body text such as the 'العربية' language value (account-screens.jsx:61) falls back to the system font. Markazi is used only through explicit inline styles at prototype.jsx:73 (splash button) and flow-screens.jsx:135 (preferences option).
+  - Flutter: app_text_styles.dart:131-169: _serif/_sans set no fontFamilyFallback. Only splash_page.dart:244-261 uses GoogleFonts.markaziText. IBM Plex Sans Arabic appears nowhere in lib/, so 'العربية' in profile (profile_page.dart:73-75) renders in the OS fallback font (as it does in the prototype).
+  - Fix: In app_text_styles.dart, add `fontFamilyFallback: aiwaUseGoogleFonts ? [GoogleFonts.ibmPlexSansArabic().fontFamily!] : const ['IBM Plex Sans Arabic']` to _sans and the Markazi equivalent to _serif. Add `AppTextStyles.arabicDisplay` (Markazi w500, letterSpacing 0) and use it in splash_page.dart instead of the local _arabicStyle.
+- **[MINOR · rtl] No localization infrastructure for the promised bilingual app** `DS-RTL-F3` ✔
+  - Prototype: README.md:4 'bilingual (EN/AR)'. The prototype UI itself is English-only with no dir switching (see notes).
+  - Flutter: app.dart:81-82 `locale: const Locale('en'), supportedLocales: [en, ar]` with no localizationsDelegates. flutter_localizations is unused (pubspec.yaml:12-13). There are no .arb/l10n files and no Directionality. All copy is hard-coded English (e.g. guest_locked_view.dart:41, empty_state.dart:129-130, confirm_sheet.dart:17-18).
+  - Fix: Enable gen-l10n (l10n.yaml + lib/l10n/app_en.arb/app_ar.arb), add `localizationsDelegates: [AppLocalizations.delegate, ...GlobalMaterialLocalizations.delegates]`, drive `locale` from the stored preference, and replace EdgeInsets.fromLTRB/left/right with EdgeInsetsDirectional in shared widgets.
+
+#### ⚠️ Shell back behaviour (pop / root no-op) — `DS-V01`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:552-560,564-580 · Flutter: [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart), [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | — | — | ⚠️ | — | — | — |
+
+- **[MINOR · interaction] System back on a tab root closes the app; the prototype's pop() does nothing on a one-entry stack** `DS-V01-F1` 
+  - Prototype: prototype.jsx:552-555 `setStack(s => s.length > 1 ? s.slice(0, -1) : s)`. Tab switches and the end of onboarding call reset() (:556-560, :564-573, :608), so each tab root is a one-entry stack and back does nothing there. :575-580 binds Escape/Backspace to pop() in the web demo.
+  - Flutter: Tab roots are entered with context.go (shell_page.dart:94, splash_page.dart:59, :71-75), which replaces the whole stack. There is no PopScope/WillPopScope/onPopInvoked anywhere in lib/ (grep), so Android back on /app/home, /app/bookings, /app/saved, /app/profile or /app/search falls through to SystemNavigator.pop and exits the app.
+  - Fix: In shell_page.dart, wrap the Scaffold in `PopScope(canPop: false, onPopInvokedWithResult: (didPop, _) { if (didPop) return; final loc = GoRouterState.of(context).uri.path; if (loc != AppRoutes.home) context.go(AppRoutes.home); })`. Tab roots then return to Home instead of exiting. Whether Home itself exits is a platform-convention decision to confirm with design. Do not copy the prototype's Backspace listener: it pops even while the user is typing and exists only for the desktop demo.
+
+### Customer sign-in / sign-up
+
+#### ⚠️ Splash - language picker + Browse as guest — `AUTH-01`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:44-86 (SplashScreen); route case prototype.jsx:612-614 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ |
+
+- **[CRITICAL · states] Language choices never appear if the stored-session check fails; splash fades in over 900ms instead of sliding in** `AUTH-01-F3` ✎
+  - Prototype: prototype.jsx:61-83: the choices render on first paint. The only entrance motion is the stack wrapper's `aiwa-slide-in 320ms cubic-bezier(.32,.72,0,1)` (initial direction 'forward' at prototype.jsx:507, applied at :726-731; translateX 8%->0 per prototype.html:16-19).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart:35-44: `_showChoices` starts false unless AuthBloc is already AuthUnauthenticated/AuthError. Until then :149-151 renders `SizedBox(height: 160)`, and :26-29 adds a 900ms FadeTransition. With a stored token, AuthBloc._onCheckSession (auth_bloc.dart:40-52) awaits GET /auth/me. If that fails at the HTTP or network level (offline, or the refresh token has expired), _ErrorInterceptor throws NetworkException/UnauthorizedException inside Dio (api_client.dart:140-161). dio 5.9.2 re-wraps it as DioException(type: unknown) (dio_mixin.dart:516-523), which AuthRepositoryImpl.getCurrentUser (auth_repository_impl.dart:96-107) does not catch. The handler throws, bloc 8.1.4 rethrows, and the state stays AuthInitial. The splash then shows no language pills and no 'Browse as guest' link, permanently.
+  - Fix: (1) In ApiClient, unwrap interceptor exceptions (see the corrected AUTH-08-F1 fix). (2) Wrap AuthBloc._onCheckSession in try/catch and emit AuthUnauthenticated() on any error. (3) In splash_page.dart show the choices unless a stored session is being checked, e.g. `context.read<SecureStorage>()`/sl&lt;SecureStorage>().hasValidSession().then((has) { if (!has && mounted) setState(() => _showChoices = true); });`. Replace the 900ms FadeTransition with a 320ms `SlideTransition(position: Tween(begin: const Offset(0.08, 0), end: Offset.zero).chain(CurveTween(curve: AppTheme.easeSoft)).animate(_controller))`.
+- **[MAJOR · tokens] Splash glows use themed stone tokens at about half the prototype's size instead of fixed rose/gold washes** `AUTH-01-F1` ✎
+  - Prototype: prototype.jsx:51 inset:0 layer `radial-gradient(circle at 30% 25%, rgba(231,186,182,.5), transparent 55%), radial-gradient(circle at 75% 80%, rgba(216,185,138,.3), transparent 60%)`. These are literal #E7BAB6 @50% and #D8B98A @30% in both themes. The circles use the default farthest-corner size, so on the 393x852 frame glow 1 fades out about 383px from (118,213) and glow 2 about 446px from (295,682).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart:87-104 has `AiwaGlow(size: 360, color: AppColors.rose300, opacity: 0.35)` at left -80/top -40 and `AiwaGlow(size: 300, color: AppColors.gold300, opacity: 0.22)` at right -90/bottom 60. AiwaGlow (Android/aiwa_app/lib/shared/widgets/screen_chrome.dart:426-452) fades to 0 at its own radius, so glow 1 ends 180px from (100,140) and glow 2 ends 150px from (W-60,H-210). Both colours are gender-aware and resolve to male #B5A898 / female #E6BAB0.
+  - Fix:
+
+    In splash_page.dart (import 'dart:math' as math), replace both AiwaGlow widgets with full-bleed gradients sized like CSS farthest-corner:
+    ```dart
+    Positioned.fill(child: LayoutBuilder(builder: (_, bc) {
+      final w = bc.maxWidth, h = bc.maxHeight, s = math.min(w, h);
+      double far(double x, double y) => math.sqrt(math.pow(math.max(x, w - x), 2) + math.pow(math.max(y, h - y), 2));
+      Widget glow(Alignment c, double cx, double cy, Color col, double stop) => SizedBox.expand(child: DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: c, radius: far(cx, cy) / s, colors: [col, col.withOpacity(0)], stops: [0, stop]))));
+      return Stack(children: [
+        glow(const Alignment(-0.4, -0.5), w * .3, h * .25, const Color(0x80E7BAB6), .55),
+        glow(const Alignment(0.5, 0.6), w * .75, h * .8, const Color(0x4DD8B98A), .6),
+      ]);
+    }))
+    ```
+    The 160deg vs topLeft->bottomRight gradient angle makes no visible difference because plum700 == plum900 in both palettes.
+
+- **[MAJOR · interaction] Picking Arabic is discarded and never reaches the signup payload** `AUTH-01-F2` ✔
+  - Prototype: prototype.jsx:613 `onPick={(lang) => { setSignup(p => ({ ...p, preferredLanguage: lang === 'ar' ? 'AR' : 'EN' })); push('role-choice'); }}`. preferredLanguage is part of the User payload (auth-screens.jsx:3).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart:55 `await prefs.setString('aiwa_language', code);`. Nothing in lib/ ever reads that key. AuthRegisterEvent (auth_event.dart:19-36) and the datasource register body (auth_remote_datasource.dart:60-79) have no preferredLanguage field, so the backend stores its default `Language.EN` (AuthRequest.java) even for Arabic users.
+  - Fix: Add `final String preferredLanguage;` to AuthRegisterEvent, RegisterUseCase and AuthRemoteDataSource.register, and send `body['preferredLanguage'] = lang == 'ar' ? 'AR' : 'EN'`. Read SharedPreferences('aiwa_language') in AvatarGenderPage._continue. For users who sign in instead, PATCH ApiConstants.meLanguage after login.
+
+#### ⚠️ Wordmark (AIWA serif logotype + dot) — `AUTH-02`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:5-13 (Wordmark) · Flutter: [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ⚠️ | ✅ | — | — | — | — |
+
+- **[MINOR · tokens] Wordmark glyphs are about 19% too large** `AUTH-02-F1` ✔
+  - Prototype: prototype.jsx:6-9: fontSize 84 inside a 100-unit-tall viewBox rendered at height 56, so the glyphs are 84x0.56 ≈ 47px.
+  - Flutter: Android/aiwa_app/lib/shared/widgets/screen_chrome.dart:469-476 `fontSize: size` gives 56px glyphs at size 56.
+  - Fix: In AiwaWordmark use `fontSize: size * 0.84, letterSpacing: -2 * size / 100`.
+- **[MINOR · layout] Dot size and position differ from the SVG** `AUTH-02-F2` ✔
+  - Prototype: prototype.jsx:10 `<circle cx="307" cy="68" r="6"/>`. That is a 6.7px dot at x=307/320 of a 3.2×height box, with its centre 6 units above the text baseline (y=74).
+  - Flutter: Android/aiwa_app/lib/shared/widgets/screen_chrome.dart:478-485 dot `size * 0.14` (7.8px), `margin: EdgeInsets.only(left: size * 0.08, bottom: size * 0.1)`, placed right after the text.
+  - Fix: Lay it out like the SVG: `SizedBox(width: size*3.2, height: size, child: Stack(children: [Positioned(left: 0, top: 0, child: Text('AIWA', ...fontSize: size*0.84)), Positioned(left: size*3.01, top: size*0.62, child: Container(width: size*0.12, height: size*0.12, decoration: BoxDecoration(shape: BoxShape.circle, color: dot)))]))`.
+
+#### ⚠️ Role choice - How will you be using AIWA? — `AUTH-04`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:83-158 (RoleChoiceScreen); route prototype.jsx:615 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/role_choice_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/role_choice_page.dart), [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · components] Selected check icon is a filled Material glyph instead of an outline** `AUTH-04-F1` ✔
+  - Prototype: auth-screens.jsx:136 `<Icon name="check-circle" size={20} color={aiwa.bone} />` (Lucide outline).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/role_choice_page.dart:169-173 `Icons.check_circle_rounded` (filled disc).
+  - Fix: Use `Icons.check_circle_outline_rounded` (size 20, AppColors.bone).
+
+#### ⚠️ Auth choice - Create account vs I already have an account (customer & provider copy) — `AUTH-05`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:762-848 (AuthChoiceScreen); route prototype.jsx:616-618 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/auth_choice_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/auth_choice_page.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | — |
+
+- **[MAJOR · tokens] Auth-choice hero glows are themed and undersized; the primary card shadow is themed instead of the literal** `AUTH-05-F1` ✎
+  - Prototype: auth-screens.jsx:781-786: hero `inset: '0 0 50% 0'` with `radial-gradient(circle at 30% 25%, rgba(231,186,182,.45), transparent 60%), radial-gradient(circle at 75% 80%, rgba(216,185,138,.25), transparent 60%)`. On the 393x426 hero, glow 1 fades out about 253px from (118,106) and glow 2 about 271px from (295,341). :812 `boxShadow: '0 12px 32px rgba(74,31,56,.18)'` (literal #4A1F38).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/auth_choice_page.dart:48-61: `AiwaGlow(size: 320, color: AppColors.rose300)` (default opacity 0.35, radius 160, centre (100,120)) and `AiwaGlow(size: 260, color: AppColors.gold300, opacity: 0.25)` (radius 130, centre ≈(W-70, H/2-50)). Both resolve to male #B5A898 / female #E6BAB0. :188 `AppTheme.shadow3` is plum700 @18%, blur 32, y 12 (male #2E2A26 / female #6B3A3A).
+  - Fix: Inside the hero Container (auth_choice_page.dart:43-63), use the farthest-corner glow helper from AUTH-01-F1 with `Color(0x73E7BAB6)` at Alignment(-0.4,-0.5) and `Color(0x40D8B98A)` at Alignment(0.5,0.6), both with stops [0, .6], computed on the hero's own box. For the sign-up card use `boxShadow: const [BoxShadow(color: Color(0x2E4A1F38), blurRadius: 32, offset: Offset(0, 12))]`.
+- **[MINOR · components] Glass back button is missing the backdrop blur** `AUTH-05-F2` ✔
+  - Prototype: components.jsx:80 glass: `background: 'rgba(255,255,255,.85)', backdropFilter: 'blur(8px)', border: '1px solid rgba(231,221,208,.7)'`.
+  - Flutter: Android/aiwa_app/lib/shared/widgets/aiwa_icon_button.dart:43-47 glass = `Colors.white.withOpacity(0.85)` with border `AppColors.divider.withOpacity(0.7)`, and no BackdropFilter.
+  - Fix: For the glass variant, wrap the Container in `ClipOval(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8), child: ...))`.
+- **[MINOR · responsive] Hero half stays pinned while the cards scroll** `AUTH-05-F3` ✔
+  - Prototype: auth-screens.jsx:779-787: the hero is `position: 'absolute', inset: '0 0 50% 0'` inside the scrolling screen div, so it scrolls with the cards.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/auth_choice_page.dart:38-44 `Positioned(top: 0, left: 0, right: 0, height: size.height * 0.5, ...)` sits outside the SingleChildScrollView (:66). On short screens the cards scroll over a fixed hero.
+  - Fix: Move the gradient into the scroll view, e.g. a Stack inside the SingleChildScrollView whose first child is the hero sized to half the viewport, so it scrolls together with the content.
+
+#### ⚠️ Sign in - phone mode — `AUTH-06`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:854-981 (SignInScreen); route prototype.jsx:619-626 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart), [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart), [Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart](Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] 'Forgot password?' is a dead end** `AUTH-06-F1` ✔
+  - Prototype: auth-screens.jsx:960-962 button -> onForgot -> prototype.jsx:625 `onForgot={() => { push('forgot-password'); }}`, which opens the 3-step ForgotPasswordScreen.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:223-230 `onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset is coming soon — contact support for now.')))`
+  - Fix: Add `static const forgotPassword = '/forgot-password'` plus a GoRoute to ForgotPasswordPage (AUTH-20..22), and change onTap to `context.push(AppRoutes.forgotPassword)`. The backend already exposes POST /auth/reset-password (AuthController.java:240-245).
+- **[CRITICAL · interaction] Provider sign-in skips the pending-verification gate** `AUTH-06-F2` ✔
+  - Prototype: prototype.jsx:622 `if (signup.role === 'PROVIDER') { reset('provider-pending'); } else { reset('home'); setTab('home'); }`
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:66-70 `context.go(state.user.isProvider ? AppRoutes.providerDashboard : AppRoutes.home)`. This ignores `user.providerProfile?.isApproved` (user_entity.dart:66), so an unverified provider lands on the dashboard.
+  - Fix:
+
+    ```dart
+    final u = state.user;
+    context.go(!u.isProvider
+        ? AppRoutes.home
+        : (u.providerProfile?.isApproved ?? false)
+            ? AppRoutes.providerDashboard
+            : AppRoutes.providerPending);
+    ```
+    Apply the same rule in splash_page.dart:71-75.
+
+- **[MINOR · interaction] 'Create an account' keeps Sign in on the back stack** `AUTH-06-F3` ✔
+  - Prototype: prototype.jsx:626 `onSwitchToSignUp={() => { reset('phone-entry'); }}` replaces the stack.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:94-97 `context.push(AppRoutes.phoneEntry, extra: {'role': widget.role})`. Back returns to Sign in, and SignInPage's AuthAuthenticated listener (:65-70) stays active through registration (see CF-03).
+  - Fix: Use `context.pushReplacement(AppRoutes.phoneEntry, extra: {'role': widget.role})`.
+- **[MINOR · components] Password eye toggle is an 18px Material IconButton** `AUTH-06-F4` ✔
+  - Prototype: auth-screens.jsx:934-936 plain button with `padding: 4` and `<Icon name={showPass ? 'eye-off' : 'eye'} size={16} />` in ink3.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:163-172 `IconButton(icon: Icon(..., size: 18, color: AppColors.ink3), ...)` with the default 48px tap box.
+  - Fix: `IconButton(padding: const EdgeInsets.all(4), constraints: const BoxConstraints(), icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 16, color: AppColors.ink3), onPressed: ...)`
+- **[MINOR · interaction] 'Remember me' has no effect** `AUTH-06-F5` ✔
+  - Prototype: auth-screens.jsx:875 `onSignIn({ identifier, mode, password, remember, role })` passes the flag along.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:31 `bool _remember = true;` is toggled at :188, but _submit (:53-59) and AuthLoginEvent never use it.
+  - Fix: Add `remember` to AuthLoginEvent and skip persisting the refresh token in SecureStorage when it is false, or remove the checkbox with design sign-off.
+- **[MINOR · layout] Gap between Password and the Remember-me row is 14px instead of 16px** `AUTH-06-V1` ＋
+  - Prototype: auth-screens.jsx:21 Field `marginBottom: 14` plus :948 remember row `marginTop: 2` = 16px when there is no error.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:184 `const SizedBox(height: 14)` before the Remember-me Row.
+  - Fix: Use `SizedBox(height: _error == null ? 16 : 10)` at :184, together with a 14px gap above the banner (AUTH-08-F3).
+
+#### ⚠️ Sign in - email mode — `AUTH-07`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:894-923 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart), [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · states] Autofocused email field opens with a plum700 focus ring** `AUTH-07-V1` ＋
+  - Prototype: auth-screens.jsx:922 `<TextInput ... type="email" icon="mail" autoFocus />`. The TextInput border stays `1.5px solid ${aiwa.divider}` (:39, male #D8CFC2 / female #EFDCD6) with `outline: 0` (:50), so the focused field looks idle.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:153 `autoFocus: true`, and Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart:119-121 `focusedBorder: AppTheme.inputBorder(... AppColors.plum700)` (male #2E2A26 / female #6B3A3A). Switching to Email immediately draws a dark ring. The shared mode toggle above it also lacks the 4px segment gap (AUTH-10-F1).
+  - Fix: Apply the AUTH-25-F1 fix (focusedBorder = AppColors.divider, or a design-approved focus style). AUTH-10-F1 fixes the toggle.
+
+#### ⚠️ Sign in - wrong credentials error — `AUTH-08`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:867-876, 941-946 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart), [Android/aiwa_app/lib/core/errors/failures.dart](Android/aiwa_app/lib/core/errors/failures.dart), [Android/aiwa_app/lib/features/auth/data/repositories/auth_repository_impl.dart](Android/aiwa_app/lib/features/auth/data/repositories/auth_repository_impl.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | ✅ | — |
+
+- **[CRITICAL · states] Wrong password never shows an error; Sign in stays stuck in its loading pulse** `AUTH-08-F1` ✎
+  - Prototype: auth-screens.jsx:870-872 `if (password === 'wrong') { setError("That phone/email and password don't match."); return; }`, rendered as the danger100 box at :941-946. The Sign in button stays usable.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:71-72 would show `state.message`, but no AuthError is emitted for bad credentials. The backend answers 401 (GlobalExceptionHandler.java:66-69). Android/aiwa_app/lib/core/network/api_client.dart:152-153 throws UnauthorizedException inside the Dio error interceptor, and dio 5.9.2 re-wraps any non-DioException thrown there as DioException(type: unknown) (dio_mixin.dart:516-523). auth_repository_impl.dart:28-34 only catches ServerException/NetworkException/UnauthorizedException, so AuthBloc._onLogin (auth_bloc.dart:54-70) throws, bloc 8.1.4 rethrows, and the global state stays AuthLoading. The Sign in button keeps pulsing and stays disabled (sign_in_page.dart:84, aiwa_button.dart:55), as does every other auth CTA bound to the same bloc, until the app restarts. Even if the exception were unwrapped, the text would be failures.dart:16 'Unauthorized. Please sign in again.'
+  - Fix:
+
+    1) In ApiClient (api_client.dart:29-84), route every call through an unwrapping helper:
+    ```dart
+    Future<Response<T>> _run<T>(Future<Response<T>> Function() f) async {
+      try { return await f(); } on DioException catch (e) {
+        final inner = e.error;
+        if (inner is ServerException || inner is UnauthorizedException || inner is NetworkException) throw inner!;
+        rethrow;
+      }
+    }
+    ```
+    2) In AuthRepositoryImpl.login, map `on UnauthorizedException` to `const Left(ServerFailure("That phone/email and password don't match.", statusCode: 401))`. 3) Add a catch-all in the AuthBloc handlers that emits AuthError, so the bloc can never stay in AuthLoading.
+
+- **[MINOR · components] Uses InlineBanner geometry instead of the compact error box** `AUTH-08-F2` ✔
+  - Prototype: auth-screens.jsx:942-943 `padding: '10px 12px', background: aiwa.danger100, borderRadius: 10, fontSize: 12.5, ... gap: 8` with `<Icon name="alert-circle" size={14} />`.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:178-182 `InlineBanner(tone: BannerTone.danger, icon: Icons.error_outline_rounded, body: _error)`, which renders with padding 13x11, radius 14, icon 16 and gap 10 (screen_chrome.dart:317-330).
+  - Fix: Add a `compact` flag to InlineBanner (padding h12/v10, radius 10, icon 14, gap 8) and pass `compact: true` here.
+- **[MINOR · layout] Spacing around the error box is off** `AUTH-08-F3` ✔
+  - Prototype: The Password Field's marginBottom 14 sits above the box (auth-screens.jsx:21). The box has marginBottom 8 and the remember row marginTop 2 (:942, :948), so 14px above and 10px below.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart:177 `SizedBox(height: 12)` above and :184 `SizedBox(height: 14)` below.
+  - Fix: Use 14 above and 10 below the banner (and 16 before the remember row when there is no error).
+
+#### ⚠️ Phone entry - phone mode (sign-up step 1) — `AUTH-10`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:164-221 (PhoneEntryScreen); route prototype.jsx:627 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart), [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart), [Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart](Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[MINOR · components] Phone/Email toggle segments have no 4px gap between them** `AUTH-10-F1` ✎
+  - Prototype: auth-screens.jsx:180 track `padding: 4, gap: 4`; :183 segment `padding: '9px 14px'` with no lineHeight, so the 13px label sits in a browser-normal (~16px) line box and each segment is ~34px tall.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart:142-151: a Row of two Expanded segments with no spacing between them. `EdgeInsets.symmetric(vertical: 10)` around AppTextStyles.label (13px, height 1) gives ~33px, which already matches the height.
+  - Fix: In IdentifierModeToggle, insert `const SizedBox(width: 4)` between the two segments (e.g. `children: [seg('phone'), const SizedBox(width: 4), seg('email')]`). Keep vertical padding 10, or use 9 only together with `height: 1.25` on the label. The shared widget also fixes Sign in and the future Forgot-password step 1.
+- **[MINOR · interaction] Phone input grabs focus on entry** `AUTH-10-F2` ✔
+  - Prototype: auth-screens.jsx:203 the phone TextInput has no autoFocus; only the email input has it (:207).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart:106-110 `EgyptPhoneField(controller: _phoneCtrl, autoFocus: true, ...)`
+  - Fix: Remove `autoFocus: true` from the phone field and keep it on the email field.
+
+#### ⚠️ Phone entry - email mode — `AUTH-11`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:169-175, 206-208, 215; prototype.jsx:627-630 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Email sign-up skips the verification code step** `AUTH-11-F1` ✔
+  - Prototype: auth-screens.jsx:215 `onContinue({ mode, value })` -> prototype.jsx:627 `push('otp')`. The OTP screen then shows the email (prototype.jsx:629 `signup.identifier?.mode === 'email' ? signup.identifier.value : ...`).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart:52-57 `// Email flow — no OTP endpoint for email, go straight to account setup.` then `context.push(AppRoutes.accountSetup, ...)`. The progress bar jumps from Step 1 to Step 3 and email ownership is never verified.
+  - Fix: Backend: let /auth/send-otp and /auth/verify-otp accept an email identifier. Flutter: rename the `phone` field of AuthSendOtpEvent/AuthVerifyOtpEvent to `identifier` and send email mode through `AuthSendOtpEvent(identifier: value)` -> OtpPage, the same as phone. Until the backend supports this, hide the Email tab on sign-up instead of silently skipping verification.
+- **[CRITICAL · interaction] Email sign-up can never finish: the email identifier is dropped from the register call** `AUTH-11-V1` ＋
+  - Prototype: prototype.jsx:627 stores `identifier: { mode: 'email', value }`, and :637 passes it to AccountSetupScreen. That screen hides its Email field for email sign-ups (auth-screens.jsx:314 `showEmailField = identifierMode === 'phone'`) because the identifier is already the account email. The flow then continues avatar-gender -> terms (prototype.jsx:638-645).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart:116-117 adds 'email' only when the hidden email field is non-empty. Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart:54-55 sends `email: data['email'] as String?, phone: mode == 'phone' ? data['identifier'] as String? : null`, so both are null in email mode; provider_verification_page.dart:38-39 repeats this. The backend rejects the request with auth.error.email_or_phone_required (AuthServiceImpl.java:41-43, HTTP 400). Because of the Dio exception wrapping (AUTH-08-F1), no AuthError is emitted, and 'Continue' on Make it yours stays in its loading pulse.
+  - Fix: In avatar_gender_page.dart `_continue` and provider_verification_page.dart:38, use `email: mode == 'email' ? data['identifier'] as String? : data['email'] as String?`. Also fix AUTH-11-F1 (verify the email by OTP) and the error unwrapping in AUTH-08-F1.
+
+#### ⚠️ OTP - enter the 6-digit code (countdown running) — `AUTH-12`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:226-303 (OTPScreen); route prototype.jsx:628-631 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart), [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | — |
+
+- **[MINOR · layout] Code boxes are fixed 44x54 and centred instead of spanning the full width** `AUTH-12-F1` ✔
+  - Prototype: auth-screens.jsx:258 `justifyContent: 'space-between', gap: 8`; :269 `width: '100%', minWidth: 0, aspectRatio: '1 / 1.15'`. On a 393px screen each box is about 50.8x58.4.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:72-74 `PinTheme(width: 44, height: 54, ...)` inside `Center` (:127-139).
+  - Fix: Size the cells from the constraints: `LayoutBuilder(builder: (c, bc) { final w = (bc.maxWidth - 5 * 8) / 6; final t = _pinTheme(AppColors.divider).copyWith(width: w, height: w * 1.15); return Pinput(defaultPinTheme: t, ...); })`
+- **[MINOR · responsive] Fixed cell widths overflow on 320dp screens** `AUTH-12-F2` ✔
+  - Prototype: The flex cells shrink (`minWidth: 0`, auth-screens.jsx:269).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:72-74, 132: 6x44 + 5x8 = 304dp of fixed width, but only 272dp is available at 320dp because of the 24px gutters (step_header.dart:96).
+  - Fix: The LayoutBuilder sizing in AUTH-12-F1 fixes this too.
+- **[MINOR · content] Destination is not bold plum900 and loses the user's spacing** `AUTH-12-F3` ✔
+  - Prototype: auth-screens.jsx:255 `We sent a 6-digit code to <strong style={{ color: aiwa.plum900 }}>{identifier}</strong>.` where identifier is `+20 ${value}` = '+20 100 555 8821' (prototype.jsx:629).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:123 `subtitle: 'We sent a 6-digit code to ${widget.identifier}.'` as plain text. The identifier is built as '+20' + digits only (phone_entry_page.dart:47), giving '+201005558821'.
+  - Fix: Give StepHeader a `Widget? subtitleWidget` and pass `Text.rich(TextSpan(children: [const TextSpan(text: 'We sent a 6-digit code to '), TextSpan(text: display, style: TextStyle(color: AppColors.plum900, fontWeight: FontWeight.w700)), const TextSpan(text: '.')]))`, where display = '+20 ' + the value as typed.
+- **[MINOR · content] Tip box copy differs** `AUTH-12-F4` ✔
+  - Prototype: auth-screens.jsx:293 'Tip — for this prototype, any 6 digits will work. In production, AIWA calls POST /auth/verify-otp.'
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:194 "Didn't get it? Check the number, then tap Resend once the timer ends."
+  - Fix: The prototype text is a demo note, so keeping the production copy is reasonable; get design sign-off. The box styling (otp_page.dart:176-203) already matches.
+- **[MINOR · interaction] Code auto-submits on the 6th digit** `AUTH-12-F5` ✔
+  - Prototype: Verification happens only when Verify is tapped (auth-screens.jsx:297).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:137 `onCompleted: (_) => _verify()`
+  - Fix: Remove onCompleted, or confirm auto-submit with design.
+- **[MINOR · states] Focused empty cell gets a plum700 border** `AUTH-12-F6` ✔
+  - Prototype: auth-screens.jsx:272 `border: 1.5px solid ${d ? aiwa.plum700 : aiwa.divider}` with `outline: 'none'`: only filled cells turn plum.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:134 `focusedPinTheme: _pinTheme(AppColors.plum700)`
+  - Fix: Use `focusedPinTheme: _pinTheme(AppColors.divider)` and keep `submittedPinTheme` as plum700.
+- **[MINOR · interaction] OTP field grabs focus and opens the keyboard on arrival** `AUTH-12-V1` ＋
+  - Prototype: auth-screens.jsx:260-276: the six inputs have no autoFocus. Focus moves only while typing (:243) or on Resend (:249).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:131 `autofocus: true`. The keyboard opens immediately, and with focusedPinTheme plum700 (:134) the first empty cell is drawn plum700.
+  - Fix: Remove `autofocus: true` from the Pinput, or confirm auto-focus with design (same decision as AUTH-10-F2).
+
+#### ⚠️ OTP - resend available (timer at 0) — `AUTH-13`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:249, 281-288 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Tapping Resend pushes a second OTP page** `AUTH-13-F1` ✔
+  - Prototype: auth-screens.jsx:249 `const resend = () => { setSeconds(45); setDigits(['','','','','','']); inputs.current[0]?.focus(); };`: the user stays on the same screen.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:163-165 dispatches `AuthSendOtpEvent`, and the bloc emits AuthLoading then AuthOtpSent (auth_bloc.dart:98-103). PhoneEntryPage is still mounted under the OTP route, and its listener (phone_entry_page.dart:65-73) runs `context.push(AppRoutes.otp, ...)` again, stacking a duplicate OtpPage. Any AuthError on OTP is also shown twice (otp_page.dart:100-104 and phone_entry_page.dart:74-78).
+  - Fix:
+
+    Only let the visible route react:
+    ```dart
+    BlocListener<AuthBloc, AuthState>(
+      listenWhen: (_, __) => ModalRoute.of(context)?.isCurrent ?? false,
+      listener: ...,
+    )
+    ```
+    Apply this in phone_entry_page.dart, otp_page.dart, sign_in_page.dart, avatar_gender_page.dart and splash_page.dart (CF-03).
+
+- **[MINOR · interaction] Focus is not returned to the first box after resend** `AUTH-13-F2` ✔
+  - Prototype: auth-screens.jsx:249 `inputs.current[0]?.focus()`
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart:161-162 only calls `_controller.clear(); _startTimer();`
+  - Fix: Give Pinput a `FocusNode _focus` and call `_focus.requestFocus()` after clear().
+
+#### ⚠️ Account setup - name, optional email, password — `AUTH-14`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:308-384 (AccountSetupScreen); route prototype.jsx:637-638 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · components] Password eye toggle is 18px instead of 16px** `AUTH-14-F1` ✔
+  - Prototype: auth-screens.jsx:353-355 button with `padding: 4` and `<Icon name={showPass ? 'eye-off' : 'eye'} size={16} />` in ink3.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart:163-172 `IconButton(icon: Icon(..., size: 18, color: AppColors.ink3))`
+  - Fix: Apply the AUTH-06-F4 snippet here too (size 16, padding 4, empty constraints).
+
+#### ⚠️ Account setup - inline validation errors — `AUTH-15`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:316-319, 335, 341, 373 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · layout] Hint is hidden while an error shows** `AUTH-15-F1` ✔
+  - Prototype: The Field gets no `error` prop here, so its hint still renders (auth-screens.jsx:27), below the child error div (:335). Result: input, then error line, then hint.
+  - Flutter: Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart:131-152 `if (hasError) ... else if (hint != null ...)` hides the hint while the error is visible.
+  - Fix: Add `bool keepHintOnError` to AiwaTextField that renders the error then the hint, and set it from account_setup_page.dart.
+- **[MINOR · components] Error line gets an icon the prototype doesn't use here** `AUTH-15-F2` ✔
+  - Prototype: auth-screens.jsx:335/341/373 plain `<div style={{ fontSize: 11.5, color: aiwa.danger700, marginTop: 5 }}>` with no icon. The Field variant with alert-circle (:28-30) is not used on this screen.
+  - Flutter: Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart:133-140 `Icon(Icons.error_outline_rounded, size: 12, color: AppColors.danger700)`
+  - Fix: Add `showErrorIcon` (default true) to AiwaTextField and pass false from AccountSetupPage.
+- **[MINOR · tokens] Input border turns danger500 on error** `AUTH-15-F3` ✔
+  - Prototype: auth-screens.jsx:39 TextInput border is always `1.5px solid ${aiwa.divider}` (male #D8CFC2 / female #EFDCD6).
+  - Flutter: Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart:115-121 enabled and focused borders use `AppColors.danger500` when hasError (male #2E2A26 / female #6B3A3A).
+  - Fix: Keep the divider border in the error state for this screen, or globally if the DS audit agrees.
+
+#### ⚠️ Password strength meter — `AUTH-16`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:321-323, 358-372 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · layout] Meter renders below the hint instead of directly under the input** `AUTH-16-F1` ✔
+  - Prototype: The meter is inside the Password Field right after the TextInput (auth-screens.jsx:358), followed by passErr (:373) and then the hint (Field, :27).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/account_setup_page.dart:156-208 renders the meter after the whole AiwaTextField, below the 'At least 6 characters.' hint or error.
+  - Fix: Add a `Widget? belowInput` slot to AiwaTextField, rendered between the TextFormField and the hint/error, and pass the meter Row into it.
+
+#### ⚠️ Make it yours - avatar + gender (sign-up step 4) — `AUTH-17`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:389-476 (AvatarGenderScreen); route prototype.jsx:639-646 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart), [Android/aiwa_app/lib/core/theme/theme_controller.dart](Android/aiwa_app/lib/core/theme/theme_controller.dart), [Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart](Android/aiwa_app/lib/features/auth/presentation/bloc/auth_bloc.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Continue creates the account and jumps to Home, skipping Terms, Preferences and the permission screens** `AUTH-17-F1` ✎
+  - Prototype: prototype.jsx:640-645 `if (signup.role === 'PROVIDER') push('provider-business'); else push('terms');`. From there: terms (:652-655) -> preferences (:656) -> handleSavePrefs reset('perm-location') (:604) -> perm-notifications (:657) -> home (:658).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart:49-59 dispatches AuthRegisterEvent for customers, and :70-73 runs `context.go(state.user.isProvider ? AppRoutes.providerPending : AppRoutes.home)`. Android/aiwa_app/lib/core/router/app_router.dart:29-55 has no /terms or /preferences route.
+  - Fix: In avatar_gender_page.dart:70-73, send a newly registered customer to a new `/terms` GoRoute instead of AppRoutes.home (providers already push providerBusiness at :46-47). The Terms 'Agree' action calls POST /terms/accept?version=&lt;v> with the new session (TermsController.java:43-56), then continues Preferences -> perm-location -> perm-notifications -> `context.go(AppRoutes.home)`. If no account may exist before terms are accepted, move AuthRegisterEvent into the Terms 'Agree' handler and call /terms/accept immediately after it succeeds. Add the /terms and /preferences routes in app_router.dart (screens covered by the ONB audit).
+- **[MAJOR · components] Photo upload is missing** `AUTH-17-F2` ✔
+  - Prototype: auth-screens.jsx:419-441: a tappable 128px circle opening `<input type="file" accept="image/*">`, a camera icon 36 when empty, a plus/pencil badge (38px, plum700, `border: 3px solid ${aiwa.bone}`), and an 'Upload a photo' / 'Replace photo' link (plum700 600 13).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart:102-143: a non-interactive circle showing the name's initial (AppTextStyles.display at 54) or Icons.person_outline_rounded 40, with the caption 'You can add a photo later from your profile.'
+  - Fix: Wrap the circle in a GestureDetector that calls `ImagePicker().pickImage(source: ImageSource.gallery)` (image_picker is already in pubspec.yaml). Show `DecorationImage(image: FileImage(file), fit: BoxFit.cover)` once picked. Add `Positioned(right: 0, bottom: 0)` with a 38x38 plum700 circle, 3px bone border and Icons.add / Icons.edit 16. Add a TextButton 'Upload a photo' / 'Replace photo'. After registering, upload via POST /auth/me/avatar (AuthController.java:118).
+- **[MAJOR · content] Copy drops the photo step** `AUTH-17-F3` ✔
+  - Prototype: auth-screens.jsx:414 sub 'Add a photo, pick your palette. You can change both later.'; :472 CTA `{avatar ? 'Continue' : 'Continue without a photo'}`; :426 empty avatar shows a camera icon.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart:95 'Pick your palette. You can change it later.'; :83 `label: 'Continue'`; :141 'You can add a photo later from your profile.'
+  - Fix: Restore the prototype subtitle and use `label: _avatar == null ? 'Continue without a photo' : 'Continue'`. Replace the caption with the Upload link and show Icons.camera_alt_outlined 36 in the empty circle.
+- **[MINOR · layout] Vertical spacing around the avatar and gender field differs** `AUTH-17-F4` ✔
+  - Prototype: auth-screens.jsx:418 avatar block `marginTop: 22, marginBottom: 18`; Field label -> grid 6 (:22); grid -> hint 5 (:27).
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart:147 `SizedBox(height: 24)`, :149 `SizedBox(height: 10)`, :167 `SizedBox(height: 6)`.
+  - Fix: Use 18, 6 and 5.
+
+#### ⚠️ Gender pick -> live palette swap — `AUTH-19`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:389-400, 444-468; theme.jsx:12-66; prototype.jsx:535, 639-642 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart), [Android/aiwa_app/lib/core/theme/theme_controller.dart](Android/aiwa_app/lib/core/theme/theme_controller.dart), [Android/aiwa_app/lib/core/theme/app_colors.dart](Android/aiwa_app/lib/core/theme/app_colors.dart), [Android/aiwa_app/lib/app.dart](Android/aiwa_app/lib/app.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | — |
+
+- **[MAJOR · tokens] 'Man' card's Warm Stone swatch has the wrong colour** `AUTH-19-F1` ✔
+  - Prototype: auth-screens.jsx:448 `{ id: 'MALE', label: 'Man', swA: '#2E2A26', swB: '#B5A898', swC: '#F5F2ED' }`
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart:193 `final colors = [swatches.plum700, swatches.rose500, swatches.bone];`. Male rose500 is #8A8074 (app_colors.dart:69). The female rose500 #C4837A happens to be correct.
+  - Fix: Use `final colors = [swatches.plum700, swatches.plum300, swatches.bone];`. plum300 is male #B5A898 and female #C4837A, matching both prototype cards.
+- **[MAJOR · states] 'Man' is preselected where the prototype preselects 'Woman'** `AUTH-19-F2` ✔
+  - Prototype: prototype.jsx:535 `gender: 'FEMALE'` is passed as initialGender (:639). auth-screens.jsx:396-398 applies the female theme as soon as the screen mounts.
+  - Flutter: Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart:32-34 `_gender` follows ThemeController.mode, which defaults to male (theme_controller.dart:16). So 'Man' is preselected and the palette doesn't change.
+  - Fix: Use `late String _gender = 'FEMALE';` and in initState call `WidgetsBinding.instance.addPostFrameCallback((_) => ThemeController.applyGender(_gender, persist: false));`, persisting on Continue.
+
+#### ✅ StepHeader (back + progress + 'Step n of N' + title) — `AUTH-24`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:59-78 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+
+No deviations found.
+
+
+#### ⚠️ Field + TextInput (form atoms) — `AUTH-25`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:19-57 · Flutter: [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart), [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart), [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | — |
+
+- **[MINOR · states] Inputs show a plum700 focus border the prototype doesn't have** `AUTH-25-F1` ✔
+  - Prototype: auth-screens.jsx:38-40 border fixed at `1.5px solid ${aiwa.divider}` with `outline: 0` on the input (:50): no focus colour.
+  - Flutter: Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart:119-121 `focusedBorder: AppTheme.inputBorder(hasError ? AppColors.danger500 : AppColors.plum700)`. The same rule is in EgyptPhoneField (step_header.dart:233) and the global inputDecorationTheme (app_theme.dart:179).
+  - Fix: For a strict match, set focusedBorder to AppColors.divider. Recommended instead: confirm with design, because a visible focus ring helps accessibility (the legacy LoginScreen at prototype.jsx:110 did use a plum700 border).
+- **[MINOR · layout] Input text starts 4px further in than the prototype (Material 3 input gaps)** `AUTH-25-V1` ＋
+  - Prototype: auth-screens.jsx:37-42 input row `padding: '13px 14px'`, `gap: 10`. Text starts 14px from the border without an icon, or 14+17+10 = 41px after a leading icon.
+  - Flutter: Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart:101-127 uses prefix Padding(left 14, right 10) and contentPadding h14, under `ThemeData.light(useMaterial3: true)` (app_theme.dart:100). The Flutter 3.49 InputDecorator adds prefixToInputGap = 4 after a prefixIcon and inputGap = OutlineInputBorder.gapPadding (default 4) when there is none (Flutter SDK material/input_decorator.dart:737, 2632-2637). Text therefore starts at 45px on icon fields and 18px on EgyptPhoneField (step_header.dart:226-238).
+  - Fix: In AppTheme.inputBorder, return `OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: color, width: 1.5), gapPadding: 0)` (no floating labels are used), so icon-less fields start at 14px. Change the AiwaTextField prefix padding to `EdgeInsets.only(left: 14, right: 6)` so icon fields start at 41px.
+
+#### ⚠️ Cross-cutting findings — Customer sign-in / sign-up
+
+- **[CRITICAL · interaction] Pages under the current route still react to the shared AuthBloc** `AUTH-CF-03` ✔
+  - Prototype: prototype.jsx:547-560: one navigation stack, and each screen's callback fires once for its own action.
+  - Flutter: SplashPage (splash_page.dart:68-79), SignInPage (sign_in_page.dart:63-74), PhoneEntryPage (phone_entry_page.dart:63-79), OtpPage (otp_page.dart:89-107) and AvatarGenderPage (avatar_gender_page.dart:68-79) all listen to the single global AuthBloc (app.dart:18-21) and stay mounted under pushed routes. One state change therefore triggers several pages: Resend pushes a duplicate OTP page, errors show 2-3 stacked SnackBars, and on registration both Splash (go home/providerDashboard) and AvatarGender (go home/providerPending) call context.go.
+  - Fix: Add `listenWhen: (_, __) => ModalRoute.of(context)?.isCurrent ?? false` to each of these BlocListeners, or move the sign-up steps to a page-scoped cubit.
+- **[MAJOR · components] No toast component; auth feedback uses default bottom SnackBars** `AUTH-CF-04` ✔
+  - Prototype: prototype.jsx:20-39 Toast: top-anchored, rgba(42,19,32,.96) background, 26px success check badge, 13px/500 text, slide-down 320ms, auto-dismiss 2.8s. It carries every auth confirmation ('Welcome back, Layla.', 'Password reset. Please sign in.').
+  - Flutter: lib/shared/widgets has no toast. Auth pages call ScaffoldMessenger SnackBars (e.g. Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart:75-77), styled by app_theme.dart:185-193: plum900 at 96%, floating at the bottom, 14px text, no icon.
+  - Fix: Build a shared `showAiwaToast` (see the AUTH-09 build notes) and use it for success messages. Keep SnackBars for errors or restyle them to match.
+- **[MINOR · interaction] Tappable cards and pills have no pressed scale** `AUTH-CF-01` ✔
+  - Prototype: prototype.html:41-42 `button { transition: transform 120ms cubic-bezier(.32,.72,0,1), background 200ms; } button:active:not(:disabled) { transform: scale(.96); }`. This applies to every &lt;button>, including role cards, auth-choice cards, language pills, the mode toggle and gender cards.
+  - Flutter: Only AiwaButton scales, and it uses 0.97 (Android/aiwa_app/lib/shared/widgets/aiwa_button.dart:114-116). Role cards (role_choice_page.dart:110), auth-choice cards (auth_choice_page.dart:180), language pills (splash_page.dart:224), IdentifierModeToggle (step_header.dart:146) and gender cards (avatar_gender_page.dart:195) are bare GestureDetectors with no pressed state.
+  - Fix: Add a small `PressScale` widget in lib/shared/widgets (AnimatedScale to 0.96, 120ms, AppTheme.easeSoft, driven by onTapDown/onTapUp/onTapCancel), wrap these GestureDetectors in it, and set AiwaButton's pressed scale to 0.96.
+- **[MINOR · interaction] Route transitions use platform defaults instead of the prototype slide/fade** `AUTH-CF-02` ✔
+  - Prototype: prototype.jsx:726-731: forward navigation uses `aiwa-slide-in` (translateX 8% -> 0) and back/reset uses `aiwa-fade-in` (scale .98 -> 1), both 320ms cubic-bezier(.32,.72,0,1) (prototype.html:16-23).
+  - Flutter: Android/aiwa_app/lib/core/router/app_router.dart:68-144: the auth GoRoutes use plain `builder:`, so they get the default MaterialPage transitions.
+  - Fix: Use `pageBuilder: (c, s) => CustomTransitionPage(child: ..., transitionDuration: AppTheme.dur3, transitionsBuilder: (c, a, _, child) => SlideTransition(position: Tween(begin: const Offset(0.08, 0), end: Offset.zero).chain(CurveTween(curve: AppTheme.easeSoft)).animate(a), child: child))` for the auth routes.
+
+### Onboarding tail & provider onboarding
+
+#### ⚠️ Provider business — 'Set up your studio' (Individual default) — `ONB-12`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:481-622; prototype.jsx:647-648 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart), [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Business profile (name, type, staff, bio, category, address, lat/lng) is never sent to the backend** `ONB-12-F1` ✎
+  - Prototype: prototype.jsx:648 `onContinue={(d) => { setSignup(p => ({ ...p, ...d })); push('provider-verification'); }}`; auth-screens.jsx:615 collects businessName, bio, address, primaryCategory, businessType, staff, latitude, longitude; the ProviderProfile contract is listed at auth-screens.jsx:6-7
+  - Flutter: provider_business_page.dart:55-74 puts the fields only in go_router `extra`. provider_verification_page.dart:34-43 and auth_remote_datasource.dart:69-77 send only fullName/password/role/email/phone/gender. ApiConstants.myProviderProfile (api_constants.dart:29) is never called. The backend exposes POST /provider/profile (ProviderController.java:68, body ProviderProfileRequest: businessName, bio, address, latitude, longitude, providerType, primaryCategory) and POST /provider/staff (StaffController.java:34, body StaffMemberRequest.fullName).
+  - Fix: After registration, at the final Preferences save: `await dio.post(ApiConstants.myProviderProfile, data: {'businessName': d['businessName'], 'bio': d['bio'], 'address': d['address'], 'latitude': d['latitude'], 'longitude': d['longitude'], 'primaryCategory': d['primaryCategory'], 'providerType': d['businessType'] == 'shop' ? 'SHOP' : 'INDIVIDUAL'}); for (final n in d['staff'] as List<String>) { await dio.post(ApiConstants.providerStaff, data: {'fullName': n}); }`. Add `static const String providerStaff = '/provider/staff';` to api_constants.dart.
+- **[MINOR · layout] Bio counter shares a row with the hint; textarea height differs** `ONB-12-F2` ✎
+  - Prototype: auth-screens.jsx:563 textarea `height: 84`, then :565 `<div style={{ fontSize: 11, color: aiwa.ink3, marginTop: 4, textAlign: 'right' }}>{bio.length}/240</div>`; the Field hint renders on its own line below (auth-screens.jsx:27, marginTop 5)
+  - Flutter: provider_business_page.dart:192 `maxLines: 3` (3 x 15 x 1.5 + 28 padding = about 95px); aiwa_text_field.dart:152-171 puts the hint (Expanded) and counter in one Row under the field
+  - Fix: In provider_business_page.dart pass `hint: null, showCounter: false`, then add `Padding(padding: EdgeInsets.only(top: 4), child: Align(alignment: Alignment.centerRight, child: Text('${_bioCtrl.text.length}/240', style: AppTextStyles.micro)))`, SizedBox(height: 5) and the hint Text (micro 11.5). For the 84px height, add `bool expands = false` and `TextStyle? textStyle` params to AiwaTextField (pass `expands` to TextFormField, forcing maxLines/minLines to null when true) and wrap the bio field's input in `SizedBox(height: 84)`.
+- **[MINOR · layout] Category tiles are about 18px taller than in the prototype** `ONB-12-F3` ✔
+  - Prototype: auth-screens.jsx:574-575 `padding: '12px 4px', borderRadius: 12` gives a natural height of about 62px (12 + icon 18 + gap 6 + label + 12)
+  - Flutter: provider_business_page.dart:207 `childAspectRatio: 0.95`, about 80px tall on a 375px-wide screen
+  - Fix: Use `childAspectRatio: 1.2`, or replace GridView with Rows of Expanded tiles padded `EdgeInsets.symmetric(vertical: 12, horizontal: 4)`.
+- **[MINOR · tokens] Bio text size 15 instead of 14** `ONB-12-F4` ✔
+  - Prototype: auth-screens.jsx:563 `fontFamily: fontBody, fontSize: 14, color: aiwa.ink`
+  - Flutter: aiwa_text_field.dart:96 `style: AppTextStyles.body.copyWith(color: AppColors.ink)` (Plus Jakarta 15)
+  - Fix: Add an optional `TextStyle? textStyle` to AiwaTextField and pass `AppTextStyles.bodySm.copyWith(color: AppColors.ink)` for the bio.
+- **[MINOR · components] 'Use GPS' rendered as a Material TextButton** `ONB-12-F5` ✔
+  - Prototype: auth-screens.jsx:591 `<button ... style={{ background: 'transparent', border: 0, color: aiwa.plum700, fontSize: 12, fontWeight: 600 }}>Use GPS</button>`
+  - Flutter: provider_business_page.dart:256-262 `suffixIcon: TextButton(onPressed: ..., child: Text('Use GPS', style: AppTextStyles.labelSm.copyWith(color: AppColors.plum700)))`, which adds a 64x40 minimum size, padding and an ink ripple
+  - Fix: `TextButton(style: TextButton.styleFrom(padding: const EdgeInsets.only(right: 14), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap, splashFactory: NoSplash.splashFactory), ...)`
+- **[MINOR · content] Lucide icons swapped for different Material glyphs** `ONB-12-F6` ✔
+  - Prototype: auth-screens.jsx:482-489 `scissors`, `hand`, `leaf`, `brush`, `eye`, `droplets`, `hand-heart`, `sparkles`; :512 `store`; :517 `user`; :589 `map-pin`
+  - Flutter: provider_business_page.dart:31-38 Icons.content_cut_rounded, back_hand_outlined, spa_outlined, brush_outlined, visibility_outlined, water_drop_outlined, volunteer_activism_outlined, auto_awesome_outlined; :100 storefront_outlined; :110 person_outline_rounded; :255 location_on_outlined
+  - Fix: To match exactly, add a Lucide icon package (e.g. lucide_icons_flutter) and use LucideIcons.hand, .handHeart, .leaf, .store, .user, .mapPin. Otherwise accept the Material equivalents as a documented deviation.
+- **[MINOR · layout] Step scaffold top offset and sticky-bar bottom padding differ (also ONB-17)** `ONB-12-V1` ＋
+  - Prototype: auth-screens.jsx:504 root `padding: '70px 24px 120px'` and :613 sticky bar `padding: '14px 22px 32px'`, measured from the frame edge. The status bar overlay is 62px (ios-frame.jsx:14) and the home indicator 34px (ios-frame.jsx:220), so the back button sits 8px below the status bar and the bar's bottom padding is 32px from the edge. ProviderVerificationScreen uses the same values (auth-screens.jsx:676, :702).
+  - Flutter: step_header.dart:96 `EdgeInsets.fromLTRB(24, insets.top + 18, 24, 16)` puts the back button 18px below the status bar, and :109 `EdgeInsets.fromLTRB(22, 14, 22, 14 + insets.bottom)` gives about 48px bottom padding on a 34px-inset iPhone.
+  - Fix: In AuthStepScaffold (step_header.dart:96, :109) use `insets.top + 8` for the scroll top padding and `EdgeInsets.fromLTRB(22, 14, 22, math.max(32.0, insets.bottom))` for the sticky bar. This is shared with the other auth steps, so confirm with the AUTH audit before changing it.
+
+#### ⚠️ Provider business — Shop / salon variant (staff members) — `ONB-13`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:533-555 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · components] Staff remove control is a 48dp IconButton with an 18px icon** `ONB-13-F1` ✔
+  - Prototype: auth-screens.jsx:542-543 `<button ... style={{ background: 'transparent', border: 0, color: aiwa.danger700, cursor: 'pointer', padding: 8 }}><Icon name="x" size={16} /></button>`
+  - Flutter: provider_business_page.dart:156-160 `IconButton(icon: Icon(Icons.close_rounded, size: 18, color: AppColors.danger700), ...)` with default 48x48 constraints and a ripple
+  - Fix: `GestureDetector(onTap: remove, child: Padding(padding: const EdgeInsets.all(8), child: Icon(Icons.close_rounded, size: 16, color: AppColors.danger700)))`
+- **[MINOR · components] 'Add staff member' border is solid, not dashed** `ONB-13-F2` ✔
+  - Prototype: auth-screens.jsx:550 `border: `1.5px dashed ${aiwa.divider}``
+  - Flutter: provider_business_page.dart:388-390 `border: Border.all(color: AppColors.divider, width: 1.5)`; the class comment at :375 admits it is only 'Dashed-looking'
+  - Fix: Draw the border with a small CustomPainter (dash 5 / gap 4 along a 12-radius RRect via PathMetric.extractPath) and reuse it for ONB-14 and ONB-15.
+
+#### ⚠️ Provider business — GPS status card (locked / no GPS) — `ONB-14`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:588-610, 497, 615 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_business_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[MINOR · states] Initial GPS state inverted (No GPS instead of GPS locked)** `ONB-14-F1` ✔
+  - Prototype: auth-screens.jsx:497 `const [hasLocation, setHasLocation] = useStateA(true);`
+  - Flutter: provider_business_page.dart:27 `bool _hasLocation = false;`
+  - Fix: Start with the locked state by fetching the position in initState (see F3). Or set `_hasLocation = true` if the mock is kept.
+- **[MINOR · components] GPS card border is solid, not dashed** `ONB-14-F2` ✔
+  - Prototype: auth-screens.jsx:597 `border: `1px dashed ${aiwa.divider}`, borderRadius: 12`
+  - Flutter: provider_business_page.dart:270 `border: Border.all(color: AppColors.divider),`
+  - Fix: Use the shared dashed-border painter from ONB-13-F2 (1px, radius 12).
+
+#### ⚠️ UploadSlot — empty (tap to upload) — `ONB-15`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:627-656 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Upload slots never capture an image; tap just toggles 'done'** `ONB-15-F1` ✔
+  - Prototype: auth-screens.jsx:637 `onClick={() => ref.current?.click()}`, :644 `<input ref={ref} type="file" accept="image/*" hidden onChange={handle} />`, and :629-635 FileReader -> onSet(dataURL)
+  - Flutter: provider_verification_page.dart:85 `onTap: () => setState(() => _idFrontDone = !_idFrontDone)` (same at :93 and :102). image_picker ^1.1.2 is in pubspec.yaml but unused.
+  - Fix: Store files, not bools: `XFile? _idFront;` and `onTap: () async { final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85); if (x != null) setState(() => _idFront = x); }`. For the selfie use `source: ImageSource.camera, preferredCameraDevice: CameraDevice.front`.
+- **[MINOR · components] Empty slot border solid instead of dashed** `ONB-15-F2` ✔
+  - Prototype: auth-screens.jsx:640 `border: `1.5px ${value ? 'solid' : 'dashed'} ${value ? aiwa.plum700 : aiwa.divider}``
+  - Flutter: provider_verification_page.dart:174 `border: Border.all(color: AppColors.divider, width: 1.5)`
+  - Fix: Use the shared dashed-border painter (1.5px, radius 14) for the empty state.
+- **[MINOR · layout] Inner gaps differ (8 vs 12 before the upload icon; 3 vs 2 under the label)** `ONB-15-F3` ✔
+  - Prototype: auth-screens.jsx:641 `gap: 12` (applies between tile, text and upload icon) and :652 `marginTop: 2`
+  - Flutter: provider_verification_page.dart:207 `const SizedBox(width: 8)` and :196 `const SizedBox(height: 3)`
+  - Fix: Change them to SizedBox(width: 12) and SizedBox(height: 2).
+
+#### ⚠️ UploadSlot — uploaded state (photo preview, tap to replace) — `ONB-16`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:637-643, 657-663 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[MAJOR · components] Uploaded slot shows a flat gradient, not the captured photo** `ONB-16-F1` ✔
+  - Prototype: auth-screens.jsx:639 `background: value ? `center/cover url(${value})` : aiwa.paper`
+  - Flutter: provider_verification_page.dart:142-146 `gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [AppColors.plum500, AppColors.plum900])`
+  - Fix: `decoration: BoxDecoration(image: DecorationImage(image: FileImage(File(x.path)), fit: BoxFit.cover), border: Border.all(color: AppColors.plum700, width: 1.5), borderRadius: BorderRadius.circular(14))`
+- **[MAJOR · interaction] 'Tap to replace' actually clears the upload** `ONB-16-F3` ✔
+  - Prototype: auth-screens.jsx:637 the filled slot still calls `ref.current?.click()`, so the value is kept unless a new file is chosen
+  - Flutter: provider_verification_page.dart:85 `onTap: () => setState(() => _idFrontDone = !_idFrontDone)` sets the slot back to empty
+  - Fix: Point onTap to the picker from ONB-15-F1 and assign only when the result is non-null.
+- **[MINOR · tokens] Caption scrim gradient differs** `ONB-16-F2` ✔
+  - Prototype: auth-screens.jsx:658 `background: 'linear-gradient(to top, rgba(42,19,32,.7), transparent 60%)'`
+  - Flutter: provider_verification_page.dart:145 `colors: [AppColors.plum500, AppColors.plum900]`, opaque top to bottom (male #5C544D -> #2E2A26)
+  - Fix: Add a foreground layer: `Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Color(0xB32A1320), Color(0x002A1320)], stops: [0, .6])))`
+- **[MINOR · content] Uploaded caption icon is filled; Lucide check-circle is an outline** `ONB-16-V1` ＋
+  - Prototype: auth-screens.jsx:660 `<Icon name="check-circle" size={14} color={aiwa.bone} />` (outline circle with check)
+  - Flutter: provider_verification_page.dart:152 `Icon(Icons.check_circle_rounded, size: 14, color: AppColors.bone)` (solid filled disc)
+  - Fix: Use `Icons.check_circle_outline_rounded`, the glyph provider_pending_page.dart:99 already uses for the same Lucide icon.
+
+#### ⚠️ Provider verification — 'Verify your identity' — `ONB-17`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:668-710; prototype.jsx:649-650 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Submit registers and jumps to Pending, skipping Terms, Preferences and the toast** `ONB-17-F1` ✔
+  - Prototype: prototype.jsx:649-650 `onContinue={(d) => { setSignup(p => ({ ...p, ...d })); push('terms'); }}`, then prototype.jsx:600-602 routes to provider-pending only after Save preferences
+  - Flutter: provider_verification_page.dart:31-44 `_submit()` dispatches `AuthRegisterEvent(... role: 'PROVIDER' ...)`; :50-51 `if (state is AuthAuthenticated) { context.go(AppRoutes.providerPending); }`
+  - Fix: `void _submit() => context.push(AppRoutes.terms, extra: {...widget.registrationData, 'idFront': _idFront!.path, 'idBack': _idBack!.path, 'selfie': _selfie!.path});`. Register, upload and show the toast at the end of Preferences.
+- **[CRITICAL · interaction] ID and selfie are never uploaded for review** `ONB-17-F2` ✔
+  - Prototype: auth-screens.jsx:703 `onContinue({ idFront, idBack, selfie })`, the files that populate nationalIdFront/Back/selfie (auth-screens.jsx:7)
+  - Flutter: ApiConstants.providerVerification '/provider/verification/documents' (api_constants.dart:38) is referenced nowhere. The backend expects multipart nationalIdFront, nationalIdBack and selfie (VerificationController.java:53-58).
+  - Fix: After registration: `await dio.post(ApiConstants.providerVerification, data: FormData.fromMap({'nationalIdFront': await MultipartFile.fromFile(front), 'nationalIdBack': await MultipartFile.fromFile(back), 'selfie': await MultipartFile.fromFile(selfie)}));`
+- **[MINOR · components] Private-docs note padding and icon gap differ (InlineBanner)** `ONB-17-F3` ✔
+  - Prototype: auth-screens.jsx:697 `padding: 14, background: aiwa.plum100, borderRadius: 14 ... gap: 8`
+  - Flutter: provider_verification_page.dart:105-110 `InlineBanner(tone: BannerTone.plum, ...)`; screen_chrome.dart:318 `EdgeInsets.symmetric(horizontal: 13, vertical: 11)` and :330 `SizedBox(width: 10)`
+  - Fix: Replace it with a local Container(padding: EdgeInsets.all(14), decoration: BoxDecoration(color: AppColors.plum100, borderRadius: BorderRadius.circular(14))) holding a Row with the icon, SizedBox(width: 8) and Expanded text.
+- **[MINOR · tokens] Private-docs note text 12.5px instead of 12px** `ONB-17-F4` ✔
+  - Prototype: auth-screens.jsx:697 `fontSize: 12, color: aiwa.plum700, lineHeight: 1.5`
+  - Flutter: screen_chrome.dart:348-351 `AppTextStyles.micro.copyWith(fontSize: 12.5, color: fg, height: 1.5)`
+  - Fix: Use `AppTextStyles.micro.copyWith(fontSize: 12, color: AppColors.plum700, height: 1.5)` in the local note.
+
+#### ⚠️ Provider pending — 'We're reviewing your documents.' — `ONB-18`
+
+Prototype: ui_kits/aiwa-app/auth-screens.jsx:715-756; prototype.jsx:600-602, 622, 651 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/provider_pending_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_pending_page.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart), [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ | — |
+
+- **[MAJOR · interaction] Pending is unreachable from sign-in; reached before Terms/Preferences at signup** `ONB-18-F1` ✔
+  - Prototype: prototype.jsx:622 `if (signup.role === 'PROVIDER') { reset('provider-pending'); }` (sign-in) and :600-602 `setToast('Account created. Verification in review.'); reset('provider-pending');` (after preferences)
+  - Flutter: sign_in_page.dart:66-69 `state.user.isProvider ? AppRoutes.providerDashboard : AppRoutes.home` (same at splash_page.dart:71-74). The only entry is provider_verification_page.dart:51, straight after registration.
+  - Fix: Gate on verification: `state.user.isProvider ? (state.user.providerProfile?.isApproved == true ? AppRoutes.providerDashboard : AppRoutes.providerPending) : AppRoutes.home` in sign_in_page.dart and splash_page.dart. Reach Pending from Preferences as in ONB-17-F1.
+- **[MINOR · tokens] Glow uses the theme rose300 in a 340px circle instead of the full-screen #E7BAB6 radial** `ONB-18-F2` ✔
+  - Prototype: auth-screens.jsx:718 `background: 'radial-gradient(circle at 30% 25%, rgba(231,186,182,.45), transparent 60%)'` (hardcoded literal over the whole screen)
+  - Flutter: provider_pending_page.dart:23-31 `Positioned(left: -60, top: 40, child: AiwaGlow(size: 340, color: AppColors.rose300, opacity: 0.4))` (male #B5A898, female #E6BAB0)
+  - Fix: `Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.4, -0.5), radius: 0.9, colors: [Color(0x73E7BAB6), Color(0x00E7BAB6)], stops: [0, .6]))))`. Keep AppColors.rose300 only if the team intentionally departs from the literal.
+- **[MINOR · components] Icon tile missing the 8px backdrop blur** `ONB-18-F3` ✔
+  - Prototype: auth-screens.jsx:721 `background: 'rgba(255,255,255,.16)' ... backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,.18)'`
+  - Flutter: provider_pending_page.dart:43-50 Container with white .16 fill and white .18 border, no BackdropFilter
+  - Fix: Wrap it in `ClipRRect(borderRadius: BorderRadius.circular(22), child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8), child: <existing container>))`.
+- **[MINOR · content] Hourglass glyph differs** `ONB-18-F4` ✔
+  - Prototype: auth-screens.jsx:722 `<Icon name="hourglass" size={34} />` and :736 `icon: 'hourglass'`
+  - Flutter: provider_pending_page.dart:52 and :111 `Icons.hourglass_top_rounded`
+  - Fix: Use `Icons.hourglass_empty_rounded` (closest outline) or LucideIcons.hourglass.
+- **[MINOR · layout] Footnote gap and bottom padding differ (top padding matches)** `ONB-18-F5` ✎
+  - Prototype: auth-screens.jsx:717 `padding: '90px 28px 40px'` measured from the frame edge. The status bar is 62px (ios-frame.jsx:14) and the home indicator 34px (ios-frame.jsx:220), so content starts 28px below the status bar and the caption ends 40px above the bottom edge. :746 `gap: 10` plus the caption `margin: '4px 0 0'` (:750) makes 14px above the footnote.
+  - Flutter: provider_pending_page.dart:33-38 `EdgeInsets.fromLTRB(28, insets.top + 28, 28, insets.bottom + 28)`: the top matches, but the bottom is about 62px on a 34px-inset iPhone vs 40. :123 has `const SizedBox(height: 10)`.
+  - Fix: Keep `insets.top + 28`. Change the bottom to `math.max(40.0, insets.bottom + 6)` (import 'dart:math' as math) and the gap above the footnote to `const SizedBox(height: 14)`.
+- **[MINOR · responsive] Fixed Column with Spacers overflows on short screens or large text** `ONB-18-F6` ✔
+  - Prototype: prototype.jsx:729 the screen wrapper is `overflow: 'auto'`, so the pending content can scroll
+  - Flutter: provider_pending_page.dart:39-134 a non-scrollable Column with two Spacer()s; about 560dp of content plus insets gives a RenderFlex overflow below about 640dp height or at textScale 1.3
+  - Fix: Wrap it in `LayoutBuilder` -> `SingleChildScrollView` -> `ConstrainedBox(minHeight: constraints.maxHeight)` -> `IntrinsicHeight(child: Column(...))` so the Spacers still work.
+
+### Customer discovery
+
+#### ⚠️ Home (greeting, search pill, hero promo, categories, trending, available now, bell) — `DISC-01`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:67-179 (HomeScreen); prototype.jsx:659 (case 'home') · Flutter: [Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart), [Android/aiwa_app/lib/features/home/presentation/widgets/category_tile.dart](Android/aiwa_app/lib/features/home/presentation/widgets/category_tile.dart), [Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart), [Android/aiwa_app/lib/features/home/presentation/widgets/provider_list_item.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_list_item.dart), [Android/aiwa_app/lib/shared/widgets/section_header.dart](Android/aiwa_app/lib/shared/widgets/section_header.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ | — |
+
+- **[MAJOR · responsive] Category grid tiles overflow on 360dp and 375dp phones** `DISC-01-F1` ✎
+  - Prototype: screens.jsx:106,111 - CSS grid rows auto-size; tile `padding: '12px 8px 10px'`, 44px icon + gap 8 + 12px label, so height follows content
+  - Flutter: home_page.dart:331 `childAspectRatio: 0.86`. Tile content is 88px: padding 22 (category_tile.dart:44) + 2px border added by Container from `Border.all` (category_tile.dart:48) + 44 + 8 + 12 (labelSm height 1). At 360dp a tile is (360-44-30)/4 = 71.5 wide and 83.1 tall, a ~4.9px RenderFlex overflow; at 375dp it is 87.5 tall (~0.5px overflow); any text scale > 1 makes it worse
+  - Fix: In home_page.dart replace GridView.count with `GridView(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), padding: EdgeInsets.zero, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, mainAxisSpacing: 10, crossAxisSpacing: 10, mainAxisExtent: 90), children: ...)`, or build two Rows of four Expanded tiles so the height follows content under text scaling
+- **[MAJOR · content] 'Open now' status is never shown on Available now rows** `DISC-01-F2` ✎
+  - Prototype: screens.jsx:167 `{p.openNow && (<>...<span style={{ color: aiwa.success700, fontWeight: 600 }}>Open now</span></>)}` (success700 = male #2E2A26 / female #6B3A3A)
+  - Flutter: provider_list_item.dart:73-77 calls `RatingMeta(rating:, reviews:, distance:)` without openNow. ProviderSummaryEntity/Model have no open field (provider_summary_entity.dart, provider_summary_model.dart:38-58), so the openNow branch in RatingMeta (provider_card.dart:302-313) never runs
+  - Fix: Add `final bool openNow` to ProviderSummaryEntity/Model. The backend ProviderSummaryDto (aiwa-backend/src/main/java/com/aiwa/dto/response/ApiResponse.java:91-109) sends only `vacationMode`, `offlineMode` and `settlementPaused`. Either derive `openNow: !(json['vacationMode'] ?? false) && !(json['offlineMode'] ?? false) && !(json['settlementPaused'] ?? false)`, or add a real `openNow` (computed from today's availabilities) to the DTO. Then pass `openNow: provider.openNow` in ProviderListItem
+- **[MAJOR · content] 'From EGP' price column never renders on Available now rows** `DISC-01-V1` ＋
+  - Prototype: screens.jsx:170-173 every Available now row ends with `<Eyebrow style={{ fontSize: 9 }}>From</Eyebrow>` + `EGP {p.price}` (DM Serif 17, plum900, lineHeight 1)
+  - Flutter: provider_list_item.dart:83 `if (!discover && provider.startingPrice != null)`; provider_summary_model.dart:27-36 derives startingPrice only from `json['services']` or `json['startingPrice']`, and the backend ProviderSummaryDto (aiwa-backend/src/main/java/com/aiwa/dto/response/ApiResponse.java:91-109) sends neither, so startingPrice is always null and the price column is dropped (ProviderServiceImpl.java:115 notes 'price sort added when min-price is on ProviderSummaryDto')
+  - Fix: Add `private BigDecimal startingPrice;` (the minimum active service price) to ProviderSummaryDto and set it in ProviderServiceImpl.toSummaryDto; the Flutter model already reads `json['startingPrice']`. Until then, keep the column and show a placeholder instead of omitting it
+- **[MINOR · content] Search pill location label is 'Near me' instead of the area name** `DISC-01-F3` ✔
+  - Prototype: screens.jsx:89-90 `<Icon name="map-pin" size={14} />Maadi` (13px, w600, plum700)
+  - Flutter: home_page.dart:232 `'Near me'`
+  - Fix: Show the resolved area or saved-address label (for example from reverse geocoding the Geolocator position, or the default address). Keep 'Near me' only as the fallback
+- **[MINOR · content] Trending section action copy differs** `DISC-01-F4` ✔
+  - Prototype: screens.jsx:122 `<SectionHeader title="Trending near you" action="View map" />`
+  - Flutter: home_page.dart:371 `action: 'View all'` -> context.go(AppRoutes.search)
+  - Fix: Use `action: 'View map'`, or confirm the copy change with design. The prototype has no map screen, so routing to Discover is acceptable
+- **[MINOR · tokens] Hero glow and search-pill shadow use theme tokens instead of the prototype literals** `DISC-01-F5` ✎
+  - Prototype: screens.jsx:97 `radial-gradient(circle, rgba(231,186,182,.4) 0%, transparent 70%)` on a 180px circle (farthest-corner radius 127px x 70% = ~89px, i.e. it fades out at the circle edge) in fixed #E7BAB6; screens.jsx:84 pill shadow `0 2px 8px rgba(74,31,56,.06)` in fixed #4A1F38
+  - Flutter: home_page.dart:261-265 `AiwaGlow(size: 180, color: AppColors.rose300, opacity: 0.4)` = male #B5A898 / female #E6BAB0; its RadialGradient (screen_chrome.dart:446-448) reaches 0 at 90px, so the falloff already matches. home_page.dart:211 `AppColors.plum700.withOpacity(0.06)` = male #2E2A26 / female #6B3A3A
+  - Fix: Only the colours differ. For literal parity use `const Color(0xFFE7BAB6)` for the hero glow and `const Color(0x0F4A1F38)` for the pill shadow; otherwise keep the gender-aware values and record them as intentional. Do not add `stops: [0, 0.7]` - that would shrink the glow to ~63px
+- **[MINOR · tokens] Rating star is 12px with a 2px gap instead of 11px with a 3px gap** `DISC-01-F6` ✔
+  - Prototype: screens.jsx:139-141,161-163 `<svg width="11" height="11" ... fill={aiwa.gold500}>` inside `gap: 3`
+  - Flutter: provider_card.dart:282-283 `Icon(Icons.star_rounded, size: 12, ...)` + `SizedBox(width: 2)`
+  - Fix: In RatingMeta, use `Icon(Icons.star_rounded, size: 11, color: AppColors.gold500), const SizedBox(width: 3)`
+- **[MINOR · layout] Category tile horizontal padding is 4 instead of 8** `DISC-01-F7` ✔
+  - Prototype: screens.jsx:111 `padding: '12px 8px 10px'`
+  - Flutter: category_tile.dart:44 `EdgeInsets.fromLTRB(4, 12, 4, 10)`
+  - Fix: Use `EdgeInsets.fromLTRB(8, 12, 8, 10)`. The label already has maxLines 1 with ellipsis
+- **[MINOR · layout] Header gap between bell and avatar is 8 instead of 12** `DISC-01-F8` ✔
+  - Prototype: screens.jsx:71 header `gap: 12` (between headline, bell and avatar)
+  - Flutter: home_page.dart:176 `const SizedBox(width: 8)`
+  - Fix: Change it to `SizedBox(width: 12)`
+- **[MINOR · layout] Available-now price column spacing differs** `DISC-01-F9` ✔
+  - Prototype: screens.jsx:155 row `gap: 12`. screens.jsx:171-172 'From' eyebrow directly above the price with no spacer
+  - Flutter: provider_list_item.dart:82 `SizedBox(width: 8)` before the price and line 88 `SizedBox(height: 2)` between 'From' and the price
+  - Fix: Use `SizedBox(width: 12)` and remove the 2px spacer
+- **[MINOR · layout] Available now shows the whole page (20) plus 'Load more' instead of 4 rows** `DISC-01-F10` ✔
+  - Prototype: screens.jsx:154 `PROVIDERS.slice(0, 4).map(...)`, with no pagination control
+  - Flutter: home_page.dart:390-403 maps every `state.providers` item, and lines 415-426 add an 'Load more' ghost button
+  - Fix: Render `state.providers.take(4)` and let users reach the full list through Discover. If the long list is wanted, confirm with design
+- **[MINOR · interaction] Bell sends guests to the auth gate** `DISC-01-F11` ✔
+  - Prototype: prototype.jsx:659 `onNotifications={() => push('notifications')}` has no guest check
+  - Flutter: home_page.dart:170-172 `user != null ? context.push(AppRoutes.notifications) : context.push(AppRoutes.authGate)`
+  - Fix: Either follow the prototype (open Notifications for guests with an empty or generic list) or keep the gate and record it as an intentional product decision
+- **[MINOR · components] Category icon glyphs swapped** `DISC-01-F12` ✔
+  - Prototype: screens.jsx:22-29 Lucide 'scissors','hand','leaf','brush','eye','droplets','hand-heart','sparkles'
+  - Flutter: home_page.dart:41-48 content_cut, back_hand, spa_outlined (a lotus, not a leaf), brush, visibility, water_drop_outlined (one drop, not droplets), volunteer_activism_outlined, auto_awesome
+  - Fix: For exact parity add a Lucide icon font package (for example lucide_icons) and use LucideIcons.leaf / droplets / handHeart. At minimum replace spa_outlined with Icons.eco_outlined for 'leaf'
+- **[MINOR · layout] Available now meta items are 6px apart instead of 8px** `DISC-01-V2` ＋
+  - Prototype: screens.jsx:160 meta row `gap: 8` between rating, dot, distance and 'Open now' (the trending card at screens.jsx:138 uses gap 6)
+  - Flutter: RatingMeta (provider_card.dart:298-313) separates items only with MetaDot, whose margin is `EdgeInsets.symmetric(horizontal: 6)` (screen_chrome.dart:416), so every row gets 6px gaps
+  - Fix: Add `final double gap` (default 6) to RatingMeta and apply it around each MetaDot; ProviderListItem passes `gap: 8`
+- **[MINOR · responsive] Trending carousel has a fixed 196px height that clips at larger text sizes** `DISC-01-V3` ＋
+  - Prototype: screens.jsx:123-124 the trending row is a flex row whose height follows the card content
+  - Flutter: home_page.dart:374-375 `SizedBox(height: 196, child: ListView.separated(...))`. The card is ~187px at text scale 1.0 (1+110+10+12+2+18.7+6+14.4+12+1) and exceeds 196 from about text scale 1.2 (about 4.6px overflow at Android 'Largest', 1.3)
+  - Fix: Replace the fixed-height ListView with `SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 22), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [...]))`, or scale the height with `MediaQuery.textScalerOf(context)`
+- **[MINOR · interaction] Home fires the OS location permission dialog directly** `DISC-01-V4` ＋
+  - Prototype: prototype.jsx:614 'Browse as guest' goes straight to `reset('home')` with no prompt; signed-up customers see the in-app PermissionPrimingScreen first (prototype.jsx:657 case 'perm-location'); HomeScreen never asks for location
+  - Flutter: home_page.dart:66-69 `if (perm == LocationPermission.denied) { perm = await Geolocator.requestPermission(); }` runs on every Home load and pull-to-refresh, so guests get the OS dialog over Home without priming
+  - Fix: In HomePage._loadData only call `Geolocator.checkPermission()` and use the default coordinates when denied; request the permission from the permission-priming screen (onboarding partition)
+
+#### ⚠️ Discover (search, category chips, sort, result list) — `DISC-02`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:129-233 (DiscoverScreen); prototype.jsx:660 (case 'discover') · Flutter: [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart), [Android/aiwa_app/lib/features/home/presentation/widgets/provider_list_item.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_list_item.dart), [Android/aiwa_app/lib/features/home/presentation/bloc/home_bloc.dart](Android/aiwa_app/lib/features/home/presentation/bloc/home_bloc.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart](Android/aiwa_app/lib/shared/widgets/aiwa_chip.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[MAJOR · interaction] Query and category chip are never applied together** `DISC-02-F1` ✎
+  - Prototype: prototype.jsx:139-145 filters one list by `cat`, rating, price and `query` together: `if (cat !== 'all' && p.cat.toLowerCase() !== cat) return false; ... if (query.trim() && ![p.name, p.category].some(...)) return false;`
+  - Flutter: search_page.dart:91 `_homeBloc.add(HomeSearchEvent(q.trim()))` sends no category, and home_bloc.dart:113-126 emits `selectedCategory: null` while the chip stays active (search_page.dart:277-278). Reverse direction: a chip tap with text in the field dispatches `HomeCategoryFilterEvent(_activeCategory)` (search_page.dart:283-286), which calls getNearbyProviders without the query (home_bloc.dart:89-111), so the typed text stays visible but is ignored
+  - Fix: In `_apply` (search_page.dart:105) add `if (_activeCategory != null && p.primaryCategory != _activeCategory) return false;` plus a client-side text match on businessName/categoryLabel. In the chip onTap, when `_controller.text.trim().isNotEmpty` call `_onSearch(_controller.text)` instead of HomeCategoryFilterEvent, so both inputs always apply
+- **[MAJOR · content] 'Open' status missing on result rows** `DISC-02-F2` ✔
+  - Prototype: prototype.jsx:226 `{p.openNow && (<>...<span style={{ color: aiwa.success700, fontWeight: 600 }}>Open</span></>)}` (Discover says 'Open', not 'Open now')
+  - Flutter: provider_list_item.dart:73-77 passes no openNow, and ProviderSummaryEntity has no field for it
+  - Fix: After adding openNow (see DISC-01-F2), add a label parameter: `RatingMeta(..., openNow: provider.openNow, openLabel: discover ? 'Open' : 'Open now')`
+- **[MAJOR · interaction] 'Price' sort and 'Max price' filter have no effect** `DISC-02-V1` ＋
+  - Prototype: prototype.jsx:142 `if (p.price > maxPrice) return false;` and prototype.jsx:147 `sort === 'Price'` sorts by `a.price - b.price`; the sheet button counts the filtered result (prototype.jsx:278)
+  - Flutter: search_page.dart:108-111 keeps every provider whose `startingPrice == null`, and search_page.dart:121-126 sorts nulls as `double.infinity`. startingPrice is always null (DISC-01-V1), so the Max price slider removes no one, 'Show N providers' never changes with it, and 'Price' leaves the order unchanged (the backend 'price' sort is also a rating placeholder, ProviderServiceImpl.java:114-115)
+  - Fix: Expose startingPrice on ProviderSummaryDto (DISC-01-V1). Until then, hide the 'Price' sort chip and the Max price slider rather than showing controls that do nothing
+- **[MINOR · content] Eight category chips instead of five** `DISC-02-F3` ✔
+  - Prototype: prototype.jsx:177-181 has only All, Hair (scissors), Nails (hand), Spa (leaf), Lashes (eye)
+  - Flutter: search_page.dart:40-49 `_cats` also includes Makeup, Skin and Massage
+  - Fix: Trim `_cats` to the five prototype chips, or confirm with design. Keeping 8 lets Home's Makeup/Skin/Massage tiles preselect a chip
+- **[MINOR · layout] Search pill right inset, height and filter-button padding differ** `DISC-02-F4` ✎
+  - Prototype: prototype.jsx:158 pill `padding: '13px 18px'` (row height = the 30px filter button, so the pill is ~58px tall incl. border); prototype.jsx:169 filter button `padding: 6` (button edge 18px, icon 24px from the pill edge)
+  - Flutter: search_page.dart:186 `EdgeInsets.only(left: 18, right: 8)` with no vertical padding; height comes from the TextField `contentPadding: EdgeInsets.symmetric(vertical: 14)` (line 219), about 52px. search_page.dart:242 `EdgeInsets.all(7)` puts the button edge 8px and the icon 15px from the pill edge
+  - Fix: In _buildSearchField use `padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13)` on the pill Container, `contentPadding: EdgeInsets.zero` on the TextField and `padding: const EdgeInsets.all(6)` on the filter AnimatedContainer
+- **[MINOR · layout] Chip row bottom padding is 4 instead of 6** `DISC-02-F5` ✔
+  - Prototype: prototype.jsx:176 `padding: '14px 22px 6px'`
+  - Flutter: search_page.dart:267-272 `EdgeInsets.fromLTRB(AppTheme.gutter, 14, AppTheme.gutter, 4)` inside `SizedBox(height: 50)`
+  - Fix: Change the bottom padding to 6 and the SizedBox height to 52
+- **[MINOR · components] Filter icon glyph differs** `DISC-02-F6` ✔
+  - Prototype: prototype.jsx:172 `<Icon name="sliders-horizontal" size={18} />`
+  - Flutter: search_page.dart:250 `Icons.tune_rounded`
+  - Fix: Use the Lucide 'sliders-horizontal' glyph if a Lucide package is adopted (see DISC-01-F12). Otherwise acceptable
+- **[MINOR · tokens] Row rating star is 12px (shared RatingMeta)** `DISC-02-F7` ✔
+  - Prototype: prototype.jsx:221 `<svg width="11" height="11" ...>` with `gap: 3`
+  - Flutter: provider_card.dart:282-283 `size: 12` + `SizedBox(width: 2)`
+  - Fix: Same fix as DISC-01-F6
+- **[MINOR · interaction] 'Nearest' sort and distances use hard-coded Cairo coordinates** `DISC-02-F8` ✔
+  - Prototype: prototype.jsx:148 sorts by the provider's distance from the user
+  - Flutter: search_page.dart:60-66, 87-89, 102 always dispatch `HomeLoadEvent(lat: 30.0444, lng: 31.2357, ...)`, while Home resolves the real position with Geolocator (home_page.dart:61-84)
+  - Fix: Share the resolved position between Home and Discover (for example cache it in a singleton or LocationCubit registered in injection_container.dart) and pass it in every HomeLoadEvent
+- **[MINOR · layout] Result-row meta items are 6px apart instead of 8px** `DISC-02-V2` ＋
+  - Prototype: prototype.jsx:219 Discover row meta `gap: 8` between rating, dot, distance and 'Open'
+  - Flutter: provider_list_item.dart:73-77 -> RatingMeta, whose MetaDot margin is 6 (screen_chrome.dart:416)
+  - Fix: Same change as DISC-01-V2: ProviderListItem passes `gap: 8` to RatingMeta
+- **[MINOR · tokens] 'Discover' title carries -0.64px letter-spacing** `DISC-02-V3` ＋
+  - Prototype: prototype.jsx:154 `fontFamily: fontDisp, fontSize: 28, ... lineHeight: 1.05` with no letterSpacing (Saved at prototype.jsx:296 and Bookings at screens.jsx:508 are the same)
+  - Flutter: screen_chrome.dart:119 PageTitle `AppTextStyles.h1.copyWith(fontSize: 28, height: 1.05)` inherits h1 `letterSpacing: -0.02 * 32` = -0.64px (app_text_styles.dart:20)
+  - Fix: Add `letterSpacing: 0` to the copyWith in PageTitle (fixes Discover, Saved and Bookings at once)
+- **[MINOR · responsive] Category chip row has a fixed height that clips chips at any text scale above ~1.03** `DISC-02-V4` ＋
+  - Prototype: prototype.jsx:176 the chip row is a flex row with `padding: '14px 22px 6px'` and a content-driven height
+  - Flutter: search_page.dart:263-272 `SizedBox(height: 50)` with 14/4 vertical padding leaves 32px, while an AiwaChip is ~31.6px (7+7 padding, 13px x 1.2 text, 2px border; aiwa_chip.dart:42-62)
+  - Fix: Replace it with `SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.fromLTRB(22, 14, 22, 6), child: Row(children: [...chips with SizedBox(width: 8) between]))`
+
+#### ⚠️ Discover - loading skeleton — `DISC-03`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:136-138,201; states.jsx:24-55 (Skeleton, SkeletonCard, SkeletonList) · Flutter: [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart), [Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart](Android/aiwa_app/lib/shared/widgets/loading_shimmer.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | — | — | ✅ | ✅ | — |
+
+- **[MINOR · tokens] Shimmer highlight is paper white instead of the hover token, and the period is 1.5s instead of 1.25s** `DISC-03-F1` ✔
+  - Prototype: states.jsx:28-30 `linear-gradient(90deg, ${aiwa.cream} 0%, ${aiwa.hover} 50%, ${aiwa.cream} 100%)`, `aiwa-shimmer 1.25s linear infinite`. hover = male #EBE5DA / female #F8E8E3, which equals cream in both themes, so the prototype shimmer is effectively flat
+  - Flutter: loading_shimmer.dart:21-23 `Shimmer.fromColors(baseColor: AppColors.cream, highlightColor: AppColors.paper)` (#FFFFFF), using the shimmer package's default 1500ms period
+  - Fix: `Shimmer.fromColors(baseColor: AppColors.cream, highlightColor: AppColors.hover, period: const Duration(milliseconds: 1250), ...)`, or keep white and record it as an intentional deviation
+
+#### ⚠️ Discover - empty results — `DISC-04`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:202-208; states.jsx:80-107 (EmptyState) · Flutter: [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart), [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[MAJOR · components] 'Notify me when someone joins' secondary action missing** `DISC-04-F1` ✔
+  - Prototype: prototype.jsx:207 `secondary="Notify me when someone joins" onSecondary={() => {}}`, rendered by states.jsx:102 as `<Btn variant="ghost" full size="sm">`
+  - Flutter: search_page.dart:396-406 passes no `secondaryLabel`/`onSecondary`, although EmptyState supports them (empty_state.dart:15-16,99-108)
+  - Fix: Add `secondaryLabel: 'Notify me when someone joins', onSecondary: _notifyMe` where `_notifyMe` calls a waitlist endpoint. Until that exists, show a SnackBar 'We'll let you know.'
+- **[MAJOR · content] 'Widen my radius' primary action missing; category-only case uses a different label** `DISC-04-F2` ✔
+  - Prototype: prototype.jsx:149,205 `filtersActive = minRating > 0 || maxPrice < 2500`; `action={filtersActive || query ? 'Clear search & filters' : 'Widen my radius'}`, so an action always shows, and a category-only empty result shows 'Widen my radius'
+  - Flutter: search_page.dart:392-405 `narrowed = q.isNotEmpty || _filtersActive || _activeCategory != null; actionLabel: narrowed ? 'Clear search & filters' : null`, so there is no button when nothing is narrowed and category-only shows 'Clear search & filters'
+  - Fix: `final cleared = q.isNotEmpty || _filtersActive; actionLabel: cleared ? 'Clear search & filters' : 'Widen my radius', onAction: cleared ? _clearAll : _widenRadius,` where `_widenRadius` reloads with a larger radiusKm. The prototype resets everything in both cases, so `_clearAll` is an acceptable minimum
+- **[MINOR · interaction] EmptyState icon has no pop-in animation** `DISC-04-F3` ✔
+  - Prototype: states.jsx:95 `animation: 'aiwa-pop 320ms cubic-bezier(.32,.72,0,1)'` (scale .86 -> 1, opacity 0 -> 1)
+  - Flutter: empty_state.dart:60-65 draws a static circle
+  - Fix: Wrap the circle: `TweenAnimationBuilder<double>(tween: Tween(begin: .86, end: 1), duration: AppTheme.dur3, curve: AppTheme.easeSoft, builder: (_, v, child) => Opacity(opacity: ((v - .86) / .14).clamp(0, 1), child: Transform.scale(scale: v, child: child)), child: circle)`
+- **[MINOR · components] Empty-results icon glyph differs** `DISC-04-V1` ＋
+  - Prototype: prototype.jsx:203 `<EmptyState icon="search-x" ...>` (magnifier with an x)
+  - Flutter: search_page.dart:397 `icon: Icons.search_off_rounded` (magnifier with a slash)
+  - Fix: Use the Lucide search-x glyph once a Lucide icon package is adopted (see DISC-01-F12); acceptable otherwise
+
+#### ⚠️ Discover - active filter chips — `DISC-05`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:183-192 · Flutter: [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · layout] Chip wrap padding is inverted (8 top / 0 bottom instead of 0 top / 4 bottom)** `DISC-05-F1` ✔
+  - Prototype: prototype.jsx:184 `padding: '0 22px 4px'`
+  - Flutter: search_page.dart:295-300 `EdgeInsets.fromLTRB(AppTheme.gutter, 8, AppTheme.gutter, 0)`
+  - Fix: Use `EdgeInsets.fromLTRB(AppTheme.gutter, 0, AppTheme.gutter, 4)`
+- **[MINOR · content] Two spaces before '×'** `DISC-05-F2` ✔
+  - Prototype: prototype.jsx:186,189 `★ {minRating.toFixed(1)}+ ×` and `Under EGP {maxPrice} ×` (one space)
+  - Flutter: search_page.dart:307,313 `'★ ${...}+  ×'` and `'Under EGP ${...}  ×'`
+  - Fix: Use a single space: `'★ ${_minRating.toStringAsFixed(1)}+ ×'`
+
+#### ⚠️ Discover - Filters bottom sheet (rating / price) — `DISC-06`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:235-282 · Flutter: [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart), [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[MINOR · tokens] Sheet shadow and scrim colours differ from the prototype literals** `DISC-06-F1` ✔
+  - Prototype: prototype.jsx:238 scrim `rgba(42,19,32,.45)` (#2A1320). prototype.jsx:244 `boxShadow: '0 -12px 32px rgba(0,0,0,.18)'`
+  - Flutter: search_page.dart:451 `AppColors.plum900.withOpacity(0.45)` gives male #2E2A26. app_theme.dart:44-50 sheetDecoration `AppColors.plum700.withOpacity(0.14)`, blur 32, offset (0,-12)
+  - Fix: In app_theme.dart sheetDecoration use `BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 32, offset: Offset(0, -12))`. Optionally use barrierColor `const Color(0x732A1320)`
+- **[MINOR · layout] Bottom padding and slider vertical rhythm differ** `DISC-06-F2` ✔
+  - Prototype: prototype.jsx:244 `padding: '18px 22px 36px'`; prototype.jsx:254 header `marginBottom: 8`; prototype.jsx:261,272 range labels `marginTop: 4`
+  - Flutter: search_page.dart:467-472 bottom `24 + safe-area`. Lines 508-521 and 523-534 put the Slider directly under _SliderHeader with no 8/4 spacers, and the Material Slider adds its own ~24px vertical padding
+  - Fix: Add `SizedBox(height: 8)` before and `SizedBox(height: 4)` after each Slider, and remove the Slider's intrinsic padding (`Slider(padding: EdgeInsets.zero, ...)` on Flutter >= 3.24, or SliderTheme overlayShape: RoundSliderOverlayShape(overlayRadius: 0)). Set bottom padding to `36 + safe-area - 34` or simply 36
+- **[MINOR · interaction] Open/close animation uses Flutter defaults** `DISC-06-F3` ✔
+  - Prototype: prototype.jsx:240,245 scrim `aiwa-fade-in 220ms`, sheet `aiwa-slide-in 320ms cubic-bezier(.32,.72,0,1)`
+  - Flutter: search_page.dart:448-453 showModalBottomSheet without an animation style
+  - Fix: Pass `sheetAnimationStyle: AnimationStyle(duration: AppTheme.dur3, curve: AppTheme.easeSoft)` (Flutter >= 3.22)
+
+#### ✅ Discover - end-of-list footer — `DISC-07`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:232; states.jsx:320-328 (EndOfList) · Flutter: [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
+
+No deviations found.
+
+
+#### ⚠️ Provider profile (cover, bio, action chips, tab bar, sticky Book CTA) — `DISC-08`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:184-244,314-321 (ProviderScreen); prototype.jsx:661-667 (case 'provider') · Flutter: [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart), [Android/aiwa_app/lib/features/providers/presentation/bloc/provider_bloc.dart](Android/aiwa_app/lib/features/providers/presentation/bloc/provider_bloc.dart), [Android/aiwa_app/lib/features/providers/domain/entities/provider_detail_entity.dart](Android/aiwa_app/lib/features/providers/domain/entities/provider_detail_entity.dart), [Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ | — |
+
+- **[CRITICAL · interaction] Report chip missing: the FlagProviderSheet flow cannot be reached** `DISC-08-F1` ✔
+  - Prototype: screens.jsx:229 `<Chip icon="flag" onClick={onFlag}>Report</Chip>`; prototype.jsx:667 `onFlag={() => setShowFlag(true)}` mounts FlagProviderSheet (prototype.jsx:742-750)
+  - Flutter: provider_detail_page.dart:334-361 chip Wrap has only Call, WhatsApp and Directions. The string 'Report' and any flag sheet are absent from lib/
+  - Fix: Append to the Wrap: `AiwaChip(label: 'Report', icon: Icons.flag_outlined, onTap: () => showFlagProviderSheet(context, providerId: p.id, providerName: p.displayName))`. Build the sheet as described in DISC-12
+- **[CRITICAL · interaction] Book routing has no shop -> staff-picker branch and skips the booking-type step** `DISC-08-F2` ✎
+  - Prototype: prototype.jsx:661-667 `if (p?.type === 'shop') { push('staff-picker'); } else if (isGuest) { push('auth-gate'); } else { push('booking-type'); }` - the shop check runs before the guest check; used by both the CTA (screens.jsx:320) and each service '+' (screens.jsx:263)
+  - Flutter: provider_detail_page.dart:62-69 `if (!_isSignedIn) { context.push(AppRoutes.authGate); return; } ... context.push('/booking/${widget.providerId}$query');`. ProviderDetailEntity/Model have no provider type or staff (provider_detail_entity.dart, provider_detail_model.dart:49-69)
+  - Fix: Map `providerType` ('INDIVIDUAL'/'SHOP') and `staffMembers` (id, fullName, title) in ProviderDetailModel. The backend already sends them in ProviderDetailDto (aiwa-backend .../dto/response/ApiResponse.java:125,135; staff also at GET /providers/{providerId}/staff, StaffController.java:26), so no backend change is needed. Then: `void _book({ServiceEntity? service}) { final q = service != null ? '?serviceId=${service.id}' : ''; if (p.providerType == 'SHOP') { context.push('/provider/${widget.providerId}/staff$q'); return; } if (!_isSignedIn) { context.push(AppRoutes.authGate, extra: '/booking/${widget.providerId}$q'); return; } context.push('/booking/${widget.providerId}$q'); }`. Route to a booking-type screen once it exists; there is none in lib/features/bookings/presentation/pages (booking partition)
+- **[CRITICAL · content] Provider detail model reads keys the backend does not send, so name, category, Verified and Call/WhatsApp/Directions disappear** `DISC-08-V1` ＋
+  - Prototype: screens.jsx:201-215 the cover shows the category eyebrow, a DM Serif 32 name, rating, 'distance · area' and Verified; screens.jsx:226-228 Call / WhatsApp / Directions chips are always shown
+  - Flutter: provider_detail_model.dart:28-30 `final user = json['user'] as Map<String, dynamic>? ?? json; final profile = json['providerProfile'] as Map<String, dynamic>? ?? {};` reads businessName/bio/address/latitude/longitude/verified from `profile` and fullName/phone from `user` (lines 45-65). GET /providers/{id} (ProviderController.java:56-63) returns a flat ProviderDetailDto: businessName, bio, address, latitude, longitude, primaryCategory, verificationStatus, and owner {fullName, phone, profileImageUrl} (ApiResponse.java:114-137). Result: displayName is '' (provider_detail_page.dart:267), categories [] hides the eyebrow (263), isVerified is always false, phone '' hides Call and WhatsApp (338-351), and a null latitude hides Directions (352)
+  - Fix: Rewrite ProviderDetailModel.fromJson for the flat DTO: `final owner = json['owner'] as Map<String, dynamic>? ?? const {};` then `providerName: owner['fullName'] ?? ''`, `businessName: json['businessName']`, `bio: json['bio']`, `address: json['address']`, `latitude: (json['latitude'] as num?)?.toDouble()`, `phone: owner['phone'] ?? ''`, `profileImageUrl: owner['profileImageUrl']`, `categories: [if (json['primaryCategory'] != null) json['primaryCategory'] as String]`, `isVerified: json['verificationStatus'] == 'APPROVED'`. Add a model test using a real response fixture
+- **[CRITICAL · interaction] Save heart calls endpoints that do not exist, so saving never persists** `DISC-08-V2` ＋
+  - Prototype: screens.jsx:197 cover `<IconBtn icon="heart" variant="glass" />`; prototype.jsx:290-337 Saved lists the providers the user has hearted
+  - Flutter: provider_remote_datasource.dart:67 `_api.post(ApiConstants.savedProviders, data: {'providerId': providerId})` sends POST /users/me/saved, but SavedController.java:48 maps only `@PostMapping("/{providerId}")`, so the call gets a 405. provider_remote_datasource.dart:78 checks GET /users/me/saved/{id}, but only GET /{providerId}/check exists (SavedController.java:80; ApiConstants.checkSaved at api_constants.dart:62 is unused), so isSaved is always false on open. ProviderBloc._onToggleSave (provider_bloc.dart:53-66) ignores the Either and flips `isSaved` anyway, so the cover heart fills without saving; SaveHeartButton (provider_card.dart:150-159) rolls back, so the trending heart springs back empty
+  - Fix: In ProviderRemoteDataSourceImpl use `_api.post('${ApiConstants.savedProviders}/$providerId')` to save and `_api.get(ApiConstants.checkSaved(providerId))`, reading `response.data['data'] as bool`, to check. In _onToggleSave emit the optimistic value first and revert on Left. Also parse ProviderSummaryDto.saved (ApiResponse.java:104) and pass it as `initiallySaved` at provider_card.dart:86
+- **[MAJOR · components] Share button missing from the cover** `DISC-08-F3` ✔
+  - Prototype: screens.jsx:195-198 `<div style={{ display: 'flex', gap: 8 }}><IconBtn icon="share-2" variant="glass" /><IconBtn icon="heart" variant="glass" /></div>`
+  - Flutter: provider_detail_page.dart:237-254 Row(back, Spacer(), heart) has no share button
+  - Fix: Insert `AiwaIconButton(icon: Icons.share_outlined, variant: AiwaIconButtonVariant.glass, onTap: _share), const SizedBox(width: 8),` before the heart. Implement `_share` with the share_plus package (not in pubspec.yaml; add it) or copy a deep link
+- **[MINOR · tokens] Cover rating star uses gold300 instead of gold500** `DISC-08-F4` ✔
+  - Prototype: screens.jsx:205 `<svg width="13" ... fill={aiwa.gold500} stroke={aiwa.gold500}>` gives male #5C544D / female #C4837A (base #B58A4E)
+  - Flutter: provider_detail_page.dart:280-281 `icon: Icons.star_rounded, iconColor: AppColors.gold300` gives male #B5A898 / female #E6BAB0
+  - Fix: Use `iconColor: AppColors.gold500`. Check contrast on the male charcoal cover with design first; gold300 may be an intentional legibility fix
+- **[MINOR · content] Location meta shows the full address instead of 'distance · area'** `DISC-08-F5` ✔
+  - Prototype: screens.jsx:209 `<Icon name="map-pin" size={12} /> {p.distance} · Maadi`
+  - Flutter: provider_detail_page.dart:287-293 `_CoverMeta(icon: Icons.location_on_outlined, text: p.address!)`, icon size 13 (line 571). The detail entity has no distance
+  - Fix: Pass `distanceKm` (from the list item via `extra`, or from the API) and render `'${distanceText} · ${area}'` with a 12px icon
+- **[MINOR · layout] Cover meta spacing and tab gap differ** `DISC-08-F6` ✔
+  - Prototype: screens.jsx:203 meta `columnGap: 10, rowGap: 4` (10px on each side of the 3px dot). screens.jsx:233 tabs `gap: 6`, and buttons use default line-height (about 40px tall)
+  - Flutter: provider_detail_page.dart:275-278 Wrap has no `spacing`; MetaDot margin is 6 on each side (screen_chrome.dart:416). Tabs Row of Expanded without gaps (607-636), label height 1 (AppTextStyles.label), about 38px tall
+  - Fix: `Wrap(spacing: 10, runSpacing: 4, ...)` with `MetaDot` margin zero in this context. In _Tabs, add `SizedBox(width: 6)` between Expanded children and `height: 1.3` on the label
+- **[MINOR · responsive] Cover height grows by half the safe-area inset** `DISC-08-F7` ✔
+  - Prototype: screens.jsx:191 `height: 280` (includes the status bar; the top buttons sit at top: 60)
+  - Flutter: provider_detail_page.dart:178 `280 + MediaQuery.paddingOf(context).top * 0.5` gives about 303px on a 47px notch
+  - Fix: Use `double get _coverHeight => 280;`. The top buttons are already offset by `top + 12`
+- **[MINOR · tokens] Provider name inherits h1 letter-spacing** `DISC-08-F8` ✔
+  - Prototype: screens.jsx:202 `fontFamily: fontDisp, fontSize: 32, margin: '4px 0 6px', lineHeight: 1.05` (no letterSpacing)
+  - Flutter: provider_detail_page.dart:268-272 `AppTextStyles.h1.copyWith(color: AppColors.bone, fontSize: 32, height: 1.05)`; h1 carries `letterSpacing: -0.02 * 32` (app_text_styles.dart:16-21)
+  - Fix: Add `letterSpacing: 0` to the copyWith
+- **[MINOR · tokens] Cover glows are theme-mapped and smaller than the prototype's** `DISC-08-F9` ✎
+  - Prototype: screens.jsx:192 `radial-gradient(circle at 25% 30%, rgba(231,186,182,.4), transparent 50%), radial-gradient(circle at 80% 70%, rgba(216,185,138,.25), transparent 60%)`. With farthest-corner sizing on a ~390x280 cover, the rose glow is centred at ~(98,84) and fades out at ~176px, and the gold glow is centred at ~(312,196) and fades out at ~221px, in fixed #E7BAB6 / #D8B98A
+  - Flutter: provider_card.dart:205-223 two `AiwaGlow(size: 280)` (radius 140) at left -60/top -20 (centre ~(80,120)) and right -80/bottom -60 (centre ~(330,200)); colours AppColors.rose300 / gold300 = male #B5A898 for both, female #E6BAB0 for both
+  - Fix: For parity, size the glows from the cover box with a LayoutBuilder: rose glow diameter ~0.9 x width centred at (25%,30%), gold glow diameter ~1.13 x width centred at (80%,70%), colours `const Color(0xFFE7BAB6)` @ .4 and `const Color(0xFFD8B98A)` @ .25. Do not add RadialGradient stops to AiwaGlow (its gradient already reaches 0 at the edge, screen_chrome.dart:446-448). Keeping the theme-aware colours is acceptable if recorded as intentional
+- **[MINOR · content] Bio fallback copy differs** `DISC-08-F10` ✔
+  - Prototype: screens.jsx:223 "Top-rated provider in your area. Read more about the studio, services, and recent reviews."
+  - Flutter: provider_detail_page.dart:330 'Top-rated provider in your area. Browse the services, recent reviews and gallery below.'
+  - Fix: Use the prototype string
+- **[MINOR · components] WhatsApp chip glyph differs** `DISC-08-F11` ✔
+  - Prototype: screens.jsx:227 `<Chip icon="message-circle">WhatsApp</Chip>`
+  - Flutter: provider_detail_page.dart:347 `Icons.chat_bubble_outline_rounded`
+  - Fix: Use the Lucide 'message-circle' (round bubble). A close Material alternative is Icons.mode_comment_outlined
+- **[MINOR · interaction] 'Book now' CTA does not preselect the first service** `DISC-08-F12` ✔
+  - Prototype: screens.jsx:320 `onClick={() => onBook(services[0])}`
+  - Flutter: provider_detail_page.dart:170 `onPressed: p.services.any((s) => s.available) ? _book : null` (no service)
+  - Fix: `onPressed: ... ? () => _book(service: p.services.firstWhere((s) => s.available)) : null`
+- **[MINOR · interaction] Push transition is the platform default instead of the 8% slide-in** `DISC-08-F13` ✔
+  - Prototype: prototype.jsx:730 `animation: aiwa-slide-in 320ms cubic-bezier(.32,.72,0,1)`; prototype.html:16-19 `from { transform: translateX(8%) }`
+  - Flutter: app_router.dart:180-186 `GoRoute(path: '/provider/:id', builder: ...)` uses the default MaterialPage transition; no pageTransitionsTheme in app_theme.dart
+  - Fix: Use `pageBuilder: (c, s) => CustomTransitionPage(child: ProviderDetailPage(...), transitionDuration: AppTheme.dur3, transitionsBuilder: (_, a, __, child) => SlideTransition(position: Tween(begin: const Offset(.08, 0), end: Offset.zero).animate(CurvedAnimation(parent: a, curve: AppTheme.easeSoft)), child: child))`, or apply it app-wide in one helper
+- **[MINOR · tokens] Sticky CTA price line-height is 1.1 instead of 1** `DISC-08-V3` ＋
+  - Prototype: screens.jsx:318 `fontFamily: fontDisp, fontSize: 22, color: aiwa.plum900, lineHeight: 1`
+  - Flutter: provider_detail_page.dart:161 `AppTextStyles.price.copyWith(height: 1.1)`; price is already 22 / height 1 (app_text_styles.dart:64-69)
+  - Fix: Use `style: AppTextStyles.price` without the copyWith
+
+#### ⚠️ Provider profile - Services tab — `DISC-09`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:246-268 · Flutter: [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart), [Android/aiwa_app/lib/features/providers/domain/entities/provider_detail_entity.dart](Android/aiwa_app/lib/features/providers/domain/entities/provider_detail_entity.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[MAJOR · content] Price-type label and 'From' eyebrow missing** `DISC-09-F1` ✔
+  - Prototype: screens.jsx:253-255 `<span>{s.duration}</span><dot/><span>{s.fixed ? 'Fixed price' : 'Starts at'}</span>`; screens.jsx:260 `{!s.fixed && <Eyebrow style={{ fontSize: 9, marginBottom: 2 }}>From</Eyebrow>}`
+  - Flutter: provider_detail_page.dart:682-700 meta row shows only `_duration(service.durationMinutes)` (plus 'Unavailable'); lines 705-708 show a bare price. ServiceEntity has no fixed-price flag (provider_detail_entity.dart:55-73)
+  - Fix: Add `final bool fixedPrice;` to ServiceEntity and the model. Render `Text(_duration(...)), const MetaDot(), Text(service.fixedPrice ? 'Fixed price' : 'Starts at', style: AppTextStyles.micro.copyWith(fontSize: 12))`, and wrap the price in `Column(crossAxisAlignment: CrossAxisAlignment.end, children: [if (!service.fixedPrice) ...[const EyebrowLabel('From', fontSize: 9), const SizedBox(height: 2)], Text('EGP ${_money(service.price)}', ...)])`
+- **[MINOR · content] Extra description line not in the prototype** `DISC-09-F2` ✔
+  - Prototype: screens.jsx:250-257 shows only the name and the meta row
+  - Flutter: provider_detail_page.dart:670-680 adds `service.description` (up to 2 lines, 12px)
+  - Fix: Remove it, or confirm the addition with design
+- **[MINOR · layout] Name-to-meta spacing is 3 instead of 2** `DISC-09-F3` ✔
+  - Prototype: screens.jsx:252 `marginTop: 2`
+  - Flutter: provider_detail_page.dart:681 `const SizedBox(height: 3)`
+  - Fix: Use `SizedBox(height: 2)`
+- **[MINOR · interaction] Plus button has no press feedback** `DISC-09-F4` ✔
+  - Prototype: prototype.html:41-42 `button:active:not(:disabled) { transform: scale(.96); }` (120ms)
+  - Flutter: provider_detail_page.dart:710-728 plain GestureDetector + Container
+  - Fix: Wrap it in an AnimatedScale driven by onTapDown/onTapUp (as AiwaButton does, aiwa_button.dart:114-123), or reuse AiwaIconButton with an outlined variant
+- **[MINOR · states] Service availability is parsed from a key the backend does not send** `DISC-09-V1` ＋
+  - Prototype: screens.jsx:248-266 every listed service is bookable (no unavailable state)
+  - Flutter: provider_detail_model.dart:91 `available: json['available'] as bool? ?? true`, but ServiceDto sends `active` (ApiResponse.java:185), so inactive services render as bookable and the dimmed 'Unavailable' state (provider_detail_page.dart:688-698, 712-713) never triggers
+  - Fix: `available: json['active'] as bool? ?? json['available'] as bool? ?? true`, or leave inactive services out of the public profile on the server; parse `pricingType` in the same place for DISC-09-F1
+
+#### ⚠️ Provider profile - Reviews tab — `DISC-10`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:270-293 · Flutter: [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart), [Android/aiwa_app/lib/shared/widgets/star_rating.dart](Android/aiwa_app/lib/shared/widgets/star_rating.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ✅ | ✅ | — | ✅ | ✅ | — |
+
+- **[CRITICAL · states] Reviews are never loaded, so the tab always shows 'No reviews yet'** `DISC-10-V1` ＋
+  - Prototype: screens.jsx:270-293 the Reviews tab shows the summary card and the review list (REVIEWS seed at screens.jsx:42-46)
+  - Flutter: provider_detail_model.dart:37-40 reads `json['reviews']`, which ProviderDetailDto does not contain (ApiResponse.java:114-137), and ProviderBloc._onLoad (provider_bloc.dart:32-51) never calls ProviderRepository.getProviderReviews (GET /providers/{id}/reviews, provider_remote_datasource.dart:40-51). provider_detail_page.dart:381-392 therefore always renders the 'No reviews yet' EmptyState, even when the cover shows e.g. '4.9 (312)'. ReviewSummaryModel also reads `json['customer']` (provider_detail_model.dart:108-113) while ReviewDto sends `user` (ApiResponse.java:276-286), so names would read 'Anonymous'
+  - Fix: Add a GetProviderReviewsUseCase and fetch reviews in ProviderBloc._onLoad (or lazily on the first switch to the Reviews tab), storing them in ProviderLoaded. In ReviewSummaryModel read `final u = (json['user'] ?? json['customer'] ?? const {}) as Map<String, dynamic>;`
+- **[MINOR · layout] Extra 3px gap between the name row and the stars** `DISC-10-F1` ✔
+  - Prototype: screens.jsx:283-287 the header div is followed directly by `<Stars value={r.rating} size={11} />`
+  - Flutter: provider_detail_page.dart:768 `const SizedBox(height: 3)`
+  - Fix: Remove the spacer
+- **[MINOR · components] Empty stars use a divider-coloured outline icon instead of an ink4 stroke** `DISC-10-F2` ✔
+  - Prototype: components.jsx:180 unfilled star `fill='none' stroke={aiwa.ink4} strokeWidth="2"`; there are no half stars
+  - Flutter: star_rating.dart:27,29-35 `Icons.star_outline_rounded` coloured `AppColors.divider`, plus `star_half_rounded` for .5 values
+  - Fix: Use `inactiveColor ?? AppColors.ink4`, and round `value` for review rows if half stars are not wanted
+- **[MINOR · tokens] 38px summary rating carries -0.96px letter-spacing** `DISC-10-V2` ＋
+  - Prototype: screens.jsx:273 `fontFamily: fontDisp, fontSize: 38, color: aiwa.plum900, lineHeight: 1` (no letterSpacing)
+  - Flutter: provider_detail_page.dart:411-414 `AppTextStyles.display.copyWith(fontSize: 38, height: 1)` keeps display's `letterSpacing: -0.02 * 48` = -0.96px (app_text_styles.dart:9-14)
+  - Fix: Add `letterSpacing: 0` to the copyWith
+
+#### ✅ Provider profile - Gallery tab — `DISC-11`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:295-311 · Flutter: [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
+
+No deviations found.
+
+
+#### ⚠️ AuthGateScreen ('Sign in to book.') — `DISC-15`
+
+Prototype: ui_kits/aiwa-app/customer-extras-2.jsx:27-54; prototype.jsx:665,669,672 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/auth_gate_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/auth_gate_page.dart), [Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart](Android/aiwa_app/lib/features/auth/presentation/widgets/step_header.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ⚠️ | ✅ | ⚠️ | — | ✅ | — |
+
+- **[CRITICAL · interaction] Signing in or creating an account from the gate does not resume the booking** `DISC-15-F1` ✔
+  - Prototype: prototype.jsx:672 `<AuthGateScreen onBack={pop} onContinue={() => { setIsGuest(false); push('booking-type'); }} />`; both buttons call onContinue (customer-extras-2.jsx:49-50)
+  - Flutter: auth_gate_page.dart:30-31 pushes AppRoutes.phoneEntry; line 39 pushes '/sign-in?role=CUSTOMER'. On success sign_in_page.dart:65-69 does `context.go(... AppRoutes.home)` and avatar_gender_page.dart:70-73 does the same, so the provider and service being booked are lost
+  - Fix: Give AuthGatePage a `returnTo` (from `state.extra` or `?from=`) and forward it: `context.push('${AppRoutes.signIn}?role=CUSTOMER&from=${Uri.encodeComponent(returnTo)}')`. In the SignIn and AvatarGender listeners use `context.go(from ?? AppRoutes.home)`. Callers pass the target, for example `context.push(AppRoutes.authGate, extra: '/booking/42?serviceId=7')`
+- **[MINOR · layout] Top and bottom padding differ from the prototype** `DISC-15-F2` ✔
+  - Prototype: customer-extras-2.jsx:29 `padding: '70px 24px 32px'` (about 23px below a 47px status bar; 32px bottom)
+  - Flutter: step_header.dart:96 `EdgeInsets.fromLTRB(24, insets.top + 18, 24, 16)` and step_header.dart:114 bottom `16 + insets.bottom`
+  - Fix: Use insets.top + 23 for this screen. The bottom is acceptable because the safe area is added
+- **[MINOR · tokens] Title letter-spacing is computed for 32px** `DISC-15-F3` ✔
+  - Prototype: customer-extras-2.jsx:33 `fontSize: 30, lineHeight: 1.05, letterSpacing: '-0.02em'` = -0.6px
+  - Flutter: auth_gate_page.dart:53 `AppTextStyles.h1.copyWith(fontSize: 30, height: 1.05)`; h1 letterSpacing = -0.64 (app_text_styles.dart:20)
+  - Fix: Add `letterSpacing: -0.6` to the copyWith (negligible visually)
+
+#### ⚠️ Saved (favorites list) — `DISC-16`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:290-337 (SavedScreen); prototype.jsx:706-708 (case 'saved') · Flutter: [Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart), [Android/aiwa_app/lib/features/saved/presentation/bloc/saved_bloc.dart](Android/aiwa_app/lib/features/saved/presentation/bloc/saved_bloc.dart), [Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · interaction] 'Book again' jumps straight to the booking page instead of the provider profile** `DISC-16-F1` ✔
+  - Prototype: prototype.jsx:708 `onRebook={(id) => { setProviderId(id); push('provider'); }}`; the button is at prototype.jsx:323-326
+  - Flutter: saved_page.dart:149 `onBook: () => context.push('/booking/${p.id}')` bypasses the provider page, and with it service selection, the staff picker and booking-type
+  - Fix: `onBook: () => context.push('/provider/${p.id}')`
+- **[CRITICAL · states] Saved list never loads: the page stays on the skeleton** `DISC-16-V1` ＋
+  - Prototype: prototype.jsx:291-334 Saved renders the favorites list, or the 'No favorites yet' EmptyState when it is empty
+  - Flutter: saved_remote_datasource.dart:24-32 passes `response.data['data']` to `PagedData.fromJson(Map<String, dynamic> json, ...)` (api_response.dart:43-58), but GET /users/me/saved returns a plain `List<ProviderSummaryDto>` (SavedController.java:31-46). The implicit cast throws a TypeError that SavedRepositoryImpl does not catch (it catches only ServerException/NetworkException, saved_repository_impl.dart:18-33), so SavedBloc stays in SavedLoading and saved_page.dart:108-113 shows the SkeletonList indefinitely. Neither the list nor the empty state can be reached
+  - Fix: In SavedRemoteDataSourceImpl.getSavedProviders accept a list: `final data = response.data['data']; if (data is List) return PagedData(content: data.map((e) => ProviderSummaryModel.fromJson(e as Map<String, dynamic>)).toList(), totalElements: data.length, totalPages: 1, number: 0, size: data.length, last: true);`, otherwise use PagedData.fromJson. Add a catch-all -> Left(ServerFailure) in SavedRepositoryImpl so parse errors show ErrorState
+- **[MINOR · tokens] Tile gradient has 3 stops instead of plum500 -> plum900** `DISC-16-F2` ✔
+  - Prototype: prototype.jsx:309-310 `linear-gradient(135deg, ${aiwa.plum500}, ${aiwa.plum900})` + `radial-gradient(circle at 30% 30%, rgba(231,186,182,.35), transparent 55%)`
+  - Flutter: saved_page.dart:190-194 uses CoverImage (non-hero): colors [plum500, plum700, plum900], stops [0, .6, 1] and AiwaGlow(rose300) (provider_card.dart:193-229). In the male theme plum700 == plum900 (#2E2A26), so it darkens from 60% instead of blending across
+  - Fix: Add an optional `List<Color>? colors` to CoverImage and pass `[AppColors.plum500, AppColors.plum900]` with stops [0, 1] from SavedPage
+- **[MINOR · tokens] Rating star is 13px with a 2px gap instead of 11 / 3** `DISC-16-F3` ✔
+  - Prototype: prototype.jsx:319-321 `<svg width="11" height="11" ...>` in `gap: 3`
+  - Flutter: saved_page.dart:221-226 `Icon(Icons.star_rounded, size: 13, ...)` + `SizedBox(width: 2)`
+  - Fix: Use size 11 and `SizedBox(width: 3)`
+- **[MINOR · states] Unsave waits for the API and removes the item even if the call fails** `DISC-16-F4` ✔
+  - Prototype: prototype.jsx:329 removes instantly: `setSaved(s => s.filter(x => x.id !== p.id))`
+  - Flutter: saved_bloc.dart:53-67 `await _repository.removeProvider(...)`, then emits the filtered list regardless of the result, so the UI lags and can go out of sync with the server
+  - Fix: Emit the filtered list first, then call the API and re-insert the provider (with a toast) if the result is a Left
+- **[MINOR · tokens] Saved title and tile initial carry negative letter-spacing; the initial's colour is theme-mapped** `DISC-16-V2` ＋
+  - Prototype: prototype.jsx:296 'Saved' 28px / lineHeight 1.05 with no letterSpacing; prototype.jsx:311 initial `fontFamily: fontDisp, fontSize: 48, color: 'rgba(250,245,238,.9)'` with no letterSpacing
+  - Flutter: saved_page.dart:80-84 PageTitle -> screen_chrome.dart:119 keeps -0.64px; provider_card.dart:234-238 `AppTextStyles.display.copyWith(fontSize: 48, color: AppColors.bone.withOpacity(0.9), height: 1)` keeps -0.96px, and the colour resolves to male #F5F2ED / female #FDF6F4 @ 90% instead of the fixed #FAF5EE
+  - Fix: Set `letterSpacing: 0` in PageTitle (see DISC-02-V3) and in the CoverImage initial style; use `const Color(0xE6FAF5EE)` if the literal colour is wanted
+
+#### ⚠️ Saved - empty state ('No favorites yet') — `DISC-17`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:299-303; states.jsx:80-107 · Flutter: [Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart), [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[MINOR · interaction] 'Browse providers' opens Discover instead of a provider profile** `DISC-17-F1` ✔
+  - Prototype: prototype.jsx:302 `onAction={() => onProvider && onProvider(1)}`, which pushes 'provider' for the hardcoded demo provider #1
+  - Flutter: saved_page.dart:123 `onAction: () => context.go(AppRoutes.search)`
+  - Fix: Keep Discover. The prototype target is a demo placeholder with a hardcoded id, which is why this is rated minor. Confirm with design and record the decision
+
+#### ⚠️ GuestLockedScreen (shared guest gate for Bookings / Saved / Profile) — `DISC-18`
+
+Prototype: ui_kits/aiwa-app/customer-extras-2.jsx:11-25 · Flutter: [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ⚠️ | — | ✅ | — |
+
+- **[CRITICAL · interaction] CTA pushes /role-choice instead of the auth gate** `DISC-18-F1` ✔
+  - Prototype: prototype.jsx:699,707,710 `onSignIn={() => push('auth-gate')}`
+  - Flutter: guest_locked_view.dart:65 `onPressed: () => context.push(AppRoutes.roleChoice)`
+  - Fix: `onPressed: () => context.push(AppRoutes.authGate)` (with a return path to the current tab once DISC-15-F1 is fixed)
+- **[MINOR · tokens] Guest-locked title carries -0.26px letter-spacing** `DISC-18-V1` ＋
+  - Prototype: customer-extras-2.jsx:19 `fontFamily: fontDisp, fontSize: 24, color: aiwa.plum900, margin: '8px 0 8px', lineHeight: 1.1` (no letterSpacing)
+  - Flutter: guest_locked_view.dart:45 `AppTextStyles.h2.copyWith(fontSize: 24, height: 1.1)` keeps h2's `letterSpacing: -0.01 * 26` = -0.26px (app_text_styles.dart:23-28)
+  - Fix: Add `letterSpacing: 0` to the copyWith
+
+#### ⚠️ Bookings tab - guest locked variant — `DISC-19`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:698-699 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart), [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] CTA goes to /role-choice instead of the auth gate (shared widget)** `DISC-19-F2` ✔
+  - Prototype: prototype.jsx:699 `onSignIn={() => push('auth-gate')}`
+  - Flutter: guest_locked_view.dart:65 `context.push(AppRoutes.roleChoice)`
+  - Fix: Fix once in GuestLockedView (DISC-18-F1)
+- **[MINOR · content] Guest Bookings copy differs from the prototype** `DISC-19-F1` ✔
+  - Prototype: prototype.jsx:699 `title="See your bookings" body="Sign in to view and track your bookings."`
+  - Flutter: my_bookings_page.dart:40-42 `title: 'Your bookings live here'`, `body: 'Sign in to book providers, track them on the way, and see your history.'`
+  - Fix: Use `title: 'See your bookings', body: 'Sign in to view and track your bookings.'`
+
+#### ⚠️ Saved tab - guest locked variant — `DISC-20`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:706-707 · Flutter: [Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart), [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] CTA goes to /role-choice instead of the auth gate (shared widget)** `DISC-20-F2` ✔
+  - Prototype: prototype.jsx:707 `onSignIn={() => push('auth-gate')}`
+  - Flutter: guest_locked_view.dart:65 `context.push(AppRoutes.roleChoice)`
+  - Fix: Fix once in GuestLockedView (DISC-18-F1)
+- **[MINOR · content] Guest Saved copy differs from the prototype** `DISC-20-F1` ✔
+  - Prototype: prototype.jsx:707 `title="Save your favorites" body="Sign in to save providers you love and book them faster next time."`
+  - Flutter: saved_page.dart:37-39 `title: 'Keep your favorites'`, `body: 'Sign in to save providers and book them again in one tap.'`
+  - Fix: Use the prototype title and body strings
+
+#### ⚠️ Profile tab - guest locked variant — `DISC-21`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:709-710 · Flutter: [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart), [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] CTA goes to /role-choice instead of the auth gate (shared widget)** `DISC-21-F2` ✔
+  - Prototype: prototype.jsx:710 `onSignIn={() => push('auth-gate')}`
+  - Flutter: guest_locked_view.dart:65 `context.push(AppRoutes.roleChoice)`
+  - Fix: Fix once in GuestLockedView (DISC-18-F1)
+- **[MINOR · content] Guest Profile copy differs from the prototype** `DISC-21-F1` ✔
+  - Prototype: prototype.jsx:710 `title="Your profile" body="Sign in to manage your account, addresses, and notifications."`
+  - Flutter: profile_page.dart:33-35 `title: 'Make AIWA yours'`, `body: 'Sign in to manage your details, notifications and bookings.'`
+  - Fix: Use the prototype title and body strings
+
+#### ⚠️ Customer bottom tab bar + onTabChange behaviour — `DISC-22`
+
+Prototype: ui_kits/aiwa-app/components.jsx:203-237 (TabBar); prototype.jsx:564-573 (onTabChange), 721, 736 · Flutter: [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[MINOR · components] Bookings tab badge dot missing** `DISC-22-F1` ✔
+  - Prototype: components.jsx:207 `{ id: 'bookings', ..., badge: true }`; components.jsx:229 `<span style={{ position: 'absolute', top: -2, right: -4, width: 8, height: 8, background: aiwa.rose500, borderRadius: '50%', border: '2px solid #fff' }}/>`
+  - Flutter: shell_page.dart:122-156 _TabItem renders only Icon + Text, with no badge
+  - Fix: Add `final bool badge` to _TabItem and wrap the icon: `Stack(clipBehavior: Clip.none, children: [Icon(...), if (badge) Positioned(top: -2, right: -4, child: Container(width: 8, height: 8, decoration: BoxDecoration(color: AppColors.rose500, shape: BoxShape.circle, border: Border.all(color: AppColors.paper, width: 2))))])`. Drive it from an upcoming-bookings or unread count
+- **[MINOR · interaction] Tab switch has no fade/scale transition** `DISC-22-F2` ✔
+  - Prototype: prototype.jsx:567 `setDirection('back')` gives prototype.jsx:730 `aiwa-fade-in 320ms cubic-bezier(.32,.72,0,1)`; prototype.html:20-23 `from { transform: scale(.98) }`
+  - Flutter: app_router.dart:151-177 every tab uses `NoTransitionPage`
+  - Fix: Replace NoTransitionPage with `CustomTransitionPage(child: ..., transitionDuration: AppTheme.dur3, transitionsBuilder: (_, a, __, c) => ScaleTransition(scale: Tween(begin: .98, end: 1.0).animate(CurvedAnimation(parent: a, curve: AppTheme.easeSoft)), child: c))`
+- **[MINOR · interaction] Re-tapping the active tab re-navigates and can drop Discover's category** `DISC-22-F3` ✔
+  - Prototype: prototype.jsx:565 `if (t === tab) return;`
+  - Flutter: shell_page.dart:94 `onTap: () => context.go(tabs[i].$4)` runs even when active. On /app/search?category=HAIR this goes to /app/search, and didUpdateWidget resets `_activeCategory` and refetches (search_page.dart:70-76)
+  - Fix: `onTap: i == index ? () {} : () => context.go(tabs[i].$4)`
+
+### Customer booking lifecycle
+
+#### ⚠️ Booking screen - scheduled (date & slot picker + CTA) — `BOOK-08`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:329-465; prototype.jsx:692 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart), [Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart](Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart), [Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart](Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart), [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · interaction] Create-booking request uses field names the backend rejects** `BOOK-08-F1` ✔
+  - Prototype: Confirm creates the booking: onConfirm={() => { setActiveStatus(...); setToast(...); push('confirmed'); }} (prototype.jsx:692)
+  - Flutter: 'scheduledDate': scheduledDate, 'scheduledTime': scheduledTime, 'customerNote': customerNote (Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart:47-49). Backend BookingRequest expects bookingDate / startTime / notes / bookingType / homeService / savedAddressId (aiwa-backend/.../dto/request/BookingRequest.java:20-36), and BookingServiceImpl throws when a SCHEDULED request has a null bookingDate/startTime (~line 160). Result: 'Confirm booking' always ends in the error SnackBar
+  - Fix: In booking_remote_datasource.dart createBooking send: data: {'providerId': providerId, 'serviceId': serviceId, 'bookingDate': scheduledDate, 'startTime': scheduledTime, 'bookingType': isNow ? 'BOOK_NOW' : 'SCHEDULED', 'homeService': homeService, if (addressId != null) 'savedAddressId': addressId, 'paymentMethod': 'CASH', if (customerNote != null) 'notes': customerNote}. Add an Idempotency-Key header (a UUID per tap).
+- **[CRITICAL · interaction] Flow skips the Booking type (Now/Schedule) step** `BOOK-08-F2` ✔
+  - Prototype: Provider onBook: else { push('booking-type'); } (prototype.jsx:661-666); booking-type passes bookingMode to 'booking' (686-692)
+  - Flutter: _book(): context.push('/booking/${widget.providerId}$query') (provider_detail_page.dart:62-68); BookingPage has no bookingMode parameter (booking_page.dart:24-32)
+  - Fix: Push BookingTypePage (BOOK-01) from _book(). Add `final String mode;` to BookingPage and read it from state.uri.queryParameters['mode'] in app_router.dart:187-196.
+- **[CRITICAL · interaction] Slots come from the weekly-hours endpoint, so the slot grid is always empty** `BOOK-08-V1` ＋
+  - Prototype: 'Available slots' 4-col grid with 12 time buttons for the chosen day (screens.jsx:341-346, 386-399)
+  - Flutter: ProviderRemoteDataSource.getAvailableSlots GETs ApiConstants.providerAvailability(id) = '/providers/$id/availability?date=' (provider_remote_datasource.dart:54-62). The backend returns weekly AvailabilityDto {dayOfWeek, startTime, endTime, slotDurationMinutes, available} and ignores date (AvailabilityController.java:27-32; ApiResponse.java:191-199). ProviderRepositoryImpl reads e['date'] and e['times'] (provider_repository_impl.dart:53-58), which never exist, so times is always empty. The page therefore always shows 'No free slots on this day — try another date.' (booking_page.dart:238-251), and the CTA stays disabled on 'Choose a time'. ApiConstants.availableSlots '/bookings/slots' (api_constants.dart:45) is unused, and GetAvailableSlotsUseCase is a no-op (get_available_slots_usecase.dart:13-15).
+  - Fix: Implement GetAvailableSlotsUseCase against GET /bookings/slots?providerId=&serviceId=&date= (BookingController.java:209-215), which returns TimeSlotDto {startTime, endTime, booked}. Reload when the selected service or date changes, because serviceId is required. Map booked == true to the disabled/struck-through chip (resolves BOOK-08-F5), e.g. _SlotChip(time: s.startTime, available: !s.booked).
+- **[MAJOR · layout] 'Where' section (home vs salon + saved addresses) missing** `BOOK-08-F3` ✔
+  - Prototype: &lt;Eyebrow>Where&lt;/Eyebrow> with the toggle and address list between Slots and Payment (screens.jsx:403-440)
+  - Flutter: The slot grid is followed directly by const EyebrowLabel('Payment') (booking_page.dart:270-272)
+  - Fix: Insert a Where block after the slots: SizedBox(height: 22), EyebrowLabel('Where'), the toggle (BOOK-10), then the address list (BOOK-11) when home service is selected.
+- **[MAJOR · states] Unavailable slots are hidden instead of shown disabled** `BOOK-08-F5` ✔
+  - Prototype: All slots render; unavailable ones use background: aiwa.cream, color: aiwa.ink4, textDecoration: 'line-through', cursor: 'not-allowed' (screens.jsx:390-397)
+  - Flutter: Only free `times` are rendered (booking_page.dart:178-186, 261-269). _SlotChip has no disabled style (541-580)
+  - Fix: Keep the full day grid with an `available` flag. In _SlotChip, when !available: color AppColors.cream, text AppColors.ink4, TextStyle(decoration: TextDecoration.lineThrough), onTap: null.
+- **[MAJOR · states] Slot-taken conflict shown as a raw SnackBar** `BOOK-08-F6` ✎
+  - Prototype: SlotConflictSheet 'Someone booked that slot.' with alternative times (system-screens.jsx:150-186; prototype.jsx:760-762)
+  - Flutter: else if (state is BookingError) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message))); } (booking_page.dart:114-118). The backend reports a taken slot as HTTP 400 'This time slot is already booked. Please choose another time' via BusinessException('booking.error.conflict') (BookingServiceImpl.java:175; GlobalExceptionHandler.java:31-39). It never returns 409, and the Failure carries only a message.
+  - Fix: Backend: return 409 (or an errorCode 'booking.error.conflict') for slot conflicts. Flutter: carry statusCode/errorCode on ServerFailure/BookingError. In booking_page.dart's BlocListener, open SlotConflictSheet (BOOK-13) when it matches, and fall back to the toast for other errors.
+- **[MINOR · layout] Day picker is a fixed-width horizontal scroller, not equal-width chips** `BOOK-08-F4` ✔
+  - Prototype: 5 days, each flex: 1, padding: '10px 6px', borderRadius: 14, number marginTop: 2 (screens.jsx:370-381)
+  - Flutter: ListView of 14 chips, width: 58, SizedBox(height: 70), gap SizedBox(height: 4) (booking_page.dart:55, 219-233, 510, 529)
+  - Fix: Keep the 14-day horizon (BookingType copy says 'Up to 14 days out'). Size chips so 5 fill the row: width: (MediaQuery.sizeOf(context).width - 44 - 32) / 5, padding EdgeInsets.symmetric(vertical: 10, horizontal: 6), SizedBox(height: 2).
+- **[MINOR · components] Summary avatar ignores provider palette** `BOOK-08-F7` ✔
+  - Prototype: &lt;Avatar name={p.name} palette={p.palette} size={44} verified={p.verified} /> (screens.jsx:359)
+  - Flutter: AiwaAvatar(name: provider.displayName, size: 44, verified: provider.isVerified, imageUrl: ...) with default plum palette (booking_page.dart:391-396)
+  - Fix: Pass palette: AvatarPalette.values[provider.id.hashCode % 4] (the same rule everywhere a provider avatar is drawn).
+- **[MINOR · content] Duration rendered as raw minutes** `BOOK-08-F8` ✔
+  - Prototype: '{service?.name} · {service?.duration}', e.g. '2h 30min' (screens.jsx:362, 36)
+  - Flutter: '${service!.name} · ${service!.durationMinutes} min' renders '150 min' (booking_page.dart:410-412)
+  - Fix: String fmt(int m) => m &lt; 60 ? '$m min' : '${m ~/ 60}h${m % 60 > 0 ? ' ${m % 60}min' : ''}';
+- **[MINOR · states] No default day/slot selection** `BOOK-08-F9` ✔
+  - Prototype: React.useState(1) day and React.useState('12:30') slot are preselected, so the CTA always reads 'Confirm booking' (screens.jsx:331-332, 461)
+  - Flutter: _selectedTime starts null; CTA reads 'Choose a service' / 'Choose a time' and is disabled (booking_page.dart:357-362)
+  - Fix: Preselect the first available slot after the slots load, or accept the disabled-CTA pattern as an intentional Flutter improvement.
+
+#### ⚠️ Booking screen - Cash on visit payment card — `BOOK-12`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:443-453 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | ✅ | — | — | ✅ | — |
+
+- **[MINOR · components] banknote icon replaced by payments icon** `BOOK-12-F1` ✔
+  - Prototype: &lt;Icon name="banknote" size={18}/> (screens.jsx:446)
+  - Flutter: Icon(Icons.payments_outlined, size: 18, color: AppColors.gold700) (booking_page.dart:290-294)
+  - Fix: Use Icons.money_rounded, or the Lucide banknote glyph via lucide_icons_flutter (see consistency finding on icons).
+- **[MINOR · tokens] Title line-height collapsed to 1.0** `BOOK-12-F2` ✔
+  - Prototype: fontWeight: 600, fontSize: 14 with normal line-height (screens.jsx:448)
+  - Flutter: AppTextStyles.label.copyWith(fontSize: 14), where label has height: 1 (booking_page.dart:303; app_text_styles.dart:71-76)
+  - Fix: AppTextStyles.label.copyWith(fontSize: 14, height: 1.3)
+
+#### ⚠️ Booking confirmed ('You said aiwa. We told Nadia.') — `BOOK-14`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:470-494; prototype.jsx:692-693 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_confirmed_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_confirmed_page.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · interaction] 'View my bookings' goes to the list instead of Tracking** `BOOK-14-F1` ✔
+  - Prototype: &lt;ConfirmedScreen onDone={() => { setActiveBookingId('b1'); reset('tracking'); }} /> (prototype.jsx:693)
+  - Flutter: onPressed: () => context.go(AppRoutes.myBookings) (booking_confirmed_page.dart:119-124)
+  - Fix: Once TrackingPage exists (BOOK-15): context.go('/booking/${booking.id}/track', extra: booking). The prototype label says 'View my bookings' but its target is Tracking; keep the label and change the target.
+- **[MAJOR · components] 'Add to calendar' button missing (replaced by 'Back to home')** `BOOK-14-F2` ✔
+  - Prototype: &lt;Btn variant="ghost" full>Add to calendar&lt;/Btn> (screens.jsx:490)
+  - Flutter: AiwaButton(label: 'Back to home', onPressed: () => context.go(AppRoutes.home), variant: AiwaButtonVariant.ghost) (booking_confirmed_page.dart:126-131)
+  - Fix: Replace it with AiwaButton(label: 'Add to calendar', variant: ghost, fullWidth: true, onPressed: _addToCalendar). Use the add_2_calendar package, or url_launcher with a Google Calendar template URL.
+- **[MAJOR · content] Headline and summary render blank provider/date from the data mapping** `BOOK-14-F3` ✔
+  - Prototype: 'We told Nadia.' and 'Provider: Nadia Studio', 'When: Tue, May 19 · 12:30 PM' (screens.jsx:477-484)
+  - Flutter: '. We told $provider.' where provider = booking.displayProviderName (booking_confirmed_page.dart:31, 73). BookingModel reads provider['fullName'] and providerProfile['businessName'], json['scheduledDate'] and json['scheduledTime'] (booking_model.dart:33-34, 41-42). The backend BookingDto sends provider.businessName/ownerName, bookingDate and startTime (ApiResponse.java:91-101, 232-239), so the page reads 'We told .' and When ' · '
+  - Fix: Fix BookingModel.fromJson (see BOOK-50-F1).
+- **[MAJOR · states] 'Booking placed. Waiting to confirm.' toast not shown** `BOOK-14-F6` ✔
+  - Prototype: setToast(bookingMode === 'now' ? 'Provider is on the way.' : 'Booking placed. Waiting to confirm.') before push('confirmed') (prototype.jsx:692)
+  - Flutter: if (state is BookingCreated) { context.go('/booking-confirmed/${state.booking.id}', extra: state.booking); } with no toast (booking_page.dart:109-113)
+  - Fix: After context.go, call showAiwaToast(context, 'Booking placed. Waiting to confirm.') (see BOOK-52 / BOOK-53).
+- **[MINOR · content] Date/time format differs** `BOOK-14-F4` ✔
+  - Prototype: Body 'Tuesday, May 19 at 12:30 PM.'; When row 'Tue, May 19 · 12:30 PM' (screens.jsx:478, 484)
+  - Flutter: '${DateFormat('EEE, MMM d').format(d)} · $t' with 24h 'HH:mm', used in both body and row (booking_confirmed_page.dart:16-26, 83, 102)
+  - Fix: Body: '${DateFormat('EEEE, MMMM d').format(dt)} at ${DateFormat('h:mm a').format(dt)}'. Row: '${DateFormat('EEE, MMM d').format(dt)} · ${DateFormat('h:mm a').format(dt)}'.
+- **[MINOR · tokens] Headline gets h1 tracking the prototype does not use** `BOOK-14-F5` ✔
+  - Prototype: h1 fontFamily fontDisp, fontSize 30, lineHeight 1.1, no letterSpacing (screens.jsx:477)
+  - Flutter: AppTextStyles.h1.copyWith(fontSize: 30, height: 1.1) keeps letterSpacing -0.64 (-0.02*32) (booking_confirmed_page.dart:63; app_text_styles.dart:16-21)
+  - Fix: AppTextStyles.h1.copyWith(fontSize: 30, height: 1.1, letterSpacing: 0)
+- **[MINOR · content] Headline uses the business name and the body says 'they' instead of 'she'** `BOOK-14-V1` ＋
+  - Prototype: 'You said aiwa. We told Nadia.' (first name) and 'We'll ping you the moment she confirms — usually within 30 minutes.' (screens.jsx:477-478), while the Provider row shows 'Nadia Studio' (480)
+  - Flutter: '. We told $provider.' with provider = booking.displayProviderName (business name first) and "We'll ping you the moment they confirm — usually within 30 minutes." (booking_confirmed_page.dart:31, 73, 83)
+  - Fix: Headline: use the owner's first name, i.e. (booking.providerName.isNotEmpty ? booking.providerName : booking.displayProviderName).split(' ').first, once providerName maps ownerName (BOOK-50-F1). Keep the business name in the Provider row. Confirm with design whether gender-neutral 'they' replaces 'she'.
+
+#### ⚠️ Cancel booking sheet (with reasons) — `BOOK-29`
+
+Prototype: ui_kits/aiwa-app/flow-screens.jsx:490-549; prototype.jsx:694, 737-741 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart), [Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart), [Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart](Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart), [Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_event.dart](Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_event.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · components] Cancellation reasons not collected** `BOOK-29-F1` ✔
+  - Prototype: const REASONS = ["Changed my mind", "Found another provider", "Wrong service / time", "Price is too high", "Provider not responsive", "Something else"] rendered as selectable rows; onClick={() => reason && onConfirm({ reason, note })} (flow-screens.jsx:493-531, 542)
+  - Flutter: showConfirmSheet(context, eyebrow: 'Cancel booking', title: 'Cancel ${b.serviceName}?', ...) with no reason UI; then _bloc.add(BookingCancelEvent(b.id)) (my_bookings_page.dart:95-106). BookingCancelEvent has only bookingId (booking_event.dart:38-43)
+  - Fix: Create shared/widgets/reason_sheet.dart returning `({String reason, String? note})?`. Use AnimatedContainer rows: padding 13/14, radius 12, selected AppColors.plum100 bg with a 1.5 plum700 border and Icons.check. Add `final String reason;` to BookingCancelEvent.
+- **[MAJOR · interaction] Reason not sent to the cancel endpoint** `BOOK-29-F2` ✔
+  - Prototype: onConfirm({ reason, note }) -> setToast('Booking cancelled. Reason: ' + reason) (prototype.jsx:737-741)
+  - Flutter: await _api.patch(ApiConstants.bookingCancel(bookingId)) with no reason (booking_remote_datasource.dart:84-86), although the backend accepts @RequestParam(required = false) String reason (BookingController.java:89-93)
+  - Fix: _api.patch(ApiConstants.bookingCancel(id), queryParameters: {'reason': reason})
+- **[MAJOR · interaction] Cancel is opened from the list card instead of Tracking** `BOOK-29-F3` ✔
+  - Prototype: Tracking footer: {canCancel && &lt;Btn variant="secondary" full onClick={onCancel} icon="x">Cancel booking&lt;/Btn>} (flow-screens.jsx:478); Upcoming cards show only Track/Directions (screens.jsx:574-579)
+  - Flutter: AiwaButton(label: 'Cancel', variant: secondary, size: sm, onPressed: onCancel) on each cancellable card (my_bookings_page.dart:414-423)
+  - Fix: Move cancel to TrackingPage (BOOK-15). On the card, replace 'Cancel' with 'Track' (BOOK-41-F2).
+- **[MAJOR · content] Copy differs from prototype** `BOOK-29-F4` ✔
+  - Prototype: Eyebrow 'Cancel your booking'; h2 'Why are you cancelling?'; buttons 'Keep booking' / 'Cancel'; no body (flow-screens.jsx:516-517, 541-544)
+  - Flutter: eyebrow 'Cancel booking', title 'Cancel ${b.serviceName}?', body '${b.displayProviderName} will be notified right away. This can't be undone.', confirmLabel 'Cancel booking', cancelLabel 'Keep it' (my_bookings_page.dart:96-104)
+  - Fix: Use the prototype strings in the new reason sheet.
+- **[MAJOR · states] 'Something else' note field and reason gating missing** `BOOK-29-F5` ✔
+  - Prototype: {reason === 'Something else' && &lt;textarea placeholder="Tell us what happened (optional)" height: 70 .../>}; 'Cancel' no-ops without a reason (flow-screens.jsx:533-539, 542)
+  - Flutter: Confirm is always enabled; the input param of showConfirmSheet is unused here (confirm_sheet.dart:87-104)
+  - Fix: In the reason sheet, show a TextField(maxLines: 3) when 'Something else' is selected. Disable the danger button until reason != null.
+- **[MINOR · layout] Icon circle and spacing not in prototype sheet** `BOOK-29-F6` ✔
+  - Prototype: Handle then Eyebrow directly (no icon); padding '18px 22px 36px' (flow-screens.jsx:511-516)
+  - Flutter: 46px danger100 circle with Icons.warning_amber_rounded (confirm_sheet.dart:57-69); bottom padding 24 + safe area (36-41)
+  - Fix: Reason sheet: no icon; EdgeInsets.fromLTRB(22, 18, 22, 36 + safeBottom).
+- **[MINOR · tokens] Scrim, shadow and button size differ** `BOOK-29-F7` ✔
+  - Prototype: Scrim 'rgba(42,19,32,.45)' + backdropFilter blur(2px); shadow '0 -12px 32px rgba(0,0,0,.18)'; Btn size md (flow-screens.jsx:505-506, 512, 541-543)
+  - Flutter: barrierColor: AppColors.plum900.withOpacity(0.48), i.e. male #2E2A26 / female #6B3A3A (confirm_sheet.dart:27); sheetDecoration shadow AppColors.plum700.withOpacity(0.14) (app_theme.dart:41-51); buttons AiwaButtonSize.lg (confirm_sheet.dart:112, 124)
+  - Fix: barrierColor: const Color(0x732A1320); BoxShadow(color: Color(0x2E000000), blurRadius: 32, offset: Offset(0, -12)); AiwaButtonSize.md.
+- **[MINOR · tokens] Sheet eyebrow colour, title size and handle spacing differ** `BOOK-29-V1` ＋
+  - Prototype: &lt;Eyebrow> uses the default aiwa.ink3 (male #7A7268 / female #8A6F71). The h2 is fontSize 22, lineHeight 1.1, margin '4px 0 14px', and the handle margin-bottom is 14 (flow-screens.jsx:515-517)
+  - Flutter: EyebrowLabel(eyebrow, color: fg) with fg = AppColors.danger700 (male #2E2A26 / female #6B3A3A). The title is AppTextStyles.h3.copyWith(fontSize: 23, height: 1.12) with h3 letterSpacing -0.22, and there is a SizedBox(height: 16) after the handle (confirm_sheet.dart:56, 71, 75)
+  - Fix: In the new reason sheet use EyebrowLabel('Cancel your booking') with the default ink3, a title style of AppTextStyles.h3.copyWith(fontSize: 22, height: 1.1, letterSpacing: 0), and SizedBox(height: 14) after the handle and after the title.
+
+#### ⚠️ Leave a review ('How was it?') — `BOOK-34`
+
+Prototype: ui_kits/aiwa-app/customer-extras.jsx:15-95; prototype.jsx:694, 712 · Flutter: [Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart](Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart), [Android/aiwa_app/lib/features/reviews/presentation/bloc/review_bloc.dart](Android/aiwa_app/lib/features/reviews/presentation/bloc/review_bloc.dart), [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[MAJOR · interaction] Review only reachable from the bookings list** `BOOK-34-F1` ✔
+  - Prototype: Tracking completed: {isDone && &lt;Btn variant="primary" full onClick={onReview} icon="star">Leave a review&lt;/Btn>} -> push('review') (flow-screens.jsx:480; prototype.jsx:694)
+  - Flutter: Only onReview: () => context.push('/review/${b.id}', extra: b) from a completed card (my_bookings_page.dart:222)
+  - Fix: Add the Tracking 'Leave a review' entry once TrackingPage exists (BOOK-20).
+- **[MINOR · components] Provider avatar lacks palette and verified badge** `BOOK-34-F2` ✔
+  - Prototype: &lt;Avatar name={p.name} palette={p.palette} size={64} verified={p.verified} /> (customer-extras.jsx:42)
+  - Flutter: AiwaAvatar(name: b.displayProviderName, size: 64, imageUrl: b.providerImageUrl) (review_page.dart:192-196)
+  - Fix: Pass verified (needs a provider verification flag on BookingEntity) and a palette.
+- **[MINOR · states] Provider name/avatar disappear without route extra** `BOOK-34-F3` ✔
+  - Prototype: Provider block always rendered (customer-extras.jsx:42-44)
+  - Flutter: if (b != null) ...[AiwaAvatar, name, subtitle] (review_page.dart:191-208); a deep link '/review/:id' has no extra
+  - Fix: When widget.booking is null, fetch it with getBookingDetail(bookingId) before rendering.
+- **[MINOR · layout] Star spacing tighter and glyph differs** `BOOK-34-F4` ✔
+  - Prototype: display flex gap: 10 with each button padding: 4, giving about 18px between 38px stars; lucide polygon strokeWidth 1.8 (customer-extras.jsx:47-60)
+  - Flutter: Padding(padding: EdgeInsets.symmetric(horizontal: 5)) gives 10px between stars; Icons.star_rounded / star_outline_rounded (review_page.dart:219-226)
+  - Fix: EdgeInsets.symmetric(horizontal: 9). Optionally draw the kit polygon with CustomPaint for an exact glyph.
+- **[MINOR · layout] Header and field label spacing** `BOOK-34-F5` ✔
+  - Prototype: Header padding '60px 22px 12px'; Eyebrow marginBottom 10 above the textarea (customer-extras.jsx:33, 78)
+  - Flutter: ScreenHeader bottom padding 8 (screen_chrome.dart:36-41); AiwaTextField label gap SizedBox(height: 6) (aiwa_text_field.dart:82)
+  - Fix: Use EyebrowLabel + SizedBox(height: 10) + TextField instead of AiwaTextField's label. Add a SizedBox(height: 4) after ScreenHeader.
+- **[MINOR · tokens] Textarea text size 15 instead of 14 and height by lines** `BOOK-34-F6` ✔
+  - Prototype: textarea fontSize: 14, height: 100, padding 14 (customer-extras.jsx:80-84)
+  - Flutter: style: AppTextStyles.body (15) with maxLines: 4 (aiwa_text_field.dart:96; review_page.dart:146)
+  - Fix: SizedBox(height: 100, child: TextField(expands: true, maxLines: null, style: AppTextStyles.bodySm (14)))
+
+#### ⚠️ My Bookings - Upcoming tab — `BOOK-41`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:499-597 (upcoming 501-503, 532-579); prototype.jsx:698-705 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart), [Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart](Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · interaction] Tapping a live booking card does nothing** `BOOK-41-F1` ✔
+  - Prototype: &lt;div onClick={() => tappable && onTrack && onTrack(b.id, b.status)} ...> where tappable = isLive || expired; onTrack pushes 'tracking' (screens.jsx:534-537; prototype.jsx:700-704)
+  - Flutter: _BookingCard returns a plain Container with no GestureDetector/InkWell (my_bookings_page.dart:327-334)
+  - Fix: Wrap it in GestureDetector(onTap: _isLive(b.status) ? () => context.push('/booking/${b.id}/track', extra: b) : b.status == 'EXPIRED' ? () => context.push('/booking/${b.id}/expired', extra: b) : null).
+- **[CRITICAL · components] 'Track' button missing; 'Cancel' shown instead** `BOOK-41-F2` ✔
+  - Prototype: &lt;Btn variant="secondary" size="sm" ... onClick={() => onTrack(b.id, b.status)}>Track&lt;/Btn>&lt;Btn variant="primary" size="sm" icon="map">Directions&lt;/Btn> on every upcoming card (screens.jsx:574-579)
+  - Flutter: if (b.canCancel) AiwaButton(label: 'Cancel', variant: secondary, size: sm) + Directions only when providerAddress is non-empty (my_bookings_page.dart:410-437)
+  - Fix: Replace 'Cancel' with AiwaButton(label: 'Track', variant: AiwaButtonVariant.secondary, size: AiwaButtonSize.sm, fullWidth: true, onPressed: onTrack). Show Directions for all upcoming cards, disabled when there is no address.
+- **[MAJOR · states] Upcoming list filtered client-side from an unfiltered page** `BOOK-41-F3` ✎
+  - Prototype: MY_BOOKINGS.filter(b => ['pending','confirmed','onway','arrived','progress'].includes(b.status)) over all bookings (screens.jsx:501-503)
+  - Flutter: BookingLoadMyEvent() with no status (my_bookings_page.dart:81-87) loads page 0 with size 20 (get_my_bookings_usecase.dart:11-16 overrides the backend default of 10). The Upcoming tab keeps only _liveStatuses from that page (179-180). /bookings/my accepts only page/size (BookingController.java:58-66). Live bookings after the first 20 appear only via 'Load more'. If the first 20 hold no live booking, the 'Nothing booked yet' EmptyState replaces the list (182-196) with no 'Load more'.
+  - Fix: Add a status filter to GET /bookings/my (e.g. @RequestParam(required=false) List&lt;BookingStatus> status) and send the live set. Otherwise keep fetching pages while hasMore before deciding the list is empty.
+- **[MINOR · content] Meta shows the provider address and 24h time instead of distance and 12h time** `BOOK-41-F4` ✔
+  - Prototype: &lt;Icon name="calendar"/>{b.when} e.g. 'Tue, May 19 · 12:30 PM'; &lt;Icon name="map-pin"/>{b.distance} e.g. '1.2 km' (screens.jsx:548-551)
+  - Flutter: _Meta(text: _when) with 'HH:mm', plus _Meta(Icons.location_on_outlined, b.providerAddress!) (my_bookings_page.dart:305-315, 375-391)
+  - Fix: Use DateFormat('h:mm a') for the time. Show distance (needs ProviderSummaryDto.distanceKm on the booking) formatted as '${d.toStringAsFixed(1)} km'.
+- **[MINOR · components] Avatar palette by list index and no verified badge** `BOOK-41-F5` ✔
+  - Prototype: &lt;Avatar name={p.name} palette={p.palette} size={42} verified={p.verified} /> (screens.jsx:540)
+  - Flutter: AiwaAvatar(..., palette: AvatarPalette.values[index % AvatarPalette.values.length]) and no verified (my_bookings_page.dart:341-347)
+  - Fix: Derive the palette from the provider id, not the index, so it is stable across tabs. Pass verified.
+- **[MINOR · tokens] Card shadow differs** `BOOK-41-F6` ✔
+  - Prototype: boxShadow: '0 1px 2px rgba(74,31,56,.04)' (screens.jsx:537)
+  - Flutter: boxShadow: AppTheme.shadow1 = plum700 @0.06 blur 2 + ink @0.04 blur 1 (my_bookings_page.dart:333; app_theme.dart:60-71)
+  - Fix: [BoxShadow(color: Color(0x0A4A1F38), blurRadius: 2, offset: Offset(0, 1))]
+- **[MINOR · layout] Avatar and name not vertically centred** `BOOK-41-F7` ✔
+  - Prototype: Inner row display flex, alignItems: 'center' (screens.jsx:539)
+  - Flutter: Row(crossAxisAlignment: CrossAxisAlignment.start) for avatar, name and pill (my_bookings_page.dart:338-340)
+  - Fix: Nest Row(crossAxisAlignment: center, [avatar, name column]) inside the outer start-aligned Row with the StatusPill.
+- **[MINOR · layout] Tab spacing 18 instead of 24, and the underline does not overlap the divider** `BOOK-41-V1` ＋
+  - Prototype: Tab row display:flex gap 6 plus marginRight 18 per tab, 24px between 'Upcoming' and 'Past'. The underline has marginBottom -1, so the 2px bar sits over the row's 1px divider (screens.jsx:510-518)
+  - Flutter: AnimatedContainer margin right 18 only. The 2px bottom border is drawn inside the row, above the container's own 1px bottom divider (my_bookings_page.dart:245-272)
+  - Fix: margin: const EdgeInsets.only(right: 24), and wrap the tab in Transform.translate(offset: const Offset(0, 1)) so the active underline covers the divider.
+- **[MINOR · tokens] 'Bookings' title inherits -0.64 letterSpacing** `BOOK-41-V2` ＋
+  - Prototype: h1 fontDisp 28, lineHeight 1.05, no letterSpacing (screens.jsx:508)
+  - Flutter: PageTitle: AppTextStyles.h1.copyWith(fontSize: 28, height: 1.05), which keeps h1 letterSpacing -0.02*32 = -0.64 (screen_chrome.dart:119; app_text_styles.dart:16-21)
+  - Fix: Add a letterSpacing parameter to PageTitle, or pass letterSpacing: 0 for Bookings (see BOOK-C4).
+
+#### ⚠️ My Bookings - Past tab — `BOOK-42`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:501-503, 552-590 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | — |
+
+- **[MAJOR · states] Past tab shows live bookings too** `BOOK-42-F1` ✔
+  - Prototype: ['completed','cancelled','rejected','noshow','expired'].includes(b.status) (screens.jsx:503)
+  - Flutter: Requests status 'COMPLETED,CANCELLED,REJECTED,NO_SHOW' (my_bookings_page.dart:65, 85), but the backend ignores it (BookingController.java:58-66) and Flutter renders `: state.bookings` unfiltered (my_bookings_page.dart:179-181)
+  - Fix: final bookings = state.bookings.where((b) => _tab == 'upcoming' ? _liveStatuses.contains(b.status) : _pastSet.contains(b.status)).toList(); with _pastSet = {'COMPLETED','CANCELLED','REJECTED','NO_SHOW','EXPIRED'}.
+- **[MINOR · states] Past status filter constant omits EXPIRED** `BOOK-42-F2` ✎
+  - Prototype: The Past filter includes 'expired', and b8 is listed and tappable (screens.jsx:60-61, 503, 535)
+  - Flutter: static const _pastStatuses = 'COMPLETED,CANCELLED,REJECTED,NO_SHOW' (my_bookings_page.dart:65) is sent as ?status= (85). The backend ignores it and the Past branch renders every booking (179-181), so EXPIRED appears today only by accident. Any filter built from this constant would drop it.
+  - Fix: Include EXPIRED in the Past set, i.e. _pastSet = {'COMPLETED','CANCELLED','REJECTED','NO_SHOW','EXPIRED'}, and use it for both the query and the client-side filter (see BOOK-42-F1).
+- **[MINOR · tokens] Card shadow differs (same as Upcoming)** `BOOK-42-F3` ✔
+  - Prototype: boxShadow: '0 1px 2px rgba(74,31,56,.04)' (screens.jsx:537)
+  - Flutter: AppTheme.shadow1 (my_bookings_page.dart:333)
+  - Fix: Same as BOOK-41-F6.
+- **[MINOR · content] Time format and location meta** `BOOK-42-F4` ✔
+  - Prototype: 'Last Sunday · 11:00 AM', '2.4 km' (screens.jsx:51, 549-550)
+  - Flutter: 'EEE, MMM d · HH:mm' and provider address (my_bookings_page.dart:305-315, 384-390)
+  - Fix: Same as BOOK-41-F4.
+
+#### ⚠️ Bookings - cancelled reason card (incl. provider-penalty variant) — `BOOK-43`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:52-53, 58-59, 552-564 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart), [Android/aiwa_app/lib/features/bookings/domain/entities/booking_entity.dart](Android/aiwa_app/lib/features/bookings/domain/entities/booking_entity.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ⚠️ | — | ⚠️ | ✅ | — |
+
+- **[MAJOR · content] Cancelled-by, time and reason not shown** `BOOK-43-F1` ✔
+  - Prototype: &lt;strong>{`Cancelled by ${b.cancelledBy || 'you'}`}&lt;/strong>{b.cancelledAt && &lt;span> · {b.cancelledAt}&lt;/span>}&lt;div>"{b.cancellationReason}"&lt;/div> (screens.jsx:556-560)
+  - Flutter: title: 'Booking cancelled', body: null for CANCELLED (my_bookings_page.dart:396-408). BookingEntity has no cancelledBy/cancelledAt/cancellationReason (booking_entity.dart:4-18), though BookingDto provides them (ApiResponse.java:252-254)
+  - Fix: Add the fields to BookingEntity/BookingModel. _ReasonBox(title: 'Cancelled by ${b.cancelledBy ?? 'you'}', meta: b.cancelledAt != null ? ' · ${fmt(b.cancelledAt!)}' : null, body: b.cancellationReason != null ? '"${b.cancellationReason}"' : null).
+- **[MAJOR · states] Provider late-cancel penalty line missing** `BOOK-43-F2` ✔
+  - Prototype: {b.penaltyApplied && &lt;div style={{ marginTop: 4, fontWeight: 600 }}>Provider penalty applied for late cancellation.&lt;/div>} (screens.jsx:561)
+  - Flutter: No penaltyApplied field or line (booking_entity.dart:4-18; my_bookings_page.dart:517-562)
+  - Fix: Map BookingDto.penaltyApplied. Add an optional `footnote` to _ReasonBox rendered w600 with a 4px top gap.
+- **[MINOR · states] Reason box shown even when no reason exists** `BOOK-43-V1` ＋
+  - Prototype: The box renders only when (b.status === 'cancelled' || b.status === 'noshow') && b.cancellationReason (screens.jsx:552). The rejected box likewise requires b.rejectionReason (565)
+  - Flutter: _ReasonBox is always rendered for CANCELLED / NO_SHOW / REJECTED (my_bookings_page.dart:392-409)
+  - Fix: After mapping the fields (BOOK-50-F2): if ((b.status == 'CANCELLED' || b.status == 'NO_SHOW') && b.cancellationReason != null) ... and if (b.status == 'REJECTED' && b.rejectionReason != null) ...
+
+#### ⚠️ Bookings - no-show reason card — `BOOK-44`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:56-57, 552-564 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ⚠️ | — | ✅ | ✅ | — |
+
+- **[MAJOR · content] No-show time and reason not shown** `BOOK-44-F1` ✔
+  - Prototype: 'Marked no-show' · {b.cancelledAt} and "{b.cancellationReason}" (screens.jsx:557-560)
+  - Flutter: title 'Marked no-show', body null (my_bookings_page.dart:400-408)
+  - Fix: Same data fields as BOOK-43-F1. Pass meta and body for NO_SHOW.
+
+#### ⚠️ Bookings - rejected reason card + 'See alternatives' — `BOOK-45`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:54-55, 565-573, 586-590; prototype.jsx:702 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] 'See alternatives' goes to Search instead of the Rejected screen** `BOOK-45-F1` ✔
+  - Prototype: onClick={() => onTrack(b.id, 'rejected')} -> if (st === 'rejected') { push('rejected'); } (screens.jsx:588; prototype.jsx:702)
+  - Flutter: onPressed: () => context.go(AppRoutes.search) (my_bookings_page.dart:471)
+  - Fix: context.push('/booking/${b.id}/rejected', extra: b) once BOOK-32 exists.
+- **[MAJOR · content] Provider's rejection reason replaced by generic text** `BOOK-45-F2` ✔
+  - Prototype: &lt;div>"{b.rejectionReason}"&lt;/div> (screens.jsx:570)
+  - Flutter: body: 'The provider couldn't take this slot. Try another time or provider.' (my_bookings_page.dart:405-407)
+  - Fix: Map BookingDto.rejectionReason to BookingEntity. body: b.rejectionReason != null ? '"${b.rejectionReason}"' : null.
+
+#### ⚠️ Bookings - expired card in Past (tappable) — `BOOK-46`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:60-61, 503, 535; components.jsx:158 · Flutter: —
+
+- **[CRITICAL · interaction] Expired booking card is not tappable (no Expired booking screen)** `BOOK-46-V1` ＋
+  - Prototype: tappable = isLive || b.status === 'expired'. onClick calls onTrack(b.id, 'expired'), which pushes 'expired-booking' (screens.jsx:534-537; prototype.jsx:703)
+  - Flutter: EXPIRED bookings reach the Past list only because it is unfiltered (my_bookings_page.dart:179-181). _BookingCard is a plain Container with no onTap (327-334), and there is no expired route in app_router.dart
+  - Fix: Wrap the card in GestureDetector(onTap: b.status == 'EXPIRED' ? () => context.push('/booking/${b.id}/expired', extra: b) : ...) once ExpiredBookingPage (BOOK-33) exists, and add EXPIRED to the Past set (BOOK-42-F2).
+
+#### ⚠️ Bookings - Upcoming empty state ('Nothing booked yet') — `BOOK-47`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:522-531; states.jsx:80-107 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart), [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[MINOR · components] calendar-plus glyph replaced** `BOOK-47-F1` ✔
+  - Prototype: icon={tab === 'upcoming' ? 'calendar-plus' : 'history'} (screens.jsx:524)
+  - Flutter: Icons.calendar_month_outlined (my_bookings_page.dart:186-188)
+  - Fix: Icons.edit_calendar_outlined (closest), or the Lucide calendar-plus glyph.
+- **[MINOR · interaction] 'Find a provider' target differs (prototype stub)** `BOOK-47-F2` ✔
+  - Prototype: onAction={() => onProvider && onProvider(1)} pushes the hard-coded provider #1 profile (screens.jsx:530; prototype.jsx:700)
+  - Flutter: onAction: () => context.go(AppRoutes.search) (my_bookings_page.dart:194)
+  - Fix: Keep Search. The prototype hard-codes a demo provider id, so confirm the intent with design.
+- **[MINOR · layout] Empty state lacks the 22px list gutter** `BOOK-47-F3` ✔
+  - Prototype: EmptyState sits inside padding: '14px 22px 0' (screens.jsx:521)
+  - Flutter: SliverToBoxAdapter(child: EmptyState(...)) with no outer padding (my_bookings_page.dart:184-196)
+  - Fix: Wrap it in Padding(padding: EdgeInsets.fromLTRB(AppTheme.gutter, 14, AppTheme.gutter, 0)).
+- **[MINOR · layout] EmptyState internal gaps 3px tighter and no pop-in** `BOOK-47-V1` ＋
+  - Prototype: EmptyState column uses gap: 3, so icon to title is 17 (marginBottom 14 + 3) and title to body is 9 (6 + 3). The circle animates 'aiwa-pop 320ms cubic-bezier(.32,.72,0,1)' (states.jsx:88-98)
+  - Flutter: SizedBox(height: 14) and SizedBox(height: 6), with no entrance animation (empty_state.dart:60-73). This also applies to BOOK-48
+  - Fix: In empty_state.dart use SizedBox(height: 17) and SizedBox(height: 9). Wrap the circle in TweenAnimationBuilder&lt;double>(tween: Tween(begin: .85, end: 1), duration: AppTheme.dur3, curve: AppTheme.easeSoft, builder: (_, v, c) => Transform.scale(scale: v, child: c)).
+
+#### ⚠️ Bookings - Past empty state ('No past appointments') — `BOOK-48`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:522-531 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+
+- **[MINOR · layout] Empty state lacks the 22px list gutter** `BOOK-48-F1` ✔
+  - Prototype: padding: '14px 22px 0' wrapper (screens.jsx:521)
+  - Flutter: No outer padding (my_bookings_page.dart:184-196)
+  - Fix: Same as BOOK-47-F3.
+
+#### ⚠️ Bookings - guest locked state — `BOOK-49`
+
+Prototype: ui_kits/aiwa-app/customer-extras-2.jsx:11-25; prototype.jsx:698-699 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart), [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ | — | ✅ | — |
+
+- **[CRITICAL · interaction] Guest CTA opens Role choice instead of Auth gate** `BOOK-49-F1` ✔
+  - Prototype: &lt;GuestLockedScreen ... onSignIn={() => push('auth-gate')} /> (prototype.jsx:699)
+  - Flutter: onPressed: () => context.push(AppRoutes.roleChoice) (guest_locked_view.dart:65)
+  - Fix: context.push(AppRoutes.authGate). The route exists at app_router.dart:206.
+- **[MINOR · content] Title/body copy differs** `BOOK-49-F2` ✔
+  - Prototype: title="See your bookings" body="Sign in to view and track your bookings." (prototype.jsx:699)
+  - Flutter: title: 'Your bookings live here', body: 'Sign in to book providers, track them on the way, and see your history.' (my_bookings_page.dart:40-42)
+  - Fix: Use the prototype strings.
+- **[MINOR · layout] Padding differs** `BOOK-49-F3` ✔
+  - Prototype: padding: '68px 24px 32px' (customer-extras-2.jsx:13)
+  - Flutter: EdgeInsets.fromLTRB(24, insets.top + 24, 24, 24) inside Padding(bottom: 90) (guest_locked_view.dart:27; my_bookings_page.dart:37-38)
+  - Fix: Top insets.top + 14 (68 minus the ~54 status bar), bottom 32 + tab bar height.
+
+#### ⚠️ Booking data model (MY_BOOKINGS seed fields) — `BOOK-50`
+
+Prototype: ui_kits/aiwa-app/screens.jsx:48-62 · Flutter: [Android/aiwa_app/lib/features/bookings/domain/entities/booking_entity.dart](Android/aiwa_app/lib/features/bookings/domain/entities/booking_entity.dart), [Android/aiwa_app/lib/features/bookings/data/models/booking_model.dart](Android/aiwa_app/lib/features/bookings/data/models/booking_model.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | — | ⚠️ | — | ⚠️ | — | — |
+
+- **[CRITICAL · content] fromJson reads keys the backend never sends** `BOOK-50-F1` ✔
+  - Prototype: Cards show provider name and when, e.g. 'Nadia Studio', 'Tue, May 19 · 12:30 PM' (screens.jsx:49, 542, 549)
+  - Flutter: providerName: provider['fullName'], providerBusinessName: providerProfile['businessName'], scheduledDate: json['scheduledDate'], scheduledTime: json['scheduledTime'], providerAddress: providerProfile['address'] (booking_model.dart:25-48). Backend BookingDto has bookingDate, startTime, notes and provider {businessName, ownerName, address, profileImageUrl} (ApiResponse.java:91-101, 232-262). Cards and Confirmed therefore render blank names and ' · ' dates
+  - Fix: providerName: provider['ownerName'] ?? '', providerBusinessName: provider['businessName'], providerAddress: provider['address'], scheduledDate: json['bookingDate'] ?? '', scheduledTime: json['startTime'] ?? '', customerNote: json['notes'], servicePrice: (json['totalPrice'] ?? service['price']).
+- **[MAJOR · states] Lifecycle fields missing from BookingEntity** `BOOK-50-F2` ✔
+  - Prototype: location, cancelledBy, cancelledAt, cancellationReason, penaltyApplied, rejectionReason (screens.jsx:49-61)
+  - Flutter: BookingEntity has only id, provider*, service*, scheduledDate/Time, status, customerNote, createdAt, providerAddress (booking_entity.dart:4-18)
+  - Fix: Add homeService, bookingType, savedAddress, travelFee, totalPrice, paymentStatus, cancelledBy, cancelledAt, cancellationReason, rejectionReason, penaltyApplied, proposedDate, proposedStartTime, estimatedArrivalMinutes, checkedInAt, reviewed, distanceKm, and map them from BookingDto.
+
+#### ✅ StatusPill (booking statuses) — `BOOK-51`
+
+Prototype: ui_kits/aiwa-app/components.jsx:147-172 · Flutter: [Android/aiwa_app/lib/shared/widgets/status_pill.dart](Android/aiwa_app/lib/shared/widgets/status_pill.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
+
+No deviations found.
+
+
+#### ⚠️ Toast component (success toast) — `BOOK-52`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:20-39, 735 · Flutter: [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | — | ⚠️ | — | ✅ | — |
+
+- **[MAJOR · layout] Toast renders at the bottom as a SnackBar** `BOOK-52-F1` ✔
+  - Prototype: position: 'absolute', top: 56, left: 16, right: 16 (prototype.jsx:27)
+  - Flutter: snackBarTheme: SnackBarThemeData(behavior: SnackBarBehavior.floating, ...) used via ScaffoldMessenger.showSnackBar (app_theme.dart:185-193; my_bookings_page.dart:127-129; review_page.dart:91-93)
+  - Fix: Create shared/widgets/aiwa_toast.dart: void showAiwaToast(BuildContext c, String msg) inserting an OverlayEntry Positioned(top: MediaQuery.paddingOf(c).top + 8, left: 16, right: 16) with a SlideTransition, removed after 2800ms.
+- **[MAJOR · components] Success check badge missing** `BOOK-52-F2` ✔
+  - Prototype: &lt;span style={{ width: 26, height: 26, borderRadius: '50%', background: aiwa.success500 }}>&lt;Icon name="check" size={15} color="#fff"/>&lt;/span> (prototype.jsx:33-35)
+  - Flutter: SnackBar(content: Text(...)) with text only
+  - Fix: Row([Container(26x26, circle, AppColors.success500, child: Icon(Icons.check, 15, color: Colors.white)), SizedBox(width: 10), Expanded(Text(msg))])
+- **[MINOR · tokens] Background, text size and shadow differ** `BOOK-52-F3` ✔
+  - Prototype: background: 'rgba(42,19,32,.96)'; fontSize 13 fontWeight 500; boxShadow '0 12px 32px rgba(74,31,56,.3)' (prototype.jsx:28-36)
+  - Flutter: AppColors.plum900.withOpacity(0.96), i.e. male #2E2A26 / female #6B3A3A; bodySm 14 w500; no shadow (app_theme.dart:185-193)
+  - Fix: color: const Color(0xF52A1320) (or keep theme-aware plum900 by design decision); AppTextStyles.bodySm.copyWith(fontSize: 13); BoxShadow(color: Color(0x4D4A1F38), blurRadius: 32, offset: Offset(0, 12)).
+- **[MINOR · interaction] Dismiss timing and entrance animation** `BOOK-52-F4` ✔
+  - Prototype: setTimeout(onClose, 2800); animation 'aiwa-toast 320ms cubic-bezier(.32,.72,0,1)' from translateY(-10px) (prototype.jsx:22, 30)
+  - Flutter: Default SnackBar duration 4s with the Material bottom slide
+  - Fix: Duration(milliseconds: 2800) and a 320ms AppTheme.easeSoft slide from Offset(0, -0.2).
+
+#### ⚠️ Toast - 'Booking cancelled. Reason: {reason}' — `BOOK-55`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:737-741 · Flutter: [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | ⚠️ | — | ⚠️ | ✅ | — | — | — |
+
+- **[MAJOR · content] Toast omits the cancellation reason** `BOOK-55-F1` ✔
+  - Prototype: setToast('Booking cancelled. Reason: ' + reason) (prototype.jsx:739)
+  - Flutter: SnackBar(content: Text('Booking cancelled')) (my_bookings_page.dart:127-129)
+  - Fix: After the reason sheet (BOOK-29): showAiwaToast(context, 'Booking cancelled. Reason: $reason').
+- **[MINOR · components] Rendered as Material SnackBar** `BOOK-55-F2` ✔
+  - Prototype: &lt;Toast> component (prototype.jsx:20-39)
+  - Flutter: ScaffoldMessenger.of(context).showSnackBar(...) (my_bookings_page.dart:127-129)
+  - Fix: Use showAiwaToast (BOOK-52).
+
+#### ⚠️ Toast - 'Thanks - your review is live.' — `BOOK-56`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:712 · Flutter: [Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart](Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | ⚠️ | — | ✅ | ✅ | — | — | — |
+
+- **[MINOR · components] Rendered as Material SnackBar** `BOOK-56-F1` ✔
+  - Prototype: &lt;Toast> top toast with check badge (prototype.jsx:20-39)
+  - Flutter: ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thanks - your review is live.'))) (review_page.dart:91-93)
+  - Fix: showAiwaToast(context, 'Thanks - your review is live.') (BOOK-52).
+
+#### ⚠️ Cross-cutting findings — Customer booking lifecycle
+
+- **[MAJOR · components] Toasts implemented with Material SnackBar instead of the kit Toast** `BOOK-C1` ✔
+  - Prototype: Single &lt;Toast> at top: 56 with a success check badge, 2800ms (prototype.jsx:20-39)
+  - Flutter: snackBarTheme floating SnackBar (app_theme.dart:185-193); ScaffoldMessenger.showSnackBar called directly in my_bookings_page.dart:127, review_page.dart:91-97, booking_page.dart:115
+  - Fix: Add shared/widgets/aiwa_toast.dart (OverlayEntry-based showAiwaToast). Replace every showSnackBar call so all toasts share one component.
+- **[MINOR · components] Material Icons used instead of the Lucide set** `BOOK-C2` ✔
+  - Prototype: All icons are Lucide names via &lt;Icon name=...> (components.jsx:21-41), e.g. banknote, calendar-plus, x-circle
+  - Flutter: Icons.* throughout (e.g. Icons.payments_outlined booking_page.dart:291, Icons.calendar_month_outlined my_bookings_page.dart:187); pubspec.yaml has no Lucide package
+  - Fix: Add lucide_icons_flutter and map kit names 1:1 (LucideIcons.banknote, LucideIcons.calendarPlus, ...).
+- **[MINOR · tokens] Sheet scrim and shadow derived from theme colours instead of the kit literals** `BOOK-C3` ✔
+  - Prototype: Scrim rgba(42,19,32,.45-.48); shadow rgba(0,0,0,.18) / rgba(42,19,32,.2) (flow-screens.jsx:505-512; states.jsx:234-240)
+  - Flutter: AppColors.plum900.withOpacity(0.48) (confirm_sheet.dart:27); AppTheme.sheetDecoration plum700 @0.14 (app_theme.dart:41-51)
+  - Fix: Add AppColors.scrim = Color(0x7A2A1320) and AppTheme.sheetShadow = BoxShadow(color: Color(0x332A1320), blurRadius: 32, offset: Offset(0, -12)). Use them in every bottom sheet.
+- **[MINOR · tokens] Serif heading styles bake in tracking that screens then inherit** `BOOK-C4` ✔
+  - Prototype: letterSpacing is set per heading only where needed (e.g. BookingType h1 -0.02em at flow-screens.jsx:168; Confirmed h1 none at screens.jsx:477)
+  - Flutter: AppTextStyles.h1/h2/h3 always carry -0.02em / -0.01em (app_text_styles.dart:16-35) and are reused with copyWith(fontSize: ...), so tracking is computed from the base size
+  - Fix: Compute letterSpacing from the final size, e.g. static TextStyle serif(double size, {double tracking = 0}) => _serif(fontSize: size, letterSpacing: tracking * size, ...).
+- **[MINOR · components] No shared reason-picker sheet; the generic ConfirmSheet is used instead** `BOOK-C5` ✔
+  - Prototype: CancelSheet and FlagProviderSheet share one pattern: handle, eyebrow, h2, selectable reason rows, 'other' textarea, secondary + danger buttons (flow-screens.jsx:490-549; customer-extras.jsx:432-491)
+  - Flutter: Only showConfirmSheet exists (confirm_sheet.dart:12-138); cancel uses it without reasons (my_bookings_page.dart:95-106)
+  - Fix: Create shared/widgets/reason_sheet.dart (showReasonSheet(context, eyebrow, title, reasons, otherLabel, confirmLabel)). Reuse it for Cancel, Flag provider and the Complaint categories.
+
+### Customer account, notifications & system
+
+#### ⚠️ Profile tab (signed-in customer) — `ACCT-01`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:342-402 (ProfileScreen); case 'profile' prototype.jsx:709-711 · Flutter: [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart), [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ |
+
+- **[CRITICAL · interaction] 7 of 10 Profile rows missing; their destinations are unreachable** `ACCT-01-F1` ✔
+  - Prototype: prototype.jsx:343-354 rows: Personal info (user) -> push('edit-profile'), Saved addresses (map-pin) -> push('addresses'), Trusted contacts (user-round-plus, value '1 saved') -> push('trusted-contacts'), Notifications (bell), Notification preferences (bell-ring) -> push('notif-prefs'), Language (globe, 'English'), Safety & policies (shield-check) -> push('safety-policies'), WhatsApp support (message-circle) -> push('support'), Sign out, Delete account (trash-2) -> setShowDeleteAccount(true); wiring prototype.jsx:711
+  - Flutter: profile_page.dart:56-89 renders only Notifications, App palette, Language, Email (conditional) and Sign out. AppRoutes (app_router.dart:29-55) has no addresses / edit-profile / trusted-contacts / notif-prefs / safety-policies / support routes
+  - Fix:
+
+    In profile_page.dart replace the Column children with the prototype order and add the routes (see ACCT-04/06/13/15/16/21/22 build notes):
+    SettingsRow(icon: Icons.person_outline_rounded, label: 'Personal info', onTap: () => context.push(AppRoutes.editProfile)),
+    SettingsRow(icon: Icons.place_outlined, label: 'Saved addresses', onTap: () => context.push(AppRoutes.addresses)),
+    SettingsRow(icon: Icons.person_add_alt_outlined, label: 'Trusted contacts', value: '${contacts.length} saved', onTap: () => context.push(AppRoutes.trustedContacts)),
+    SettingsRow(icon: Icons.notifications_none_rounded, label: 'Notifications', onTap: () => context.push(AppRoutes.notifications)),
+    SettingsRow(icon: Icons.notifications_active_outlined, label: 'Notification preferences', onTap: () => context.push(AppRoutes.notifPrefs)),
+    SettingsRow(icon: Icons.language_rounded, label: 'Language', value: lang, onTap: _pickLanguage),
+    SettingsRow(icon: Icons.verified_user_outlined, label: 'Safety & policies', onTap: () => context.push(AppRoutes.safetyPolicies)),
+    SettingsRow(icon: Icons.chat_bubble_outline_rounded, label: 'WhatsApp support', onTap: () => context.push(AppRoutes.support)),
+    SettingsRow(icon: Icons.logout_rounded, label: 'Sign out', danger: true, onTap: () => _signOut(context)),
+    SettingsRow(icon: Icons.delete_outline_rounded, label: 'Delete account', danger: true, showDivider: false, onTap: () => _deleteAccount(context)),
+
+- **[MAJOR · components] Header stats tiles (Bookings / Favorites / Reviews) missing** `ACCT-01-F2` ✔
+  - Prototype: prototype.jsx:366-379: flex row gap 10 marginTop 18; each tile flex:1, background 'rgba(250,245,238,.12)', borderRadius 14, padding '10px 14px', backdropFilter blur(8px); value fontDisp 22 lh 1; label 11px/600, letterSpacing 0.08em, uppercase, color rose300 (male #B5A898 / female #E6BAB0)
+  - Flutter: profile_page.dart:196-230: the _Header Row only has AiwaAvatar + name + contact; no stats
+  - Fix:
+
+    Under the Row in _Header add:
+    const SizedBox(height: 18),
+    Row(children: [for (final (i, s) in [(bookings, 'Bookings'), (saved, 'Favorites'), (reviews, 'Reviews')].indexed) Expanded(child: Container(margin: EdgeInsets.only(left: i == 0 ? 0 : 10), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), decoration: BoxDecoration(color: const Color(0x1FFAF5EE), borderRadius: BorderRadius.circular(14)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${s.$1}', style: AppTextStyles.h3.copyWith(fontSize: 22, height: 1, letterSpacing: 0, color: AppColors.bone)), const SizedBox(height: 2), Text(s.$2.toUpperCase(), style: AppTextStyles.micro.copyWith(fontWeight: FontWeight.w600, letterSpacing: 0.88, color: AppColors.rose300))])))]),
+    The counts come from MyBookings (GET /bookings/my), saved (GET /users/me/saved) and a review count, which needs a backend field.
+
+- **[MAJOR · layout] Row order/set differs; Flutter-only 'App palette' and 'Email' rows** `ACCT-01-F3` ✔
+  - Prototype: prototype.jsx:343-354 fixed order: Personal info, Saved addresses, Trusted contacts, Notifications, Notification preferences, Language, Safety & policies, WhatsApp support, Sign out, Delete account. The theme choice lives inside Personal info as the 'Theme' Mauve/Charcoal picker (account-screens.jsx:40-59); email is a field there too (account-screens.jsx:38)
+  - Flutter: profile_page.dart:61-69 'App palette' row (value 'Mauve'/'Charcoal', opens the _pickPalette sheet at 114-169); profile_page.dart:77-82 read-only 'Email' row
+  - Fix: Remove both rows from profile_page.dart. Move the palette picker into the new Personal info page as the 2-column 'Theme' selector, reusing _PaletteOption, and show email as an editable AiwaTextField there.
+- **[MINOR · tokens] Header glow colour/geometry and name letter-spacing** `ACCT-01-F4` ✔
+  - Prototype: prototype.jsx:358 radial-gradient(circle at 70% 30%, rgba(231,186,182,.4), transparent 60%) over the whole header (literal #E7BAB6, not themed); name prototype.jsx:362 fontDisp 24 lh 1.1 with no letterSpacing
+  - Flutter: profile_page.dart:184-188 AiwaGlow(size: 260, color: AppColors.rose300 (male #B5A898 / female #E6BAB0), opacity: 0.4) at right:-60 top:-30; name profile_page.dart:211 AppTextStyles.h2.copyWith(fontSize: 24...) keeps h2 letterSpacing -0.26 (app_text_styles.dart:27)
+  - Fix: Positioned(right: -40, top: -60, child: AiwaGlow(size: 320, color: const Color(0xFFE7BAB6), opacity: 0.4)) and add letterSpacing: 0 to the name style.
+- **[MINOR · components] Language row is missing the chevron the prototype draws on every non-danger row** `ACCT-01-F5` ✎
+  - Prototype: prototype.jsx:349 { icon: 'globe', label: 'Language', value: 'English' } has no onTap (the row is inert in the prototype too); prototype.jsx:397 `{!r.danger && <Icon name="chevron-right" size={16} color={aiwa.ink3} />}` still renders the chevron on it
+  - Flutter: profile_page.dart:70-76 Language SettingsRow has no onTap; screen_chrome.dart:223 `if (!danger && onTap != null)` so no chevron is drawn
+  - Fix: In screen_chrome.dart add `final bool? showChevron;` to SettingsRow and change line 223 to `if (!danger && (showChevron ?? onTap != null))`; pass `showChevron: true` on the Language row in profile_page.dart. Making the row open a language picker (AuthRemoteDataSource.updateLanguage -> PATCH ApiConstants.meLanguage) is optional and goes beyond the prototype.
+- **[MINOR · states] Guest view is keyed on AuthAuthenticated, so a future profile update would flip signed-in users to the guest lock** `ACCT-01-F6` ✎
+  - Prototype: prototype.jsx:709-711: the guest view depends only on the isGuest flag; a signed-in user always sees ProfileScreen
+  - Flutter: profile_page.dart:26-27 `final user = state is AuthAuthenticated ? state.user : null; if (user == null) return GuestLockedView`. auth_bloc.dart:132-144 _onUpdateProfile emits AuthLoading and then AuthProfileUpdated (never AuthAuthenticated). Nothing dispatches AuthUpdateProfileEvent yet (only declared at auth_event.dart:62), so this is latent today. It becomes visible as soon as the Personal info page (ACCT-13) saves.
+  - Fix: auth_bloc.dart _onUpdateProfile: drop `emit(AuthLoading())` and emit `AuthAuthenticated(user)` on success (or AuthProfileUpdated followed by AuthAuthenticated). profile_page.dart: `BlocBuilder<AuthBloc, AuthState>(buildWhen: (_, s) => s is AuthAuthenticated || s is AuthUnauthenticated, ...)` so transient states never rebuild into the guest view.
+- **[MINOR · interaction] Tab-switch transition missing** `ACCT-01-F7` ✔
+  - Prototype: prototype.jsx:563-570 tab change sets direction 'back', which gives animation 'aiwa-fade-in 320ms cubic-bezier(.32,.72,0,1)' (prototype.jsx:729-731; prototype.html:20-23 scale(.98 -> 1))
+  - Flutter: app_router.dart:173-177 NoTransitionPage(child: ProfilePage())
+  - Fix: Use CustomTransitionPage(transitionDuration: AppTheme.dur3, transitionsBuilder: (_, a, __, c) => ScaleTransition(scale: Tween(begin: .98, end: 1.0).animate(CurvedAnimation(parent: a, curve: AppTheme.easeSoft)), child: c)) for the shell tabs.
+- **[MINOR · rtl] Arabic language value rendered without the Arabic font or locale support** `ACCT-01-F8` ✔
+  - Prototype: tokens/colors_and_type.css:96-101 --font-body falls back to 'IBM Plex Sans Arabic'; --font-display falls back to 'Markazi Text'; css:277-282 swaps fonts under [dir=rtl]/[lang=ar]
+  - Flutter: profile_page.dart:73-75 shows 'العربية' in AppTextStyles.meta (Plus Jakarta Sans only, app_text_styles.dart:151-169, no fontFamilyFallback). app.dart:81-82 hard-codes locale: Locale('en') with no localizationsDelegates, although flutter_localizations is in pubspec.yaml
+  - Fix: In app_text_styles.dart _sans/_serif add fontFamilyFallback: [GoogleFonts.ibmPlexSansArabic().fontFamily!] / [GoogleFonts.markaziText().fontFamily!]. In app.dart add localizationsDelegates: GlobalMaterialLocalizations.delegates and drive locale from user.preferredLanguage.
+- **[MINOR · layout] Row value and chevron sit 8px / 6px apart instead of the 14px row gap** `ACCT-01-V1` ＋
+  - Prototype: prototype.jsx:384 row `display: 'flex', alignItems: 'center', gap: 14`; the 14px gap applies label -> value and value -> chevron (prototype.jsx:395-397)
+  - Flutter: screen_chrome.dart:218-226 value wrapped in `EdgeInsets.only(left: 8)` and chevron preceded by `SizedBox(width: 6)`, e.g. the Language 'English' row (profile_page.dart:70-76)
+  - Fix: In SettingsRow (non-boxed) use `padding: const EdgeInsets.only(left: 14)` for the value and `const SizedBox(width: 14)` before the chevron; use 13 for the boxed variant (states.jsx:442).
+- **[MINOR · layout] Profile hero content sits 4px lower than the same 68px header on Home** `ACCT-01-V2` ＋
+  - Prototype: prototype.jsx:357 header padding '68px 22px 22px', the same 68px top as the Home header (screens.jsx:71 '68px 22px 16px')
+  - Flutter: profile_page.dart:192 `MediaQuery.paddingOf(context).top + 26`, while home_page.dart:140 maps the same 68px to `top + 22`
+  - Fix: profile_page.dart:192 -> `MediaQuery.paddingOf(context).top + 22`.
+
+#### ⚠️ Profile tab - guest-locked state — `ACCT-02`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:709-710; customer-extras-2.jsx:11-25 (GuestLockedScreen) · Flutter: [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart), [Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart](Android/aiwa_app/lib/shared/widgets/guest_locked_view.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ⚠️ | ⚠️ | — | ✅ | — |
+
+- **[CRITICAL · interaction] CTA goes to Role choice instead of the Auth gate** `ACCT-02-F2` ✔
+  - Prototype: prototype.jsx:710 onSignIn={() => push('auth-gate')}, which is AuthGateScreen 'Sign in to book.' with 'Create account' / 'I already have an account' (customer-extras-2.jsx:27-54)
+  - Flutter: guest_locked_view.dart:65 onPressed: () => context.push(AppRoutes.roleChoice)
+  - Fix: guest_locked_view.dart: onPressed: () => context.push(AppRoutes.authGate) (the route exists at app_router.dart:206). Or add an onSignIn parameter so each tab can pass its own target.
+- **[MINOR · content] Guest profile title/body copy differs** `ACCT-02-F1` ✔
+  - Prototype: prototype.jsx:710 title="Your profile" body="Sign in to manage your account, addresses, and notifications."
+  - Flutter: profile_page.dart:33-35 title: 'Make AIWA yours', body: 'Sign in to manage your details, notifications and bookings.'
+  - Fix: GuestLockedView(title: 'Your profile', body: 'Sign in to manage your account, addresses, and notifications.', icon: Icons.person_outline_rounded)
+- **[MINOR · tokens] Guest title carries h2 negative letter-spacing (tokens dimension should be 'deviates')** `ACCT-02-V1` ＋
+  - Prototype: customer-extras-2.jsx:19 h2 fontDisp 24, lineHeight 1.1, no letterSpacing
+  - Flutter: guest_locked_view.dart:45 `AppTextStyles.h2.copyWith(fontSize: 24, height: 1.1)` keeps h2 letterSpacing -0.26 (app_text_styles.dart:27)
+  - Fix: guest_locked_view.dart:45 -> `AppTextStyles.h2.copyWith(fontSize: 24, height: 1.1, letterSpacing: 0)`.
+
+#### ⚠️ Sign-out confirm sheet — `ACCT-03`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:756-758; states.jsx:227-257 (ConfirmSheet) · Flutter: [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart), [Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart), [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ⚠️ | ⚠️ | ✅ | — | ✅ | — |
+
+- **[MAJOR · content] Sign-out body/eyebrow copy changes the message** `ACCT-03-F1` ✔
+  - Prototype: prototype.jsx:757-758 eyebrow="Your account" body="Your bookings, saved providers and addresses all stay safe. You'll need a code to sign back in."
+  - Flutter: profile_page.dart:103 eyebrow: 'Sign out'; profile_page.dart:105 body: "You'll need your phone or email and password to sign back in." (drops the data-safety reassurance and says password instead of code)
+  - Fix: showConfirmSheet(context, eyebrow: 'Your account', title: 'Sign out of AIWA?', body: "Your bookings, saved providers and addresses all stay safe. You'll need a code to sign back in.", confirmLabel: 'Sign out', icon: Icons.logout_rounded, danger: false)
+- **[MINOR · tokens] Danger tone used instead of neutral; sheet shadow/scrim/padding differ** `ACCT-03-F2` ✔
+  - Prototype: prototype.jsx:757 tone="neutral", which resolves to plum100 bg / plum700 fg / 'primary' confirm (states.jsx:229-231); sheet padding bottom 34, shadow '0 -12px 32px rgba(42,19,32,.2)', scrim literal rgba(42,19,32,.48) (states.jsx:234-240)
+  - Flutter: profile_page.dart:101-108 omits danger:, so the default danger: true (confirm_sheet.dart:19) gives danger100/danger700 + AiwaButtonVariant.danger (confirm_sheet.dart:30-31, 121-123). Hex happens to be identical today (male danger700 = plum700 = #2E2A26, female #6B3A3A). Padding bottom 24 + safe inset (confirm_sheet.dart:40); shadow AppColors.plum700 @ .14 (app_theme.dart:44-50); barrier AppColors.plum900 @ .48 (confirm_sheet.dart:27; male #2E2A26)
+  - Fix: Pass danger: false. In AppTheme.sheetDecoration use BoxShadow(color: const Color(0x332A1320), blurRadius: 32, offset: Offset(0, -12)); barrierColor: const Color(0x7A2A1320); bottom padding 34 + safe inset minus the device home-indicator overlap.
+
+#### ⚠️ Notifications inbox (customer) — `ACCT-20`
+
+Prototype: ui_kits/aiwa-app/customer-extras.jsx:100-172 (NOTIFICATIONS, NotificationsScreen); prototype.jsx:713 · Flutter: [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart), [Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_bloc.dart](Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_bloc.dart), [Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_state.dart](Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_state.dart), [Android/aiwa_app/lib/features/notifications/domain/entities/notification_entity.dart](Android/aiwa_app/lib/features/notifications/domain/entities/notification_entity.dart), [Android/aiwa_app/lib/features/notifications/data/repositories/notification_repository_impl.dart](Android/aiwa_app/lib/features/notifications/data/repositories/notification_repository_impl.dart), [Android/aiwa_app/lib/core/network/api_client.dart](Android/aiwa_app/lib/core/network/api_client.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart), [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · interaction] Notification rows are dead: no routing to Tracking or Terms re-accept** `ACCT-20-F1` ✔
+  - Prototype: prototype.jsx:713 onOpen={(n) => { if (n?.type === 'terms') { push('terms-reaccept'); } else { setActiveStatus('onway'); push('tracking'); } }}; the row onClick marks read and then calls onOpen (customer-extras.jsx:141)
+  - Flutter: notifications_page.dart:134-140 onTap only does `if (!n.read) add(NotificationMarkReadEvent(n.id))`. NotificationEntity.referenceId (notification_entity.dart:10) is never used, and app_router.dart has no terms-reaccept or tracking route
+  - Fix:
+
+    onTap: () {
+      if (!n.read) context.read&lt;NotificationBloc>().add(NotificationMarkReadEvent(n.id));
+      final t = n.type.toUpperCase();
+      if (t.contains('TERMS') || t.contains('POLICY')) { context.push(AppRoutes.termsReaccept); }
+      else if (n.referenceId != null) { context.push('/tracking/${n.referenceId}'); }
+    }
+    This depends on the Terms re-accept and Tracking routes owned by other partitions.
+
+- **[MAJOR · states] Mark read / Mark all read never clear a row's unread styling** `ACCT-20-F2` ✔
+  - Prototype: customer-extras.jsx:113 markAllRead sets every item unread:false; customer-extras.jsx:141 sets the tapped item unread:false, so the plum100 background and rose dot disappear immediately
+  - Flutter: notification_bloc.dart:76-86 _onMarkRead only emits current.copyWith(unreadCount: count - 1); notification_bloc.dart:88-96 _onMarkAll only sets unreadCount: 0. The notifications list (and NotificationEntity.read, notification_entity.dart:8) is untouched, so rows keep AppColors.plum100 + dot (notifications_page.dart:216, 268-277). Tapping again re-sends the PUT and decrements the count again
+  - Fix:
+
+    Add NotificationEntity copyWith({bool? read}) and in the bloc:
+    emit(current.copyWith(
+      notifications: [for (final x in current.notifications) x.id == event.id ? x.copyWith(read: true) : x],
+      unreadCount: (current.unreadCount - 1).clamp(0, 999)));
+    For mark-all, map every item to read: true. Update optimistically before awaiting the repository.
+
+- **[MAJOR · states] Server/offline errors leave the inbox on an endless skeleton** `ACCT-20-F3` ✔
+  - Prototype: Designed failure surfaces: OfflineBanner 'No connection — showing saved data' (states.jsx:128-145, prototype.jsx:759); ErrorState with 'Try again' (states.jsx:110-125)
+  - Flutter: api_client.dart:141-158 _ErrorInterceptor.onError uses `throw const NetworkException()` / `throw ServerException(...)` inside the interceptor. dio 5.9.2 (dio_mixin.dart:516-523, assureDioException) re-wraps these as DioException(error: ServerException), so NotificationRepositoryImpl's `on ServerException` / `on NetworkException` (notification_repository_impl.dart:28-31) never match. The DioException escapes NotificationBloc._onLoad (notification_bloc.dart:45-58) after it emitted NotificationLoading, so notifications_page.dart:83-89 shows SkeletonList forever and the ErrorState branch (72-81) is unreachable. (Inferred from reading the Dio source; not run)
+  - Fix: In api_client.dart replace the throws with handler.reject(err.copyWith(error: ServerException(message: ..., statusCode: statusCode))), and in the repositories catch DioException and map it via `e.error`. Or map in the data source: try { ... } on DioException catch (e) { throw e.error is ServerException ? e.error as ServerException : ServerException(message: e.message ?? 'Something went wrong'); }
+- **[MINOR · states] Header '· N new' counts only the first page** `ACCT-20-F4` ✔
+  - Prototype: customer-extras.jsx:112 unreadCount = items.filter(n => n.unread).length over the full list
+  - Flutter: notification_bloc.dart:54 unreadCount: paged.content.where((n) => !n.read).length (page 0, size 20), which overwrites the server count that Home loaded via NotificationGetUnreadCountEvent (home_page.dart:57)
+  - Fix: In _onLoad, also call getUnreadCount() and use its value; keep decrementing locally on mark-read.
+- **[MINOR · content] Status notifications use a calendar glyph instead of navigation / check-circle** `ACCT-20-F5` ✔
+  - Prototype: customer-extras.jsx:101-102 'Nadia is on the way' icon 'navigation'; 'Booking accepted' icon 'check-circle'
+  - Flutter: notifications_page.dart:175-177 any type containing BOOKING/STATUS -> Icons.event_available_outlined
+  - Fix: Map finer-grained types, e.g. if (t.contains('ON_THE_WAY')) return Icons.navigation_outlined; if (t.contains('ACCEPT') || t.contains('CONFIRM')) return Icons.check_circle_outline_rounded; else Icons.event_available_outlined. Backend type names are not visible.
+- **[MINOR · tokens] Title line-heights / letter-spacing slightly off** `ACCT-20-F6` ✔
+  - Prototype: customer-extras.jsx:122 h1 fontDisp 24 lineHeight 1.05, no letterSpacing; customer-extras.jsx:158 row title lineHeight 1.2
+  - Flutter: screen_chrome.dart:58-61 AppTextStyles.h3.copyWith(fontSize: 24, height: 1.1), inheriting h3 letterSpacing -0.22 (app_text_styles.dart:34); notifications_page.dart:248 row title height: 1.25
+  - Fix: Add a titleHeight param to ScreenHeader (1.05 here) with letterSpacing: 0; set the row title to height: 1.2.
+- **[MINOR · layout] Unread dot sits 8px from the text column instead of 12px** `ACCT-20-F7` ✔
+  - Prototype: customer-extras.jsx:143 row `gap: 12` applies between the text column and the dot (customer-extras.jsx:163)
+  - Flutter: notifications_page.dart:272 margin: const EdgeInsets.only(left: 8, top: 14)
+  - Fix: margin: const EdgeInsets.only(left: 12, top: 14)
+- **[MINOR · layout] Title/time row is top-aligned instead of baseline-aligned** `ACCT-20-V1` ＋
+  - Prototype: customer-extras.jsx:157 title/time row `display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6`
+  - Flutter: notifications_page.dart:237-238 `Row(crossAxisAlignment: CrossAxisAlignment.start, ...)`, so the 11px time label is top-aligned with the 14px title instead of sharing its baseline
+  - Fix: notifications_page.dart:238 -> `crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic,`
+
+#### ⚠️ Notifications inbox - all read (after 'Mark all read') — `ACCT-V06`
+
+Prototype: ui_kits/aiwa-app/customer-extras.jsx:112-113, 123, 126-130, 144, 158, 163 · Flutter: [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart), [Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_bloc.dart](Android/aiwa_app/lib/features/notifications/presentation/bloc/notification_bloc.dart), [Android/aiwa_app/lib/features/notifications/domain/entities/notification_entity.dart](Android/aiwa_app/lib/features/notifications/domain/entities/notification_entity.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | — |
+
+- **[MAJOR · states] After 'Mark all read' the header clears but every row still looks unread** `ACCT-V06-F1` 
+  - Prototype: customer-extras.jsx:113 `setItems(items.map(n => ({ ...n, unread: false })))`, so rows lose the plum100 bg (144), drop to weight 600 (158) and lose the dot (163)
+  - Flutter: notification_bloc.dart:88-96 only emits current.copyWith(unreadCount: 0). The header hides '· N new' and the button (notifications_page.dart:43, 47), but rows read `!n.read` (206) and keep AppColors.plum100 (216), w700 (245-247) and the rose500 dot (268-277). Same root cause as ACCT-20-F2.
+  - Fix: Add `NotificationEntity copyWith({bool? read})` in notification_entity.dart and in _onMarkAll emit `current.copyWith(notifications: [for (final n in current.notifications) n.read ? n : n.copyWith(read: true)], unreadCount: 0)` optimistically before awaiting _repository.markAllAsRead().
+
+#### ⚠️ Cross-cutting findings — Customer account, notifications & system
+
+- **[CRITICAL · interaction] No global HTTP-status to system-screen routing and no SystemScreen shell** `ACCT-C07` ✔
+  - Prototype: system-screens.jsx:1-4: system screens 'respond to states the backend already returns (401, 423, 409)'. SystemScreen shell (system-screens.jsx:9-36): bone, padding 76/26/34, 72px toned circle with aiwa-pop, eyebrow, DM Serif 27 title, 14/1.6 body maxWidth 290, primary lg + ghost sm
+  - Flutter: api_client.dart:138-162 _ErrorInterceptor maps 401 to UnauthorizedException and everything else to ServerException (thrown, then re-wrapped by Dio). There is no 403/404/423 handling, no navigation hook, no GoRouter errorBuilder or redirect (app_router.dart:64-228), and no system_screen.dart in lib/shared/widgets
+  - Fix: Add lib/shared/widgets/system_screen.dart (SystemScreen({icon, tone, eyebrow, title, body, primary, onPrimary, secondary, onSecondary})), an ApiClient.authEvents broadcast stream emitting the status codes 401 (after a failed refresh), 403 and 423, and a listener in app.dart routing to /session-expired, /forbidden and /account-locked. Add GoRouter(errorBuilder: ...) for 404 (see ACCT-24..27).
+- **[MAJOR · components] No top Toast component; SnackBars are used instead** `ACCT-C01` ✔
+  - Prototype: prototype.jsx:20-39 Toast: absolute top:56, left/right 16, bg rgba(42,19,32,.96), radius 14, padding 12x16, 26px success500 circle + white check 15, text 13/500 bone, aiwa-toast 320ms slide-down, auto-dismiss 2800ms. Used for every account toast (prototype.jsx:676-678, 715, 753)
+  - Flutter: app_theme.dart:185-193 snackBarTheme: plum900 @ .96, bodySm 14 w500 bone, floating at the bottom, radius 14, no check badge; used ad hoc (review_page.dart:91-92, my_bookings_page.dart:129)
+  - Fix: Add lib/shared/widgets/aiwa_toast.dart with showAiwaToast(context, message) as specified in ACCT-05 and replace ScaffoldMessenger.showSnackBar calls with it.
+- **[MAJOR · tokens] Arabic typography and localization not wired** `ACCT-C02` ✎
+  - Prototype: tokens/colors_and_type.css:96-101 font stacks include 'Markazi Text' (display) and 'IBM Plex Sans Arabic' (body); css:277-285 swaps to the Arabic families under [dir=rtl]/[lang=ar]; the prototype shows Arabic copy ('العربية' at account-screens.jsx:61 and customer-extras.jsx:300)
+  - Flutter: app_text_styles.dart:131-189 define only DM Serif Display / Plus Jakarta Sans / JetBrains Mono with no fontFamilyFallback; app.dart:81-82 fixes locale: const Locale('en') with supportedLocales but no localizationsDelegates, although flutter_localizations is in pubspec.yaml:12
+  - Fix: In _serif/_sans (app_text_styles.dart) add fontFamilyFallback: [GoogleFonts.markaziText().fontFamily!] / [GoogleFonts.ibmPlexSansArabic().fontFamily!]. In app.dart add localizationsDelegates: GlobalMaterialLocalizations.delegates and set locale from AuthAuthenticated.user.preferredLanguage.
+- **[MAJOR · components] No shared Toggle widget** `ACCT-C04` ✎
+  - Prototype: states.jsx:209-224 Toggle: 42x24 pill, background plum700 on / divider off (warn500 for tone warn), 18px white knob at left 21/3 with shadow 0 1px 3px rgba(42,19,32,.25), 200ms easeSoft. Used by the address Default toggle (account-screens.jsx:190); Notification preferences uses an inline 40x22 variant (flow-additions-v3.jsx:100-104)
+  - Flutter: No toggle in lib/shared/widgets (14 files: aiwa_avatar, aiwa_button, aiwa_chip, aiwa_icon_button, aiwa_text_field, confirm_sheet, empty_state, eyebrow_label, guest_locked_view, loading_shimmer, screen_chrome, section_header, star_rating, status_pill); no Switch theme in app_theme.dart
+  - Fix: Add lib/shared/widgets/aiwa_toggle.dart: GestureDetector -> AnimatedContainer(width: 42, height: 24, borderRadius 999, color: value ? AppColors.plum700 : AppColors.divider) with an AnimatedPositioned 18px knob (left: value ? 21 : 3, top 3, BoxShadow(color: Color(0x402A1320), blurRadius: 3, offset: Offset(0,1))), duration AppTheme.dur2, curve AppTheme.easeSoft.
+- **[MINOR · components] SettingsRow boxed variant diverges from the kit's SettingsRow** `ACCT-C03` ✔
+  - Prototype: states.jsx:438-461 SettingsRow: boxed paper radius 14, padding 13x14, gap 13; icon tile 36 radius 11 with plum/gold/danger tone; label 14/600; sub 11.5 ink3; value 12.5 ink3; `right` slot; chevron-right 17 ink4
+  - Flutter: screen_chrome.dart:155-258 SettingsRow: tile radius 10, gap 14, label AppTextStyles.body w500 15 (lines 201-205), value AppTextStyles.meta 13 (221), chevron 16 ink3 (225), no tone/right params. The 15/500 styling matches only the Profile inline rows (prototype.jsx:395)
+  - Fix: When boxed is true use label 14 w600, tile radius 11, gap 13, value 12.5, chevron 17 AppColors.ink4. Add `Widget? right` and `bool gold` params (gold100/gold700 tile). Needed by Safety & policies, Personal info and Trusted contacts.
+- **[MINOR · tokens] Serif headings inherit negative letter-spacing where the kit has none** `ACCT-C05` ✔
+  - Prototype: ScreenHeader h2 (states.jsx:419), EmptyState h3 (states.jsx:97) and the Profile name (prototype.jsx:362) set no letterSpacing; only SectionHeader uses -0.01em (components.jsx:196)
+  - Flutter: AppTextStyles.h2 letterSpacing -0.26 (app_text_styles.dart:27) and h3 -0.22 (app_text_styles.dart:34) carry into ScreenHeader (screen_chrome.dart:58), EmptyState (empty_state.dart:69), ConfirmSheet (confirm_sheet.dart:75) and the Profile name (profile_page.dart:211)
+  - Fix: Override letterSpacing: 0 in ScreenHeader, EmptyState/ErrorState, GuestLockedView and the Profile header. Keep -0.01em only for SectionHeader.
+- **[MINOR · interaction] Pushed routes don't use the prototype slide-in transition** `ACCT-C06` ✔
+  - Prototype: prototype.jsx:724-731 pushed screens animate 'aiwa-slide-in 320ms cubic-bezier(.32,.72,0,1)' (prototype.html:16-19 translateX(8%) -> 0)
+  - Flutter: app_router.dart:180-226 use plain GoRoute builder, so platform default MaterialPage transitions. AppTheme.easeSoft / dur3 (app_theme.dart:31-33) are defined but not used for routes
+  - Fix: Add a helper `Page<void> aiwaPage(Widget child) => CustomTransitionPage(child: child, transitionDuration: AppTheme.dur3, transitionsBuilder: (_, a, __, c) => SlideTransition(position: Tween(begin: const Offset(.08, 0), end: Offset.zero).animate(CurvedAnimation(parent: a, curve: AppTheme.easeSoft)), child: c));` and use pageBuilder for /notifications and all new account routes.
+
+### Provider app
+
+#### ⚠️ Provider post-sign-in / session-restore routing — `PROV-02`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:619-626,651 · Flutter: [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart), [Android/aiwa_app/lib/features/auth/presentation/pages/provider_pending_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_pending_page.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| — | — | — | ⚠️ | ⚠️ | — | — | — |
+
+- **[CRITICAL · interaction] Unapproved providers skip the pending-verification gate on sign-in and on session restore** `PROV-02-F1` ✎
+  - Prototype: prototype.jsx:622 `if (signup.role === 'PROVIDER') { reset('provider-pending'); }`. The provider walkthrough (prototype.jsx:922-929) shows the Today app only after admin approval.
+  - Flutter: sign_in_page.dart:66-70 and splash_page.dart:71-75 call `context.go(state.user.isProvider ? AppRoutes.providerDashboard : AppRoutes.home)` with no verification check. The approval flag is also unusable. user_model.dart:36-39 reads `json['providerProfile']`, but the backend login and /auth/me UserDto (AuthServiceImpl.java:246-261, AuthController.java:343-358) never sets providerProfile, providerProfileId or providerStatus. user.providerProfile is therefore always null, and `isApproved` (user_entity.dart:66) is always false.
+  - Fix: Backend: in both toUserDto builders set `.providerProfileId(p.getId()).providerStatus(p.getVerificationStatus())` for PROVIDER users. Flutter UserModel.fromJson: `providerProfile: json['providerStatus'] != null ? ProviderProfileSummaryModel(id: json['providerProfileId'] as int? ?? 0, businessName: '', verificationStatus: json['providerStatus'] as String) : null`. Then in both listeners: `final u = state.user; context.go(!u.isProvider ? AppRoutes.home : (u.providerProfile?.isApproved ?? false) ? AppRoutes.providerDashboard : AppRoutes.providerPending);`. Add a GoRouter redirect on the provider routes as well. Without the mapping, this fix sends every provider to /provider-pending.
+- **[MINOR · content] 'Welcome back' toast after sign-in is missing** `PROV-02-F2` ✔
+  - Prototype: prototype.jsx:621 `setToast('Welcome back, Layla.')`
+  - Flutter: sign_in_page.dart:65-73 only navigates; nothing in lib/ calls showSnackBar with a welcome message.
+  - Fix: Call a shared top toast (see consistency PROV-C1) with 'Welcome back, ${user.fullName.split(' ').first}.' before context.go(...).
+
+#### ⚠️ Provider Today dashboard (hero header + stat tiles + section structure) — `PROV-03`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:35-139; ui_kits/aiwa-app/prototype.jsx:437 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart), [Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart), [Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart](Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart), [Android/aiwa_app/lib/core/constants/api_constants.dart](Android/aiwa_app/lib/core/constants/api_constants.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · states] Dashboard stats call hits a non-existent endpoint, so the page never leaves the loading skeleton** `PROV-03-F1` ✎
+  - Prototype: provider-screens.jsx:35-139: ProviderDashboard always renders the hero stats and the request lists.
+  - Flutter: dashboard_remote_datasource.dart:37 calls `_api.get(ApiConstants.providerStats)`, which is '/provider/stats' (api_constants.dart:30). The backend only maps GET /provider/dashboard (ProviderController.java:89; DashboardDto has todayBookings and no totalReviews). _ErrorInterceptor turns the 404 into a thrown ServerException (api_client.dart:138-160). Dio 5.9.2 wraps errors thrown inside interceptors in a DioException (dio_mixin.dart:516-523, assureDioException), so the `on ServerException` in DashboardRepositoryImpl.getStats (dashboard_repository_impl.dart:18-22) never matches. The DioException escapes _onLoad after `emit(DashboardLoading())` (dashboard_bloc.dart:29-30). dashboard_page.dart:109-120 keeps showing ShimmerBox and SkeletonList, and the ErrorState branch (103-108) is never reached. This comes from static reading of the Dio source; the app was not run.
+  - Fix: api_constants.dart: add `static const String providerDashboard = '/provider/dashboard';` and parse DashboardDto in getStats(), including todayBookings and confirmedBookings. totalReviews needs a backend field. Also fix the error plumbing so failures reach the UI. In _ErrorInterceptor, call `handler.reject(DioException(requestOptions: err.requestOptions, response: err.response, error: ServerException(message: ..., statusCode: ...)))` instead of throwing. In the repositories, add `on DioException catch (e) { final x = e.error; return Left(x is ServerException ? ServerFailure(x.message) : NetworkFailure(e.message ?? 'Network error')); }`.
+- **[CRITICAL · interaction] Today is a dead-end route with no navigation to the other provider tabs** `PROV-03-F7` ✎
+  - Prototype: prototype.jsx:471,485: `showTabBar = ['today','bookings','services','schedule','profile'].includes(current.name)` renders ProviderTabBar on Today.
+  - Flutter: app_router.dart:223-226 `GoRoute(path: AppRoutes.providerDashboard, builder: (_, __) => const DashboardPage())` has no ShellRoute or bottomNavigationBar. The DashboardPage Scaffold (dashboard_page.dart:98-100) has only a body.
+  - Fix: Host DashboardPage inside a provider ShellRoute (PROV-01). app_router.dart:180-186 already declares `GoRoute(path: '/provider/:id')` for the customer ProviderDetailPage, and go_router uses the first matching route. Paths like '/provider/today' or '/provider/bookings' would therefore open ProviderDetailPage(id: 'today') unless the new ShellRoute is declared before that route. A distinct prefix is safer, e.g. '/pro/today', '/pro/bookings', '/pro/services', '/pro/schedule', '/pro/profile' (and '/pro/bookings/:id' for detail).
+- **[MAJOR · layout] Section structure replaced by a status filter row** `PROV-03-F2` ✔
+  - Prototype: provider-screens.jsx:88-137: `<SectionHeader title="New requests" action={pending.length + ' pending'} />` + pending cards, then `<SectionHeader title="Confirmed today" />` + today rows.
+  - Flutter: dashboard_page.dart:126-183: hero -> _PendingCallout -> `_buildFilter(state.filterStatus)` (Pending/Upcoming/Done/Cancelled) -> one SliverList of _RequestCard.
+  - Fix: Rebuild the slivers as [header, callout, SectionHeader(title: 'New requests', action: '${pending.length} pending'), pending _RequestCards, SectionHeader(title: 'Confirmed today'), _TodayRow list (PROV-06)]. Move the filter tabs to a new ProviderBookingsPage (PROV-08). SectionHeader already exists in shared/widgets/section_header.dart.
+- **[MAJOR · content] Stat tiles show pending count and lifetime compact revenue instead of today's count and today's EGP** `PROV-03-F3` ✔
+  - Prototype: provider-screens.jsx:57-69: `{today.length}` 'Today'; '1,730' 'EGP today'; star '4.9' / '312 reviews'.
+  - Flutter: dashboard_page.dart:262-272: `value: '${stats.pendingBookings}', label: 'Pending'` and `NumberFormat.compact(locale: 'en').format(stats.totalRevenue)` (e.g. '1.7K'), `label: 'EGP earned'`.
+  - Fix: `_StatTile(value: '${stats.todayBookings.length}', label: 'Today')` and `_StatTile(value: NumberFormat.decimalPattern('en').format(todayRevenue), label: 'EGP today')`, where todayRevenue sums totalPrice of today's bookings (or comes from a new backend field).
+- **[MAJOR · states] Accept/decline/advance failures are swallowed, and every action reloads to a full-screen skeleton and resets the filter** `PROV-03-F6` ✔
+  - Prototype: provider-screens.jsx:344 Accept updates in place (`onClick={() => setSt('confirmed')}`); errors are surfaced through toasts elsewhere in the kit.
+  - Flutter: dashboard_bloc.dart:63-68 `await _repository.acceptBooking(event.bookingId); add(DashboardLoadEvent());` discards the Either (same at :70-106). _onLoad emits `DashboardLoading()` (:29), so dashboard_page.dart:109-120 swaps to ShimmerBox/SkeletonList, and filterStatus is forced back to 'PENDING' (:41).
+  - Fix: `final r = await _repository.acceptBooking(id); r.fold((f) => emit(current.copyWith(error: f.message)), (_) {});` and then refresh without emitting DashboardLoading (a silent reload that keeps filterStatus). Show failures with the shared toast.
+- **[MINOR · components] Extra sign-out icon button in the hero** `PROV-03-F4` ✔
+  - Prototype: provider-screens.jsx:46-52: the hero row holds only the eyebrow/title and `<Avatar name="Nadia" palette="rose" size={44} verified />`. Sign-out is a Profile row (provider-screens.jsx:493).
+  - Flutter: dashboard_page.dart:243-248 `AiwaIconButton(icon: Icons.logout_rounded, variant: AiwaIconButtonVariant.glass, size: 36, onTap: _signOut)`.
+  - Fix: Remove the AiwaIconButton and SizedBox (dashboard_page.dart:243-249) once the Provider Profile tab (PROV-29) hosts the 'Sign out' SettingsRow.
+- **[MINOR · tokens] Hero overlay colour, tile blur, star size and label tracking differ** `PROV-03-F5` ✔
+  - Prototype: provider-screens.jsx:45 `radial-gradient(circle at 80% 20%, rgba(231,186,182,.3), transparent 55%)`; :56 tile `background: 'rgba(250,245,238,.12)', backdropFilter: 'blur(8px)'`; :66 star svg 14px fill gold300; :58 label `letterSpacing: '0.08em'` (0.88px).
+  - Flutter: dashboard_page.dart:207-211 `AiwaGlow(size: 260, color: AppColors.rose300, opacity: 0.3)` (male #B5A898, not the pink rgba(231,186,182)); :353 `AppColors.bone.withOpacity(0.12)` with no BackdropFilter; :362 `Icons.star_rounded, size: 15`; :386 `letterSpacing: 0.8`.
+  - Fix: Wrap the tile Container in `ClipRRect(borderRadius: BorderRadius.circular(14), child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8), child: ...))`, set the star size to 14 and letterSpacing to 0.88. Keeping the gender-aware rose300 glow is acceptable; if the prototype hex must be exact, use `const Color(0xFFE7BAB6)`.
+- **[MINOR · components] Verified badge on the hero avatar never renders** `PROV-03-V1` ＋
+  - Prototype: provider-screens.jsx:51 `<Avatar name="Nadia" palette="rose" size={44} verified />`: a gold500 check badge with a 2px #fff border (components.jsx:114-124; gold500 male #5C544D / female #C4837A).
+  - Flutter: dashboard_page.dart:198 `final verified = user?.providerProfile?.isApproved ?? false;`. user_model.dart:36-39 only fills providerProfile from json['providerProfile'], which the backend auth UserDto never sends (AuthServiceImpl.java:246-261), so `verified` is always false and AiwaAvatar draws no badge.
+  - Fix: Map providerStatus into UserModel (see corrected PROV-02-F1) so isApproved is true for approved providers. Once the approval gate exists, only approved providers reach Today, so `verified: true` is also acceptable.
+
+#### ✅ Pending booking requests callout — `PROV-04`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:74-86 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+
+No deviations found.
+
+
+#### ⚠️ 'New requests' section and booking request card (Decline / Accept) — `PROV-05`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:88-113 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart), [Android/aiwa_app/lib/features/bookings/data/models/booking_model.dart](Android/aiwa_app/lib/features/bookings/data/models/booking_model.dart), [Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart](Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Request card is not tappable, so there is no way into the booking detail** `PROV-05-F1` ✔
+  - Prototype: provider-screens.jsx:92 `onClick={() => onBooking(b.id)}` -> prototype.jsx:437 `push('booking-detail')`.
+  - Flutter: dashboard_page.dart:514-590: _RequestCard returns a bare Container with no GestureDetector/InkWell, and no provider booking-detail route exists in app_router.dart.
+  - Fix: Wrap the card: `InkWell(borderRadius: BorderRadius.circular(18), onTap: () => context.push('/provider/bookings/${b.id}'), child: ...)` and add that route (PROV-13).
+- **[CRITICAL · interaction] Decline sends the reason in the body, but the backend requires a query parameter, so every decline fails silently** `PROV-05-F2` ✔
+  - Prototype: provider-screens.jsx:343 Decline -> prototype.jsx:459 `else { pop(); }` (request declined).
+  - Flutter: dashboard_remote_datasource.dart:80-83 `_api.patch(ApiConstants.bookingReject(bookingId), data: {'reason': reason})`. The backend declares `@RequestParam String reason` (required) (aiwa-backend BookingController.java:102-110), so the call returns 400. dashboard_bloc.dart:73-74 ignores the Left and reloads with the booking still pending. The sheet also labels the reason 'optional' (dashboard_page.dart:62) even though the backend requires it.
+  - Fix: `_api.patch(ApiConstants.bookingReject(id), queryParameters: {'reason': reason.isEmpty ? 'Declined by provider' : reason})` (add queryParameters to ApiClient.patch if it lacks it). Parse `data['booking']`, because the response is BookingWithAlternativesDto. Surface failures.
+- **[MAJOR · content] Request card shows the placeholder 'Customer' instead of the customer's name** `PROV-05-F3` ✎
+  - Prototype: provider-screens.jsx:94-96 `<Avatar name={b.customer} palette="plum" size={42} />` and `{b.customer}` (e.g. 'Hana K.').
+  - Flutter: dashboard_page.dart:513 `final customer = b.providerName.isEmpty ? 'Customer' : b.providerName;` with booking_model.dart:33 `providerName: provider['fullName']`. Backend BookingDto.provider is a ProviderSummaryDto (ApiResponse.java:91-109: businessName and ownerName, no fullName), so providerName is always '' and every card renders 'Customer' with a 'C' avatar. The real name sits in BookingDto.customer.fullName (ApiResponse.java:234, UserDto), which BookingModel never reads.
+  - Fix: Add `final String customerName;` (and optionally customerImageUrl) to BookingEntity and map it in BookingModel.fromJson: `customerName: (json['customer'] as Map<String, dynamic>?)?['fullName'] as String? ?? ''`. Use b.customerName for the text and the AiwaAvatar name in _RequestCard.
+- **[MAJOR · content] Date/time line renders empty because of wrong JSON keys; time is 24h instead of 12h** `PROV-05-F4` ✔
+  - Prototype: provider-screens.jsx:103 `{b.when}`, e.g. 'Today · 12:30 PM'.
+  - Flutter: booking_model.dart:41-42 reads `json['scheduledDate']` / `json['scheduledTime']`, but the backend BookingDto fields are `bookingDate` / `startTime`, so _when (dashboard_page.dart:495-508) yields ' · '. Even with data it prints `scheduledTime.substring(0, 5)` ('12:30').
+  - Fix: `scheduledDate: json['bookingDate'] ?? json['scheduledDate'] ?? ''`, `scheduledTime: json['startTime'] ?? json['scheduledTime'] ?? ''`. Format with `DateFormat('h:mm a')`.
+- **[MAJOR · layout] 'New requests' section header with the pending count is missing** `PROV-05-F5` ✔
+  - Prototype: provider-screens.jsx:89 `<SectionHeader title="New requests" action={pending.length + ' pending'} />`.
+  - Flutter: dashboard_page.dart:136 inserts `_buildFilter(...)` instead; there is no SectionHeader in DashboardPage.
+  - Fix: `SliverToBoxAdapter(child: SectionHeader(title: 'New requests', action: '${pending.length} pending'))` above the pending list.
+- **[MAJOR · interaction] Inline Accept/Decline act immediately instead of opening the booking detail** `PROV-05-V1` ＋
+  - Prototype: provider-screens.jsx:108-109 `<Btn variant="secondary" size="sm" style={{ flex: 1 }}>Decline</Btn>` and `<Btn variant="primary" size="sm" ... icon="check">Accept</Btn>` have no onClick. The tap bubbles to the card's `onClick={() => onBooking(b.id)}` (:92), which pushes 'booking-detail' (prototype.jsx:437). The real accept/decline happens in the detail bar (provider-screens.jsx:340-348), after the provider has seen the address, the travel-fee option and the customer note.
+  - Flutter: dashboard_page.dart:619-634: Accept calls onAccept, which sends DashboardAcceptBookingEvent and PATCHes /accept immediately (dashboard_bloc.dart:63-68). Decline opens the Flutter-only reason sheet (dashboard_page.dart:52-67) and rejects from the list.
+  - Fix: Once ProviderBookingDetailPage exists, point both inline buttons at it: `onPressed: () => context.push('/pro/bookings/${b.id}')`. Keep them as direct quick actions only if product explicitly approves skipping the detail review.
+- **[MINOR · components] Customer avatar palette cycles instead of plum** `PROV-05-F6` ✔
+  - Prototype: provider-screens.jsx:94 `<Avatar name={b.customer} palette="plum" size={42} />`.
+  - Flutter: dashboard_page.dart:526-531 `palette: AvatarPalette.values[index % AvatarPalette.values.length]`.
+  - Fix: `palette: AvatarPalette.plum`.
+- **[MINOR · tokens] Card shadow is a stronger double shadow** `PROV-05-F7` ✔
+  - Prototype: provider-screens.jsx:92 `boxShadow: '0 1px 2px rgba(74,31,56,.04)'`.
+  - Flutter: dashboard_page.dart:520 `boxShadow: AppTheme.shadow1` = plum700 @0.06 blur 2 + ink @0.04 blur 1 (app_theme.dart:60-71).
+  - Fix: `boxShadow: [BoxShadow(color: AppColors.plum700.withOpacity(0.04), blurRadius: 2, offset: const Offset(0, 1))]`.
+- **[MINOR · content] Duration is always minutes ('150 min' instead of '2h 30m')** `PROV-05-F8` ✔
+  - Prototype: provider-screens.jsx:6,97 duration '2h 30m', '45 min'.
+  - Flutter: dashboard_page.dart:545 `'${b.serviceName} · ${b.serviceDurationMinutes} min'`.
+  - Fix: Add a formatter: `String fmt(int m) => m < 60 ? '$m min' : '${m ~/ 60}h${m % 60 > 0 ? ' ${m % 60}m' : ''}';`.
+- **[MINOR · layout] Gap before the StatusPill is 8px instead of 12px** `PROV-05-V2` ＋
+  - Prototype: provider-screens.jsx:93 header row `display: 'flex', alignItems: 'center', gap: 12` (avatar | name column | StatusPill).
+  - Flutter: dashboard_page.dart:553 `const SizedBox(width: 8)` before `StatusPill(status: b.status)`.
+  - Fix: Change it to `const SizedBox(width: 12)`.
+
+#### ⚠️ Provider Bookings screen (header + Pending/Upcoming/Past tab row + list) — `PROV-08`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:145-190; ui_kits/aiwa-app/prototype.jsx:438 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart), [Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart), [Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart](Android/aiwa_app/lib/features/provider_dashboard/data/datasources/dashboard_remote_datasource.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · interaction] Status tabs are dead: the backend ignores the status parameter, so every tab lists the same bookings** `PROV-08-F1` ✔
+  - Prototype: provider-screens.jsx:147-151 filters pending / confirmed / completed per tab.
+  - Flutter: dashboard_remote_datasource.dart:57-61 sends `'status': status`, but aiwa-backend BookingController.java:68-76 `providerBookings(@RequestParam page, @RequestParam size)` has no status parameter, and BookingServiceImpl.java:254 calls `findByProviderIdOrderByBookingDateAscStartTimeAsc`, which is unfiltered.
+  - Fix: Backend: add `@RequestParam(required = false) List<BookingStatus> status` and a repository `findByProviderIdAndStatusIn...`. Flutter: send `'status': 'ACCEPTED,ON_THE_WAY,ARRIVED,IN_PROGRESS'` for Upcoming.
+- **[MAJOR · layout] No standalone Bookings tab screen with its 'Manage / Bookings' header** `PROV-08-F2` ✔
+  - Prototype: provider-screens.jsx:154-157 `<Eyebrow>Manage</Eyebrow><h1 ... fontSize: 28 ...>Bookings</h1>`, reached via the Bookings tab.
+  - Flutter: The tab row is rendered at dashboard_page.dart:136 below the Today hero; there is no page title.
+  - Fix: Create features/provider_dashboard/presentation/pages/provider_bookings_page.dart: `PageTitle(eyebrow: 'Manage', title: 'Bookings', bottom: 8)` (screen_chrome.dart:85 already renders h1 28 / lh 1.05), then move `_buildFilter` and the list there, mounted at /provider/bookings.
+- **[MAJOR · components] List rows reuse the big action card instead of the compact booking row** `PROV-08-F3` ✔
+  - Prototype: provider-screens.jsx:172-185: row radius 16, avatar plum 42, name 14/600, service 12, calendar line 12 ink2, right column `<StatusPill>` over 'EGP' DM Serif 16. No buttons.
+  - Flutter: dashboard_page.dart:162-177 renders `_RequestCard` (radius 18, price 18, inline Decline/Accept/On my way/etc. buttons) for every tab.
+  - Fix: Add a _BookingRow widget with that spec for the Bookings tab and keep _RequestCard only for Today's 'New requests'.
+- **[MAJOR · states] Tab switch failures are silently ignored and no loading feedback is shown** `PROV-08-F5` ✔
+  - Prototype: provider-screens.jsx:160 setTab switches the list instantly.
+  - Flutter: dashboard_bloc.dart:51-60 `result.fold((_) {}, ...)`: on error the underline stays on the old tab and nothing happens; there is no pending indicator while the request runs.
+  - Fix: Emit `current.copyWith(filterStatus: s, loadingList: true)` first and on failure emit an error flag rendered as ErrorState(compact: true, onRetry: ...).
+- **[MINOR · content] Tab labels differ: 'Done' + 'Cancelled' instead of 'Past'** `PROV-08-F4` ✔
+  - Prototype: provider-screens.jsx:159 `[['pending','Pending'],['upcoming','Upcoming'],['past','Past']]`.
+  - Flutter: dashboard_page.dart:38-43 `('PENDING','Pending'), ('ACCEPTED','Upcoming'), ('COMPLETED','Done'), ('CANCELLED','Cancelled')`.
+  - Fix: Use three tabs: `('PENDING','Pending'), ('UPCOMING','Upcoming'), ('PAST','Past')`, mapping PAST to COMPLETED (optionally plus CANCELLED/REJECTED/NO_SHOW).
+
+#### ⚠️ Bookings tab: Pending — `PROV-09`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:147-148,171-186 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Rows do not open booking detail, and the tab does not actually filter** `PROV-09-F3` ✔
+  - Prototype: provider-screens.jsx:172 `onClick={() => onBooking(b.id)}`; :148 `filter(b => b.status === 'pending')`.
+  - Flutter: _RequestCard has no tap (dashboard_page.dart:514); the backend ignores status (PROV-08-F1).
+  - Fix: See PROV-05-F1 and PROV-08-F1.
+- **[MAJOR · components] Pending rows carry inline Decline/Accept buttons instead of the compact row** `PROV-09-F1` ✔
+  - Prototype: provider-screens.jsx:172-185: compact row, no buttons.
+  - Flutter: dashboard_page.dart:617-635: a Decline/Accept pair on every PENDING card in this list.
+  - Fix: Render _BookingRow (see PROV-08-F3) in the Bookings tab.
+- **[MAJOR · content] Rows show the placeholder 'Customer' and an empty date (same root cause as PROV-05-F3/F4)** `PROV-09-F2` ✎
+  - Prototype: provider-screens.jsx:175,178 `{b.customer}`, `{b.when}`.
+  - Flutter: booking_model.dart:33 maps provider['fullName'], which ProviderSummaryDto (ApiResponse.java:91-109) does not have, so dashboard_page.dart:513 falls back to 'Customer'. booking_model.dart:41-42 read scheduledDate/scheduledTime instead of bookingDate/startTime, so the date line renders ' · '.
+  - Fix: Apply the BookingModel mapping from PROV-05-F3/F4: customerName from json['customer']['fullName'], plus bookingDate and startTime.
+
+#### ⚠️ Bookings tab: Upcoming — `PROV-10`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:149-150,171-186 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · interaction] Rows do not open booking detail** `PROV-10-F4` ✔
+  - Prototype: provider-screens.jsx:172 onBooking -> prototype.jsx:438 push('booking-detail').
+  - Flutter: dashboard_page.dart:514: not tappable.
+  - Fix: See PROV-05-F1.
+- **[MAJOR · states] In-flight jobs (ON_THE_WAY / ARRIVED / IN_PROGRESS) belong to no tab once filtering works** `PROV-10-F1` ✔
+  - Prototype: provider-screens.jsx:149-150 'upcoming' = confirmed jobs; job progress is then handled in booking detail (provider-screens.jsx:199-209).
+  - Flutter: dashboard_page.dart:38-43 filters are exactly PENDING, ACCEPTED, COMPLETED, CANCELLED. After 'On my way' (dashboard_page.dart:638-642) the booking becomes ON_THE_WAY and would drop out of every tab. It currently still shows only because the backend ignores the filter (PROV-08-F1).
+  - Fix: Make Upcoming query ACCEPTED + ON_THE_WAY + ARRIVED + IN_PROGRESS (a multi-status param).
+- **[MAJOR · components] Upcoming rows embed status-advance buttons instead of the compact row** `PROV-10-F2` ✔
+  - Prototype: provider-screens.jsx:172-185: no buttons; actions live in the detail's bottom bar (provider-screens.jsx:350-360).
+  - Flutter: dashboard_page.dart:636-659: 'On my way' / "I've arrived" / 'Start service' buttons inside each card.
+  - Fix: Use _BookingRow in the list and move the advance actions to the booking detail sticky bar (PROV-13/PROV-14).
+- **[MAJOR · content] Wrong name and empty date (BookingModel mapping)** `PROV-10-F3` ✔
+  - Prototype: provider-screens.jsx:175,178.
+  - Flutter: booking_model.dart:33,41-42.
+  - Fix: See PROV-05-F3/F4.
+
+#### ⚠️ Bookings tab: Past — `PROV-11`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:151,159,171-186 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Past rows do not open booking detail** `PROV-11-F3` ✔
+  - Prototype: provider-screens.jsx:172 onBooking.
+  - Flutter: dashboard_page.dart:514: no tap.
+  - Fix: See PROV-05-F1.
+- **[MAJOR · components] Past rows use the large request card (price 18, radius 18) instead of the compact row with the pill on the right** `PROV-11-F2` ✔
+  - Prototype: provider-screens.jsx:181-184 right column: StatusPill + 'EGP' DM Serif 16.
+  - Flutter: dashboard_page.dart:162-177 _RequestCard with the StatusPill in the header row and price 18 (dashboard_page.dart:554,580-583).
+  - Fix: Use _BookingRow (PROV-08-F3).
+- **[MINOR · content] Tab label 'Done' instead of 'Past'** `PROV-11-F1` ✔
+  - Prototype: provider-screens.jsx:159 `['past','Past']`.
+  - Flutter: dashboard_page.dart:41 `('COMPLETED', 'Done')`.
+  - Fix: Rename to 'Past'.
+
+#### ⚠️ Bookings list empty state — `PROV-12`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:170 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart), [Android/aiwa_app/lib/shared/widgets/empty_state.dart](Android/aiwa_app/lib/shared/widgets/empty_state.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | ⚠️ | — | ✅ | ✅ | — |
+
+- **[MINOR · components] Full EmptyState (icon circle + serif title + body) instead of a single text line** `PROV-12-F1` ✔
+  - Prototype: provider-screens.jsx:170 `<div style={{ textAlign: 'center', padding: 40, color: aiwa.ink3, fontSize: 13 }}>Nothing here yet.</div>`.
+  - Flutter: dashboard_page.dart:139-148 `EmptyState(icon: Icons.event_available_outlined, title: ..., subtitle: ..., compact: true)`.
+  - Fix: `Padding(padding: EdgeInsets.all(40), child: Text('Nothing here yet.', textAlign: TextAlign.center, style: AppTextStyles.meta.copyWith(color: AppColors.ink3)))`.
+- **[MINOR · tokens] Title renders DM Serif 19 plum900 instead of Plus Jakarta 13 ink3** `PROV-12-F2` ✔
+  - Prototype: provider-screens.jsx:170 fontSize 13, color ink3 (body font).
+  - Flutter: empty_state.dart:67-70 `AppTextStyles.h3.copyWith(fontSize: compact ? 19 : 22)`.
+  - Fix: Covered by PROV-12-F1.
+- **[MINOR · content] Copy differs: 'No new requests' plus a subtitle** `PROV-12-F3` ✔
+  - Prototype: provider-screens.jsx:170 'Nothing here yet.' for every tab.
+  - Flutter: dashboard_page.dart:141-146 'No new requests' / 'New booking requests will appear here — reply within 30 minutes to keep your top rating.' and 'Bookings in this status will show up here.'
+  - Fix: Use 'Nothing here yet.' for all tabs.
+
+#### ⚠️ Booking detail — job progress stepper and status-advance action bar — `PROV-14`
+
+Prototype: ui_kits/aiwa-app/provider-screens.jsx:199-209,233-245,350-360 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart), [Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/bloc/dashboard_bloc.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | — |
+
+- **[CRITICAL · interaction] 'Mark completed' completes the booking directly and skips the cash-confirmation / dispute step and the customer rating** `PROV-14-F1` ✔
+  - Prototype: provider-screens.jsx:357 `onClick={() => onAct('complete')}` -> prototype.jsx:457 `push('payment-confirm')` -> :451 `push('rate-customer')`.
+  - Flutter: dashboard_page.dart:670-676 `onPressed: () => onComplete(b.id)` -> dashboard_bloc.dart:77-82 `_repository.completeBooking(...)` = PATCH /bookings/{id}/complete with the default cashCollected=true (backend BookingController.java:139-147).
+  - Fix: Replace onComplete with `context.push('/provider/bookings/${b.id}/payment')` (PROV-20) and call PATCH /complete?cashCollected=true|false from there.
+- **[CRITICAL · interaction] Provider cannot cancel an accepted booking (the penalty flow is missing)** `PROV-14-F2` ✔
+  - Prototype: provider-screens.jsx:354 `{st !== 'progress' && <Btn variant="secondary" ... icon="x" onClick={() => onAct('cancel')}>Cancel</Btn>}` -> prototype.jsx:456 opens ProviderCancelSheet.
+  - Flutter: dashboard_page.dart:636-659: ACCEPTED/ON_THE_WAY/ARRIVED render only the single advance button; no cancel exists anywhere in lib/features/provider_dashboard.
+  - Fix: Add a Cancel secondary lg button beside the next action for every non-IN_PROGRESS status, opening the ProviderCancelSheet (PROV-18) and calling PATCH /bookings/{id}/cancel?reason=.
+- **[MAJOR · interaction] Venue (non-home) bookings are wrongly offered 'On my way'** `PROV-14-F3` ✔
+  - Prototype: provider-screens.jsx:208 non-home: `{ confirmed: { to: 'progress', label: 'Start service', icon: 'play', note: 'Tap once the customer has arrived at your venue.' } }`.
+  - Flutter: dashboard_page.dart:636-643: ACCEPTED always shows 'On my way'. BookingEntity has no homeService field (booking_entity.dart:3-18), although backend BookingDto has `boolean homeService`.
+  - Fix: Map `homeService: json['homeService'] as bool? ?? false`. For ACCEPTED: `b.homeService ? single('On my way', ...) : single('Start service', Icons.play_arrow_rounded, () => onInProgress(b.id))`.
+- **[MAJOR · layout] Actions are inline in list cards instead of a sticky bottom action bar on the detail screen** `PROV-14-F4` ✔
+  - Prototype: provider-screens.jsx:351 `position: 'absolute', left: 0, right: 0, bottom: 0, background: '#fff', borderTop: ..., padding: '12px 22px 32px'` with the note above the buttons.
+  - Flutter: dashboard_page.dart:605-614 `single(...)` = sm AiwaButton inside each card, with 12px top padding.
+  - Fix: On ProviderBookingDetailPage use `bottomNavigationBar: StickyBar(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(note, style: AppTextStyles.micro.copyWith(fontSize: 12)), SizedBox(height: 8), Row(children: [cancelBtn, SizedBox(width: 10), Expanded(child: nextBtn)])]))`.
+- **[MAJOR · components] 'Job progress' stepper card is missing** `PROV-14-F5` ✔
+  - Prototype: provider-screens.jsx:233-245: #fff card radius 18, Eyebrow 'Job progress' 10px, grid of 4px bars (plum700 when done, else divider), labels 11px (700 current / 500 others).
+  - Flutter: No stepper anywhere in dashboard_page.dart; only the StatusPill in each card (dashboard_page.dart:554).
+  - Fix: Add a _JobProgress widget: `Row(children: steps.mapIndexed((i, s) => Expanded(child: Column(children: [Container(height: 4, decoration: BoxDecoration(color: i <= idx ? AppColors.plum700 : AppColors.divider, borderRadius: BorderRadius.circular(2))), SizedBox(height: 6), Text(s, style: AppTextStyles.micro.copyWith(fontSize: 11, fontWeight: i == idx ? FontWeight.w700 : FontWeight.w500, color: i <= idx ? AppColors.plum900 : AppColors.ink3))]))).toList())`.
+- **[MAJOR · states] Advance-step failures (e.g. invalid transition) are silently ignored** `PROV-14-F8` ✔
+  - Prototype: provider-screens.jsx:356: the step advances immediately via setSt(next.to).
+  - Flutter: dashboard_bloc.dart:90-106 `await _repository.bookingOnTheWay(...)` etc. discard the Either and reload.
+  - Fix: Fold the result and show a toast on Left (see PROV-03-F6).
+- **[MINOR · content] Helper notes under each step are missing** `PROV-14-F6` ✔
+  - Prototype: provider-screens.jsx:205-208,352 notes, e.g. 'Customer gets a push + live tracking starts.' and 'Finish the job, then confirm the cash you received.'
+  - Flutter: dashboard_page.dart:636-678: buttons only, no note text.
+  - Fix: Add a `const _notes = {'ACCEPTED': ..., 'ON_THE_WAY': ..., 'ARRIVED': ..., 'IN_PROGRESS': 'Finish the job, then confirm the cash you received.'}` map rendered above the buttons.
+- **[MINOR · tokens] Buttons are sm instead of lg; the complete icon is a single check** `PROV-14-F7` ✔
+  - Prototype: provider-screens.jsx:354-357 `size="lg"` (15px 26px, 16px text, 18px icon); `icon="check-check"` for Mark completed.
+  - Flutter: dashboard_page.dart:607-613 `size: AiwaButtonSize.sm` (8/14 padding, 13px); :672 `icon: Icons.check_rounded`.
+  - Fix: Use AiwaButtonSize.lg in the detail bar and Icons.done_all_rounded for 'Mark completed'.
+
+#### ⚠️ Provider sign-out ConfirmSheet — `PROV-32`
+
+Prototype: ui_kits/aiwa-app/prototype.jsx:491-493; ui_kits/aiwa-app/states.jsx:227-257; ui_kits/aiwa-app/provider-screens.jsx:493 · Flutter: [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart), [Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | — | ✅ | — |
+
+- **[MINOR · content] Eyebrow reads 'Sign out' instead of 'Provider account', and the body copy is missing** `PROV-32-F1` ✔
+  - Prototype: prototype.jsx:492-493 `eyebrow="Provider account" title="Sign out of AIWA?" confirmLabel="Sign out" body="Your bookings stay exactly as they are. You'll need your number and a code to sign back in."`
+  - Flutter: dashboard_page.dart:82-88 `eyebrow: 'Sign out', title: 'Sign out of AIWA?', confirmLabel: 'Sign out', icon: Icons.logout_rounded` (no body).
+  - Fix: `showConfirmSheet(context, eyebrow: 'Provider account', title: 'Sign out of AIWA?', body: "Your bookings stay exactly as they are. You'll need your number and a code to sign back in.", confirmLabel: 'Sign out', danger: false, icon: Icons.logout_rounded)`.
+- **[MINOR · tokens] Sheet shadow colour and opacity differ** `PROV-32-F3` ✔
+  - Prototype: states.jsx:240 `boxShadow: '0 -12px 32px rgba(42,19,32,.2)'`.
+  - Flutter: app_theme.dart:44-49 `AppColors.plum700.withOpacity(0.14), blurRadius: 32, offset: Offset(0, -12)`.
+  - Fix: `withOpacity(0.2)` on AppColors.plum900 in AppTheme.sheetDecoration.
+- **[MINOR · interaction] Triggered from a hero icon instead of the Profile 'Sign out' row; no 'Signed out.' toast** `PROV-32-F4` ✔
+  - Prototype: provider-screens.jsx:493 `{ icon: 'log-out', label: 'Sign out', danger: true, onTap: onSignOut }`; prototype.jsx:491 `onConfirm={() => { setShowSignOut(false); setToast('Signed out.'); }}`.
+  - Flutter: dashboard_page.dart:243-248 glass logout icon in the Today hero; :90-91 `AuthLogoutEvent()` then `context.go(AppRoutes.splash)` with no toast. Going to splash matches the customer sign-out (prototype.jsx:756).
+  - Fix: Move the trigger to the Provider Profile SettingsRow (PROV-29) and show the shared toast 'Signed out.' after the navigation.
+
+#### ⚠️ Provider notifications inbox (PROVIDER_NOTIFICATIONS) — `PROV-48`
+
+Prototype: ui_kits/aiwa-app/customer-extras.jsx:110-172,501-508; ui_kits/aiwa-app/prototype.jsx:441,447 · Flutter: [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart), [Android/aiwa_app/lib/core/router/app_router.dart](Android/aiwa_app/lib/core/router/app_router.dart)
+
+| layout | components | tokens | content | interaction | states | responsive | rtl |
+|---|---|---|---|---|---|---|---|
+| ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — |
+
+- **[CRITICAL · interaction] Provider notifications inbox is unreachable from the provider app** `PROV-48-F1` ✔
+  - Prototype: provider-screens.jsx:489 `{ icon: 'bell', label: 'Notifications', onTap: onNotifications }` -> prototype.jsx:441 `push('provider-notifications')` -> :447 `<NotificationsScreen items={window.PROVIDER_NOTIFICATIONS} ...>`.
+  - Flutter: app_router.dart:207-210 registers /notifications, but DashboardPage (the only provider screen) has no bell or profile row that pushes it.
+  - Fix: Add a 'Notifications' SettingsRow on ProviderProfilePage (PROV-29): `onTap: () => context.push(AppRoutes.notifications)`. Optionally add a bell AiwaIconButton with an unread dot in the Today hero.
+- **[MINOR · components] Settlement, payment-dispute and moderation notifications fall back to generic glyphs** `PROV-48-F2` ✎
+  - Prototype: customer-extras.jsx:502-504: pn1 'banknote' (settlement), pn2 'image-off' (moderation), pn3 'alert-triangle' (payment disputed). pn4 'calendar-check', pn5 'star' and pn6 'badge-check' already have equivalent Material glyphs.
+  - Flutter: notifications_page.dart:178-180 `if (t.contains('PAYMENT') || t.contains('SETTLEMENT')) return Icons.receipt_long_outlined;` catches SETTLEMENT_OVERDUE and PAYMENT_DISPUTED (backend NotificationType.java). MODERATION_ACTION matches no branch and falls to Icons.notifications_none_rounded (:190). BOOKING_* -> Icons.event_available_outlined (:175-177) is an acceptable calendar-check equivalent.
+  - Fix: In _icon, before the PAYMENT/SETTLEMENT branch: `if (t.contains('DISPUTED')) return Icons.warning_amber_rounded; if (t.startsWith('SETTLEMENT') || t == 'COMMISSION_DUE') return Icons.payments_outlined; if (t.startsWith('MODERATION')) return Icons.hide_image_outlined;`
+
+#### ⚠️ Cross-cutting findings — Provider app
+
+- **[CRITICAL · interaction] Provider data layer targets endpoints and parameters the backend does not expose** `PROV-C3` ✔
+  - Prototype: All provider flows assume working data (ProviderApp, prototype.jsx:404-496).
+  - Flutter: api_constants.dart:30 '/provider/stats' (backend has /provider/dashboard); dashboard_remote_datasource.dart:60 sends status (ignored by BookingController.java:68-76); :80-83 sends the reject reason as a body (backend `@RequestParam String reason`); bookingComplete never passes cashCollected. The settlement, provider mode, staff and propose-time endpoints are absent from ApiConstants.
+  - Fix: Align ApiConstants with the backend controllers (ProviderController, BookingController, SettlementController, ProviderModeController, StaffController, GalleryController) and add a contract test per datasource method using recorded backend JSON.
+- **[MAJOR · components] No shared toast matching the kit Toast; the 6 ProviderApp toasts and 2 provider auth toasts are unimplemented** `PROV-C1` ✎
+  - Prototype: prototype.jsx:20-39 Toast: `position: 'absolute', top: 56, left: 16, right: 16`, `background: 'rgba(42,19,32,.96)'`, radius 14, padding 12px 16px, 26px success500 check chip, 13/500 text, 2800ms auto-dismiss. ProviderApp toasts: 'Business info saved.' (:443), 'Marked as disputed. Admin has been notified.' (:452), 'Rating submitted. Slot freed — next booking notified.' (:453), 'Alternative time sent to customer.' (:458), 'Booking cancelled. Penalty applied to your ledger.' (:488), 'Signed out.' (:491). Provider auth toasts: 'Account created. Verification in review.' (:601), 'Welcome back, Layla.' (:621).
+  - Flutter: Only SnackBarThemeData exists (app_theme.dart:185-193: floating at the bottom, no icon), and lib/shared/widgets has no toast helper.
+  - Fix: Add shared/widgets/aiwa_toast.dart: `void showAiwaToast(BuildContext c, String msg)` inserts an OverlayEntry at `top: MediaQuery.paddingOf(c).top + 8, left: 16, right: 16`. It holds a Container(color: AppColors.plum900.withOpacity(.96), radius 14, padding 12/16) with a 26px AppColors.success500 circle + Icons.check 15 and a 13/500 bone label. Slide/fade over 320ms with AppTheme.easeSoft and remove after 2800ms.
+- **[MAJOR · content] BookingModel JSON keys do not match the backend BookingDto used by every provider booking view** `PROV-C2` ✔
+  - Prototype: Provider views show customer name, 'Today · 12:30 PM', duration, price and customer note (provider-screens.jsx:4-11,96-105,332-336).
+  - Flutter: booking_model.dart:30-49 reads provider.fullName, scheduledDate, scheduledTime, customerNote and service.price. Backend BookingDto (ApiResponse.java) exposes customer, bookingDate, startTime, notes, totalPrice, travelFee and homeService.
+  - Fix: Map `customerName: json['customer']?['fullName']`, `scheduledDate: json['bookingDate']`, `scheduledTime: json['startTime']`, `customerNote: json['notes']`, `totalPrice`, `travelFee`, `homeService` with fallbacks to the old keys so customer screens keep working.
+- **[MINOR · components] Tab bar is private to the customer shell and cannot be reused for the provider shell** `PROV-C4` ✔
+  - Prototype: TabBar (components.jsx:203-237) and ProviderTabBar (provider-screens.jsx:562-596) share one visual spec.
+  - Flutter: shell_page.dart:36-158 `_TabBar` / `_TabItem` are private, with customer routes hard-coded.
+  - Fix: Extract to shared/widgets/aiwa_tab_bar.dart with a `List<AiwaTab>` parameter and optional badge; use it in both ShellPage and the new ProviderShellPage.
+- **[MINOR · components] Missing shared primitives the provider screens need: Toggle, Tag, stepper** `PROV-C5` ✔
+  - Prototype: states.jsx:209-224 Toggle (42x24, knob 18, warn tone); states.jsx:397-410 Tag (3px 9px, radius 999, 11/700, eight tones); schedule/profile inline 40x22 toggles; travel-buffer stepper (provider-screens.jsx:468-470).
+  - Flutter: lib/shared/widgets has no toggle, tag or stepper widget (class list: AiwaAvatar, AiwaButton, AiwaChip, AiwaIconButton, AiwaTextField, EmptyState, ErrorState, EyebrowLabel, GuestLockedView, Shimmer*, ScreenHeader, PageTitle, StickyBar, SettingsRow, InlineBanner, EndOfList, MetaDot, AiwaGlow, AiwaWordmark, SectionHeader, StarRating, StatusPill).
+  - Fix: Add AiwaToggle({value, onChanged, tone}) and AiwaTag({label, tone}) with the kit sizes before building PROV-26..PROV-47.
+- **[MINOR · tokens] Hard-coded rgba literals in the prototype are mapped to theme tokens in Flutter** `PROV-C6` ✔
+  - Prototype: provider-screens.jsx:45,56,498 and provider-extras.jsx:31 use literal rgba(231,186,182,.3/.4) and rgba(250,245,238,.12), identical in both palettes.
+  - Flutter: dashboard_page.dart:207-211,353 use AppColors.rose300 / AppColors.bone opacity, which change per gender (male #B5A898 vs the prototype's pink).
+  - Fix: Keep the token approach (more consistent), but document it as an intentional deviation in the theme README. If exact parity is required, add `static const heroGlow = Color(0xFFE7BAB6);` to AppColors.
+
+## 5. Design-system consistency
+
+Token parity: **138/222** tokens match.
+
+| Area | Token | Prototype | Flutter | Match | Note |
+|---|---|---|---|---|---|
+| ds | plum900 | male #2E2A26 / female #6B3A3A (base #2A1320) — theme.jsx:14/:35; components.jsx:5 | AiwaPalettes.male 0xFF2E2A26 / female 0xFF6B3A3A — Android/aiwa_app/lib/core/theme/app_colors.dart:63/:101 | ✅ |  |
+| ds | plum700 | male #2E2A26 / female #6B3A3A (base #4A1F38) — theme.jsx:14/:35 | 0xFF2E2A26 / 0xFF6B3A3A — app_colors.dart:64/:102 | ✅ |  |
+| ds | plum500 | male #5C544D / female #9A5A55 (base #7E3A5C) — theme.jsx:14/:35 | 0xFF5C544D / 0xFF9A5A55 — app_colors.dart:65/:103 | ✅ |  |
+| ds | plum300 | male #B5A898 / female #C4837A (base #B98AA3) — theme.jsx:15/:36 | 0xFFB5A898 / 0xFFC4837A — app_colors.dart:66/:104 | ✅ |  |
+| ds | plum100 | male #E8E2D9 / female #F2D9D3 (base #EFE0E8) — theme.jsx:15/:36 | 0xFFE8E2D9 / 0xFFF2D9D3 — app_colors.dart:67/:105 | ✅ |  |
+| ds | rose700 | male #5C544D / female #6B3A3A (base #B8525A) — theme.jsx:17/:38 | 0xFF5C544D / 0xFF6B3A3A — app_colors.dart:68/:106 | ✅ |  |
+| ds | rose500 | male #8A8074 / female #C4837A (base #C77B7E) — theme.jsx:17/:38 | 0xFF8A8074 / 0xFFC4837A — app_colors.dart:69/:107 | ✅ |  |
+| ds | rose300 | male #B5A898 / female #E6BAB0 (base #E6BAB6) — theme.jsx:17/:38 | 0xFFB5A898 / 0xFFE6BAB0 — app_colors.dart:70/:108 | ✅ |  |
+| ds | rose100 | male #E8E2D9 / female #F8E4DE (base #FBE9E5) — theme.jsx:17/:38 | 0xFFE8E2D9 / 0xFFF8E4DE — app_colors.dart:71/:109 | ✅ |  |
+| ds | gold700 | male #2E2A26 / female #6B3A3A (base #8A672F) — theme.jsx:19/:40 | 0xFF2E2A26 / 0xFF6B3A3A — app_colors.dart:72/:110 | ✅ |  |
+| ds | gold500 | male #5C544D / female #C4837A (base #B58A4E) — theme.jsx:19/:40 | 0xFF5C544D / 0xFFC4837A — app_colors.dart:73/:111 | ✅ |  |
+| ds | gold300 | male #B5A898 / female #E6BAB0 (base #D8B98A) — theme.jsx:19/:40 | 0xFFB5A898 / 0xFFE6BAB0 — app_colors.dart:74/:112 | ✅ |  |
+| ds | gold100 | male #E8E2D9 / female #F8E4DE (base #F3E7D0) — theme.jsx:19/:40 | 0xFFE8E2D9 / 0xFFF8E4DE — app_colors.dart:75/:113 | ✅ |  |
+| ds | ink | male #2E2A26 / female #2E2026 (base #1A1316) — theme.jsx:21/:42 | 0xFF2E2A26 / 0xFF2E2026 — app_colors.dart:76/:114 | ✅ |  |
+| ds | ink2 | male #4A4540 / female #5A4347 (base #4A3F40) — theme.jsx:21/:42 | 0xFF4A4540 / 0xFF5A4347 — app_colors.dart:77/:115 | ✅ |  |
+| ds | ink3 | male #7A7268 / female #8A6F71 (base #6B5E5A) — theme.jsx:21/:42 | 0xFF7A7268 / 0xFF8A6F71 — app_colors.dart:78/:116 | ✅ |  |
+| ds | ink4 | male #A39A8E / female #B59A99 (base #9A8C86) — theme.jsx:21/:42 | 0xFFA39A8E / 0xFFB59A99 — app_colors.dart:79/:117 | ✅ |  |
+| ds | bone | male #F5F2ED / female #FDF6F4 (base #FAF5EE) — theme.jsx:23/:44 | 0xFFF5F2ED / 0xFFFDF6F4 — app_colors.dart:80/:118 | ✅ |  |
+| ds | cream | male #EBE5DA / female #F8E8E3 (base #F6F0E6) — theme.jsx:23/:44 | 0xFFEBE5DA / 0xFFF8E8E3 — app_colors.dart:81/:119 | ✅ |  |
+| ds | paper | #FFFFFF in all palettes — theme.jsx:23/:44 | 0xFFFFFFFF — app_colors.dart:82/:120 | ✅ |  |
+| ds | divider | male #D8CFC2 / female #EFDCD6 (base #E7DDD0) — theme.jsx:25/:46 | 0xFFD8CFC2 / 0xFFEFDCD6 — app_colors.dart:83/:121 | ✅ |  |
+| ds | hover | male #EBE5DA / female #F8E8E3 (base #F0E8DC) — theme.jsx:25/:46 | 0xFFEBE5DA / 0xFFF8E8E3 — app_colors.dart:84/:122 | ✅ | hover == cream in both palettes, so the prototype skeleton gradient is flat |
+| ds | success700 | male #2E2A26 / female #6B3A3A (base #2F5C42) — theme.jsx:27/:48 | 0xFF2E2A26 / 0xFF6B3A3A — app_colors.dart:85/:123 | ✅ |  |
+| ds | success500 | male #2E2A26 / female #6B3A3A (base #4F7A5A) — theme.jsx:27/:48 | 0xFF2E2A26 / 0xFF6B3A3A — app_colors.dart:86/:124 | ✅ |  |
+| ds | success100 | male #E8E2D9 / female #F2D9D3 (base #E2EDE4) — theme.jsx:27/:48 | 0xFFE8E2D9 / 0xFFF2D9D3 — app_colors.dart:87/:125 | ✅ |  |
+| ds | warn700 | male #2E2A26 / female #6B3A3A (base #8A5A1F) — theme.jsx:28/:49 | 0xFF2E2A26 / 0xFF6B3A3A — app_colors.dart:88/:126 | ✅ |  |
+| ds | warn500 | male #5C544D / female #C4837A (base #C28A3D) — theme.jsx:28/:49 | 0xFF5C544D / 0xFFC4837A — app_colors.dart:89/:127 | ✅ |  |
+| ds | warn100 | male #EBE5DA / female #F8E4DE (base #F6E8CC) — theme.jsx:28/:49 | 0xFFEBE5DA / 0xFFF8E4DE — app_colors.dart:90/:128 | ✅ |  |
+| ds | danger700 | male #2E2A26 / female #6B3A3A (base #8A2230) — theme.jsx:29/:50 | 0xFF2E2A26 / 0xFF6B3A3A — app_colors.dart:91/:129 | ✅ |  |
+| ds | danger500 | male #2E2A26 / female #6B3A3A (base #B23A48) — theme.jsx:29/:50 | 0xFF2E2A26 / 0xFF6B3A3A — app_colors.dart:92/:130 | ✅ |  |
+| ds | danger100 | male #E8E2D9 / female #F2D9D3 (base #F5DDE0) — theme.jsx:29/:50 | 0xFFE8E2D9 / 0xFFF2D9D3 — app_colors.dart:93/:131 | ✅ |  |
+| ds | info700 | male #2E2A26 / female #6B3A3A (base #2D5670) — theme.jsx:30/:51 | 0xFF2E2A26 / 0xFF6B3A3A — app_colors.dart:94/:132 | ✅ |  |
+| ds | info500 | male #5C544D / female #9A5A55 (base #4F7B96) — theme.jsx:30/:51 | 0xFF5C544D / 0xFF9A5A55 — app_colors.dart:95/:133 | ✅ |  |
+| ds | info100 | male #EBE5DA / female #F8E4DE (base #DDE9F0) — theme.jsx:30/:51 | 0xFFEBE5DA / 0xFFF8E4DE — app_colors.dart:96/:134 | ✅ |  |
+| ds | Base brand palette (unthemed --aiwa-*) | tokens/colors_and_type.css:22-65; components.jsx:4-16 (e.g. plum-700 #4A1F38, rose-500 #C77B7E) | Not defined; AiwaPalettes has only male/female (app_colors.dart:57-136) | ❌ | Overwritten at load by applyAiwaTheme('male') (theme.jsx:66), so it is never rendered through tokens. It only leaks through JSX literals (next row). |
+| ds | Hard-coded JSX color literals | barrier rgba(42,19,32,.48) (states.jsx:234), filter barrier .45 (prototype.jsx:238), toast rgba(42,19,32,.96) (prototype.jsx:28), shadows rgba(74,31,56,…), focus ring #7E3A5C (states.jsx:17), row hov… | Theme-aware: plum900.withOpacity(.48) (confirm_sheet.dart:27), snackBarTheme plum900 .96 (app_theme.dart:186), shadows AppColors.plum700 (app_theme.dart:60-92); focus ring and row hover not implement… | ❌ | In the male theme Flutter overlays and shadows are charcoal-based instead of plum. Decide whether theme-aware is intended. |
+| ds | --status-* (booking status dots) | pending warn500, confirmed info500, onway plum500, arrived plum700, progress rose500, completed success500, cancelled danger500 — css:68-74; components.jsx:149-159 | StatusPill dot colors identical — status_pill.dart:41-121 | ✅ |  |
+| ds | Semantic roles (--color-bg/surface/fg/brand/brand-fg/accent/border/premium) | bone / paper / ink / plum700 / #FFFFFF / rose500 / divider / gold500 — css:77-88 | scaffoldBackgroundColor bone (app_theme.dart:102); colorScheme primary plum700, onPrimary paper, secondary rose500, surface paper, onSurface ink (:104-115); dividerTheme divider (:216-220); gold500 u… | ✅ |  |
+| ds | --font-display | "DM Serif Display", "Markazi Text", serif — css:96; fontDisp components.jsx:18 | _serif -> GoogleFonts.dmSerifDisplay — app_text_styles.dart:131-149 (family :139) | ✅ | Markazi fallback missing (DS-RTL-F1) |
+| ds | --font-body | "Plus Jakarta Sans", "IBM Plex Sans Arabic", system — css:97-98; fontBody components.jsx:17 | _sans -> GoogleFonts.plusJakartaSans — app_text_styles.dart:151-169; textTheme plusJakartaSansTextTheme (app_theme.dart:116-119) | ✅ | IBM Plex Sans Arabic fallback missing |
+| ds | --font-mono | "JetBrains Mono" — css:99; fontMono components.jsx:19 | _mono -> GoogleFonts.jetBrainsMono — app_text_styles.dart:171-189 | ✅ |  |
+| ds | --font-arabic-display (Markazi Text) | css:100, 280-286 (weight 500, ls 0); splash button prototype.jsx:73 | Only local GoogleFonts.markaziText in splash_page.dart:244-261; no AppTextStyles entry | ❌ |  |
+| ds | --font-arabic-body (IBM Plex Sans Arabic) | css:101, 278-279 | Not present anywhere in lib/ | ❌ |  |
+| ds | display / --fs-display | 48px, 400, lh 1.1 (--lh-tight), -0.02em — css:104,193-201 | AppTextStyles.display 48, h 1.1, ls -0.96 — app_text_styles.dart:9-14 | ✅ |  |
+| ds | --fs-h1 (32px) | 32px DM Serif 400 -0.02em (the .h2 class uses lh 1.25) — css:105,203-210; README.md:31 headlines lh 1.05-1.1 | AppTextStyles.h1 32, h 1.1, ls -0.64 — app_text_styles.dart:16-21 | ✅ | Follows the README/JSX line-height rather than the CSS .h2 class (1.25) |
+| ds | --fs-h2 (26px) | 26px, headline tracking -0.02em per README.md:31 — css:106 | AppTextStyles.h2 26, h 1.15, ls -0.26 (-0.01em) — app_text_styles.dart:23-28 | ❌ | Size matches; tracking is -0.01em instead of -0.02em |
+| ds | --fs-h3 / h3 | Plus Jakarta 600 20px lh 1.25 ls -0.005em — css:107,212-219 | AppTextStyles.h3 DM Serif 22, h 1.15, ls -0.22 — app_text_styles.dart:30-35 | ❌ | Flutter h3 matches the JSX serif-22 titles (components.jsx:196), not the token |
+| ds | --fs-h4 / h4 | Plus Jakarta 600 17px lh 1.25 — css:108,221-227 | AppTextStyles.h4 DM Serif 18, h 1.2 — app_text_styles.dart:37-38 | ❌ |  |
+| ds | --fs-body (16) / body lh 1.5 | 16px, lh var(--lh-base) 1.5 — css:109,115,183-186 | AppTextStyles.bodyLg 16, h 1.5 — app_text_styles.dart:41-42 | ✅ |  |
+| ds | p / .body lh 1.65 (--lh-loose) | 16px lh 1.65 — css:117,229-236 | No 1.65 style (body 15/1.5 at :44-45) | ❌ |  |
+| ds | UI body 15px (JSX) | inputs/buttons 15px — states.jsx:177, components.jsx:47 | AppTextStyles.body 15/1.5 — app_text_styles.dart:44-45 | ✅ |  |
+| ds | --fs-body-sm (14) / .body-sm | 14px lh 1.55 color --color-fg-2 (ink2) — css:110,238-242 | AppTextStyles.bodySm 14, h 1.55, color ink — app_text_styles.dart:47-48 | ❌ | Color is ink instead of ink2 |
+| ds | --fs-meta (13) / .meta | 13px lh 1.45 ink3 — css:111,244-248 | AppTextStyles.meta 13, h 1.4, ink3 — app_text_styles.dart:50-51 | ❌ | Line-height 1.4 instead of 1.45 |
+| ds | --fs-micro (11) | 11px — css:112 | AppTextStyles.micro 11, h 1.4, ink3 — app_text_styles.dart:53-54 | ✅ |  |
+| ds | eyebrow 11/600/0.14em uppercase | css:250-257; components.jsx:189; README.md:34 | AppTextStyles.eyebrow 11, w600, ls 0.14*11, ink3 (app_text_styles.dart:56-62) + EyebrowLabel toUpperCase (eyebrow_label.dart:24) | ✅ |  |
+| ds | .price | DM Serif 400 20px (--fs-h3), -0.02em, tnum — css:259-266 | AppTextStyles.price 22, h 1, tnum, no tracking — app_text_styles.dart:64-69 | ❌ |  |
+| ds | code / .mono | JetBrains Mono .92em, color var(--aiwa-plum-700) #4A1F38, background var(--aiwa-cream), padding .1em .3em, radius 4px — tokens/colors_and_type.css:268-275 (the class is not loaded by prototype.html; … | AppTextStyles.mono = JetBrains Mono 13, height 1.4, color AppColors.ink (male #2E2A26 / female #2E2026) — app_text_styles.dart:100-101; no cream chip background, padding or 4px radius helper | ❌ | The family matches, but the colour (ink vs plum700) and the chip decoration do not. |
+| ds | Line-height tokens (--lh-tight/snug/base/loose) | 1.1 / 1.25 / 1.5 / 1.65 — css:114-117 | No named constants; values are inline in styles (1.1, 1.15, 1.2, 1.4, 1.5, 1.55) | ❌ |  |
+| ds | --tracking-tight (-0.02em) | css:119 | display/h1 letterSpacing -0.02*size — app_text_styles.dart:13,20 | ✅ |  |
+| ds | --tracking-wide (0.08em) | css:121; profile stat labels prototype.jsx:369 | Not defined | ❌ |  |
+| ds | --tracking-eyebrow (0.14em) | css:122 | 0.14 * size — app_text_styles.dart:59; eyebrow_label.dart:29 | ✅ |  |
+| ds | Button label (Btn) | Plus Jakarta 600, lh 1, 13/15/16 for sm/md/lg — components.jsx:46-48,61-63 | AppTextStyles.button 15 w600 h1 / buttonSm 13 (app_text_styles.dart:85-97); AiwaButton sizes (aiwa_button.dart:141-168) | ✅ |  |
+| ds | Spacing --s-1..--s-10 | 4/8/12/16/20/24/32/40/56/72 — css:128-137 | AppTheme.s1..s10 identical — app_theme.dart:17-26 | ✅ | --s-0 not defined (trivial) |
+| ds | Screen gutter 22px (JSX convention) | padding '0 22px' across screens, e.g. components.jsx:195 | AppTheme.gutter = 22 — app_theme.dart:28 | ✅ |  |
+| ds | --r-xs | 4px — css:139 | AppTheme.radiusXs 4 — app_theme.dart:10 | ✅ |  |
+| ds | --r-sm | 8px — css:140 | AppTheme.radiusSm 8 — app_theme.dart:11 | ✅ |  |
+| ds | --r-md | 12px — css:141 | AppTheme.radiusMd 12 — app_theme.dart:12 | ✅ |  |
+| ds | --r-lg (card) | 18px — css:142; README.md:37 | AppTheme.radiusLg 18 — app_theme.dart:13 | ✅ |  |
+| ds | --r-xl (sheet/hero) | 24px — css:143 | AppTheme.radiusXl 24 — app_theme.dart:14 | ✅ |  |
+| ds | --r-pill | 999px — css:144 | AppTheme.radiusPill 999 — app_theme.dart:15 | ✅ |  |
+| ds | Input radius 14 | README.md:37 'inputs 14px'; states.jsx:191 | BorderRadius.circular(14) inline in inputBorder — app_theme.dart:95 | ✅ | Value matches but there is no named constant |
+| ds | --shadow-1 | 0 1px 2px rgba(74,31,56,.06), 0 1px 1px rgba(26,19,22,.04) — tokens/colors_and_type.css:149-150 (literal base-plum/base-ink tints, not runtime-themed) | AppTheme.shadow1: AppColors.plum700 .06 blur 2 (0,1) + AppColors.ink .04 blur 1 (0,1) — app_theme.dart:60-71. plum700 resolves to male #2E2A26 / female #6B3A3A; ink to male #2E2A26 / female #2E2026 | ❌ | Geometry and alpha match, but the tint does not: it is theme-aware instead of the literal rgb(74,31,56)/rgb(26,19,22). This is the same situation as the 'Hard-coded JSX color literals' row and is vis… |
+| ds | --shadow-2 | 0 4px 14px rgba(74,31,56,.08), 0 2px 4px rgba(26,19,22,.04) — tokens/colors_and_type.css:151-152 | AppTheme.shadow2: AppColors.plum700 .08 blur 14 (0,4) + AppColors.ink .04 blur 4 (0,2) — app_theme.dart:73-84 (male #2E2A26 / female #6B3A3A tint) | ❌ | Geometry and alpha match; the tint is theme-aware instead of the literal rgb(74,31,56). |
+| ds | --shadow-3 | 0 12px 32px rgba(74,31,56,.14), 0 4px 10px rgba(26,19,22,.06) — css:153-154 | AppTheme.shadow3 single layer plum700 .18, blur 32, (0,12) — app_theme.dart:86-92 | ❌ |  |
+| ds | --shadow-4 | 0 24px 60px rgba(42,19,32,.22) — css:155 | Not defined | ❌ |  |
+| ds | --shadow-card | 0 2px 8px rgba(74,31,56,.05), 0 1px 2px rgba(26,19,22,.04) — css:158-159 | Not defined | ❌ |  |
+| ds | Sheet shadow | 0 -12px 32px rgba(42,19,32,.2) — states.jsx:240 | sheetDecoration plum700 .14 blur 32 (0,-12) — app_theme.dart:44-50 | ❌ |  |
+| ds | Toast shadow | 0 12px 32px rgba(74,31,56,.3) + blur 8px — prototype.jsx:30-31 | SnackBar default M3 elevation, no blur — app_theme.dart:185-193 | ❌ |  |
+| ds | IconBtn shadow | 0 1px 2px rgba(74,31,56,.05) — ui_kits/aiwa-app/components.jsx:87 (literal) | BoxShadow(AppColors.plum700.withOpacity(0.05), blurRadius 2, offset (0,1)) — aiwa_icon_button.dart:49-59 (male #2E2A26 / female #6B3A3A) | ❌ | Geometry and alpha match; the tint is theme plum700 instead of the JSX literal rgb(74,31,56). |
+| ds | --ease-soft | cubic-bezier(.32,.72,0,1) — css:168 | AppTheme.easeSoft = Cubic(.32,.72,0,1) — app_theme.dart:31 | ✅ |  |
+| ds | --ease-out | cubic-bezier(.22,.61,.36,1) — css:166 | Not defined | ❌ |  |
+| ds | --ease-in | cubic-bezier(.55,.055,.675,.19) — css:167 | Not defined | ❌ |  |
+| ds | --ease-bounce | cubic-bezier(.34,1.56,.64,1) — css:169; SuccessSheet pop states.jsx:277 | Not defined | ❌ |  |
+| ds | --dur-1 | 120ms — css:171; button press prototype.html:41 | No constant; inline Duration(milliseconds: 120) — aiwa_button.dart:116 | ❌ |  |
+| ds | --dur-2 | 200ms — css:172 | AppTheme.dur2 — app_theme.dart:32 | ✅ |  |
+| ds | --dur-3 | 320ms — css:173 | AppTheme.dur3 — app_theme.dart:33 | ✅ |  |
+| ds | --dur-4 | 480ms — css:174 | Not defined | ❌ |  |
+| ds | Screen transition (aiwa-slide-in / aiwa-fade-in) | translateX(8%) to 0 / scale(.98) to 1, 320ms soft — prototype.html:16-23; prototype.jsx:730 | Platform default MaterialPage (builder: routes) and NoTransitionPage for tabs — app_router.dart:68-226 | ❌ |  |
+| ds | Button press | scale(.96), 120ms soft — prototype.html:41-42 | AnimatedScale 0.97, 120ms easeSoft — aiwa_button.dart:114-117 (AiwaButton only) | ❌ |  |
+| ds | aiwa-toast + auto-dismiss | opacity 0 to 1 + translateY(-10) to 0, 320ms soft; 2800ms — prototype.html:26-29; prototype.jsx:22,30 | SnackBar default animation, 4000ms | ❌ |  |
+| ds | aiwa-shimmer | background-position -320px to 320px, 1.25s linear infinite — states.jsx:11,30 | shimmer package, default period 1500ms, highlight paper — loading_shimmer.dart:21-23 | ❌ |  |
+| ds | aiwa-pop | scale .86 to 1 + fade; 320ms soft (EmptyState states.jsx:95), 340ms bounce (SuccessSheet :277) | Not implemented | ❌ |  |
+| ds | aiwa-pulse | states.jsx:12 opacity .55 to .9 (overrides prototype.html:35-38 scale 1 to 1.05); used by tracking/system screens | Only the AiwaButton loading pulse, opacity .35 to 1 over 900ms — aiwa_button.dart:48-53 (Flutter-only) | ❌ |  |
+| ds | aiwa-drop | translateY(-14) to 0 + fade, 260ms (OfflineBanner) — states.jsx:15,135 | Not implemented | ❌ |  |
+| ds | aiwa-heart-pop | scale 1 to 1.35 to 1 — prototype.html:30-34 (not referenced by any JSX) | Not implemented | ❌ | Unused in the prototype; no action required |
+| auth | plum700 (primary CTA, active role card, progress) | aiwa.plum700 -> male #2E2A26 / female #6B3A3A (base #4A1F38), theme.jsx:14,35 | AppColors.plum700 -> male #2E2A26 / female #6B3A3A (app_colors.dart:64,102), gender-aware | ✅ |  |
+| auth | bone (auth screen background) | aiwa.bone -> male #F5F2ED / female #FDF6F4 (theme.jsx:23,44) | AppColors.bone -> #F5F2ED / #FDF6F4 (app_colors.dart:80,118) | ✅ |  |
+| auth | cream (mode-toggle track, OTP tip box) | aiwa.cream -> #EBE5DA / #F8E8E3 | AppColors.cream -> #EBE5DA / #F8E8E3 | ✅ |  |
+| auth | divider (input and card borders) | aiwa.divider -> #D8CFC2 / #EFDCD6 | AppColors.divider -> #D8CFC2 / #EFDCD6 | ✅ |  |
+| auth | rose300 (hero sub text, active perks) | aiwa.rose300 -> #B5A898 / #E6BAB0 | AppColors.rose300 -> #B5A898 / #E6BAB0 | ✅ |  |
+| auth | Splash radial glow 1 | rgba(231,186,182,.5) literal, not theme-aware (prototype.jsx:51) | AppColors.rose300 @ 0.35 (splash_page.dart:90-94) | ❌ | AUTH-01-F1 |
+| auth | Splash radial glow 2 | rgba(216,185,138,.3) literal (prototype.jsx:51) | AppColors.gold300 @ 0.22 (splash_page.dart:100-103) | ❌ | AUTH-01-F1 |
+| auth | Auth-choice glows | rgba(231,186,182,.45) / rgba(216,185,138,.25) (auth-screens.jsx:786) | rose300 @ 0.35 / gold300 @ 0.25 (auth_choice_page.dart:51-60) | ❌ | AUTH-05-F1 |
+| auth | 'Man' palette swatch B (Warm Stone) | #B5A898 (auth-screens.jsx:448) | male rose500 #8A8074 (avatar_gender_page.dart:193) | ❌ | AUTH-19-F1 |
+| auth | Button lg | padding 15px 26px, 16px/600 Plus Jakarta Sans, radius 999 (components.jsx:48, 61-62) | AiwaButton lg: hPad 26, vPad 15, fontSize 16, w600, radiusPill (aiwa_button.dart:159-166) | ✅ |  |
+| auth | Disabled CTA | opacity .45 + pointerEvents none | AnimatedOpacity 0.45 when onPressed == null (aiwa_button.dart:111-113) | ✅ |  |
+| auth | Text input | padding 13x14, radius 14, 1.5px divider border, 15px body, icon 17 plum700 (auth-screens.jsx:37-52) | AppTheme.inputBorder radius 14 width 1.5; contentPadding h14 v13; body 15; icon 17 plum700 (aiwa_text_field.dart:56-128) | ✅ |  |
+| auth | StepHeader title | DM Serif Display 28, lh 1.08, -0.02em, plum900 (auth-screens.jsx:73) | AppTextStyles.h1.copyWith(fontSize: 28, height: 1.08, letterSpacing: -0.56) (step_header.dart:51-58) | ✅ |  |
+| auth | Eyebrow | 11px / 600 / 0.14em / uppercase / ink3 (components.jsx:189) | EyebrowLabel: 11, w600, letterSpacing 0.14*11, uppercase, ink3 (eyebrow_label.dart:22-31), plus an 'smcp' font feature | ✅ |  |
+| auth | Wordmark glyph size | 84/100 x height (≈47px at height 56) (prototype.jsx:6-9) | fontSize = size (56) (screen_chrome.dart:469-476) | ❌ | AUTH-02-F1 |
+| auth | OTP cell | flex width, aspect 1:1.15 (≈50.8x58.4 at 393px), DM Serif 28 (auth-screens.jsx:269-270) | fixed 44x54, h2 at 28 (otp_page.dart:72-78) | ❌ | AUTH-12-F1 |
+| auth | Sign-in error box | danger100 bg, radius 10, padding 10x12, icon 14 (auth-screens.jsx:942-943) | InlineBanner danger: radius 14, padding 13x11, icon 16 (screen_chrome.dart:317-329) | ❌ | AUTH-08-F2 |
+| auth | Toast | rgba(42,19,32,.96), top 56, radius 14, success check badge, 13/500 (prototype.jsx:26-36) | No toast. SnackBar theme: plum900 @ 0.96, bottom floating, radius 14, 14px text (app_theme.dart:185-193) | ❌ | AUTH-CF-04 |
+| auth | Splash radial glow extent | farthest-corner circles: glow 1 transparent at 55% (~383px) from 30%/25%; glow 2 transparent at 60% (~446px) from 75%/80% (prototype.jsx:51) | AiwaGlow radius 180 centred (100,140) and radius 150 centred (W-60,H-210) (splash_page.dart:87-104) | ❌ | AUTH-01-F1 (corrected): the Flutter glows are about half the prototype's radius, as well as the wrong hue. |
+| auth | Auth-choice glow extent | ~253px from (118,106) and ~271px from (295,341) inside the 50% hero (auth-screens.jsx:781-786) | radius 160 centred (100,120) and radius 130 centred (W-70,H/2-50) (auth_choice_page.dart:48-61) | ❌ | AUTH-05-F1 (corrected) |
+| auth | Phone/Email toggle segment | padding 9px 14px, browser-normal line box (~34px tall), 4px gap between segments (auth-screens.jsx:180-189) | vertical padding 10 + label 13px at height 1 (~33px tall), no gap (step_header.dart:136-176) | ❌ | Only the gap differs; the height already matches (AUTH-10-F1 corrected). |
+| auth | Input text inset | 14px with no icon; 41px after a 17px icon (auth-screens.jsx:37-42) | 18px / 45px because of the M3 inputGap and prefixToInputGap (aiwa_text_field.dart:101-127, app_theme.dart:94-97) | ❌ | AUTH-25-V1 |
+| onb | aiwa.plum700 (CTA, checkbox, tiles, active chips) | male #2E2A26 / female #6B3A3A (base #4A1F38) | AppColors.plum700 -> AiwaPalettes.male #2E2A26 / female #6B3A3A (app_colors.dart:64,102) | ✅ | Gender-aware via ThemeController.applyGender (theme_controller.dart:29-31) |
+| onb | aiwa.plum900 (titles) | male #2E2A26 / female #6B3A3A (base #2A1320) | AppColors.plum900 #2E2A26 / #6B3A3A (app_colors.dart:63,101) | ✅ |  |
+| onb | aiwa.plum100 (icon tiles, verification note) | male #E8E2D9 / female #F2D9D3 (base #EFE0E8) | AppColors.plum100 #E8E2D9 / #F2D9D3 | ✅ |  |
+| onb | aiwa.bone (screen bg, text on dark) | male #F5F2ED / female #FDF6F4 (base #FAF5EE) | AppColors.bone #F5F2ED / #FDF6F4 | ✅ |  |
+| onb | aiwa.paper / divider | #FFFFFF / male #D8CFC2, female #EFDCD6 | AppColors.paper #FFFFFF / AppColors.divider #D8CFC2, #EFDCD6 | ✅ |  |
+| onb | aiwa.ink2 / ink3 | male #4A4540 / #7A7268; female #5A4347 / #8A6F71 | AppColors.ink2 / ink3 same hexes (app_colors.dart:77-78,115-116) | ✅ |  |
+| onb | aiwa.rose300 / gold300 (pending screen) | male #B5A898 / #B5A898; female #E6BAB0 / #E6BAB0 | AppColors.rose300 / gold300 same | ✅ |  |
+| onb | aiwa.rose700 (priming + re-accept eyebrow) | male #5C544D / female #6B3A3A (base #B8525A) | AppColors.rose700 #5C544D / #6B3A3A | ✅ | The token exists, but no in-scope Flutter screen uses it yet (the priming and re-accept screens are missing) |
+| onb | Btn accent (pending CTA) | bg rose500 male #8A8074 / female #C4837A, fg plum900 | AiwaButtonVariant.accent bg AppColors.rose500, fg plum900 (aiwa_button.dart:174-175) | ✅ |  |
+| onb | success100/700, warn100/700 (GPS card) | male #E8E2D9/#2E2A26, #EBE5DA/#2E2A26; female #F2D9D3/#6B3A3A, #F8E4DE/#6B3A3A | AppColors.success100/700, warn100/700 same | ✅ |  |
+| onb | Pending glow | rgba(231,186,182,.45) literal (#E7BAB6), full-screen radial at 30% 25% -> transparent 60% (auth-screens.jsx:718) | AiwaGlow(size: 340, color: AppColors.rose300, opacity: 0.4) (provider_pending_page.dart:26-30) | ❌ |  |
+| onb | UploadSlot uploaded scrim | linear-gradient(to top, rgba(42,19,32,.7), transparent 60%) (auth-screens.jsx:658) | LinearGradient([AppColors.plum500, AppColors.plum900]) opaque (provider_verification_page.dart:142-146) | ❌ |  |
+| onb | Eyebrow | Plus Jakarta 11 / 600 / 0.14em / uppercase / ink3 (components.jsx:188-190) | EyebrowLabel: AppTextStyles.eyebrow 11 w600, letterSpacing 0.14*11, uppercased, ink3 (eyebrow_label.dart:21-31) | ✅ |  |
+| onb | StepHeader title | DM Serif Display 28 / lh 1.08 / -0.02em / plum900 (auth-screens.jsx:73) | AppTextStyles.h1.copyWith(fontSize: 28, height: 1.08, letterSpacing: -0.56) (step_header.dart:53-57) | ✅ |  |
+| onb | Btn lg | padding 15px 26px, 16px w600, radius 999 (components.jsx:48,61-62) | AiwaButtonSize.lg hPad 26 vPad 15 fontSize 16, radiusPill (aiwa_button.dart:159-166,131) | ✅ |  |
+| onb | Disabled CTA | opacity .45 + pointer-events none (auth-screens.jsx:616, flow-screens.jsx:68) | AnimatedOpacity 0.45 when onPressed == null (aiwa_button.dart:112) | ✅ |  |
+| onb | TextInput | padding 13/14, radius 14, 1.5px divider, icon 17 plum700, 15px ink (auth-screens.jsx:35-57) | AiwaTextField contentPadding 14/13, inputBorder radius 14 width 1.5, icon 17, body 15 (aiwa_text_field.dart:96-127; app_theme.dart:94-97) | ✅ |  |
+| onb | Textarea (bio) font | 14px (auth-screens.jsx:563) | AppTextStyles.body 15px (aiwa_text_field.dart:96) | ❌ |  |
+| onb | aiwa-pop entrance (priming / SystemScreen icon) | scale .86->1, opacity 0->1, 340ms cubic-bezier(.34,1.56,.64,1) (states.jsx:13; system-screens.jsx:23,111) | No equivalent. AppTheme defines only easeSoft Cubic(.32,.72,0,1), dur2 and dur3 (app_theme.dart:31-33). | ❌ |  |
+| onb | Toast (onboarding toasts ONB-03 / ONB-11) | literal rgba(42,19,32,.96) bg, top 56 / left-right 16, radius 14, padding 12/16, shadow 0 12px 32px rgba(74,31,56,.3), blur 8, 26px success500 badge (male #2E2A26 / female #6B3A3A) with white check 1… | Only snackBarTheme: floating bottom SnackBar, AppColors.plum900 @0.96 (male #2E2A26 / female #6B3A3A), radius 14, bodySm w500 bone, no success badge (app_theme.dart:185-193) | ❌ | Missing from the primary token table. The color, position and badge all differ. |
+| onb | Dashed borders (Add staff member, GPS status card, empty UploadSlot) | 1.5px dashed divider / 1px dashed divider / 1.5px dashed divider (auth-screens.jsx:550, 597, 640); divider male #D8CFC2 / female #EFDCD6 | Solid Border.all(AppColors.divider) (provider_business_page.dart:270, 390; provider_verification_page.dart:174) | ❌ |  |
+| onb | Verification privacy note | padding 14, gap 8, 12px plum700 lh 1.5 on plum100, radius 14 (auth-screens.jsx:697) | InlineBanner plum: padding 13x11, gap 10, 12.5px (screen_chrome.dart:318, 330, 348-351); colors plum100/plum700 match | ❌ |  |
+| disc | Default palette at launch | theme.jsx:66 applyAiwaTheme('male') -> MALE_THEME | app_colors.dart:146 `static AiwaPalette _p = AiwaPalettes.male;` + theme_controller.dart:22 (persisted) | ✅ |  |
+| disc | aiwa.plum700 / plum900 | male #2E2A26 / #2E2A26; female #6B3A3A / #6B3A3A (base #4A1F38 / #2A1320) | app_colors.dart:63-64,101-102 identical | ✅ |  |
+| disc | aiwa.bone / divider / ink3 | male #F5F2ED / #D8CFC2 / #7A7268; female #FDF6F4 / #EFDCD6 / #8A6F71 | app_colors.dart:78-83,116-121 identical | ✅ |  |
+| disc | aiwa.rose300 / gold500 / success700 | male #B5A898 / #5C544D / #2E2A26; female #E6BAB0 / #C4837A / #6B3A3A | app_colors.dart identical | ✅ |  |
+| disc | Fonts | components.jsx:17-18 fontBody 'Plus Jakarta Sans', fontDisp 'DM Serif Display' | app_text_styles.dart:131-169 GoogleFonts.dmSerifDisplay / plusJakartaSans | ✅ |  |
+| disc | Eyebrow | components.jsx:189 11px / 600 / 0.14em / uppercase / ink3 | eyebrow_label.dart:22-31 11 / w600 / 0.14*size / toUpperCase / ink3 (height 1.2) | ✅ |  |
+| disc | Hero / cover radial glow | screens.jsx:97,192 literal rgba(231,186,182,.4) and rgba(216,185,138,.25), fading at 50-70% | AiwaGlow(AppColors.rose300 / gold300) -> male #B5A898, fading over 100% of the radius (screen_chrome.dart:446-448) | ❌ | Theme-mapped instead of literal; see DISC-01-F5 and DISC-08-F9 |
+| disc | Search pill shadow | screens.jsx:84 / prototype.jsx:159 `0 2px 8px rgba(74,31,56,.06)` | home_page.dart:209-214, search_page.dart:191-197 AppColors.plum700 @ .06, blur 8, offset (0,2) | ❌ | Colour resolves to the theme primary instead of #4A1F38; visually negligible |
+| disc | Sheet shadow / scrim | prototype.jsx:238,244 scrim rgba(42,19,32,.45); shadow 0 -12px 32px rgba(0,0,0,.18) | search_page.dart:451 plum900 @ .45; app_theme.dart:44-50 plum700 @ .14 blur 32 offset (0,-12) | ❌ |  |
+| disc | Skeleton shimmer | states.jsx:28-30 cream -> hover -> cream, 1.25s | loading_shimmer.dart:21-23 cream -> paper (#FFFFFF), 1.5s default | ❌ |  |
+| disc | Card / pill / sheet / body radii | 18 (cards), 16 (home rows), 999 (pills), 24 (sheets), 28 (provider body card), 22 (hero) | AppTheme.radiusLg 18, 16 literal, radiusPill 999, radiusXl 24, 28 literal, 22 literal | ✅ |  |
+| disc | Tab bar surface | components.jsx:214-215 rgba(255,255,255,.94) + blur(20px), divider top border | shell_page.dart:71-76 paper @ .94 + ImageFilter.blur(20,20), divider top border | ✅ |  |
+| disc | Hero promo radial glow falloff | screens.jsx:97 radial-gradient(circle, rgba(231,186,182,.4) 0%, transparent 70%) on a 180px circle -> fades out at ~89px | home_page.dart:261-265 AiwaGlow(size: 180) -> RadialGradient reaches 0 at 90px (screen_chrome.dart:446-448) | ✅ | The falloff matches; only the colour differs (literal #E7BAB6 vs theme rose300 = male #B5A898 / female #E6BAB0). The primary tokenTable's '100% vs 70%' note is misleading. |
+| disc | Provider cover glow geometry | screens.jsx:192 farthest-corner radii ~176px (rose, centre 25%/30%) and ~221px (gold, centre 80%/70%) | provider_card.dart:205-223 AiwaGlow size 280 (radius 140) centred ~(80,120) and ~(330,200) | ❌ | The glows are smaller and off-centre in addition to the theme-mapped colours; see the corrected DISC-08-F9 |
+| disc | Tab-root PageTitle letter-spacing | prototype.jsx:154,296; screens.jsx:508 28px DM Serif, lineHeight 1.05, no letterSpacing | screen_chrome.dart:119 h1.copyWith(fontSize: 28, height: 1.05) -> letterSpacing -0.64px | ❌ |  |
+| disc | Row meta gap (RatingMeta) | screens.jsx:160 and prototype.jsx:219 gap 8 (rows); screens.jsx:138 gap 6 (trending card) | screen_chrome.dart:416 MetaDot margin 6 on each side for every use | ❌ |  |
+| book | aiwa.plum700 (primary CTA/selected) | male #2E2A26 / female #6B3A3A (base #4A1F38) - theme.jsx:14, 35 | AppColors.plum700 -> AiwaPalettes.male #2E2A26 / female #6B3A3A (app_colors.dart:64, 102), gender-aware | ✅ |  |
+| book | aiwa.plum900 (headings) | male #2E2A26 / female #6B3A3A (base #2A1320) | AppColors.plum900 #2E2A26 / #6B3A3A (app_colors.dart:63, 101) | ✅ |  |
+| book | aiwa.plum100 (selected rows, tiles) | male #E8E2D9 / female #F2D9D3 (base #EFE0E8) | AppColors.plum100 #E8E2D9 / #F2D9D3 (app_colors.dart:67, 105) | ✅ |  |
+| book | aiwa.bone (screen bg) | male #F5F2ED / female #FDF6F4 (base #FAF5EE) | AppColors.bone #F5F2ED / #FDF6F4 (app_colors.dart:80, 118) | ✅ |  |
+| book | aiwa.cream (disabled slot, notes) | male #EBE5DA / female #F8E8E3 (base #F6F0E6) | AppColors.cream #EBE5DA / #F8E8E3 | ✅ |  |
+| book | aiwa.divider | male #D8CFC2 / female #EFDCD6 (base #E7DDD0) | AppColors.divider #D8CFC2 / #EFDCD6 | ✅ |  |
+| book | aiwa.ink3 / ink4 | male #7A7268 / #A39A8E; female #8A6F71 / #B59A99 | AppColors.ink3 / ink4 same hex (app_colors.dart:78-79, 116-117) | ✅ |  |
+| book | aiwa.rose700 (eyebrows on Confirmed/Rejected) | male #5C544D / female #6B3A3A (base #B8525A) | AppColors.rose700 #5C544D / #6B3A3A | ✅ |  |
+| book | aiwa.gold100 / gold700 (cash tile) | male #E8E2D9 / #2E2A26; female #F8E4DE / #6B3A3A | AppColors.gold100 / gold700 same hex | ✅ |  |
+| book | aiwa.success100/700, danger100/700/500, warn100/700 | male E8E2D9/2E2A26, E8E2D9/2E2A26/2E2A26, EBE5DA/2E2A26; female F2D9D3/6B3A3A, F2D9D3/6B3A3A/6B3A3A, F8E4DE/6B3A3A | AppColors.* identical per palette (app_colors.dart:85-96, 123-134) | ✅ |  |
+| book | '#fff' literal (paper cards, selected chip text) | #FFFFFF | AppColors.paper #FFFFFF | ✅ |  |
+| book | Sheet scrim | rgba(42,19,32,.45) + blur(2px) on CancelSheet; rgba(42,19,32,.48) on other sheets (fixed #2A1320) | AppColors.plum900.withOpacity(0.48) -> #2E2A26 or #6B3A3A @48%, no blur (confirm_sheet.dart:27) | ❌ | Theme-derived rather than the fixed plum literal |
+| book | Sheet shadow | 0 -12px 32px rgba(0,0,0,.18) (CancelSheet) / rgba(42,19,32,.2) (ConfirmSheet) | AppColors.plum700 @0.14, blur 32, offset (0,-12) (app_theme.dart:41-51) | ❌ |  |
+| book | Toast background / text | rgba(42,19,32,.96), bone 13px w500, shadow 0 12px 32px rgba(74,31,56,.3) | SnackBar AppColors.plum900 @0.96, bodySm 14 w500 bone, no shadow (app_theme.dart:185-193) | ❌ |  |
+| book | Booking card shadow | 0 1px 2px rgba(74,31,56,.04) | AppTheme.shadow1: plum700 @0.06 blur2 (0,1) + ink @0.04 blur1 (0,1) (app_theme.dart:60-71) | ❌ |  |
+| book | fontDisp / fontBody / fontMono | DM Serif Display / Plus Jakarta Sans / JetBrains Mono (components.jsx:17-19) | GoogleFonts.dmSerifDisplay / plusJakartaSans / jetBrainsMono (app_text_styles.dart:131-189) | ✅ |  |
+| book | Eyebrow | 11px w600, letterSpacing 0.14em, uppercase, ink3 (components.jsx:188-190) | EyebrowLabel: toUpperCase, 11 w600, letterSpacing 0.14*size, height 1.2 (eyebrow_label.dart:22-31) | ✅ |  |
+| book | Btn sizes | sm 8/14 13px, md 12/20 15px, lg 15/26 16px, radius 999, w600 (components.jsx:45-66) | AiwaButton sm hPad14 vPad8 13, md 20/12 15, lg 26/15 16, radiusPill (aiwa_button.dart:141-167) | ✅ |  |
+| book | Heading tracking | Most booking headings have no letterSpacing (e.g. screens.jsx:353, 477) | AppTextStyles.h1 letterSpacing -0.64, h3 -0.22 applied by default (app_text_styles.dart:16-35) | ❌ | Small tracking difference on Confirmed h1, day numbers and titles |
+| book | Sheet top radius / card radius | 24 / 18 | AppTheme.radiusXl 24 / radiusLg 18 | ✅ |  |
+| book | Easing | cubic-bezier(.32,.72,0,1), 200ms / 320ms | AppTheme.easeSoft Cubic(.32,.72,0,1), dur2 200ms, dur3 320ms (app_theme.dart:31-33) | ✅ |  |
+| acct | plum700 (primary CTA / icons) | theme.jsx:14 male #2E2A26; theme.jsx:35 female #6B3A3A (base components.jsx:5 #4A1F38) | app_colors.dart:64 0xFF2E2A26; app_colors.dart:102 0xFF6B3A3A (AppColors.plum700 getter, gender-aware via ThemeController) | ✅ |  |
+| acct | plum900 (titles) | male #2E2A26 / female #6B3A3A (base #2A1320) | app_colors.dart:63 0xFF2E2A26 / :101 0xFF6B3A3A | ✅ |  |
+| acct | plum100 (icon tiles, unread bg) | male #E8E2D9 / female #F2D9D3 (base #EFE0E8) | app_colors.dart:67 0xFFE8E2D9 / :105 0xFFF2D9D3 | ✅ |  |
+| acct | rose300 (header sub-text) | male #B5A898 / female #E6BAB0 (base #E6BAB6) | app_colors.dart:70 0xFFB5A898 / :108 0xFFE6BAB0 | ✅ |  |
+| acct | rose500 (unread dot, '· N new') | male #8A8074 / female #C4837A (base #C77B7E) | app_colors.dart:69 0xFF8A8074 / :107 0xFFC4837A | ✅ |  |
+| acct | ink / ink2 / ink3 / ink4 | male #2E2A26 / #4A4540 / #7A7268 / #A39A8E; female #2E2026 / #5A4347 / #8A6F71 / #B59A99 | app_colors.dart:76-79 and :114-117 identical hexes | ✅ |  |
+| acct | bone / cream / paper / divider | male #F5F2ED / #EBE5DA / #FFFFFF / #D8CFC2; female #FDF6F4 / #F8E8E3 / #FFFFFF / #EFDCD6 | app_colors.dart:80-83 and :118-121 identical hexes | ✅ |  |
+| acct | danger100 / danger500 / danger700 | male #E8E2D9 / #2E2A26 / #2E2A26; female #F2D9D3 / #6B3A3A / #6B3A3A | app_colors.dart:91-93 and :129-131 identical | ✅ |  |
+| acct | warn100 / warn700; success100 / success500; gold100 / gold700 | male #EBE5DA / #2E2A26; #E8E2D9 / #2E2A26; #E8E2D9 / #2E2A26 — female #F8E4DE / #6B3A3A; #F2D9D3 / #6B3A3A; #F8E4DE / #6B3A3A | app_colors.dart:72-75, 85-90 and :110-113, 123-128 identical | ✅ |  |
+| acct | Profile header glow | prototype.jsx:358 radial-gradient(circle at 70% 30%, rgba(231,186,182,.4), transparent 60%) (literal #E7BAB6, not themed) | profile_page.dart:187 AiwaGlow(size 260, color: AppColors.rose300 = male #B5A898 / female #E6BAB0, opacity .4) | ❌ | Colour and geometry differ (ACCT-01-F4) |
+| acct | Hero gradient (Profile header / Support hero) | linear-gradient(160deg, plum700 0%, plum900 100%) (prototype.jsx:357) | app_theme.dart:54-58 LinearGradient(topLeft -> bottomRight = 135deg, [plum700, plum900]) | ❌ | Angle differs, but plum700 == plum900 in both palettes so the rendered result is identical today |
+| acct | Sheet scrim | rgba(42,19,32,.48) literal #2A1320 (states.jsx:234); DeleteAccount rgba(42,19,32,.5) | confirm_sheet.dart:27 AppColors.plum900.withOpacity(0.48) (male #2E2A26 / female #6B3A3A) | ❌ |  |
+| acct | Sheet shadow / padding | 0 -12px 32px rgba(42,19,32,.2); padding '18px 22px 34px'; radius 24 (states.jsx:238-240) | app_theme.dart:44-50 plum700 @ .14 blur 32 offset (0,-12); confirm_sheet.dart:36-41 padding 18/22/24 + safe bottom; radius 24 | ❌ |  |
+| acct | Toast surface | rgba(42,19,32,.96) + bone 13/500 + success500 check badge, top-anchored (prototype.jsx:26-35) | app_theme.dart:185-193 SnackBar plum900 @ .96 + bodySm 14 w500, bottom floating, no badge | ❌ |  |
+| acct | Font: display / body / mono | DM Serif Display / Plus Jakarta Sans / JetBrains Mono (components.jsx:17-19) | app_text_styles.dart:139, 159, 179 GoogleFonts.dmSerifDisplay / plusJakartaSans / jetBrainsMono | ✅ |  |
+| acct | Font: Arabic display / body | Markazi Text / IBM Plex Sans Arabic (tokens/colors_and_type.css:100-101) | Not defined anywhere in lib/core/theme | ❌ |  |
+| acct | Eyebrow | 11px / 600 / 0.14em / uppercase / ink3 (components.jsx:188-190) | eyebrow_label.dart:24-31 text.toUpperCase(), 11, w600, letterSpacing 1.54, ink3, height 1.2 | ✅ |  |
+| acct | ScreenHeader title | DM Serif 22 / 400 / lh 1.1 / plum900, no letter-spacing (states.jsx:419) | screen_chrome.dart:58-61 AppTextStyles.h3 22, height 1.1, letterSpacing -0.22 | ❌ | Letter-spacing only (ACCT-C05) |
+| acct | Profile list row | prototype.jsx:384-397 36px tile radius 10, label 15/500 ink (no explicit line-height), value 13 ink3, chevron 16 ink3, padding 14x4, gap 14 between label, value and chevron | screen_chrome.dart:181-226 tile/label/value/chevron sizes and colours match, but value left padding is 8 (:220), chevron gap 6 (:224) and label height 1.3 (:204) | ❌ | Primary marked this identical; the spacing after the label differs (ACCT-01-V1) |
+| acct | Button lg | padding 15x26, 16px / 600, pill, icon 18, gap 10 (components.jsx:48) | aiwa_button.dart:159-165 vPad 15, hPad 26, fontSize 16, iconSize 18, gap 10 | ✅ |  |
+| acct | Toggle | 42x24, knob 18, plum700 / divider (states.jsx:209-224) | No widget in lib/shared/widgets | ❌ |  |
+| acct | Form field (ValidatedInput vs AiwaTextField) | states.jsx:181-203 label 12.5/600 ink2 sentence case + ' · optional' ink4 400; mono 11 ink4 counter in the label row; icon turns danger500 and a trailing circle-alert on error; hint 11.5 ink4 | aiwa_text_field.dart:69 uppercase AppTextStyles.eyebrow label (11/600/0.14em ink3); :72-79 'Optional' 10/500 ink3 tag; :56-58 icon always plum700, no trailing alert; :161 hint 11.5 ink3; :167 counter… | ❌ | Matters because the build notes for ACCT-07/13/18 plan to reuse AiwaTextField for these kit forms |
+| prov | plum700 / plum900 (primary, hero gradient, titles) | male #2E2A26 / female #6B3A3A (theme.jsx:14,35; base #4A1F38 / #2A1320) | AppColors.plum700/plum900 -> 0xFF2E2A26 / 0xFF6B3A3A (app_colors.dart:63-64,101-102), gender-aware via ThemeController | ✅ |  |
+| prov | plum100 (tiles, active tab, unread bg) | male #E8E2D9 / female #F2D9D3 | AppColors.plum100 0xFFE8E2D9 / 0xFFF2D9D3 (app_colors.dart:67,105) | ✅ |  |
+| prov | rose300 (hero eyebrow, stat labels) | male #B5A898 / female #E6BAB0 | AppColors.rose300 0xFFB5A898 / 0xFFE6BAB0 | ✅ |  |
+| prov | rose500 (badge / unread dot) | male #8A8074 / female #C4837A | AppColors.rose500 0xFF8A8074 / 0xFFC4837A | ✅ |  |
+| prov | warn100 / warn500 / warn700 (pending callout) | male #EBE5DA / #5C544D / #2E2A26; female #F8E4DE / #C4837A / #6B3A3A | AppColors.warn100/500/700, same hex (app_colors.dart:88-90,126-128) | ✅ |  |
+| prov | info500 (confirmed-today stripe) | male #5C544D / female #9A5A55 | AppColors.info500 0xFF5C544D / 0xFF9A5A55 (defined but unused in provider scope) | ✅ |  |
+| prov | gold300 (hero rating star) | male #B5A898 / female #E6BAB0 | AppColors.gold300 same hex (dashboard_page.dart:362) | ✅ |  |
+| prov | bone / divider / ink3 | male #F5F2ED / #D8CFC2 / #7A7268; female #FDF6F4 / #EFDCD6 / #8A6F71 | AppColors.bone/divider/ink3, same hex | ✅ |  |
+| prov | Hero radial overlay | 'radial-gradient(circle at 80% 20%, rgba(231,186,182,.3), transparent 55%)' hard-coded (provider-screens.jsx:45) | AiwaGlow(color: AppColors.rose300, opacity: 0.3, size: 260) at right -40 / top -50 = male rgba(181,168,152,.3) (dashboard_page.dart:204-212) | ❌ | Flutter is theme-aware; the prototype literal is pink in both themes |
+| prov | Hero stat tile background | 'rgba(250,245,238,.12)' + backdropFilter blur(8px) (provider-screens.jsx:56) | AppColors.bone.withOpacity(0.12), no blur (dashboard_page.dart:353) | ❌ |  |
+| prov | Hero gradient | linear-gradient(160deg, plum700 0%, plum900 100%) | AppTheme.heroGradient LinearGradient topLeft -> bottomRight [plum700, plum900] (app_theme.dart:54-58) | ✅ | Angle differs (~135deg) but plum700 == plum900 in both palettes, so there is no visible difference |
+| prov | Request card shadow | '0 1px 2px rgba(74,31,56,.04)' (provider-screens.jsx:92) | AppTheme.shadow1 = plum700 @.06 blur 2 y1 + ink @.04 blur 1 y1 (app_theme.dart:60-71) | ❌ |  |
+| prov | Card radii | request card 18; callout / bookings row / today row 16; settings tiles 14 | _RequestCard AppTheme.radiusLg 18; _PendingCallout 16 | ✅ |  |
+| prov | fontDisp / fontBody / fontMono | DM Serif Display / Plus Jakarta Sans / JetBrains Mono (components.jsx:17-19) | GoogleFonts.dmSerifDisplay / plusJakartaSans / jetBrainsMono (app_text_styles.dart:131-189) | ✅ | Mono is defined but not used in any provider screen (today-row time, schedule hours and fee input are missing) |
+| prov | Eyebrow | 11px / 600 / 0.14em / uppercase, ink3 (components.jsx:188-190) | EyebrowLabel 11 w600 letterSpacing 0.14*size, toUpperCase (eyebrow_label.dart:20-31) | ✅ |  |
+| prov | Today title | DM Serif 26 / lh 1.1 / -0.01em (provider-screens.jsx:49) | AppTextStyles.h2 (26, -0.26) with height 1.1 (dashboard_page.dart:235-238) | ✅ |  |
+| prov | Stat label tracking | letterSpacing 0.08em = 0.88px (provider-screens.jsx:58) | letterSpacing 0.8 (dashboard_page.dart:386) | ❌ |  |
+| prov | Btn sizes | sm 8px 14px / 13px / icon 14; md 12px 20px / 15 / 16; lg 15px 26px / 16px / icon 18 (components.jsx:45-49) | AiwaButtonSize sm hPad 14 vPad 8 font 13 icon 14; md 20/12/15/16; lg 26/15/16/18 (aiwa_button.dart:143-165; the file is 209 lines, so the audit's aiwa_button.dart:279-306 reference is wrong) | ✅ | The values match; only the line reference is corrected. |
+| prov | Bottom sheet | bone, radius 24, padding 18px 22px 34px, handle 40x4, shadow 0 -12px 32px rgba(42,19,32,.2), scrim rgba(42,19,32,.48) | AppTheme.sheetDecoration radiusXl 24, shadow plum700 @.14 blur 32 y -12; padding 18/22/24+safe; barrier plum900 @.48 (confirm_sheet.dart:24-41) | ❌ | Shadow opacity/colour only |
+| prov | Toast | absolute top 56, left/right 16, rgba(42,19,32,.96), radius 14, padding 12px 16px, 26px success500 check chip, 13/500, auto-dismiss 2800ms (prototype.jsx:20-39) | Only snackBarTheme: plum900 @.96, floating (bottom), radius 14, no icon (app_theme.dart:185-193) | ❌ |  |
+| prov | Provider tab bar | rgba(255,255,255,.94) + blur 20; item maxWidth 76, padding 6px 10px, radius 14 (provider-screens.jsx:571-585) | No provider tab bar; the customer _TabBar uses paper @.94, blur 20, maxWidth 80, padding 6/12 (shell_page.dart:70-135) | ❌ |  |
+| prov | StatusPill | padding 5px 10px, radius 999, 12/600, dot 7 (components.jsx:147-172) | StatusPill padding 10/5, labelSm 12 w600, dot 7, same status map incl. backend aliases (status_pill.dart) | ✅ |  |
+| prov | Avatar | gradient 135deg; plum [plum500, plum700], rose [rose300, rose500]; verified badge gold500 with 2px #fff border (components.jsx:97-127) | AiwaAvatar same gradients and badge (aiwa_avatar.dart:66-128) | ✅ |  |
+| prov | Card radii (Bookings tab rows) | Bookings row borderRadius 16, price DM Serif 16 (provider-screens.jsx:172,183) | The Bookings filter list reuses _RequestCard: BorderRadius.circular(AppTheme.radiusLg) = 18 (dashboard_page.dart:518), price h4 fontSize 18 (:582) | ❌ | The tokenTable marks card radii as matching, which holds only for the Today request card. The Bookings-tab rows deviate (see PROV-08-F3). |
+
+### Hard-coding & global behaviour
+
+- **[MAJOR · states] 'No spinners' rule broken by four RefreshIndicators** `DS-C4` ✔
+  - Prototype: README.md:43 'No spinners — pulse/shimmer only'; README.md:110 'No spinners anywhere — shimmer/pulse only.'
+  - Flutter: There are no CircularProgressIndicator/LinearProgressIndicator widgets. However, RefreshIndicator (a Material circular spinner during pull-to-refresh) is used at home_page.dart:99, my_bookings_page.dart:135, saved_page.dart:74 and dashboard_page.dart:121. app_theme.dart:213-215 also defines progressIndicatorTheme.
+  - Fix: Replace RefreshIndicator with a custom pull-to-refresh (e.g. the custom_refresh_indicator package) that shows a pulsing rose500 dot (opacity .55 to .9, 1.1s, aiwa-pulse) or re-shows SkeletonList while reloading. Remove progressIndicatorTheme so spinners are not styled by default.
+- **[MAJOR · interaction] Page transitions ignore the 320ms soft-door motion** `DS-C5` ✔
+  - Prototype: prototype.jsx:726-731 wrapper animation `aiwa-slide-in` / `aiwa-fade-in` at 320ms cubic-bezier(.32,.72,0,1); README.md:42 '320ms sheet/screen transitions'
+  - Flutter: There is no pageTransitionsTheme (app_theme.dart:99-231) and no CustomTransitionPage (grep). Pushed routes use `builder:` (platform default); tab roots use NoTransitionPage (app_router.dart:151-176).
+  - Fix: See DS-33-F1/F2. Add a softDoor CustomTransitionPage helper in app_router.dart and use pageBuilder everywhere.
+- **[MAJOR · interaction] Modal sheets opened from tab roots sit under the tab bar** `DS-C9` ✔
+  - Prototype: All sheets are mounted at the app root above the TabBar (prototype.jsx:737-768; ConfirmSheet zIndex 140 vs TabBar zIndex 30)
+  - Flutter: showModalBottomSheet without useRootNavigator at confirm_sheet.dart:24, profile_page.dart:115 (palette picker) and search_page.dart:448 (filters). Pages inside the ShellRoute (app_router.dart:145-179) push onto the shell navigator, and ShellPage's bottomNavigationBar (shell_page.dart:20, extendBody: true) paints over it.
+  - Fix: Add `useRootNavigator: true` to all three calls, or centralize them in a `showAiwaSheet` helper that always sets it.
+- **[MINOR · tokens] Colors are centralized; only 6 raw Colors.white literals remain** `DS-C1` ✔
+  - Prototype: JSX itself uses white-alpha literals, e.g. 'rgba(255,255,255,.85)' (components.jsx:80) and 'rgba(255,255,255,.16)' / '.18' (auth-screens.jsx:721)
+  - Flutter: 'Color(0x' outside lib/core/theme: 0. 'Colors.' (excluding transparent and AppColors): 6, all Colors.white.withOpacity: provider_pending_page.dart 4 (:47 .16, :49 .18, :160 .08, :162 .12), role_choice_page.dart 1 (:134 .18), aiwa_icon_button.dart 1 (:44 .85). None contradict tokens.
+  - Fix: Optionally add `static Color whiteA(double a) => AppColors.paper.withValues(alpha: a);` in app_colors.dart and replace the 6 literals so all color goes through the theme.
+- **[MINOR · tokens] 116 fontSize overrides (all copyWith on AppTextStyles) with off-scale sizes** `DS-C2` ✔
+  - Prototype: Token scale 48/32/26/20/17/16/14/13/11 (css:104-112). The JSX also uses off-scale 11.5 / 12.5 / 13.5 (e.g. states.jsx:98, 138, 202).
+  - Flutter: 116 'fontSize:' in 35 files outside lib/core/theme. Top files: provider_detail_page.dart 10, dashboard_page.dart 9, booking_page.dart 9, screen_chrome.dart 7, provider_business_page.dart 6, provider_card.dart 5, my_bookings_page.dart 5. Values: 12 x19, 11.5 x17, 14 x11, 13.5 x7, 10 x6, 20 x6, 12.5 x4, 9 x1 (provider_list_item.dart:87 EyebrowLabel 9px), 54 (avatar_gender_page.dart:129), 38 (provider_detail_page.dart:412). Only splash_page.dart:254 builds a raw TextStyle with a size (test fallback). 'FontWeight.' overrides: 25 (screen_chrome 3, provider_detail_page 3, provider_card 3, notifications_page 2, splash_page 2, provider_pending_page 2, phone_entry_page 2, …). 'TextStyle(' outside theme: 5 (phone_entry_page.dart:128,136; provider_pending_page.dart:84; booking_confirmed_page.dart:68 are TextSpan color/weight overrides that inherit the family). 'GoogleFonts.' outside theme: 1 (splash_page.dart:247 markaziText).
+  - Fix: Add named styles for the recurring JSX sizes (e.g. `static TextStyle get caption => _sans(fontSize: 11.5, height: 1.45, color: AppColors.ink3);`, `bodyXs` 12.5, `bodySmPlus` 13.5) plus `arabicDisplay` (Markazi) in app_text_styles.dart, and replace copyWith(fontSize:) chains. Check the 9px eyebrow against its screen JSX.
+- **[MINOR · tokens] Radii are mostly inline literals: 66 BorderRadius.circular calls outside the theme, only 14 via AppTheme** `DS-C3` ✎
+  - Prototype: Tokens are r-xs 4 / sm 8 / md 12 / lg 18 / xl 24 / pill 999 (css:139-144), plus inputs 14 (README.md:37). The JSX literals themselves are mostly 14, 18, 12, 10 and 16.
+  - Flutter: There are 52 non-token radii outside lib/core/theme: 50 numeric literals plus provider_list_item.dart:36 (discover ? 18 : 16) and loading_shimmer.dart:29 (variable). The literals are 14 x16, 12 x10, 2 x5, 16 x4 (booking_page.dart:386, profile_page.dart:259, dashboard_page.dart:417, avatar_gender_page.dart:203), 10 x4 (screen_chrome.dart:186, booking_page.dart:288, my_bookings_page.dart:536, provider_business_page.dart:281), 999 x3 (status_pill.dart:19, provider_card.dart:61, saved_page.dart:245), 20 x2 (role_choice_page.dart:118, auth_choice_page.dart:186), 22 x2 (home_page.dart:254, provider_pending_page.dart:48), 6 x2, 5 x1 and 18 x1 (booking_confirmed_page.dart:93). provider_detail_page.dart:316 also has Radius.circular(28). Only AppTheme.radiusPill (7) and radiusLg (7) are referenced. Top files by raw literals: booking_page.dart 7, provider_business_page.dart 5, then screen_chrome.dart, profile_page.dart and provider_verification_page.dart with 3 each.
+  - Fix: Add `radiusInput = 14`, `radiusTile = 10`, `radius16 = 16`, `radius20 = 20` and `radius22 = 22` to AppTheme (mirroring the JSX literals) and replace the inline values. Use AppTheme.radiusPill for the three 999 literals and AppTheme.radiusLg at booking_confirmed_page.dart:93.
+- **[MINOR · interaction] Press-scale feedback exists only on AiwaButton** `DS-C6` ✎
+  - Prototype: prototype.html:41-42 `button:active:not(:disabled){transform:scale(.96)}` with a 120ms soft transition applies to &lt;button> elements only (IconBtn, Chip, TabBar items, SectionHeader/InlineBanner actions). Div cards have no :active rule (prototype.html:43 only sets a transition).
+  - Flutter: AnimatedScale press feedback exists only at aiwa_button.dart:114-117 (0.97); review_page.dart:215 is a selection-state scale. 43 of the 44 `GestureDetector(` call sites in lib/ have no press feedback, and the ones that matter are the kit-button equivalents (aiwa_icon_button.dart:61, aiwa_chip.dart:37, shell_page.dart:123, section_header.dart:39, screen_chrome.dart:358).
+  - Fix: See DS-31-F1: add lib/shared/widgets/aiwa_pressable.dart (scale 0.96, 120ms, easeSoft) and use it in the kit-button equivalents only, not in card rows.
+- **[MINOR · states] No keyboard focus ring or semantics** `DS-C7` ✔
+  - Prototype: states.jsx:17 `.aiwa-focusable:focus-visible{outline:2px solid #7E3A5C;outline-offset:2px}`; README.md:123
+  - Flutter: grep finds no Focus(, FocusableActionDetector, Semantics( or tooltip in lib/. GestureDetector-based shared controls cannot be focused and are not exposed as buttons to screen readers.
+  - Fix: See DS-31-F2: use FocusableActionDetector + a 2px AppColors.plum500 ring in AiwaPressable, and wrap it in Semantics(button: true, label: …).
+- **[MINOR · tokens] Hard-coded animation durations are off the motion scale** `DS-C8` ✔
+  - Prototype: Motion scale 120/200/320/480ms (css:171-174)
+  - Flutter: sign_in_page.dart:193 150ms; review_page.dart:217 180ms; account_setup_page.dart:184 literal 200ms (should be AppTheme.dur2); aiwa_button.dart:116 literal 120ms (no dur1 token); splash_page.dart:28 900ms
+  - Fix: Snap to AppTheme.dur1 (120) or dur2 (200) once DS-04-F1 adds the missing constants, and replace the literals.
+- **[MINOR · states] Error feedback goes through the success-style toast** `DS-C10` ✔
+  - Prototype: The toast only confirms successes (prototype.jsx:20-39, success500 check). Errors appear inline via ValidatedInput / InlineBanner / ErrorState (states.jsx).
+  - Flutter: `showSnackBar(SnackBar(content: Text(state.message)))` for failures at avatar_gender_page.dart:77, otp_page.dart:103, phone_entry_page.dart:77, provider_verification_page.dart:55, booking_page.dart:117 and review_page.dart:97
+  - Fix: Show failures in InlineBanner(tone: BannerTone.danger) near the action, or as per-field errors, and keep the toast for success (DS-32).
+- **[MINOR · components] Material Icons are used app-wide instead of Lucide** `DS-C11` ✔
+  - Prototype: README.md:49 'Icons: Lucide (24px stroke, 2px weight)'; every &lt;Icon name=…> in the JSX
+  - Flutter: Every icon is Icons.* (no Lucide dependency in pubspec.yaml:9-70)
+  - Fix: See DS-05-F1: add lucide_icons_flutter and an AiwaIcons alias file, then migrate the shared widgets first.
+
+## 6. Missing screens — what each needs
+
+### Design system & shared components (5)
+
+- **SkeletonRows (table skeleton)** `DS-17` (state) — reached via Admin tables only (no mobile screen mounts it). Source: ui_kits/aiwa-app/states.jsx:67-77
+  - Build: Low priority: only admin tables use it. If a Flutter web/admin surface is added, build `SkeletonRows({int cols = 5, int rows = 5})` in loading_shimmer.dart as a Column of Rows of ShimmerBox (widthFactor .8 for column 0, .58 otherwise, height 12, gap 12), each row padded EdgeInsets.symmetric(vertical: 16, horizontal: 22) with a bottom BorderSide(AppColors.divider). Reuse ShimmerBox with the DS-15 fix.
+- **OfflineBanner** `DS-20` (banner) — reached via Prototype header 'Preview states' -> Offline banner (overlays any customer screen). Source: ui_kits/aiwa-app/states.jsx:128-145; ui_kits/aiwa-app/prototype.jsx:519,586,759,782
+  - Build: Nothing implements this. connectivity_plus ^6.0.3 is declared (pubspec.yaml:63-64) but grep finds no use in lib/. Build lib/shared/widgets/offline_banner.dart plus a ConnectivityCubit (listen to Connectivity().onConnectivityChanged and to Dio connection errors in the ApiClient interceptor, lib/core/network/api_client.dart). Mount it globally with `MaterialApp.router(builder: (ctx, child) => Stack(children: [child!, const OfflineBanner()]))` in app.dart:76-83 so it sits above all routes. Visuals: Container(color: AppColors.plum900) with padding EdgeInsets.fromLTRB(18, MediaQuery.paddingOf.top + 8, 18, 11). Row gap 10: Icon(wifi_off / Lucide wifi-off, 15, AppColors.rose300); Expanded Text('No connection — showing saved data', AppTextStyles.micro.copyWith(fontSize: 12.5, fontWeight: w500, color: AppColors.bone)); Retry pill (bg AppColors.bone.withOpacity(.16), radius pill, padding 5x12, labelSm 11.5/w700 bone) that re-checks connectivity. Enter with a slide from Offset(0,-14) plus fade over 260ms AppTheme.easeSoft. Pair it with cached data in the list blocs so 'showing saved data' is true.
+- **Toggle (switch)** `DS-23` (component) — reached via Profile -> Saved addresses -> Add address -> 'Set as default' (account-screens.jsx:190). Source: ui_kits/aiwa-app/states.jsx:209-224
+  - Build: There is no Toggle/Switch anywhere in lib/ (grep for 'Switch(' returns nothing). Build lib/shared/widgets/aiwa_toggle.dart: `AiwaToggle({required bool value, required ValueChanged<bool> onChanged, AiwaToggleTone tone = plum})`. Use AnimatedContainer(width 42, height 24, radius pill, color value ? (tone==warn ? AppColors.warn500 : AppColors.plum700) : AppColors.divider, duration AppTheme.dur2, curve easeSoft) containing an AnimatedAlign/AnimatedPositioned knob (18x18 white circle, left 3 or 21, BoxShadow(color: Color(0x402A1320), blurRadius: 3, offset: Offset(0,1))). Wrap it in Semantics(toggled: value) and FocusableActionDetector for the 2px plum500 focus ring. Needed by the address form, notification preferences and provider vacation mode (screens owned by other auditors).
+- **SuccessSheet** `DS-25` (sheet) — reached via All success terminals (primitive; no prototype screen currently mounts it). Source: ui_kits/aiwa-app/states.jsx:260-288; README.md:117
+  - Build: Add `Future<void> showSuccessSheet(BuildContext, {required String title, String? body, String primary = 'Done', VoidCallback? onPrimary, String? secondary, VoidCallback? onSecondary})` next to confirm_sheet.dart, using the same shell (useRootNavigator: true, barrier plum900 .48, AppTheme.sheetDecoration, handle 40x4 with mb 18, padding 18/22/34). Content is centered: 58px circle (AppColors.success100) with a check icon (27, success700) that pops in over 340ms with the DS-04 easeBounce Cubic(.34,1.56,.64,1); title AppTextStyles.h3.copyWith(fontSize: 24, height: 1.12, letterSpacing: 0); body bodySm 13.5 ink2 maxWidth 280; then AiwaButton lg fullWidth primary, and 9px below it an optional ghost sm secondary. README.md:117 says every success terminal should use it, so screens that currently use SnackBars for success could adopt it.
+- **Pagination** `DS-26` (component) — reached via Admin bookings monitor / audit log (admin-modules.jsx:107,314); no mobile screen mounts it. Source: ui_kits/aiwa-app/states.jsx:291-318; README.md:118
+  - Build: Low priority for mobile: no customer/provider prototype screen mounts it (mobile lists end with EndOfList). If paginated /bookings/my or /providers/{id}/reviews needs explicit paging, build `AiwaPagination({page, totalPages, onPage, compact})` in lib/shared/widgets. Row centered, gap 6, padding top 18 bottom 6 (compact 14/4). Chevron buttons 32x32 radius 10, 1px divider border, paper bg, plum700 or ink4 at .5 opacity when disabled. Number buttons minWidth 32 with horizontal padding 9, selected plum700/white, others paper/ink2, 13/600. Show '…' ink4 when totalPages > from+2, and add a focus ring.
+
+### Customer sign-in / sign-up (7)
+
+- **LoginScreen (legacy phone login)** `AUTH-03` (screen) — reached via UNREACHABLE. No renderScreen case in CustomerApp (prototype.jsx:610-718) or ProviderApp renders it. auth-screens.jsx:10 and :161 say PhoneEntryScreen replaces it.. Source: ui_kits/aiwa-app/prototype.jsx:88-124 (LoginScreen)
+  - Build: Do not build. This is dead prototype code superseded by PhoneEntryScreen, which is implemented as phone_entry_page.dart (AUTH-10). It is listed only for completeness and excluded from the fidelity score.
+- **Toast - 'Welcome back, Layla.'** `AUTH-09` (toast) — reached via Sign in -> valid credentials -> Home (the toast overlays the new screen). Source: ui_kits/aiwa-app/prototype.jsx:621 (setToast) + Toast component prototype.jsx:20-39
+  - Build: No toast exists in lib/shared/widgets. Build `showAiwaToast(BuildContext, String)` there: an OverlayEntry on rootNavigatorKey.currentState!.overlay, positioned at MediaQuery.padding.top + 12 with 16px sides, a Container of Color(0xF52A1320), radius 14 and padding 12x16, a 26px AppColors.success500 circle with Icons.check_rounded 15 white, text 13/w500 bone, animated with SlideTransition + FadeTransition over 320ms AppTheme.easeSoft, removed after a 2800ms Timer. Call it in SignInPage's AuthAuthenticated branch (sign_in_page.dart:65) with `'Welcome back, ${state.user.fullName.split(' ').first}.'` before context.go. Use the root overlay because go() replaces the route.
+- **Make it yours - photo selected** `AUTH-18` (state) — reached via Make it yours -> tap the avatar or 'Upload a photo' -> pick an image. Source: ui_kits/aiwa-app/auth-screens.jsx:402-408, 421, 432, 440, 472
+  - Build: Add `XFile? _avatar` to _AvatarGenderPageState and build the widgets from AUTH-17-F2. Pass the file through the registration data. After AuthRegisterEvent succeeds, upload it with multipart POST /auth/me/avatar: add `uploadAvatar(File)` to AuthRemoteDataSource and AuthRepository plus a use case, then refresh the user. Reuse AiwaButton for the label switch.
+- **Forgot password - step 1: where to send the code** `AUTH-20` (sub-screen) — reached via Sign in -> Forgot password?. Source: ui_kits/aiwa-app/flow-additions-v3.jsx:135-168 (ForgotPasswordScreen step 1); route prototype.jsx:625, 632
+  - Build: Create lib/features/auth/presentation/pages/forgot_password_page.dart with `int _step` (1..3), `_mode` and controllers, and register it as `AppRoutes.forgotPassword = '/forgot-password'` in app_router.dart. Reuse AuthStepScaffold, AiwaIconButton (back: step 1 -> context.pop(), otherwise setState(() => _step--)), EyebrowLabel, AppTextStyles.h1.copyWith(fontSize: 28, height: 1.08), IdentifierModeToggle (add a `shadow: false` option), AiwaTextField(icon: Icons.phone_outlined or Icons.mail_outline_rounded) and AiwaButton lg 'Send reset code'. For phone, call POST /auth/send-otp via a new ForgotPasswordCubit or AuthBloc event. The backend reset endpoint is phone-only (POST /auth/reset-password takes phone + code + new password, AuthController.java:240-245), so the email tab needs backend support first.
+- **Forgot password - step 2: enter the code** `AUTH-21` (sub-screen) — reached via Forgot password step 1 -> Send reset code. Source: ui_kits/aiwa-app/flow-additions-v3.jsx:169-182
+  - Build: Step 2 of ForgotPasswordPage: AiwaTextField(icon: Icons.key_outlined, placeholder: '6-digit code', keyboardType: TextInputType.number) with text style AppTextStyles.mono.copyWith(fontSize: 15), which needs a `textStyle` override on AiwaTextField. AiwaButton 'Verify' is enabled when code.length >= 4 (the prototype's threshold; backend codes have 6 digits). The code is sent with the new password in step 3; optionally call /auth/verify-otp here to fail fast.
+- **Forgot password - step 3: set a new password** `AUTH-22` (sub-screen) — reached via Forgot password step 2 -> Verify. Source: ui_kits/aiwa-app/flow-additions-v3.jsx:183-202
+  - Build: Two obscured AiwaTextFields (Icons.lock_outline_rounded, placeholders 'New password' / 'Confirm password', 10px apart). AiwaButton 'Reset password' is enabled when `pw.length >= 6 && pw == pw2`. On tap, dispatch a new AuthResetPasswordEvent(phone, code, newPassword) -> POST /auth/reset-password (add ApiConstants.resetPassword plus a datasource/repository/use case). On success pop back to SignInPage and show the AUTH-23 toast. On failure show an InlineBanner(tone: danger).
+- **Toast - 'Password reset. Please sign in.'** `AUTH-23` (toast) — reached via Forgot password step 3 -> Reset password -> back on Sign in. Source: ui_kits/aiwa-app/prototype.jsx:632 (`onDone={() => { setToast('Password reset. Please sign in.'); pop(); }}`); Toast prototype.jsx:20-39
+  - Build: Use the shared toast from AUTH-09: `showAiwaToast(context, 'Password reset. Please sign in.')` followed by `context.pop()` back to SignInPage.
+
+### Onboarding tail & provider onboarding (14)
+
+- **Terms & safety policy (signup)** `ONB-01` (screen) — reached via Customer: Splash -> Continue -> Role choice (I'm here to book) -> Create account -> Phone entry -> OTP -> Account setup -> Avatar/gender -> Terms. Provider: ... Avatar/gender -> Provider business -> Provider verification -> Submit for review -> Terms. Source: ui_kits/aiwa-app/flow-screens.jsx:13-73; prototype.jsx:652-655
+  - Build: Create lib/features/auth/presentation/pages/terms_page.dart (StatefulWidget, bool _agree) and add AppRoutes.terms = '/terms' with a GoRoute that forwards `extra`. Layout: reuse AuthStepScaffold (non-sticky) from features/auth/presentation/widgets/step_header.dart for scroll and safe area. Children: AiwaIconButton(Icons.arrow_back_rounded) -> SizedBox(22) -> EyebrowLabel('Step 1 of 2') -> SizedBox(6) -> Text(AppTextStyles.h1.copyWith(fontSize: 30, height: 1.05, letterSpacing: -0.6)) -> SizedBox(8) -> bodySm ink2 subtitle -> SizedBox(24) -> 4 cards (Column spacing 14; Row gap 12; padding 14; AppColors.paper; Border.all(divider); radius 16; 36x36 plum100 tile radius 10 with 18px plum700 icon; title 14 w600 ink; text 12.5 ink2 height 1.5) -> SizedBox(18) -> tappable checkbox row (AnimatedContainer 22x22 radius 6, 2px border ink4/plum700, fill plum700 when checked, Icons.check 14 white, AppTheme.easeSoft 180ms) with a Text.rich label -> Spacer -> AiwaButton(label: 'Agree & continue', size: lg, fullWidth: true, onPressed: _agree ? _accept : null). The disabled .45 opacity is already built into aiwa_button.dart:112. Data: GET ApiConstants.termsLatest?type=CUSTOMER_TERMS (the provider type for providers) to get the version and keep it in `extra`. After the account exists, POST ApiConstants.termsAccept?version=&lt;v> (backend TermsController.java:43-46). Wiring: the AvatarGenderPage customer branch and ProviderVerificationPage both push AppRoutes.terms; move AuthRegisterEvent to the Preferences save.
+- **Preferences (area, min/max search radius, language, theme commit)** `ONB-02` (screen) — reached via ... Avatar/gender -> Terms -> tick agreement -> Agree & continue -> Preferences (customer and provider). Source: ui_kits/aiwa-app/flow-screens.jsx:78-157; prototype.jsx:595-606 (handleSavePrefs), 656
+  - Build: Create lib/features/auth/presentation/pages/preferences_page.dart and AppRoutes.preferences = '/preferences'. Widgets: AuthStepScaffold, AiwaIconButton, EyebrowLabel, and AiwaTextField(icon: Icons.location_on_outlined, suffixIcon: 'Use GPS' button) for the area. For the radius, two Slider widgets in a Row (Expanded each, gap 10, min 1, max 25, divisions 24; the sliderTheme in app_theme.dart:207-212 already uses plum700), coupled with `if (v > _max) _max = v`. Show the readout in AppTextStyles.h4 (DM Serif 18 plum900) and the min/max captions in micro 11 ink3. Build the language pills as two Expanded AnimatedContainers; for the Arabic font reuse the GoogleFonts.markaziText helper at splash_page.dart:244-256. 'Use GPS' should call Geolocator.getCurrentPosition (geolocator is already a dependency). Save flow: register if deferred (AuthRegisterEvent should also send preferredLanguage, which the backend accepts at AuthRequest.Register) -> POST terms accept -> PATCH ApiConstants.mePreferences {searchRadiusMinKm, searchRadiusMaxKm} (backend limits @Min 1 / @Max 100) -> PATCH ApiConstants.meLanguage -> ThemeController.applyGender(gender), which is already applied live at avatar-gender -> provider: show the ONB-03 toast and context.go(AppRoutes.providerPending); customer: context.go(AppRoutes.permLocation). Pass user.searchRadiusMaxKm into HomeLoadEvent in place of the hardcoded 10.
+- **Toast 'Account created. Verification in review.'** `ONB-03` (toast) — reached via Provider signup: ... Provider verification -> Terms -> Preferences -> Save preferences -> toast over Provider pending. Source: ui_kits/aiwa-app/prototype.jsx:600-602; Toast at prototype.jsx:20-39
+  - Build: Add a shared top-toast helper (e.g. lib/shared/widgets/aiwa_toast.dart, showAiwaToast(context, message)) using an OverlayEntry that matches Toast: top insets.top+12, horizontal 16, color Color(0xF52A1320), radius 14, a 26px success500 circle with a check, 13 w500 bone text, 320ms slide from -10px, dismiss after 2800ms. Call it right before context.go(AppRoutes.providerPending) at the end of the provider Preferences save.
+- **SystemScreen (shared full-screen system message shell)** `ONB-04` (component) — reached via Not a route by itself. It wraps Session expired, Account locked, Not found, Forbidden and Permission denied (Preview states menu / error flows).. Source: ui_kits/aiwa-app/system-screens.jsx:9-36
+  - Build: Create lib/shared/widgets/system_screen.dart: `SystemScreen({required IconData icon, SystemTone tone = SystemTone.plum, String? eyebrow, required String title, required String body, String? primary, VoidCallback? onPrimary, String? secondary, VoidCallback? onSecondary, Widget? child})`. Use Scaffold(backgroundColor: AppColors.bone) with padding EdgeInsets.fromLTRB(26, insets.top + 30, 26, insets.bottom + 34), Column(center) [Spacer, pop-in icon circle (TweenAnimationBuilder scale .86->1 and opacity 0->1, 340ms, Cubic(.34,1.56,.64,1)), SizedBox(18), EyebrowLabel(color: fg), SizedBox(7), Text(h1.copyWith(fontSize: 27, height: 1.1, letterSpacing: -0.27), center), SizedBox(9), ConstrainedBox(maxWidth 290, bodySm ink2 height 1.6), child, Spacer, AiwaButton lg primary, SizedBox(9), AiwaButton(variant: ghost, size: sm, fullWidth: true)]. The ACCT auditor's screens (session expired, locked, not found, forbidden, permission denied) reuse it.
+- **Permission priming — location (onboarding route 'perm-location')** `ONB-05` (screen) — reached via Customer signup: ... Terms -> Preferences -> Save preferences -> reset('perm-location'). Both Allow and Deny -> reset('perm-notifications').. Source: ui_kits/aiwa-app/system-screens.jsx:73-79, 103-132; prototype.jsx:604, 657
+  - Build: Create lib/features/onboarding/presentation/pages/permission_priming_page.dart with `enum PermissionKind { location, notifications, camera, contacts }` and a const copy map mirroring PERMISSIONS (system-screens.jsx:72-101): icon, eyebrow, title, body, points, allow, deny. Layout: Scaffold(bone) with Padding(fromLTRB(26, insets.top + 30, 26, insets.bottom + 34)), Column(start) [Spacer, pop-in 66x66 radius-22 plum700 tile, SizedBox(20), EyebrowLabel(color: AppColors.rose700), SizedBox(7), h1 29/1.07, SizedBox(10), bodySm ink2 1.6, SizedBox(22), point rows, Spacer, AiwaButton lg, SizedBox(9), AiwaButton ghost sm]. Add route AppRoutes.permLocation = '/perm-location' and use context.go so the stack resets, like the prototype's reset. Allow: `await Geolocator.requestPermission()`, then context.go(AppRoutes.permNotifications). Deny: go to the same route. Then change HomePage._loadData to call getCurrentPosition only when checkPermission() is already whileInUse/always, with no cold request. Platform: add ACCESS_COARSE_LOCATION/ACCESS_FINE_LOCATION to android/app/src/main/AndroidManifest.xml and NSLocationWhenInUseUsageDescription to ios/Runner/Info.plist.
+- **Permission priming — notifications (onboarding route 'perm-notifications')** `ONB-06` (screen) — reached via Customer signup: ... Preferences -> perm-location (Allow or Choose my area manually) -> perm-notifications. Both buttons run finishOnboarding: reset('home') + setTab('home').. Source: ui_kits/aiwa-app/system-screens.jsx:80-86, 103-132; prototype.jsx:608, 658
+  - Build: Reuse the PermissionPrimingPage from ONB-05 with kind notifications on route AppRoutes.permNotifications = '/perm-notifications'. Allow: `await Permission.notification.request();` (permission_handler), then context.go(AppRoutes.home). Deny: context.go(AppRoutes.home) directly. Add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>` for Android 13+.
+- **Permission priming — camera** `ONB-07` (screen) — reached via No caller in the prototype. It renders only through route 'permission' with s.kind === 'camera' (prototype.jsx:684), and the Preview-states dispatcher pushes 'permission' with no kind (prototype.jsx:589 `else push(k);`). Its copy fits the moment before the ID or selfie capture on Provider verification.. Source: ui_kits/aiwa-app/system-screens.jsx:87-93, 103-132; prototype.jsx:684
+  - Build: PermissionPrimingPage(kind: camera). Show it before the first UploadSlot capture in ProviderVerificationPage when `await Permission.camera.status` is not granted. 'Open camera' -> Permission.camera.request(), then ImagePicker().pickImage(source: ImageSource.camera). 'Upload from files instead' -> ImagePicker().pickImage(source: ImageSource.gallery). Add NSCameraUsageDescription and NSPhotoLibraryUsageDescription to Info.plist.
+- **Permission priming — contacts (trusted contact)** `ONB-08` (screen) — reached via No caller in the prototype: only route 'permission' with kind 'contacts'. Its copy fits Profile -> Trusted contacts -> Add (the SOS feature).. Source: ui_kits/aiwa-app/system-screens.jsx:94-100, 103-132; prototype.jsx:684
+  - Build: PermissionPrimingPage(kind: contacts), shown from the Trusted contacts add flow (owned by the ACCT/profile auditor). The simplest version avoids the runtime permission: 'Choose a contact' launches the system contact picker (Android ACTION_PICK needs no READ_CONTACTS; iOS CNContactPickerViewController needs no permission) through a small platform channel or package, and 'Enter manually' opens a name + phone form.
+- **Permission priming — in-app re-prompt (Preview states -> 'Permission priming', route 'permission')** `ONB-09` (state) — reached via Any customer screen -> Preview states menu -> 'Permission priming' -> push('permission') -> PermissionPrimingScreen kind 'location'. Allow and Deny both pop back to the screen underneath.. Source: ui_kits/aiwa-app/prototype.jsx:589, 684, 791
+  - Build: Give PermissionPrimingPage a `popOnDone` flag and add route '/permission?kind=location' opened with context.push. Both buttons: request if Allow, then context.pop(). Trigger it from Home or Search when Geolocator.checkPermission() == LocationPermission.denied and the user asks for nearby results. deniedForever should route to the Permission denied screen (ACCT auditor).
+- **Terms re-accept (policy updated)** `ONB-10` (screen) — reached via Home -> bell -> Notifications -> tap 'Terms & policies updated' (type 'terms') -> push('terms-reaccept') -> Agree & continue -> toast + pop. Source: ui_kits/aiwa-app/flow-additions-v3.jsx:207-226; prototype.jsx:636, 713; notification seed customer-extras.jsx:107
+  - Build: Create lib/features/terms/presentation/pages/terms_reaccept_page.dart and route '/terms-reaccept'. Fetch GET ApiConstants.termsLatest for the version and change summary (TermsPolicyDto). Layout: bone Scaffold, padding (24, insets.top+26, 24, insets.bottom+16), EyebrowLabel(color: AppColors.rose700), h1.copyWith(fontSize: 28, height: 1.08), bodySm ink2, SizedBox(20), a cream Container(radius 14, padding 14) with Text.rich (bold version + summary, 12.5 ink2 h1.5), Spacer, AiwaButton lg 'Agree & continue'. On tap: POST ApiConstants.termsAccept?version=v, show the ONB-11 toast, context.pop(). Wire NotificationsPage onTap: `if (n.type.toUpperCase().contains('TERMS')) context.push('/terms-reaccept');`. For the forced variant, wrap it in PopScope(canPop: false) and add a GoRouter redirect when user.acceptedTermsVersion != latest.
+- **Toast 'Thanks — terms accepted.'** `ONB-11` (toast) — reached via Notifications -> Terms & policies updated -> Terms re-accept -> Agree & continue -> toast over Notifications (after pop). Source: ui_kits/aiwa-app/prototype.jsx:636; Toast prototype.jsx:20-39
+  - Build: After a successful POST /terms/accept in TermsReacceptPage: `showAiwaToast(context, 'Thanks — terms accepted.'); context.pop();`
+- **Terms — agree checkbox gating (unchecked / checked)** `ONB-V01` (state) — reached via Signup ... Avatar/gender (customer) or Provider verification (provider) -> Terms -> tap the checkbox or its label. Source: ui_kits/aiwa-app/flow-screens.jsx:14, 52-70
+  - Build: Inside the new TermsPage (ONB-01) keep `bool _agree = false`. Wrap the box and label in one GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() => _agree = !_agree)) holding a Row(crossAxisAlignment: start) with AnimatedContainer(duration: const Duration(milliseconds: 180), curve: AppTheme.easeSoft, width: 22, height: 22, margin: EdgeInsets.only(top: 1), decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: _agree ? AppColors.plum700 : AppColors.ink4, width: 2), color: _agree ? AppColors.plum700 : Colors.transparent), child: _agree ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null), SizedBox(width: 10), and Expanded(Text.rich(bodySm 13 ink2 h1.5 with plum700 w600 spans)). The CTA is `AiwaButton(label: 'Agree & continue', size: lg, fullWidth: true, onPressed: _agree ? _accept : null)`; the .45 disabled opacity already exists at aiwa_button.dart:112. Wrap the row in Semantics(checked: _agree) for accessibility.
+- **Preferences — search radius min/max range pair** `ONB-V02` (component) — reached via ... Terms -> Agree & continue -> Preferences -> 'Search radius' section. Source: ui_kits/aiwa-app/flow-screens.jsx:81-82, 110-127
+  - Build: In PreferencesPage use two `Slider(min: 1, max: 25, divisions: 24)` in a Row of Expanded widgets with SizedBox(width: 10). Keep two sliders rather than a RangeSlider to match the design. The sliderTheme at app_theme.dart:207-212 already uses plum700 for the active track and thumb and divider for the inactive track. Couple them with `onChanged: (v) => setState(() { _min = v; if (v > _max) _max = v; })` and the mirror for max. Readout: `Text('${_min.round()}–${_max.round()} km', style: AppTextStyles.h4)` (DM Serif 18 plum900, app_text_styles.dart:37-38) in a Row with `crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic`. Captions use AppTextStyles.micro. On save, PATCH ApiConstants.mePreferences {searchRadiusMinKm, searchRadiusMaxKm} (backend @Min 1 / @Max 100 in UpdatePreferencesRequest.java) and feed the max into HomeLoadEvent (see the corrected ONB-02-F1).
+- **Preferences — App language pills (English / العربية)** `ONB-V03` (component) — reached via ... Terms -> Agree & continue -> Preferences -> 'App language' section. Source: ui_kits/aiwa-app/flow-screens.jsx:83, 129-149
+  - Build: Build a Row of two Expanded GestureDetector + AnimatedContainer(duration: AppTheme.dur2, curve: AppTheme.easeSoft, padding: EdgeInsets.symmetric(vertical: 12, horizontal: 14), decoration: BoxDecoration(color: active ? AppColors.plum700 : AppColors.paper, borderRadius: BorderRadius.circular(14), border: Border.all(color: active ? Colors.transparent : AppColors.divider, width: 1.5))) with SizedBox(width: 8) between. English label: AppTextStyles.label.copyWith(fontSize: 14, color: active ? AppColors.bone : AppColors.ink). Arabic label: reuse the Markazi helper at splash_page.dart:244-256 with fontSize 18 and FontWeight.w600. On save, PATCH ApiConstants.meLanguage with {'preferredLanguage': 'EN'|'AR'} (see ONB-02-V1) and switch MaterialApp.router's locale (app.dart:81) through a ValueNotifier. Add `localizationsDelegates: GlobalMaterialLocalizations.delegates` (flutter_localizations is already in pubspec.yaml:12) so 'ar' flips Directionality to RTL.
+
+### Customer discovery (3)
+
+- **FlagProviderSheet (report a provider)** `DISC-12` (sheet) — reached via Provider profile -> 'Report' chip. Source: ui_kits/aiwa-app/customer-extras.jsx:432-491; mounted at prototype.jsx:742-750
+  - Build: Create lib/features/providers/presentation/widgets/flag_provider_sheet.dart exposing `Future<void> showFlagProviderSheet(BuildContext context, {required String providerId, required String providerName})`. Use showModalBottomSheet(isScrollControlled: true, backgroundColor: Colors.transparent, barrierColor: const Color(0x732A1320)), a Container with AppTheme.sheetDecoration and padding fromLTRB(22, 18, 22, 36 + viewInsets.bottom), and a StatefulBuilder holding `reason` and a TextEditingController. Follow the structure of shared/widgets/confirm_sheet.dart (handle, EyebrowLabel(color: AppColors.rose700), AppTextStyles.h3), build reason rows as GestureDetector + AnimatedContainer, and use AiwaTextField(maxLines: 3, placeholder: 'Help us understand') when reason == 'Other'. Put Row(Expanded(AiwaButton secondary 'Cancel'), SizedBox(10), Expanded(AiwaButton danger 'Submit flag', onPressed: reason == null ? null : submit)). Data: add `flagProvider(providerId, reason, note)` to ProviderRepository, ProviderRemoteDataSource and a use case, backed by a backend endpoint (for example POST /api/providers/{id}/flags; not visible in the Flutter code, verify in aiwa-backend). On success pop the sheet and show the DISC-13 toast. Open it from the new 'Report' chip (DISC-08-F1).
+- **Toast - 'Thanks — flag received. Our team reviews every report.'** `DISC-13` (toast) — reached via Provider profile -> Report -> choose a reason -> Submit flag. Source: ui_kits/aiwa-app/prototype.jsx:746-749 (setToast); Toast at prototype.jsx:20-39
+  - Build: No shared toast widget exists in lib/shared/widgets. The only equivalent is snackBarTheme (floating, plum900 @ .96, radius 14; app_theme.dart:185-193), which is bottom-anchored and has no check icon. Add lib/shared/widgets/aiwa_toast.dart with `void showAiwaToast(BuildContext context, String message)`: an OverlayEntry positioned at top: safeTop + 12, left/right 16; a Container with color Color(0xF52A1320) (or AppColors.plum900.withOpacity(.96)), radius 14 and a BoxShadow; a 26px circle in AppColors.success500 with Icons.check (15, white); a SlideTransition from Offset(0, -0.2) over 320ms easeSoft; removal after 2800ms. Call it with the prototype string once the flag API succeeds. The same helper serves every other setToast in the app.
+- **StaffPickerScreen ('Pick your stylist.' - shop-type providers)** `DISC-14` (screen) — reached via Provider profile (shop-type, e.g. Layla Beauty or Maadi Hammam) -> 'Book now' or a service '+' -> Staff picker -> (guest) Auth gate or (signed in) Booking type. Source: ui_kits/aiwa-app/customer-extras-2.jsx:56-98; prototype.jsx:664,668-671
+  - Build: Data first: ProviderDetailEntity and its model need `type` ('INDIVIDUAL'/'SHOP') and `List<StaffEntity> staff` (id, name, role, imageUrl). Staff names are already collected at signup (provider_business_page.dart:62-63), but the provider-detail API contract is not visible and needs backend exposure. Add GoRoute '/provider/:id/staff' (root navigator, outside the ShellRoute) -> StaffPickerPage(providerId, serviceId?). Reuse AuthStepScaffold (auth/presentation/widgets/step_header.dart:75) or ScreenHeader for the header, AiwaIconButton(Icons.arrow_back_rounded), EyebrowLabel, AppTextStyles.h1.copyWith(fontSize: 28, height: 1.05), and AiwaAvatar(size: 50, verified: true) plus Icons.chevron_right_rounded for rows. The dashed 'No preference' border needs a small CustomPainter (there is no dotted_border dependency in pubspec). Read staff from ProviderBloc state (pass the bloc or re-fetch). onPick(staffId or null): if not AuthAuthenticated, push AppRoutes.authGate with a return path; otherwise push '/booking/:id?serviceId=..&staffId=..'. BookingPage (booking partition) must accept staffId. Wire it from ProviderDetailPage._book (DISC-08-F2).
+
+### Customer booking lifecycle (45)
+
+- **Booking type choice (Now or later)** `BOOK-01` (screen) — reached via Home -> provider card -> Provider profile -> service '+' or 'Book now' (individual provider; shops go via Staff picker, guests via Auth gate) -> Booking type. Source: ui_kits/aiwa-app/flow-screens.jsx:162-221; prototype.jsx:686-691
+  - Build: Create features/bookings/presentation/pages/booking_type_page.dart with route '/booking-type/:providerId?serviceId=' in app_router.dart. Change provider_detail_page.dart _book() (lines 62-68) to push this page instead of '/booking/:id'. Build two tappable cards: a plum700 card with AiwaGlow (screen_chrome.dart) and a paper card with a 1.5px divider border. Add the cream note Container. Scheduled pushes '/booking/:id?mode=scheduled'; Now opens BookNowCheckSheet (BOOK-02). Backend already accepts BookingRequest.bookingType SCHEDULED|BOOK_NOW, and BookingDto.estimatedArrivalMinutes can feed the ETA. Reuse AiwaIconButton, EyebrowLabel, AppTextStyles.h1.copyWith(fontSize: 30, height: 1.05).
+- **Book Now availability check - checking state (and AVAILABLE pass-through)** `BOOK-02` (sheet) — reached via Booking type -> tap 'Book now' card. Source: ui_kits/aiwa-app/system-screens.jsx:228-260; prototype.jsx:763-768
+  - Build: Use showModalBottomSheet(isDismissible: false while checking) backed by a small Cubit that resolves availability. aiwa-backend has no GET /bookings/book-now/availability endpoint (none in BookingController). Either add one, or derive the result from ProviderSummaryDto.offlineMode/vacationMode/settlementPaused (ApiResponse.java:106-108) plus a busy check. Reuse AppTheme.sheetDecoration, EyebrowLabel and an AnimationController pulse. On AVAILABLE, push BookingPage with mode=now (BOOK-09).
+- **Book Now blocked - OFFLINE** `BOOK-03` (sheet) — reached via Maadi Hammam (bookNowStatus OFFLINE) -> Staff picker -> Booking type -> Book now; or Preview states 'Book Now - offline'. Source: ui_kits/aiwa-app/system-screens.jsx:221, 261-273; screens.jsx:13
+  - Build: Add a blocked-reason body to the BOOK-02 sheet, driven by a map like BOOK_NOW_BLOCKS: {icon, eyebrow, title(name), body}. Buttons: AiwaButton(lg, icon Icons.calendar_today) goes to '/booking/:id?mode=scheduled'; AiwaButton(secondary, lg, icon Icons.search) goes to context.go(AppRoutes.search). Needs provider offline status from the backend (ProviderSummaryDto.offlineMode).
+- **Book Now blocked - BUSY** `BOOK-04` (sheet) — reached via Omar - Barbier (bookNowStatus BUSY) -> Booking type -> Book now; or Preview states 'Book Now - busy'. Source: ui_kits/aiwa-app/system-screens.jsx:222, 261-273; screens.jsx:17
+  - Build: Same sheet as BOOK-03 with the BUSY copy. The backend has no busy flag in ProviderSummaryDto; it needs an availability endpoint (see BOOK-02).
+- **Book Now blocked - VACATION** `BOOK-05` (sheet) — reached via Mariam Lashes (vacationMode, bookNowStatus VACATION) -> Booking type -> Book now; or Preview states 'Book Now - vacation'. Source: ui_kits/aiwa-app/system-screens.jsx:223, 261-273; screens.jsx:18
+  - Build: Same sheet as BOOK-03. Drive it from ProviderSummaryDto.vacationMode (ApiResponse.java:106).
+- **Book Now blocked - SETTLEMENT_PAUSED** `BOOK-06` (sheet) — reached via Preview states 'Book Now - provider paused' only (no seed provider uses it). Source: ui_kits/aiwa-app/system-screens.jsx:224, 261-273; prototype.jsx:787
+  - Build: Same sheet as BOOK-03. Drive it from ProviderSummaryDto.settlementPaused (ApiResponse.java:108).
+- **Book Now blocked - NOT_APPROVED (defined, not reachable in prototype)** `BOOK-07` (sheet) — reached via Not reachable. Defined in BOOK_NOW_BLOCKS, but no seed provider or Preview state uses it. Source: ui_kits/aiwa-app/system-screens.jsx:225
+  - Build: Include it in the same reason map as BOOK-03 so the backend's inactive-provider/service result has a designed surface.
+- **Booking screen - Book Now mode variant** `BOOK-09` (state) — reached via Booking type -> Book now -> availability AVAILABLE -> Booking screen (bookingMode 'now'). Source: ui_kits/aiwa-app/screens.jsx:336, 405-408, 420; prototype.jsx:692, 766
+  - Build: Add a mode param to BookingPage. When mode == now: replace the toggle with InlineBanner(tone: BannerTone.plum, icon: Icons.home_outlined, body: ...), force homeService = true and send bookingType 'BOOK_NOW'. The backend picks today plus the next slot and computes the ETA (BookingServiceImpl ~152-178), so the day/slot pickers could be hidden. On success, show the toast from BOOK-54.
+- **Booking screen - 'Where' home vs salon toggle** `BOOK-10` (component) — reached via Booking screen (scheduled) -> Where section. Source: ui_kits/aiwa-app/screens.jsx:403-419
+  - Build: In booking_page.dart add `bool _homeService = true;` and a Row of two Expanded AnimatedContainer toggles (AppTheme.dur2, easeSoft). Send BookingRequest.homeService (the field exists in the backend). When 'At the salon' is selected, hide the address list.
+- **Booking screen - saved address selector (Home / Work / Add new address)** `BOOK-11` (component) — reached via Booking screen -> Where -> 'At my address' (or always in Book Now mode). Source: ui_kits/aiwa-app/screens.jsx:335, 420-438; customer-extras-2.jsx:179-182
+  - Build: Flutter has no saved-addresses feature or endpoint in api_constants.dart. The backend supports BookingRequest.savedAddressId and BookingDto.savedAddress. Build an addresses datasource/cubit (shared with the account partition's Addresses screen), a SavedAddressRow widget, and wire 'Add new address' to the address form route. Send savedAddressId in the create payload.
+- **Slot conflict sheet ('Someone booked that slot.')** `BOOK-13` (sheet) — reached via Booking screen -> Confirm booking when the slot was just taken (409); or Preview states 'Slot just taken'. Source: ui_kits/aiwa-app/system-screens.jsx:150-186; prototype.jsx:760-762, 783
+  - Build: Create shared/widgets/slot_conflict_sheet.dart (showModalBottomSheet with AppTheme.sheetDecoration). Open it from the booking_page.dart BlocListener when BookingError carries a 409. Feed it the remaining times from ProviderLoaded.slots for _selectedDate. On pick, set _selectedTime, re-dispatch BookingCreateEvent and show the toast from BOOK-61. 'Pick another day' closes the sheet and scrolls to the day picker.
+- **Tracking - Pending** `BOOK-15` (state) — reached via Booking confirmed (scheduled) -> 'View my bookings' -> Tracking; or Bookings -> Upcoming -> tap b2 'Gel Manicure' (pending) / 'Track'. Source: ui_kits/aiwa-app/flow-screens.jsx:226-233, 235-485 (pending branches 250-256, 262, 442-469, 479); prototype.jsx:692, 694
+  - Build: Create features/bookings/presentation/pages/tracking_page.dart with route '/booking/:id/track' in app_router.dart. Load the booking with the existing BookingRemoteDataSource.getBookingDetail (GET /bookings/{id}) through a new TrackingCubit. Refresh by polling or push; pubspec.yaml has no firebase_messaging or web socket package. Map backend PENDING/ACCEPTED/ON_THE_WAY/ARRIVED/IN_PROGRESS/COMPLETED to STATUS_STEPS {icon, label, hint} and WAITING_ON copy. Header: Container with a LinearGradient(plum700 -> plum900) plus AiwaGlow, AiwaIconButton(variant: glass). Build the timeline as a Column of Rows with a 28px circle and a 2px connector. Reuse AiwaAvatar, AiwaButton, EyebrowLabel, StatusPill. Wire: my_bookings card tap and 'Track' (BOOK-41), Confirmed CTA (BOOK-14), notifications_page onTap. Omit the prototype-only dashed demo buttons in production.
+- **Tracking - Accepted (confirmed)** `BOOK-16` (state) — reached via Bookings -> Upcoming -> b1 'Haircut & Style' (confirmed, home) -> Tracking; also after Book Now booking or Proposed time 'Accept new time'. Source: ui_kits/aiwa-app/flow-screens.jsx:228, 252, 262, 378-389; prototype.jsx:513, 634, 700-704
+  - Build: A state of TrackingPage (BOOK-15). Show 'Cancel booking' when BookingEntity.canCancel (PENDING/ACCEPTED, already defined at booking_entity.dart:40-41). The backend topology comment says venue bookings go ACCEPTED -> IN_PROGRESS; the prototype always shows 6 steps.
+- **Tracking - On the way** `BOOK-17` (state) — reached via Notifications -> 'Nadia is on the way' (opens Tracking with status onway); or Tracking -> provider taps on-the-way. Source: ui_kits/aiwa-app/flow-screens.jsx:229, 253, 339-356; prototype.jsx:713
+  - Build: A state of TrackingPage (BOOK-15). Needs BookingEntity.homeService (BookingDto.homeService) to decide whether to show the safety card. notifications_page.dart onTap (lines 134-140) should push the tracking route for booking notifications.
+- **Tracking - Arrived** `BOOK-18` (state) — reached via Tracking (on the way) -> provider marks arrived. Source: ui_kits/aiwa-app/flow-screens.jsx:230, 254, 339
+  - Build: A state of TrackingPage (BOOK-15). Backend status ARRIVED.
+- **Tracking - In progress** `BOOK-19` (state) — reached via Tracking (arrived) -> provider starts service. Source: ui_kits/aiwa-app/flow-screens.jsx:231, 255, 305
+  - Build: A state of TrackingPage (BOOK-15). Pulse: AnimationController(duration: 1600ms)..repeat(reverse: true) driving ScaleTransition 1.0->1.05.
+- **Tracking - Completed (confirm cash payment + review)** `BOOK-20` (state) — reached via Tracking (in progress) -> provider marks complete. Source: ui_kits/aiwa-app/flow-screens.jsx:232, 263, 317, 427-439, 480; prototype.jsx:694
+  - Build: A state of TrackingPage (BOOK-15). 'Confirm' pushes '/booking/:id/payment' (BOOK-38). 'Leave a review' pushes '/review/:id' with extra: booking (the route exists in app_router.dart:211-222). Hide the payment row when BookingDto.paymentStatus is already confirmed, and hide review when BookingDto.reviewed is true.
+- **Tracking - provider contact card (call + chat entry)** `BOOK-21` (component) — reached via Any Tracking state. Source: ui_kits/aiwa-app/flow-screens.jsx:329-337; prototype.jsx:694 (onChat -> push('chat'))
+  - Build: Part of TrackingPage. Use Transform.translate(offset: Offset(0, -20)) or a Stack over the header. AiwaIconButton(size: 36, icon: Icons.phone_outlined) could launch a masked-number tel: link (backend masking not visible). AiwaIconButton(Icons.chat_bubble_outline) pushes '/booking/:id/chat' (BOOK-36).
+- **Tracking - home-service safety card (live location + ID, SOS button)** `BOOK-22` (component) — reached via Tracking in On the way / Arrived / In progress for a home (non-venue) booking. Source: ui_kits/aiwa-app/flow-screens.jsx:339-356
+  - Build: Part of TrackingPage. Show it when booking.homeService and the status is ON_THE_WAY/ARRIVED/IN_PROGRESS. SOS calls the backend SafetyController POST /bookings/{bookingId}/safety (SafetyController.java:21, 39) and moves through SOS stages 1-3 (BOOK-23..25) in a SafetyCubit. Trusted contacts come from the account partition.
+- **Tracking - SOS stage 1: alerting** `BOOK-23` (banner) — reached via Tracking (home service, on the way/arrived/in progress) -> SOS button. Source: ui_kits/aiwa-app/flow-screens.jsx:357-363
+  - Build: SafetyCubit state 'alerting' while POST /bookings/{id}/safety is in flight. The design rule is no spinners, so pulse the loader icon.
+- **Tracking - SOS stage 2: support notified** `BOOK-24` (banner) — reached via SOS alerting -> request succeeds. Source: ui_kits/aiwa-app/flow-screens.jsx:364-370
+  - Build: SafetyCubit 'notified' state. 'I'm safe' resolves the incident (endpoint not visible; SafetyController exposes GET/POST only).
+- **Tracking - SOS stage 3: incident logged** `BOOK-25` (banner) — reached via SOS notified -> 'I'm safe'. Source: ui_kits/aiwa-app/flow-screens.jsx:371-376
+  - Build: SafetyCubit 'logged' state rendered with InlineBanner(tone: plum, icon: Icons.fact_check_outlined).
+- **Tracking - venue check-in card** `BOOK-26` (component) — reached via Tracking for a venue booking (e.g. b2 Gel Manicure) in Accepted / On the way / Arrived. Source: ui_kits/aiwa-app/flow-screens.jsx:378-389
+  - Build: Show it when !booking.homeService and the status is in ACCEPTED/ON_THE_WAY/ARRIVED. 'Check in' calls PATCH /bookings/{id}/check-in (BookingController.java:189); add ApiConstants.bookingCheckIn. After success, show 'Checked in' from BookingDto.checkedInAt.
+- **Tracking - travel fee quote (accept / decline) + total row** `BOOK-27` (state) — reached via Tracking (pending) -> provider quotes a travel fee (prototype demo button). Source: ui_kits/aiwa-app/flow-screens.jsx:442-475
+  - Build: Needs BookingEntity.travelFee (BookingDto.travelFee exists). The customer accept/decline endpoint is not visible in aiwa-backend: only provider-side PATCH /travel-fee in ProviderModeController.java:40. Render it when status PENDING and travelFee != null with no customer decision yet.
+- **Tracking - travel fee declined ('No problem - no fee applied.')** `BOOK-28` (state) — reached via Tracking (pending) -> travel fee card -> Decline. Source: ui_kits/aiwa-app/flow-screens.jsx:265-281
+  - Build: A full-screen state inside TrackingPage after the decline API succeeds. Reuse a SystemScreen-style layout (Spacer / icon / eyebrow / title / body / Spacer / button). The prototype's onBack returns to the Bookings tab.
+- **Proposed time - provider suggested a different time (active countdown)** `BOOK-30` (screen) — reached via Tracking (pending) -> 'Demo: provider proposes new time' (in production: push/notification when the provider proposes). Source: ui_kits/aiwa-app/flow-additions-v3.jsx:9-68; prototype.jsx:633-635
+  - Build: Route '/booking/:id/proposed-time'. Needs BookingEntity.proposedDate/proposedStartTime (BookingDto.proposedDate/proposedStartTime) and PATCH /bookings/{id}/proposal-response?accept=true|false (BookingController.java:178-187); add ApiConstants.bookingProposalResponse. Drive the countdown with Stream.periodic(1s) in a Cubit; text style AppTextStyles.mono w700. Accept shows the BOOK-58 toast and goes to tracking. Decline goes to the rejected route.
+- **Proposed time - offer expired** `BOOK-31` (state) — reached via Proposed time -> countdown reaches 00:00. Source: ui_kits/aiwa-app/flow-additions-v3.jsx:41-45, 54-58
+  - Build: Expired state of BOOK-30. Use InlineBanner(tone: BannerTone.warn, icon: Icons.hourglass_bottom) from screen_chrome.dart.
+- **Booking rejected - reason + alternatives** `BOOK-32` (screen) — reached via Bookings -> Past -> rejected card 'See alternatives'; or Proposed time -> Decline. Source: ui_kits/aiwa-app/customer-extras.jsx:343-427; prototype.jsx:635, 702, 716
+  - Build: Route '/booking/:id/rejected'. Needs BookingEntity.rejectionReason (BookingDto.rejectionReason). Alternatives: BookingWithAlternativesDto is only returned to the rejecting provider (PATCH /reject), so add a customer endpoint or query /providers/search with the original category. Reuse ProviderListItem (features/home/presentation/widgets/provider_list_item.dart), SectionHeader, AiwaButton, AiwaAvatar.
+- **Expired booking ('No answer in time.')** `BOOK-33` (screen) — reached via Bookings -> Past -> b8 'Russian Volume Lashes' (expired) card tap; or Preview states 'Booking expired'. Source: ui_kits/aiwa-app/system-screens.jsx:189-215; prototype.jsx:681, 703, 790
+  - Build: Route '/booking/:id/expired'. The backend has BookingStatus.EXPIRED; include it in the Past list (BOOK-46) and make the card tappable. Reuse InlineBanner(tone: plum), AiwaButton, EyebrowLabel. Note: the prototype uses the current providerId, not the booking's provider, for the name (prototype.jsx:681). Use the booking's provider.
+- **Complaint ('Open a complaint / What happened?')** `BOOK-35` (screen) — reached via Tracking (any status) -> 'Report a problem'. Source: ui_kits/aiwa-app/customer-extras.jsx:177-258; prototype.jsx:694, 714
+  - Build: Create features/complaints (datasource, cubit, page) with route '/booking/:id/complaint'. ApiConstants.complaints ('/complaints') already exists (api_constants.dart:70) but has no datasource. POST /complaints on the backend. Reuse ScreenHeader, AiwaAvatar, EyebrowLabel, StickyBar, AiwaButton, and the row style from the reason sheet (BOOK-29 fix). Show the BOOK-57 toast on success.
+- **Chat with provider (masked number)** `BOOK-36` (screen) — reached via Tracking -> provider card message-circle button. Source: ui_kits/aiwa-app/customer-extras-2.jsx:100-177; prototype.jsx:673, 694
+  - Build: Create features/chat with route '/booking/:id/chat'. Backend has GET/POST /bookings/{bookingId}/chat and POST /bookings/{bookingId}/chat/{messageId}/report (ChatController.java:37-75). ChatCubit polls, since there is no realtime package. Reuse AiwaAvatar, AiwaIconButton(variant: plum, icon: Icons.send_rounded), InlineBanner(tone: plum, icon: Icons.visibility_outlined).
+- **Chat - report message sheet + '[message removed by admin]' state** `BOOK-37` (sheet) — reached via Chat -> 'Report' under a provider message. Source: ui_kits/aiwa-app/customer-extras-2.jsx:116-119, 137-141, 156-160, 172-174
+  - Build: Reuse showConfirmSheet(context, eyebrow: 'Report message', title: 'Send this to admin review?', confirmLabel: 'Report message', icon: Icons.flag_outlined, body: ...). POST .../chat/{messageId}/report. Render the blocked style when the message DTO flags removal (field not verified).
+- **Payment confirm (customer) - 'Did you pay {provider} in cash?'** `BOOK-38` (screen) — reached via Tracking (completed) -> 'Confirm your cash payment' row -> 'Confirm'. Source: ui_kits/aiwa-app/flow-additions-v4.jsx:82-106; prototype.jsx:694-697
+  - Build: Route '/booking/:id/payment'. PATCH /bookings/{id}/confirm-payment?paid=true|false (BookingController.java:198-206); add ApiConstants.bookingConfirmPayment. A PaymentConfirmCubit handles the idle / confirmed / dispute-form states (BOOK-39, BOOK-40). The amount comes from BookingDto.totalPrice, which includes travelFee.
+- **Payment confirm - paid / confirmed state** `BOOK-39` (state) — reached via Payment confirm -> 'Yes, I paid - confirm'. Source: ui_kits/aiwa-app/flow-additions-v4.jsx:108-140; prototype.jsx:696
+  - Build: Part of BOOK-38. 'Rate your provider' in the prototype only toasts and pops. In Flutter, show the BOOK-59 toast and push '/review/:id' to match the label intent (flag this to design). The prototype's Undo is local-only; decide whether to delay the API call until the user leaves the screen.
+- **Payment confirm - unpaid / dispute form** `BOOK-40` (state) — reached via Payment confirm -> 'No / something's wrong'. Source: ui_kits/aiwa-app/flow-additions-v4.jsx:142-160; prototype.jsx:697
+  - Build: Part of BOOK-38. Call PATCH confirm-payment?paid=false. The endpoint takes no reason text, so the reason needs a complaint/dispute POST or a backend field. Show the BOOK-60 toast.
+- **Toast - 'Booking placed. Waiting to confirm.'** `BOOK-53` (toast) — reached via Booking screen (scheduled) -> Confirm booking. Source: ui_kits/aiwa-app/prototype.jsx:692
+  - Build: In booking_page.dart:109-113, after context.go('/booking-confirmed/...'), call showAiwaToast(context, 'Booking placed. Waiting to confirm.') (BOOK-52 helper).
+- **Toast - 'Provider is on the way.'** `BOOK-54` (toast) — reached via Book Now -> Booking screen -> Confirm booking. Source: ui_kits/aiwa-app/prototype.jsx:692
+  - Build: Depends on the Book Now mode (BOOK-09). Show it when mode == now on BookingCreated.
+- **Toast - 'Complaint submitted. We will reach out via WhatsApp.'** `BOOK-57` (toast) — reached via Tracking -> Report a problem -> Submit complaint. Source: ui_kits/aiwa-app/prototype.jsx:714
+  - Build: Show it on complaint submit success in the new ComplaintPage (BOOK-35).
+- **Toast - 'New time confirmed - your calendar and reminders are updated.'** `BOOK-58` (toast) — reached via Proposed time -> Accept new time. Source: ui_kits/aiwa-app/prototype.jsx:634
+  - Build: Show it after proposal-response?accept=true succeeds (BOOK-30).
+- **Toast - 'Payment confirmed. Receipt sent.'** `BOOK-59` (toast) — reached via Payment confirm -> Yes, I paid -> Rate your provider. Source: ui_kits/aiwa-app/prototype.jsx:696
+  - Build: Show it after confirm-payment?paid=true (BOOK-39).
+- **Toast - 'Reported as unpaid. AIWA support has been notified.'** `BOOK-60` (toast) — reached via Payment confirm -> No / something's wrong -> Submit as unpaid. Source: ui_kits/aiwa-app/prototype.jsx:697
+  - Build: Show it after confirm-payment?paid=false (BOOK-40).
+- **Toast - 'Rebooked for {time}.'** `BOOK-61` (toast) — reached via Slot conflict sheet -> pick alternative -> Book {time}. Source: ui_kits/aiwa-app/prototype.jsx:760-762
+  - Build: Show it after the re-dispatched BookingCreateEvent succeeds from the SlotConflictSheet (BOOK-13).
+- **Proposed time - countdown under 2 minutes (urgent)** `BOOK-V01` (state) — reached via Tracking (pending) -> provider proposes new time -> Proposed time, while secondsLeft &lt; 120. Source: ui_kits/aiwa-app/flow-additions-v3.jsx:47-50
+  - Build: Part of the new ProposedTimePage (BOOK-30). In the countdown Cubit, expose secondsLeft, then style the row: color: secondsLeft &lt; 120 ? AppColors.danger700 : AppColors.ink3, and use AppTextStyles.mono.copyWith(fontWeight: FontWeight.w700, fontSize: 12.5) for the digits. It depends on BookingDto.proposedDate/proposedStartTime and an expiry timestamp from the backend (not visible in BookingDto), since a client-only 30:00 timer resets on reopen.
+- **Slot conflict sheet - alternative selected** `BOOK-V02` (state) — reached via Booking -> Confirm booking (slot taken) -> Slot conflict sheet -> tap an alternative chip. Source: ui_kits/aiwa-app/system-screens.jsx:151, 170-181
+  - Build: Part of the SlotConflictSheet (BOOK-13). Keep `String? picked` in a StatefulBuilder. AiwaButton(label: picked == null ? 'Book slot' : 'Book $picked', onPressed: picked == null ? null : ...) already renders the .45 disabled opacity (aiwa_button.dart:111-112). Alternatives should come from GET /bookings/slots with booked=false (see BOOK-08-V1).
+- **Cancel sheet - 'Something else' selected with note field** `BOOK-V03` (state) — reached via Tracking (pending/accepted) -> Cancel booking -> tap 'Something else'. Source: ui_kits/aiwa-app/flow-screens.jsx:519-539
+  - Build: Part of the new reason sheet (BOOK-29-F1/F5). Show a TextField(maxLines: 3, minLines: 3, style: AppTextStyles.bodySm.copyWith(fontSize: 13)) with AppTheme.inputBorder(AppColors.divider) and radius 12 only when reason == 'Something else'. Return the note with the reason. The backend cancel endpoint accepts only `reason`, so send '$reason: $note' or add a notes param.
+
+### Customer account, notifications & system (32)
+
+- **Delete account sheet (type DELETE to confirm)** `ACCT-04` (sheet) — reached via Profile tab -> 'Delete account' row. Source: ui_kits/aiwa-app/customer-extras-2.jsx:217-248; mounted prototype.jsx:751-755
+  - Build: Add showDeleteAccountSheet(context) in lib/shared/widgets/confirm_sheet.dart, or add a `requiredPhrase` parameter to showConfirmSheet. Reuse AppTheme.sheetDecoration and a TextField styled with AppTextStyles.mono.copyWith(fontSize: 14) and AppTheme.inputBorder(AppColors.divider). Wrap the confirm AiwaButton(variant: danger) in ValueListenableBuilder&lt;TextEditingValue> on the controller: onPressed: v.text == 'DELETE' ? () => Navigator.pop(ctx, true) : null (AiwaButton already dims to .45 when onPressed is null, aiwa_button.dart:112; the prototype uses .5). Backend: no delete endpoint exists in api_constants.dart:13-16, so add DELETE /auth/me (or /users/me) to AuthRemoteDataSource plus an AuthDeleteAccountEvent in auth_bloc.dart that calls it, secureStorage.clearAll() and emits AuthUnauthenticated. Then context.go(AppRoutes.splash) and show the ACCT-05 toast. Add the danger row to profile_page.dart (see ACCT-01-F1).
+- **Toast: 'Account deleted. Sorry to see you go.'** `ACCT-05` (toast) — reached via Profile -> Delete account -> type DELETE -> 'Delete account'. Source: ui_kits/aiwa-app/prototype.jsx:751-754; Toast component prototype.jsx:20-39
+  - Build: No top-toast component exists. Flutter only uses bottom SnackBars (app_theme.dart:185-193, e.g. review_page.dart:91-92). Build lib/shared/widgets/aiwa_toast.dart with showAiwaToast(BuildContext, String) using an OverlayEntry on rootNavigatorKey's overlay: Positioned(top: MediaQuery.paddingOf(ctx).top + 12, left: 16, right: 16) Container(color: const Color(0xF52A1320), radius 14, padding EdgeInsets.symmetric(horizontal: 16, vertical: 12), boxShadow Color(0x4D4A1F38) blur 32 offset (0,12)) Row[26px circle AppColors.success500 + Icon(Icons.check, size 15, white), SizedBox(10), Text(msg, AppTextStyles.meta 13 w500 AppColors.bone)]. Use a SlideTransition/FadeTransition with AppTheme.dur3 + AppTheme.easeSoft and remove it after 2800ms. Call it after the ACCT-04 confirm, before context.go(AppRoutes.splash) (the overlay survives because it sits on the root navigator).
+- **Saved addresses list** `ACCT-06` (sub-screen) — reached via Profile tab -> 'Saved addresses'. Source: ui_kits/aiwa-app/customer-extras-2.jsx:179-215 (AddressesScreen, SAVED_ADDRESSES); prototype.jsx:674
+  - Build: Create lib/features/addresses/ (data: AddressRemoteDataSource + AddressModel; domain: AddressEntity{id,label,street,building,floor,apartment,landmark,notes,isDefault,lat,lng}; presentation: AddressBloc + addresses_page.dart). Add AppRoutes.addresses = '/addresses' in app_router.dart (root-level GoRoute like /notifications). UI reuses ScreenHeader(eyebrow: 'Account', title: 'Saved addresses', onBack: context.pop), AiwaIconButton(icon: Icons.edit_outlined, size: 34) and a Container with AppColors.paper, radius 16, Border.all(AppColors.divider). The dashed add button needs a dashed border (CustomPainter; there's no dashed helper in shared/widgets). Backend: no address endpoints in api_constants.dart, so GET/POST/PUT/DELETE /users/me/addresses is needed. The prototype designs no empty or loading state here; use EmptyState(compact: true) and SkeletonList as fallbacks. booking_page.dart presumably also needs this list to pre-select the default address (not verified).
+- **New address form (add mode)** `ACCT-07` (sub-screen) — reached via Profile -> Saved addresses -> 'Add new address'. Source: ui_kits/aiwa-app/account-screens.jsx:116-215 (AddressFormScreen, existing=null); prototype.jsx:674-677
+  - Build: Build address_form_page.dart(existing: AddressEntity?) under lib/features/addresses/presentation/pages with routes '/addresses/new' and '/addresses/:id/edit'. Reuse AiwaTextField (it already has label/icon/placeholder/error/hint/optional/maxLength/showCounter, aiwa_text_field.dart:9-28) for every field, StickyBar (screen_chrome.dart:132) with Row[Expanded(AiwaButton secondary lg 'Cancel'), SizedBox(10), Expanded(AiwaButton primary lg 'Add address', onPressed: valid ? _save : null)]. Build the map placeholder with a Container gradient (AppColors.plum100, cream, gold100) + a CustomPaint grid. The pin picker can use geolocator (already in pubspec) for 'Drop pin'; no map SDK is installed. Needs the shared AiwaToggle (see ACCT-C04). On save: AddressBloc add, then showAiwaToast('Address added.') (ACCT-10), then context.pop().
+- **Edit address form (edit mode)** `ACCT-08` (sub-screen) — reached via Profile -> Saved addresses -> pencil icon on an address. Source: ui_kits/aiwa-app/account-screens.jsx:121-215 (existing != null); prototype.jsx:674-677
+  - Build: Same AddressFormPage as ACCT-07 in edit mode: initialise the TextEditingControllers from `existing`, switch the header title and primary label ('Save address'), and show the delete button only when existing != null. The button is a GestureDetector/OutlinedButton with side: BorderSide(color: AppColors.danger100, width: 1.5), foreground AppColors.danger700, Icons.delete_outline_rounded 15. Save -> PUT /users/me/addresses/{id} -> showAiwaToast('Address updated.') (ACCT-11) -> pop.
+- **Delete address confirm sheet** `ACCT-09` (sheet) — reached via Profile -> Saved addresses -> pencil -> 'Delete this address'. Source: ui_kits/aiwa-app/account-screens.jsx:210-212
+  - Build: Reuse showConfirmSheet (confirm_sheet.dart:12) directly: final ok = await showConfirmSheet(context, eyebrow: 'Remove address', title: 'Delete "$label"?', body: 'Bookings already made to this address keep their details. You can add it again any time.', confirmLabel: 'Delete', icon: Icons.delete_outline_rounded); if (ok) { bloc.add(AddressDeleteEvent(id)); showAiwaToast(context, 'Address deleted.'); context.pop(); }. Needs DELETE /users/me/addresses/{id}.
+- **Toast: 'Address added.'** `ACCT-10` (toast) — reached via Profile -> Saved addresses -> Add new address -> valid form -> 'Add address'. Source: ui_kits/aiwa-app/prototype.jsx:676 (editAddress == null); Toast prototype.jsx:20-39
+  - Build: Depends on the shared showAiwaToast from ACCT-05 and the form from ACCT-07. Call showAiwaToast(context, 'Address added.') after a successful POST, then context.pop().
+- **Toast: 'Address updated.'** `ACCT-11` (toast) — reached via Profile -> Saved addresses -> pencil -> 'Save address'. Source: ui_kits/aiwa-app/prototype.jsx:676 (editAddress != null)
+  - Build: Uses showAiwaToast (ACCT-05) after the PUT succeeds in AddressFormPage edit mode (ACCT-08).
+- **Toast: 'Address deleted.'** `ACCT-12` (toast) — reached via Profile -> Saved addresses -> pencil -> Delete this address -> 'Delete'. Source: ui_kits/aiwa-app/prototype.jsx:677
+  - Build: Uses showAiwaToast (ACCT-05) after the ACCT-09 confirm and DELETE succeed.
+- **Personal info (edit profile)** `ACCT-13` (sub-screen) — reached via Profile tab -> 'Personal info'. Source: ui_kits/aiwa-app/account-screens.jsx:7-73 (EditProfileScreen); prototype.jsx:678
+  - Build: No page exists, but the plumbing is partly there. AuthUpdateProfileEvent(fullName, email, profileImageUrl) (auth_event.dart:62-72) -> PATCH /auth/me (auth_remote_datasource.dart:131-150); updateLanguage -> PATCH /auth/me/language; image_picker is in pubspec for 'Change photo'; the phone change can reuse AuthSendOtpEvent/AuthVerifyOtpEvent + OtpPage. Build lib/features/profile/presentation/pages/edit_profile_page.dart with route '/profile/edit'. Use AiwaAvatar(size: 68, palette: rose, imageUrl), AiwaButton(variant: secondary, size: sm, icon: Icons.photo_camera_outlined, label: 'Change photo'), three AiwaTextFields with errors, the Theme grid reusing _PaletteOption from profile_page.dart:238-292 (move it to shared) with ThemeController.set, SettingsRow(boxed: true) for Language, and StickyBar with AiwaButton(loading: saving) (AiwaButton pulses instead of showing 'Saving…'; pass label 'Saving…' to match). Fix first: auth_bloc.dart:132-144 emits AuthProfileUpdated, which makes ProfilePage show the guest lock (ACCT-01-F6), so emit AuthAuthenticated(user) instead. On success call showAiwaToast('Profile updated.') (ACCT-14) and context.pop().
+- **Toast: 'Profile updated.'** `ACCT-14` (toast) — reached via Profile -> Personal info -> edit a field -> 'Save changes'. Source: ui_kits/aiwa-app/prototype.jsx:678
+  - Build: Uses showAiwaToast (ACCT-05). Fire it from a BlocListener&lt;AuthBloc> in EditProfilePage when the update succeeds.
+- **Safety & policies** `ACCT-15` (sub-screen) — reached via Profile tab -> 'Safety & policies'. Source: ui_kits/aiwa-app/account-screens.jsx:75-114 (POLICY_DOCS, SafetyPoliciesScreen); prototype.jsx:679
+  - Build: Build lib/features/profile/presentation/pages/safety_policies_page.dart with route '/profile/policies'. Reuse ScreenHeader, InlineBanner(tone: BannerTone.success, icon: Icons.check_circle_outline_rounded) (screen_chrome.dart:263), SectionHeader(title: 'Your safety tools') and SettingsRow(boxed: true, sub: ...). SettingsRow needs a `right` widget slot (for the chevron up/down) and a gold tone (states.jsx:448-449). Its boxed label is currently 15/500, but the kit uses 14/600 (ACCT-C03). Accordion: keep a String? open in local state and AnimatedSize for the cream panel. Data: GET /terms/latest (ApiConstants.termsLatest, api_constants.dart:77) plus UserEntity.acceptedTermsVersion (user_entity.dart:14) for the banner/sub text. Open the PDF with url_launcher (already used in my_bookings_page.dart:115). The 'Trusted contacts' row should push the ACCT-16 route; 'How SOS works' has no target in the prototype.
+- **Trusted contacts (list)** `ACCT-16` (sub-screen) — reached via Profile tab -> 'Trusted contacts' (value '1 saved'). Source: ui_kits/aiwa-app/account-screens.jsx:217-295 (TrustedContactsScreen, TRUSTED_SEED); prototype.jsx:680
+  - Build: Build lib/features/trusted_contacts/ (entity {id,name,phone,relationship}, bloc, page) with route '/trusted-contacts'. Reuse ScreenHeader, InlineBanner(tone: BannerTone.warn, icon: Icons.emergency_share_outlined), AiwaAvatar(palette: AvatarPalette.gold, size: 42), AiwaIconButton(icon: Icons.delete_outline_rounded, size: 34), and AiwaChip or status_pill for the gold Tag (padding 3x9, 11/700; verify AiwaChip supports a tonal gold variant, which was not checked). Phone text uses AppTextStyles.mono.copyWith(fontSize: 12, color: AppColors.ink3). Backend: no trusted-contact endpoints in api_constants.dart, so GET/POST/DELETE /users/me/trusted-contacts is needed; the SOS flow (other partition) consumes them. Feed the count into the Profile row value ('N saved').
+- **Trusted contacts - empty state** `ACCT-17` (state) — reached via Profile -> Trusted contacts with 0 contacts (e.g. after removing the seeded 'Mona Kamal'). Source: ui_kits/aiwa-app/account-screens.jsx:246-250
+  - Build: Reuse the existing EmptyState widget, which already supports compact + gold tone (empty_state.dart:6-31): EmptyState(compact: true, tone: EmptyStateTone.gold, icon: Icons.person_add_alt_outlined, title: 'No trusted contact yet', subtitle: "Add someone you'd want alerted if you ever felt unsafe during a home service.", actionLabel: 'Add a contact', onAction: () => setState(() => adding = true)). Show it only when contacts.isEmpty && !adding, below the warn InlineBanner.
+- **Trusted contacts - add contact inline form** `ACCT-18` (state) — reached via Profile -> Trusted contacts -> 'Add another contact' (or 'Add a contact' from the empty state). Source: ui_kits/aiwa-app/account-screens.jsx:268-279
+  - Build: In TrustedContactsPage keep a bool adding. Render a Container(decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.plum700, width: 1.5))) with EyebrowLabel('New trusted contact', color: AppColors.plum700), three AiwaTextFields (autoFocus on the first), and a Row of AiwaButton secondary/primary (onPressed null until canAdd). POST to the trusted-contacts endpoint (see ACCT-16).
+- **Remove trusted contact confirm sheet** `ACCT-19` (sheet) — reached via Profile -> Trusted contacts -> trash icon on a contact. Source: ui_kits/aiwa-app/account-screens.jsx:289-292
+  - Build: Reuse showConfirmSheet: showConfirmSheet(context, eyebrow: 'Safety', title: 'Remove this contact?', body: "They'll no longer be alerted if you press SOS during a home service.", confirmLabel: 'Remove', icon: Icons.person_remove_outlined). If confirmed, DELETE the contact and remove it from bloc state.
+- **Notification preferences (channels + quiet hours)** `ACCT-21` (sub-screen) — reached via Profile tab -> 'Notification preferences'. Source: ui_kits/aiwa-app/flow-additions-v3.jsx:70-133 (NOTIF_CHANNELS, NotificationPreferencesScreen); prototype.jsx:685
+  - Build: Build lib/features/notifications/presentation/pages/notification_preferences_page.dart with route '/notification-preferences'. Reuse ScreenHeader(eyebrow: 'Account', title: 'Notification preferences'), SectionHeader (shared/widgets/section_header.dart; check it matches the kit's padding 0 22 / marginTop 22 / 12), and a shared AiwaToggle (ACCT-C04; note this screen draws its own 40x22 toggle vs the kit Toggle's 42x24). Show the time cards with AnimatedSize when quietOn; tapping a card opens showTimePicker and displays the time in AppTextStyles.mono.copyWith(fontSize: 15). State: a small cubit. Backend: ApiConstants.mePreferences = '/auth/me/preferences' (api_constants.dart:15) exists but its payload is not visible; it needs channels{push,sms,whatsapp,email} and quietHours{enabled,start,end}.
+- **WhatsApp support ('Talk to AIWA')** `ACCT-22` (sub-screen) — reached via Profile tab -> 'WhatsApp support'; also Account locked -> 'Contact support'. Source: ui_kits/aiwa-app/customer-extras.jsx:263-338 (WhatsAppSupportScreen); prototype.jsx:715
+  - Build: Build lib/features/support/presentation/pages/support_page.dart with route '/support'. The hero reuses AppTheme.heroGradient + AiwaGlow(color: Color(0xFFE7BAB6), opacity: .35) + AiwaButton(variant: accent, size: lg, icon: Icons.open_in_new_rounded). Open WhatsApp with url_launcher (already a dependency, used in my_bookings_page.dart:115): launchUrl(Uri.parse('https://wa.me/201005550000'), mode: LaunchMode.externalApplication) plus showAiwaToast('Opening WhatsApp…') (ACCT-23). Contact values should come from GET /support/contact (ApiConstants.supportContact, api_constants.dart:74), whose response shape is not visible. The FAQ rows have no target in the prototype. The Arabic text 'العربية' needs the Arabic font fallback (ACCT-C02).
+- **Toast: 'Opening WhatsApp…'** `ACCT-23` (toast) — reached via Profile -> WhatsApp support -> 'Open WhatsApp'. Source: ui_kits/aiwa-app/prototype.jsx:715
+  - Build: Uses showAiwaToast (ACCT-05) right before launchUrl in SupportPage (ACCT-22).
+- **Session expired** `ACCT-24` (screen) — reached via Any authenticated request returns 401 and the refresh fails (prototype: Preview states -> 'Session expired'). Source: ui_kits/aiwa-app/system-screens.jsx:9-44 (SystemScreen, SessionExpiredScreen); prototype.jsx:682; Preview states item prototype.jsx:788
+  - Build: Build a shared SystemScreen widget (lib/shared/widgets/system_screen.dart; see ACCT-C07) and SessionExpiredPage with route '/session-expired'. Today a 401 is never surfaced. _AuthInterceptor (api_client.dart:106-135) calls _storage.clearAll() when the refresh fails but doesn't navigate; _ErrorInterceptor throws UnauthorizedException (api_client.dart:152-153), which Dio re-wraps; AuthBloc._onCheckSession (auth_bloc.dart:40-51) silently emits AuthUnauthenticated when /auth/me fails. Add `static final authEvents = StreamController<int>.broadcast();` to ApiClient and push 401 after a failed refresh. In app.dart listen to it: context.read&lt;AuthBloc>().add(AuthLogoutEvent()); router.go('/session-expired'). CTA: context.go(AppRoutes.splash).
+- **Account locked** `ACCT-25` (screen) — reached via Sign-in or any request returns 423 / suspended account (prototype: Preview states -> 'Account locked'). Source: ui_kits/aiwa-app/system-screens.jsx:46-53 (AccountLockedScreen); prototype.jsx:683; Preview states prototype.jsx:789
+  - Build: AccountLockedPage on the shared SystemScreen, route '/account-locked'. Trigger: _ErrorInterceptor (api_client.dart:148-158) has no 423 branch (per the system-screens.jsx:3-4 header the backend returns 423). Emit 423 on ApiClient.authEvents and route there; also route when UserEntity.active == false (user_entity.dart:11) after /auth/me. 'Contact support' -> context.push('/support') (ACCT-22), which requires /support to work without an authenticated session. 'Back to sign in' -> clear storage + context.go(AppRoutes.splash).
+- **Forbidden (no access)** `ACCT-26` (screen) — reached via API returns 403 / deep link into another role's area (not wired in the prototype). Source: ui_kits/aiwa-app/system-screens.jsx:63-69 (ForbiddenScreen; defined and exported at :281 but not mounted by CustomerApp)
+  - Build: ForbiddenPage on SystemScreen (icon Icons.gpp_bad_outlined, danger tone), route '/forbidden'. Wire it from the 403 branch in api_client.dart _ErrorInterceptor via ApiClient.authEvents, and from a go_router redirect that blocks customers from provider routes (e.g. AppRoutes.providerDashboard, app_router.dart:223-226, has no role guard). 'Go back' -> context.canPop() ? context.pop() : context.go(AppRoutes.home).
+- **Not found** `ACCT-27` (screen) — reached via API 404 / stale deep link / cancelled booking link (not wired in the prototype). Source: ui_kits/aiwa-app/system-screens.jsx:55-61 (NotFoundScreen; defined but not mounted)
+  - Build: NotFoundPage({String what = 'This page'}) on SystemScreen (Icons.search_off_rounded, plum tone). Set GoRouter(errorBuilder: (_, s) => const NotFoundPage()) in app_router.dart:64, which has no errorBuilder so go_router's default error screen shows. Also route to it when detail pages (provider_detail_page, booking) get ServerException(statusCode: 404). The booking-confirmed redirect (app_router.dart:197-205) currently falls back silently to bookings.
+- **Permission denied - location** `ACCT-28` (screen) — reached via User denies the OS location permission (after the location priming screen). Source: ui_kits/aiwa-app/system-screens.jsx:135-147 (PermissionDeniedScreen kind='location'; defined but not mounted)
+  - Build: PermissionDeniedPage(kind: PermissionKind.location) on SystemScreen (Icons.block_rounded, warn tone). permission_handler ^11.3.1 is in pubspec but unused: on PermissionStatus.permanentlyDenied route here. 'Open Settings' -> openAppSettings(). The fallback should open a manual area picker (not in this partition). geolocator is already used for location.
+- **Permission denied - camera** `ACCT-29` (screen) — reached via Provider signup -> verification (ID / selfie) -> camera permission denied. Source: ui_kits/aiwa-app/system-screens.jsx:135-147 (kind='camera'; defined but not mounted)
+  - Build: Same PermissionDeniedPage with kind camera. Trigger from provider_verification_page.dart when image_picker/permission_handler reports camera denied. 'Upload from files' -> ImagePicker().pickImage(source: ImageSource.gallery). Copy map lives in system-screens.jsx:136-140.
+- **Permission denied - notifications** `ACCT-30` (screen) — reached via Onboarding notification priming -> OS notification permission denied. Source: ui_kits/aiwa-app/system-screens.jsx:135-147 (kind='notifications'; defined but not mounted)
+  - Build: Same PermissionDeniedPage with kind notifications. Trigger when Permission.notification.request() returns denied/permanentlyDenied (flutter_local_notifications and permission_handler are in pubspec). The fallback goes to context.push(AppRoutes.notifications) (ACCT-20).
+- **Offline banner** `ACCT-31` (banner) — reached via Any screen while the device loses connectivity (prototype: Preview states -> 'Offline banner'); 'Retry' hides it. Source: ui_kits/aiwa-app/states.jsx:127-145 (OfflineBanner); mounted prototype.jsx:759; Preview states 'Offline banner' prototype.jsx:782
+  - Build: connectivity_plus ^6.0.3 is in pubspec but unused. Add a ConnectivityCubit (stream Connectivity().onConnectivityChanged) provided in app.dart, and mount the banner globally via MaterialApp.router(builder: (ctx, child) => Stack(children: [child!, const OfflineBanner()])) (app.dart:76-83). Widget: AnimatedSlide/AnimatedOpacity 260ms easeSoft; Container(color: AppColors.plum900, padding: EdgeInsets.fromLTRB(18, MediaQuery.paddingOf(ctx).top + 6, 18, 11)) Row[Icon(Icons.wifi_off_rounded, 15, AppColors.rose300), SizedBox(10), Expanded(Text('No connection — showing saved data', 12.5 w500 bone)), pill 'Retry' (Color(0x29FAF5EE))]. Retry re-checks connectivity and re-dispatches the current page's load event. Also show it when ApiClient raises NetworkException (api_client.dart:142-147).
+- **Personal info - saving state ('Saving…')** `ACCT-V01` (state) — reached via Profile tab -> Personal info -> edit a field -> 'Save changes'. Source: ui_kits/aiwa-app/account-screens.jsx:15, 66-69; toast wiring prototype.jsx:678
+  - Build: Part of the missing EditProfilePage (ACCT-13). Keep a local `saving` flag (or a dedicated AuthProfileSaving state) and render AiwaButton(label: saving ? 'Saving…' : 'Save changes', loading: saving, onPressed: valid && dirty && !saving ? _save : null) in StickyBar. AiwaButton's loading pulse (aiwa_button.dart:107-109) is an acceptable stand-in for the dim. Do not emit AuthLoading from auth_bloc.dart:134, or ProfilePage flips to the guest view (ACCT-01-F6). On success call showAiwaToast('Profile updated.') (ACCT-14) and context.pop().
+- **Personal info - inline validation errors** `ACCT-V02` (state) — reached via Profile tab -> Personal info -> clear or garble a field, then leave it (blur). Source: ui_kits/aiwa-app/account-screens.jsx:17-21, 35-38; states.jsx:171-206 (ValidatedInput)
+  - Build: Build it inside EditProfilePage (ACCT-13) with a FocusNode per field that sets a `touched` flag on blur, and only pass `error:` to AiwaTextField once touched. AiwaTextField does not match ValidatedInput, so adjust it or add a variant. Label: uppercase AppTextStyles.eyebrow (aiwa_text_field.dart:69) vs kit 12.5/600 ink2 sentence case. Optional marker: an 'Optional' 10/500 tag (72-79) vs ' · optional' in ink4. The prefix icon does not turn danger500 and there is no trailing circle-alert (56-58). Hint colour is ink3 (161) vs kit ink4 (states.jsx:203). Validation: name.trim().length >= 2; phone digits >= 9; email optional but must match \S+@\S+\.\S+ when non-empty.
+- **Address form - validation error state** `ACCT-V03` (state) — reached via Profile -> Saved addresses -> Add new address (or pencil) -> leave Street or Building invalid and blur. Source: ui_kits/aiwa-app/account-screens.jsx:132-134, 174-176, 204
+  - Build: Part of AddressFormPage (ACCT-07/08). Use the same touched-on-blur pattern as ACCT-V02. The Building field sits in the 1.4fr/1fr/1fr grid, so its error text must wrap inside a Flexible(flex: 14) column without overflowing (use Row with Expanded(flex: 14/10/10)). Primary button: AiwaButton(onPressed: valid ? _save : null), which dims to .45 automatically (aiwa_button.dart:112).
+- **Safety & policies - expanded policy (accordion open)** `ACCT-V04` (state) — reached via Profile tab -> Safety & policies -> tap any policy row (e.g. 'Terms of service'). Source: ui_kits/aiwa-app/account-screens.jsx:85, 95-103
+  - Build: Part of SafetyPoliciesPage (ACCT-15). Keep `String? open` in State; wrap the panel in AnimatedSize(duration: AppTheme.dur2, curve: AppTheme.easeSoft). SettingsRow needs the `right` slot (ACCT-C03) to show Icons.expand_more_rounded / expand_less_rounded at 17 AppColors.ink4. Panel: Container(margin: EdgeInsets.only(top: 7), padding: EdgeInsets.symmetric(horizontal: 15, vertical: 13), decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(13))). Text: AppTextStyles.micro.copyWith(fontSize: 12.5, color: AppColors.ink2, height: 1.6). Button: AiwaButton(variant: ghost, size: sm, icon: Icons.download_rounded, label: 'Download PDF'), wired to url_launcher once GET /terms/latest (api_constants.dart:77) returns a PDF URL.
+- **Notification preferences - quiet hours off** `ACCT-V05` (state) — reached via Profile tab -> Notification preferences -> toggle 'Mute non-urgent notifications' off. Source: ui_kits/aiwa-app/flow-additions-v3.jsx:81, 110-129
+  - Build: Part of NotificationPreferencesPage (ACCT-21). Render the From/To Row only when quietOn, wrapped in AnimatedSize so the card collapses smoothly. Use the shared AiwaToggle (ACCT-C04) at the 40x22 / knob-left-20/2 size this screen specifies (or accept the kit's 42x24). Persist quietHours.enabled via PATCH ApiConstants.mePreferences ('/auth/me/preferences'); the payload shape is not visible.
+
+### Provider app (39)
+
+- **ProviderTabBar (Today / Bookings / Services / Schedule / Profile)** `PROV-01` (component) — reached via Provider app -> visible on every tab root (today, bookings, services, schedule, profile); hidden on pushed screens. Source: ui_kits/aiwa-app/provider-screens.jsx:562-596; ui_kits/aiwa-app/prototype.jsx:465-471,485
+  - Build: Add a provider ShellRoute (/provider/today, /provider/bookings, /provider/services, /provider/schedule, /provider/profile) wrapped by a ProviderShellPage. Extract the private _TabBar/_TabItem from shell_page.dart into shared/widgets/aiwa_tab_bar.dart taking a list of (icon, activeIcon, label, route, showBadge) so both shells reuse it. For the provider variant use item maxWidth 76 and horizontal padding 10 (customer uses 80/12). Icons: Icons.dashboard_outlined, Icons.event_available_outlined (+8px AppColors.rose500 dot with a 2px paper border when pendingBookings > 0), Icons.list_rounded, Icons.schedule_rounded, Icons.person_outline_rounded. Use NoTransitionPage or a fade for tab roots. Point the sign-in/splash provider redirects at /provider/today.
+- **'Confirmed today' section (today's confirmed bookings)** `PROV-06` (component) — reached via Provider app -> Today tab -> below New requests. Source: ui_kits/aiwa-app/provider-screens.jsx:115-131
+  - Build: Use DashboardDto.todayBookings from GET /provider/dashboard (see PROV-03-F1). Add `SectionHeader(title: 'Confirmed today')` and a private _TodayRow: `Container(padding: EdgeInsets.all(14), decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider)), child: IntrinsicHeight(child: Row(children: [Container(width: 4, decoration: BoxDecoration(color: AppColors.info500, borderRadius: BorderRadius.circular(4))), SizedBox(width: 12), AiwaAvatar(palette: AvatarPalette.rose, size: 40), ... , Column(crossAxisAlignment: end, children: [Text(time, style: AppTextStyles.mono.copyWith(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.plum900)), Text(duration, style: AppTextStyles.micro)])])))`. Filter out PENDING.
+- **'Confirmed today' empty state** `PROV-07` (state) — reached via Provider app -> Today tab (no non-pending bookings today). Source: ui_kits/aiwa-app/provider-screens.jsx:132-136
+  - Build: Inside the PROV-06 sliver: when today's non-pending list is empty, render `Padding(padding: EdgeInsets.all(24), child: Text('Nothing else on the books for today.', textAlign: TextAlign.center, style: AppTextStyles.meta.copyWith(color: AppColors.ink3)))`. Plain text, not EmptyState.
+- **Booking request detail — Review & respond (pending)** `PROV-13` (sub-screen) — reached via Provider app -> Today (New requests card) or Bookings (any row) -> Booking detail. Source: ui_kits/aiwa-app/provider-screens.jsx:195-349; ui_kits/aiwa-app/prototype.jsx:454-460
+  - Build: Add route /provider/bookings/:id -> ProviderBookingDetailPage, pushed from _RequestCard and _BookingRow. Load with GET /bookings/{id} (ApiConstants.bookingById exists). Extend BookingEntity/BookingModel with customerName, customerVerified, homeService, savedAddress (label/line), notes, travelFee, totalPrice, proposedDate/proposedStartTime (all present in backend BookingDto). Create a ProviderBookingDetailBloc with Accept (PATCH /accept), Decline (PATCH /reject?reason=), ProposeTime (PATCH /bookings/{id}/propose-time, backend BookingController.java:168), Cancel (PATCH /bookings/{id}/cancel?reason=) and the Advance events (existing repository methods). Reuse ScreenHeader, AiwaAvatar, StatusPill, InlineBanner, AiwaButton (lg), StickyBar and AiwaIconButton. The chat icon needs a chat feature, which does not exist in Flutter. Total = service price + travel fee.
+- **Quote a travel fee sheet** `PROV-15` (sheet) — reached via Provider app -> Booking detail (pending, home service with address, no fee yet) -> 'Quote a travel fee instead'. Source: ui_kits/aiwa-app/provider-screens.jsx:210-220,362-393
+  - Build: Backend has no per-booking travel-fee quote endpoint, only a flat provider fee (PATCH /provider/mode/travel-fee, aiwa-backend ProviderModeController.java:40-57). Add something like PATCH /bookings/{id}/travel-fee-quote?amount=, plus the customer accept/decline flow. UI: showModalBottomSheet(backgroundColor: Colors.transparent, barrierColor: AppColors.plum900.withOpacity(.48)) with AppTheme.sheetDecoration. Build 3 preset buttons and a TextField(keyboardType: TextInputType.number, style: AppTextStyles.mono.copyWith(fontSize: 18, fontWeight: FontWeight.w600)) with a prefix 'EGP'. On send, set proposedFee state in ProviderBookingDetailBloc.
+- **Travel-fee state banners (no address / quote sent / fee accepted)** `PROV-16` (banner) — reached via Provider app -> Booking detail (home service). Source: ui_kits/aiwa-app/provider-screens.jsx:295-329
+  - Build: InlineBanner already supports BannerTone.warn/gold/success (screen_chrome.dart:260-375). Drive the banners from booking.homeService, savedAddress == null, a proposed quote and booking.travelFee (BookingDto.travelFee exists). Needs the quote endpoint from PROV-15. Margin 14/22/0.
+- **Propose a different time + toast 'Alternative time sent to customer.'** `PROV-17` (toast) — reached via Provider app -> Booking detail (pending, no quote pending) -> 'Propose a different time instead' -> toast + back. Source: ui_kits/aiwa-app/provider-screens.jsx:347; ui_kits/aiwa-app/prototype.jsx:458
+  - Build: Backend PATCH /bookings/{id}/propose-time with RescheduleRequest exists (aiwa-backend BookingController.java:168-176); add ApiConstants.bookingProposeTime. The prototype sends immediately with no picker. A real build needs a date/slot choice (reuse GET /bookings/slots via the existing booking feature). Show the shared top toast (PROV-C1) and context.pop().
+- **ProviderCancelSheet — cancelling after accepting (penalty warning)** `PROV-18` (sheet) — reached via Provider app -> Booking detail (accepted / on the way / arrived) -> Cancel. Source: ui_kits/aiwa-app/provider-extras.jsx:124-164; ui_kits/aiwa-app/prototype.jsx:486-490
+  - Build: Create shared/widgets/reason_sheet.dart (or reuse the customer CancelSheet if one is built) via showModalBottomSheet returning the reason String. Call PATCH /bookings/{id}/cancel?reason= (ApiConstants.bookingCancel exists at api_constants.dart:48; backend BookingController.java:89-98; BookingDto.penaltyApplied reflects the penalty). On success: toast (PROV-19) + pop to the list.
+- **Toast 'Booking cancelled. Penalty applied to your ledger.'** `PROV-19` (toast) — reached via Provider app -> Booking detail -> Cancel -> pick reason -> 'Cancel + accept penalty'. Source: ui_kits/aiwa-app/prototype.jsx:486-490
+  - Build: Show via the shared top toast (PROV-C1) after a successful PATCH /cancel, then context.pop().
+- **PaymentConfirmScreen (provider role) — 'Did {customer} pay in cash?'** `PROV-20` (screen) — reached via Provider app -> Booking detail (in progress) -> Mark completed -> Payment confirm. Source: ui_kits/aiwa-app/flow-additions-v4.jsx:82-106; ui_kits/aiwa-app/prototype.jsx:448-452
+  - Build: Route /provider/bookings/:id/payment -> ProviderPaymentConfirmPage with a local outcome state (null | confirmed | dispute). API: PATCH /bookings/{id}/complete?cashCollected=true|false (backend BookingController.java:139-147; Flutter bookingComplete exists but sends no param). Reuse AiwaIconButton, EyebrowLabel, AiwaButton lg full.
+- **PaymentConfirm — 'Cash received · job closed' state** `PROV-21` (state) — reached via Provider app -> Payment confirm -> 'Yes, cash received'. Source: ui_kits/aiwa-app/flow-additions-v4.jsx:108-140
+  - Build: Show after a successful PATCH /complete?cashCollected=true. Commission comes from BookingDto.commissionAmount (backend) rather than a hard-coded 15%. The backend has no endpoint to undo a completion, so either defer the API call until 'Rate' is tapped or add a revert endpoint. 'Rate {name}' pushes /provider/bookings/:id/rate-customer.
+- **PaymentConfirm — dispute form state** `PROV-22` (state) — reached via Provider app -> Payment confirm -> 'Mark unpaid or disputed'. Source: ui_kits/aiwa-app/flow-additions-v4.jsx:142-160
+  - Build: Call PATCH /bookings/{id}/complete?cashCollected=false (backend marks it DISPUTED). The backend does not accept the explanation text, so add a reason param or file it via POST /complaints (ApiConstants.complaints). Reuse AiwaTextField multiline if supported (not verified) or a TextField with AppTheme.inputBorder.
+- **Toast 'Marked as disputed. Admin has been notified.'** `PROV-23` (toast) — reached via Provider app -> Payment confirm -> dispute -> 'Submit as disputed' -> Bookings tab. Source: ui_kits/aiwa-app/prototype.jsx:452
+  - Build: After a successful disputed completion: shared top toast + context.go('/provider/bookings').
+- **RateCustomerScreen (two-way rating)** `PROV-24` (screen) — reached via Provider app -> Payment confirm -> 'Cash received' -> 'Rate {customer}'. Source: ui_kits/aiwa-app/provider-extras.jsx:84-122; ui_kits/aiwa-app/prototype.jsx:453
+  - Build: Route /provider/bookings/:id/rate-customer. POST /reviews with ReviewRequest {bookingId, rating, comment, quickTags} (backend ReviewController.java:29; ReviewDirection has PROVIDER_TO_CUSTOMER). Verify the backend infers the direction from the caller's role. Reuse the features/reviews bloc/usecase (submit_review_usecase.dart) if its payload matches, plus AiwaChip, StickyBar, AiwaAvatar; build 36px tappable stars (StarRating is display-only, star_rating.dart). On success: toast (PROV-25) + go to Bookings.
+- **Toast 'Rating submitted. Slot freed — next booking notified.'** `PROV-25` (toast) — reached via Provider app -> Rate customer -> Submit rating -> Bookings tab. Source: ui_kits/aiwa-app/prototype.jsx:453
+  - Build: Shared top toast + context.go('/provider/bookings').
+- **Provider Services tab** `PROV-26` (screen) — reached via Provider app -> Services tab. Source: ui_kits/aiwa-app/provider-screens.jsx:401-430; ui_kits/aiwa-app/prototype.jsx:439
+  - Build: Tab route /provider/services -> ProviderServicesPage + ServicesBloc. GET /providers/{id}/services (ApiConstants.providerServices), POST /provider/services, PUT/DELETE /provider/services/{id} (api_constants.dart:31-33; backend ServiceController). ServiceDto has name, price, durationMinutes, pricingType (fixed vs starts-at), active. Reuse PageTitle(trailing: AiwaButton(size: sm, icon: Icons.add, label: 'New')), MetaDot (screen_chrome.dart:407) and AiwaIconButton(icon: Icons.edit_outlined, size: 34). The prototype has no edit/new form (buttons have no handler), so the form design is TBD.
+- **Provider Schedule tab (weekly availability)** `PROV-27` (screen) — reached via Provider app -> Schedule tab. Source: ui_kits/aiwa-app/provider-screens.jsx:435-459,472-474; ui_kits/aiwa-app/prototype.jsx:440
+  - Build: Tab route /provider/schedule. GET /providers/{id}/availability, POST /provider/availability, DELETE /provider/availability/{id} (api_constants.dart:34-36; backend AvailabilityController). No toggle widget exists in lib/shared/widgets, so add AiwaToggle (kit Toggle states.jsx:209-224 is 42x24; this inline one is 40x22). Mono text via AppTextStyles.mono. Day-detail editing is only hinted in the tip copy.
+- **Travel buffer stepper** `PROV-28` (component) — reached via Provider app -> Schedule tab -> below the week list. Source: ui_kits/aiwa-app/provider-screens.jsx:436,460-471
+  - Build: Persist via PUT /provider/profile with travelBufferMinutes (aiwa-backend ProviderProfileRequest.java:26; ApiConstants.myProviderProfile). Debounce saves. Pure local widget with two small circular InkWell buttons.
+- **Provider Profile tab** `PROV-29` (screen) — reached via Provider app -> Profile tab. Source: ui_kits/aiwa-app/provider-screens.jsx:482-557; ui_kits/aiwa-app/prototype.jsx:441
+  - Build: Tab route /provider/profile -> ProviderProfilePage. Hero: reuse AppTheme.heroGradient + AiwaGlow(opacity .4) + AiwaAvatar(rose, 64, verified: isApproved). Name/category from AuthBloc user.providerProfile (ProviderProfileSummary has only id/businessName/verificationStatus, so area/category need GET /providers/{id}); rating/count from GET /provider/dashboard; gallery count from the gallery GET. Rows: SettingsRow (screen_chrome.dart:155) matches the spec (36 tile, radius 10, gap 14, 15/500, padding 14/4, divider). Note SettingsRow hides the chevron when onTap == null (screen_chrome.dart:223), so give Safety & policies / WhatsApp support handlers (customer equivalents exist). Move the sign-out trigger here from the dashboard hero.
+- **Vacation / offline mode toggle** `PROV-30` (component) — reached via Provider app -> Profile tab -> Vacation / offline card. Source: ui_kits/aiwa-app/provider-screens.jsx:483,508-522
+  - Build: PATCH /provider/mode?vacationMode=true|false (aiwa-backend ProviderModeController.java:22-33); add ApiConstants.providerMode = '/provider/mode'. Optimistic toggle with revert and a toast on failure. The initial value needs vacationMode in the provider profile payload (verify GET /providers/{id} or /auth/me exposes it). Reuse the AiwaToggle from PROV-27 with a warn tone. Icons.beach_access_outlined as the palmtree stand-in.
+- **Verified provider banner** `PROV-31` (banner) — reached via Provider app -> Profile tab. Source: ui_kits/aiwa-app/provider-screens.jsx:524-533
+  - Build: Render when user.providerProfile.isApproved (user_entity.dart:66). The approval date is not in ProviderProfileSummary (user_entity.dart:55-66), so expose verifiedAt from the backend. Same structure as _PendingCallout (dashboard_page.dart:397-470) with success tokens and Icons.verified_rounded.
+- **Toast 'Signed out.'** `PROV-33` (toast) — reached via Provider app -> Profile -> Sign out -> Sign out. Source: ui_kits/aiwa-app/prototype.jsx:491
+  - Build: Call the shared toast (PROV-C1) from the root navigator context after context.go(AppRoutes.splash).
+- **Provider Wallet (commission & settlement)** `PROV-34` (sub-screen) — reached via Provider app -> Profile tab -> Wallet & settlement. Source: ui_kits/aiwa-app/provider-extras.jsx:8-82; ui_kits/aiwa-app/prototype.jsx:442
+  - Build: Route /provider/wallet pushed from Profile. GET /provider/settlement and PATCH /provider/settlement/pay (aiwa-backend SettlementController.java:35,44); add both to ApiConstants and create a WalletBloc. Reuse ScreenHeader, AppTheme.heroGradient + AiwaGlow, LinearProgressIndicator (minHeight 6, radius 4), StatusPill, SectionHeader. The prototype's settle button has no handler; wire it to PATCH /pay with a confirm sheet.
+- **Wallet — blocked (over negative limit) state** `PROV-35` (state) — reached via Provider app -> Profile -> Wallet (balance &lt;= limit). Source: ui_kits/aiwa-app/provider-extras.jsx:16-19,35,40-45,54
+  - Build: Derive overLimit from the settlement payload (balance &lt;= negativeLimit). InlineBanner(tone: BannerTone.danger, icon: Icons.block). Also consider reflecting it on Today (PROVIDER_NOTIFICATIONS pn1 'Settlement overdue').
+- **Business info (edit) screen with validation** `PROV-36` (sub-screen) — reached via Provider app -> Profile tab -> Business info. Source: ui_kits/aiwa-app/provider-manage.jsx:9-66; ui_kits/aiwa-app/prototype.jsx:443
+  - Build: Route /provider/business-info. PUT /provider/profile (ApiConstants.myProviderProfile; backend ProviderController.java:79). Prefill from GET /providers/{id}. Reuse AiwaTextField (error/counter/multiline support not verified), AiwaChip, the theme Slider (app_theme.dart:207-212), InlineBanner, StickyBar. The onboarding provider_business_page.dart already has category/address inputs worth extracting. On save: toast (PROV-38) + pop.
+- **Business info — re-review notice banner** `PROV-37` (banner) — reached via Provider app -> Profile -> Business info (above the sticky bar). Source: ui_kits/aiwa-app/provider-manage.jsx:55-56
+  - Build: `InlineBanner(tone: BannerTone.info, icon: Icons.verified_outlined, title: 'Verified studio', body: 'Changing your business name or address sends your profile for a quick re-review.')` with 14px bottom margin. If the backend flips verificationStatus on save, refresh the AuthBloc user.
+- **Toast 'Business info saved.'** `PROV-38` (toast) — reached via Provider app -> Profile -> Business info -> Save changes. Source: ui_kits/aiwa-app/prototype.jsx:443
+  - Build: Shared top toast + context.pop() after a successful PUT.
+- **Gallery manager (grid, cover badge, count, add tile)** `PROV-39` (sub-screen) — reached via Provider app -> Profile tab -> Gallery. Source: ui_kits/aiwa-app/provider-manage.jsx:68-175; ui_kits/aiwa-app/prototype.jsx:444
+  - Build: Route /provider/gallery. Backend: POST /provider/gallery (multipart), DELETE /provider/gallery, GET /provider/gallery/{providerId} (aiwa-backend GalleryController.java:23-69). Flutter ApiConstants.providerGallery is '/providers/$id/gallery' (api_constants.dart:26), which does not match the backend GET path, so verify. Needs image_picker (check pubspec). GridView with SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 120, mainAxisSpacing: 9, crossAxisSpacing: 9). A Tag widget does not exist in lib/shared/widgets, so add one (kit states.jsx:397-410). Drag-reorder is only in the copy, not implemented in the prototype.
+- **Gallery — upload progress card with cancel** `PROV-40` (state) — reached via Provider app -> Gallery -> Add tile (or 'Upload first photo'). Source: ui_kits/aiwa-app/provider-manage.jsx:86-100,111-125
+  - Build: Use Dio onSendProgress for the percentage and a CancelToken for the x button (ApiClient.post would need to expose these). LinearProgressIndicator(minHeight: 5, backgroundColor: AppColors.cream, color: AppColors.plum700).
+- **Gallery — moderation-hidden photo overlay + warning banner** `PROV-41` (state) — reached via Provider app -> Gallery (a photo hidden by moderation). Source: ui_kits/aiwa-app/provider-manage.jsx:74,135-142,162-166
+  - Build: The gallery item model needs hidden/hiddenReason from the backend (verify the GalleryController GET payload). Stack overlay on the tile plus InlineBanner(tone: BannerTone.warn, icon: Icons.visibility_off_outlined). Links to PROVIDER_NOTIFICATIONS pn2.
+- **Gallery — delete photo ConfirmSheet** `PROV-42` (sheet) — reached via Provider app -> Gallery -> tile x button. Source: ui_kits/aiwa-app/provider-manage.jsx:169-172
+  - Build: `showConfirmSheet(context, eyebrow: 'Gallery', title: 'Delete this photo?', body: "It's removed from your public profile straight away. This can't be undone.", confirmLabel: 'Delete', icon: Icons.delete_outline_rounded)`, then DELETE /provider/gallery.
+- **Gallery — empty state** `PROV-43` (state) — reached via Provider app -> Gallery (0 photos). Source: ui_kits/aiwa-app/provider-manage.jsx:127-130
+  - Build: `EmptyState(icon: Icons.photo_library_outlined, title: 'No photos yet', subtitle: ..., actionLabel: 'Upload first photo', onAction: _startUpload)` (empty_state.dart already matches the kit sizes).
+- **Provider Reviews screen (summary, distribution, filters, list)** `PROV-44` (sub-screen) — reached via Provider app -> Profile tab -> Reviews. Source: ui_kits/aiwa-app/provider-manage.jsx:177-275; ui_kits/aiwa-app/prototype.jsx:445
+  - Build: Route /provider/reviews. GET /providers/{id}/reviews (ApiConstants.providerReviews). The backend ReviewDto has no reply field and ReviewController exposes no reply endpoint (only POST /reviews, GET /providers/{id}/reviews and admin moderation), so the backend needs reply support. Reuse StarRating, AiwaChip, EndOfList, AiwaAvatar and a new Tag widget. 'Needs reply' filters reviews without a reply.
+- **Reviews — reply composer (char count) and posted reply block** `PROV-45` (component) — reached via Provider app -> Reviews -> 'Reply publicly'. Source: ui_kits/aiwa-app/provider-manage.jsx:187-198,246-268
+  - Build: Local state in the Reviews page (replyToId, TextEditingController). TextField(maxLength: 280, buildCounter: custom mono counter) with the focusedBorder from AppTheme.inputBorder(AppColors.plum700). Needs the backend reply endpoint (see PROV-44).
+- **Reviews — filter empty state** `PROV-46` (state) — reached via Provider app -> Reviews -> a filter with no matches (e.g. Needs reply when all are answered). Source: ui_kits/aiwa-app/provider-manage.jsx:228-229
+  - Build: `EmptyState(icon: Icons.chat_bubble_outline_rounded, title: 'Nothing here', subtitle: 'No reviews match this filter.', compact: true)`.
+- **Staff & availability (shop plan)** `PROV-47` (sub-screen) — reached via Provider app -> Profile tab -> Staff & availability. Source: ui_kits/aiwa-app/flow-additions-v4.jsx:8-80; ui_kits/aiwa-app/prototype.jsx:446
+  - Build: Route /provider/staff. GET /providers/{id}/staff, POST /provider/staff, PUT /provider/staff/{id} (aiwa-backend StaffController.java:26-53); add them to ApiConstants. Per-staff services/availability payload shape still needs verifying. Use an AnimatedSize accordion; reuse AiwaAvatar, AiwaChip, EyebrowLabel, AiwaButton. Onboarding already collects staff names (provider_business_page.dart:24-177).
+- **Booking detail — travel-fee quote pending (action bar locked)** `PROV-V01` (state) — reached via Provider app -> Booking detail (pending home-service booking with an address) -> 'Quote a travel fee instead' -> Send quote. Source: ui_kits/aiwa-app/provider-screens.jsx:198,213,215-220,295-307,318-323,340-348
+  - Build: In ProviderBookingDetailPage (PROV-13), derive quotePending from the booking payload. The backend has no per-booking quote endpoint or field yet (see PROV-15). Render Accept as `AiwaButton(label: 'Accept', icon: Icons.check_rounded, size: AiwaButtonSize.lg, onPressed: quotePending ? null : _accept)`; AiwaButton already renders 0.45 opacity when onPressed is null (aiwa_button.dart AnimatedOpacity). Keep Decline enabled to mirror the prototype literally, or disable both if product prefers. Hide both ghost links while quotePending. Reuse InlineBanner(tone: BannerTone.gold, icon: Icons.directions_car_outlined).
+- **Booking detail — read-only state for completed / past bookings** `PROV-V02` (state) — reached via Provider app -> Bookings tab -> Past -> tap a completed row. Source: ui_kits/aiwa-app/provider-screens.jsx:196-203,224-231,233,340,350; ui_kits/aiwa-app/prototype.jsx:438
+  - Build: ProviderBookingDetailPage must handle terminal statuses (COMPLETED, CANCELLED, REJECTED, NO_SHOW, EXPIRED, disputed) by hiding _JobProgress and the StickyBar while keeping the info cards. StatusPill (status_pill.dart) already maps completed/cancelled/rejected/no_show/expired/disputed. Load via GET /bookings/{id} (ApiConstants.bookingById).
+- **Business info — validation error / unsaved (Save disabled) state** `PROV-V03` (state) — reached via Provider app -> Profile -> Business info -> clear Business name or Base address and blur (or open without editing). Source: ui_kits/aiwa-app/provider-manage.jsx:18-23,29-31,40,59-63; ui_kits/aiwa-app/states.jsx:171-206
+  - Build: Part of PROV-36. Use a Form with validators on onUserInteraction. AiwaTextField's support for errorText, prefix icon and counter was not verified; otherwise use TextFormField with errorBorder: AppTheme.inputBorder(AppColors.danger500) and a custom mono buildCounter. Track dirty via controller listeners. `AiwaButton(label: 'Save changes', size: AiwaButtonSize.lg, onPressed: valid && dirty ? _save : null)` gives the 0.45 disabled look.
+
+### Admin web panel (47)
+
+- **Admin panel shell (sidebar + main area)** `ADMIN-01` (component) — reached via Prototype role switcher 'Admin' (prototype.jsx:797, rendered at prototype.jsx:900 &lt;AdminPanel />) -> desktop web panel. Source: ui_kits/aiwa-app/admin-screens.jsx:48-135
+  - Build: Build a desktop web app. README.md:12 allows a normal web stack (React/Vue); the other option is adding a Flutter web target, since Android/aiwa_app has only android/ and ios/. Build a persistent 240px sidebar layout with 11 routes: /dashboard, /verifications(/:id), /complaints, /flags, /users, /bookings, /reviews, /moderation, /settlements(/:providerId), /audit, /settings. Sidebar badges: GET /api/admin/dashboard (pendingVerification, openComplaints; AdminController.java:45) and GET /api/admin/flags totalElements. Footer: GET /api/auth/me. Auth: POST /api/auth/login, then POST /api/auth/2fa/verify (TOTP, AuthController.java:253), then require role ADMIN. Gate mutations by permission tier (security/Perms.java: SUPPORT / FINANCE / SUPER_ADMIN; SUPER_ADMIN implies the other two). Palette: the prototype renders admin with the runtime aiwa palette (male default: sidebar #2E2A26, main #F5F2ED), so choose one fixed admin palette. Fonts: Plus Jakarta Sans body, DM Serif Display headings, JetBrains Mono for refs, amounts and IPs (components.jsx:17-19). Add the .aiwa-row-hover row hover and the .aiwa-focusable 2px plum focus ring (README.md:123, needed for the WCAG pass). Also fix the Flutter app so an ADMIN login gets a 'use the web panel' message instead of the customer home.
+- **Admin Dashboard** `ADMIN-02` (screen) — reached via Admin panel -> sidebar 'Dashboard' (default route, admin-screens.jsx:49). Source: ui_kits/aiwa-app/admin-screens.jsx:140-309
+  - Build: Existing endpoints: GET /api/admin/dashboard (totalCustomers, totalProviders, pendingVerification, approvedProviders, rejectedProviders, suspendedProviders, totalBookings, completedBookings, openComplaints, openDisputes, overdueSettlements, totalRevenue; AdminController.java:45-80) covers tiles and Needs attention counts. GET /api/admin/analytics/bookings?days=90 (daily completed/cancelled/total, capped at 90; AnalyticsController.java:25) feeds the chart; bucket it into weeks on the client. GET /api/admin/analytics/export?days=30 (CSV) backs 'Export'. GET /api/admin/audit?size=6 or GET /api/admin/inbox?limit=6 backs Recent activity. Missing backend: 30-day windowed metrics and period-over-period deltas (+8.2%, etc.), GMV over 30 days (totalRevenue is all-time), a date-range parameter for the 'Last 30 days' chip, and a 'high priority' complaint count. Prototype copy bug: the label 'open complaint' stays singular at count 3 (admin-screens.jsx:178), so pluralise by count. Reuse the chart palette plum700/rose500.
+- **Verifications queue** `ADMIN-03` (screen) — reached via Admin panel -> sidebar 'Verifications' (also Dashboard 'Needs attention' / quick link). Source: ui_kits/aiwa-app/admin-screens.jsx:314-362
+  - Build: Endpoints: GET /api/admin/verification/pending?page&size (VerificationController.java:71); GET /api/admin/verification?status=APPROVED|REJECTED|SUSPENDED (line 81), which lets the Approved/Rejected chips actually filter; GET /api/admin/verification/counts (line 39) for chip counts. Missing or unverified: whether ProviderVerificationDto exposes a 'reshoot requested' flag and a submitted-at timestamp (DTO not read), and SLA age. The prototype draws no loading or empty state. Add SkeletonRows and an EmptyState ('No providers waiting') per README.md:110-111.
+- **Verification detail (ID + business review)** `ADMIN-04` (sub-screen) — reached via Admin -> Verifications -> click a row / 'Review'. Source: ui_kits/aiwa-app/admin-screens.jsx:367-459
+  - Build: Endpoints: POST /api/admin/verification/{providerId}/approve, /reject?reason= (required), /request-info?message= (all SUPPORT; VerificationController.java:92-121); GET /api/admin/verification/document?filePath= (line 145) for document images, opened in a new tab from external-link; POST /suspend and /reactivate also exist. Missing: a single-provider verification-detail GET (only list endpoints found; GET /api/admin/users/{id} may cover part of it), storage for the internal admin note, and a message input for 'Request more info' (the prototype has no UI for it). In the prototype, approve and reject only toggle local state (see ADMIN-05/06).
+- **Verification detail — Approve selected** `ADMIN-05` (state) — reached via Admin -> Verifications -> row -> click 'Approve provider'. Source: ui_kits/aiwa-app/admin-screens.jsx:369,451
+  - Build: On click, call POST /api/admin/verification/{providerId}/approve, then return to the queue with the row removed. The prototype never designed success feedback. Reuse InlineBanner success (states.jsx:148) or a toast, and flag this to design as an open question.
+- **Verification detail — Reject with reason** `ADMIN-06` (state) — reached via Admin -> Verifications -> row -> click 'Reject with reason'. Source: ui_kits/aiwa-app/admin-screens.jsx:441-452
+  - Build: Submit via POST /api/admin/verification/{providerId}/reject?reason=&lt;text>. The backend requires reason, so require it before enabling submit. The prototype has no separate submit control; the second click on 'Reject with reason' should submit.
+- **Complaints list** `ADMIN-07` (screen) — reached via Admin -> sidebar 'Complaints' (or Dashboard Needs attention / quick link). Source: ui_kits/aiwa-app/admin-screens.jsx:464-522
+  - Build: Endpoints: GET /api/admin/complaints?status=OPEN|UNDER_REVIEW|RESOLVED&page&size (ComplaintController.java:54); POST /api/admin/complaints/{id}/resolve?notes= (SUPPORT); POST /api/admin/complaints/{id}/flag (SUPPORT). ComplaintStatus also has ESCALATED and CLOSED, which have no prototype chips. Missing: a priority field (ComplaintDto not read, verify), an endpoint to move a complaint to UNDER_REVIEW, and a complaint-detail/resolve-with-notes screen, which the prototype never designed ('Open' is dead).
+- **Flags list (Trust & safety)** `ADMIN-08` (screen) — reached via Admin -> sidebar 'Flags' (badge 3). Source: ui_kits/aiwa-app/admin-extras.jsx:154-193
+  - Build: GET /api/admin/flags?page&size (AdminController.java:110) returns flagged complaints (ComplaintDto). The prototype rows are flagged parties with a type and reporter role, so map those from ComplaintDto or add a user-flag listing. POST /api/admin/users/{userId}/flag?reason= exists (ComplaintController.java:87). Add an EmptyState for an empty queue; the prototype doesn't draw one.
+- **Flags — expanded review row (warn / suspend-ban / dismiss)** `ADMIN-09` (state) — reached via Admin -> Flags -> 'Review' on a row. Source: ui_kits/aiwa-app/admin-extras.jsx:172-187
+  - Build: Endpoints: POST /api/admin/users/{userId}/warn?reason= (SUPPORT; ComplaintController.java:99). Suspend: PATCH /api/admin/users/{id}/deactivate (SUPPORT; AdminUsersController.java:194), or POST /api/admin/verification/{providerId}/suspend for providers. Ban/permanent: DELETE /api/admin/users/{id} (SUPER_ADMIN). Missing: a dismiss/unflag endpoint. The prototype has no confirm step here, but README.md:151 requires 'an explicit secondary confirmation step' for admin suspend/ban. Reuse ConfirmSheet (states.jsx:227), as Settlements does (admin-extras.jsx:100-103), and add a reason input for warn.
+- **Users & providers list** `ADMIN-10` (screen) — reached via Admin -> sidebar 'Users & providers' (or Dashboard quick link 'Manage users'). Source: ui_kits/aiwa-app/admin-screens.jsx:527-622
+  - Build: GET /api/admin/users?role=CUSTOMER|PROVIDER|ADMIN&q=&page&size (AdminUsersController.java:43). The API supports search (q) but the prototype has no search box; add TableToolbar if wanted. Unverified: UserDto bookings count, joined date, adminPermissions and a 'flagged' status (DTO not read). PATCH /api/admin/users/{id} (SUPPORT) and POST /{id}/reset-password exist but have no prototype UI.
+- **Users — row action menu** `ADMIN-11` (overlay) — reached via Admin -> Users & providers -> row '…' (more-horizontal). Source: ui_kits/aiwa-app/admin-screens.jsx:600-614
+  - Build: PATCH /api/admin/users/{id}/deactivate and /reactivate (SUPPORT; AdminUsersController.java:194, 226). GET /api/admin/users/{id} and /{id}/activity back 'View profile', whose screen the prototype never designed. Add a ConfirmSheet before Suspend/Deactivate (README.md:151) and close the menu on outside click and Esc.
+- **Users — 'Blocked' last-super-admin banner** `ADMIN-12` (banner) — reached via Admin -> Users -> Admins -> '…' on the only active SUPER_ADMIN -> Deactivate. Source: ui_kits/aiwa-app/admin-screens.jsx:534-541,618
+  - Build: The backend already enforces this: AdminUsersController deactivate checks countActiveSuperAdmins() &lt;= 1 and throws BusinessException '… — they're the last active super admin' (AdminUsersController.java ~210-218). Show that error message in this banner instead of duplicating the rule on the client.
+- **Add admin modal (AddAdminSheet)** `ADMIN-13` (modal) — reached via Admin -> Users & providers -> 'Add admin'. Source: ui_kits/aiwa-app/admin-screens.jsx:624-705
+  - Build: POST /api/admin/users/admins with body AdminUserRequest.CreateAdmin {fullName, email, phone, password (@Size min 12), permissions[]}. The endpoint calls requireSuperAdmin (AdminUsersController.java:74-120). PATCH /api/admin/users/{id}/permissions (SUPER_ADMIN) handles later edits but has no prototype UI. Show 'Add admin' only to SUPER_ADMIN.
+- **Add admin — validation error state** `ADMIN-14` (state) — reached via Admin -> Users -> Add admin -> 'Create admin' with invalid input. Source: ui_kits/aiwa-app/admin-screens.jsx:640-647,696
+  - Build: Client rules match the backend (AdminUserRequest @Size(min = 12, message = 'Admin password must be at least 12 characters')). Show server BusinessExceptions ('Email already in use', 'Phone number already in use', 'Email or phone is required') in the same box. The backend accepts phone-only admins while the prototype requires email; align one to the other.
+- **Bookings monitor** `ADMIN-15` (screen) — reached via Admin -> sidebar 'Bookings' (or Dashboard 'payment dispute to resolve'). Source: ui_kits/aiwa-app/admin-modules.jsx:20-112
+  - Build: GET /api/admin/bookings?status=&lt;BookingStatus>&page&size (AdminController.java:82). Missing backend: free-text search, a paymentStatus=DISPUTED filter for 'Disputes', stat-tile metrics (today count, in-progress now, 7-day cancel rate; only openDisputes is available via /api/admin/dashboard) and a bookings CSV export (only /admin/analytics/export and /admin/settlements/export exist). Map BookingStatus NO_SHOW, CANCELLED, COMPLETED, IN_PROGRESS and REJECTED to StatusPill variants.
+- **Bookings — expanded row detail** `ADMIN-16` (state) — reached via Admin -> Bookings -> click a booking row. Source: ui_kits/aiwa-app/admin-modules.jsx:82-103
+  - Build: GET /api/admin/bookings/{id}/chat (AdminBookingController.java:52) backs 'View chat', but no chat viewer is designed; reuse the DisputeResolutionSheet chat tab styling. POST /api/admin/bookings/{id}/force-cancel?reason= (FINANCE; line 28). Add a ConfirmSheet with a reason field (README.md:151). Use the live rate from GET /api/admin/settings/commission instead of the prototype's hardcoded 0.15 (admin-modules.jsx:86). Take Location from the booking's home/venue field rather than the constant 'Home service'.
+- **Bookings — dispute resolved banner** `ADMIN-17` (banner) — reached via Admin -> Bookings -> expand disputed row -> Resolve dispute -> Confirm resolution. Source: ui_kits/aiwa-app/admin-modules.jsx:96,108-109
+  - Build: Show after POST /api/admin/bookings/{id}/resolve-dispute returns 200, then refresh the row's payment status and the header dispute Tag count.
+- **Bookings — no results empty state** `ADMIN-18` (state) — reached via Admin -> Bookings -> search/filter with no matches. Source: ui_kits/aiwa-app/admin-modules.jsx:65-67
+  - Build: Client-side state built on the shared EmptyState (states.jsx:80-107: 52px circle plum100/plum700, DM Serif 19 title, 13.5 ink3 body).
+- **Payment dispute resolution modal (DisputeResolutionSheet)** `ADMIN-19` (modal) — reached via Admin -> Bookings -> expand disputed row (BK-2838) -> 'Resolve dispute'. Source: ui_kits/aiwa-app/admin-modules.jsx:320-413
+  - Build: POST /api/admin/bookings/{id}/resolve-dispute?outcome=PAID|UNPAID|NO_SHOW|CANCEL (FINANCE; AdminBookingController.java:39-50). Map the prototype ids 'Paid' / 'Unpaid' / 'No-show' / 'Cancel' to those values. 'Cancel booking' says 'with reason logged', but the prototype has no reason input; add one. See ADMIN-20..22 for tab data.
+- **Dispute modal — Evidence tab** `ADMIN-20` (tab) — reached via Dispute resolution modal -> 'Evidence' chip (default). Source: ui_kits/aiwa-app/admin-modules.jsx:355-362
+  - Build: Missing backend: no dispute evidence upload or list endpoint was found. Only the empty-evidence variant is designed; a has-evidence layout (photo grid) needs design.
+- **Dispute modal — Chat tab** `ADMIN-21` (tab) — reached via Dispute resolution modal -> 'Chat' chip. Source: ui_kits/aiwa-app/admin-modules.jsx:363-375
+  - Build: GET /api/admin/bookings/{id}/chat returns ChatMessageDto[] (AdminBookingController.java:52). Map sender role to left/right.
+- **Dispute modal — History tab** `ADMIN-22` (tab) — reached via Dispute resolution modal -> 'History' chip. Source: ui_kits/aiwa-app/admin-modules.jsx:376-388
+  - Build: Missing backend: no booking status-history endpoint found. Derive events from BookingDto timestamps if exposed, or add GET /api/admin/bookings/{id}/history backed by the audit/status log.
+- **Reviews moderation queue** `ADMIN-23` (screen) — reached via Admin -> sidebar 'Reviews'. Source: ui_kits/aiwa-app/admin-modules.jsx:122-175
+  - Build: GET /api/admin/reviews/moderation (ANY_ADMIN; ReviewController.java:63) lists reported cases. POST /api/admin/reviews/moderation/{caseId}/resolve?action=REMOVE|HIDE|KEEP (SUPPORT; line 89) maps one-to-one to the three buttons. PATCH /api/admin/reviews/{id}/visibility and GET /api/admin/reviews?page (all reviews, for the 'All' chip) also exist. Missing backend: 'Low rating' filter, search and export.
+- **Reviews moderation — 'Queue is clear' empty state** `ADMIN-24` (state) — reached via Admin -> Reviews -> after every item is handled (or search has no match). Source: ui_kits/aiwa-app/admin-modules.jsx:141-143
+  - Build: Shown when GET /api/admin/reviews/moderation returns []. The prototype shows the same 'Queue is clear' copy for a search with no matches; use a 'No reviews match' variant there.
+- **Content moderation (gallery images / reviews)** `ADMIN-25` (screen) — reached via Admin -> sidebar 'Moderation'. Source: ui_kits/aiwa-app/admin-extras.jsx:108-146
+  - Build: GET /api/admin/moderation?status=OPEN (ModerationController.java:31); PATCH /api/admin/moderation/{id}/action?status=ACTIONED|DISMISSED&notes= (SUPPORT; line 55). Target types are GALLERY_IMAGE, REVIEW and CHAT_MESSAGE (enums/ModerationTargetType.java). CHAT_MESSAGE has no prototype card, and chat moderation also lives at GET /api/admin/chat/moderation. Rendering a real thumbnail needs an image URL on the moderation DTO (not verified). Add EmptyState and a confirm for 'Hide image'/'Remove review'.
+- **Settlements (commission oversight)** `ADMIN-26` (screen) — reached via Admin -> sidebar 'Settlements' (or Dashboard 'provider with overdue settlement'). Source: ui_kits/aiwa-app/admin-extras.jsx:6-106
+  - Build: Endpoints: GET /api/admin/settlements/providers and /api/admin/settlements/overview (SettlementController.java:86-108); GET /api/admin/settings/commission and PATCH ?percent= (FINANCE; AdminSettingsController.java:24-37); GET /api/admin/settlements/export (CSV, line 159) for 'Export ledger'; POST /api/admin/settlements/provider/{providerId}/remind (FINANCE, line 178); PATCH /api/admin/providers/{providerId}/settlement-pause?paused= (FINANCE, line 214). Prototype bug: on overdue rows 'Send reminder' calls onOpen and opens detail instead of reminding (admin-extras.jsx:91). In the build, call /remind directly and let the row or 'View' open detail. Per-provider commission override exists at PATCH /api/admin/providers/{providerId}/commission, with no prototype UI.
+- **Settlements — commission rate inline edit** `ADMIN-27` (state) — reached via Admin -> Settlements -> pencil on 'Commission rate' tile. Source: ui_kits/aiwa-app/admin-extras.jsx:16-24,44-58
+  - Build: PATCH /api/admin/settings/commission?percent=&lt;n> (FINANCE). Show an inline error for out-of-range values instead of reverting silently, and hide the pencil for admins without FINANCE.
+- **Settlements — Suspend provider confirm** `ADMIN-28` (dialog) — reached via Admin -> Settlements -> ban icon on a row. Source: ui_kits/aiwa-app/admin-extras.jsx:100-103; states.jsx:227-257
+  - Build: POST /api/admin/verification/{providerId}/suspend (SUPPORT) or PATCH /api/admin/providers/{providerId}/settlement-pause?paused=true (FINANCE) if the intent is a settlement pause. Decide which one; the copy says 'hidden from search, can't accept new bookings'. ConfirmSheet is a mobile bottom sheet positioned absolute; on desktop render it as a centered dialog or a sheet anchored inside the main pane.
+- **Settlement detail (ledger + confirm payout)** `ADMIN-29` (sub-screen) — reached via Admin -> Settlements -> row 'View' (or 'Send reminder' on overdue rows). Source: ui_kits/aiwa-app/flow-additions-v4.jsx:165-231
+  - Build: GET /api/admin/settlements/provider/{providerId} (SettlementController.java:109) for ledger and total; POST /api/admin/settlements/provider/{providerId}/confirm-payout (FINANCE, line 135); POST /remind (FINANCE, line 178); PATCH /api/admin/settlements/{id}/settle (per-entry settle, no prototype UI). The prototype hardcodes commissionRate 0.15 (flow-additions-v4.jsx:170) although the list lets you edit the rate; use each ledger entry's stored rate. Mapping overdue to StatusPill 'cancelled' is a prototype shortcut; use explicit Overdue / Within limit / Settled pills matching ADMIN-26. Consider a confirm before 'Confirm payout received', since it's a financial mutation.
+- **Settlement detail — payout confirmed state** `ADMIN-30` (state) — reached via Admin -> Settlements -> View -> 'Confirm payout received' (or open an already 'settled' row). Source: ui_kits/aiwa-app/flow-additions-v4.jsx:167,187,209-215
+  - Build: Show after POST /confirm-payout returns 200, then refresh the Settlements list totals. The audit log records SETTLEMENT_CONFIRMED (prototype AUDIT_LOG a4).
+- **Settlement detail — Suspend account confirm** `ADMIN-31` (dialog) — reached via Admin -> Settlements -> View -> 'Suspend account'. Source: ui_kits/aiwa-app/flow-additions-v4.jsx:221,225-228
+  - Build: Same component and endpoint as ADMIN-28; build one shared confirm dialog.
+- **Settlement detail — 'Account suspended' banner** `ADMIN-32` (banner) — reached via Admin -> Settlements -> View -> Suspend account -> confirm (or open a suspended provider). Source: ui_kits/aiwa-app/flow-additions-v4.jsx:218-219
+  - Build: Drive from provider verificationStatus SUSPENDED or the settlement-pause flag in the GET /api/admin/settlements/provider/{id} response (not verified). Add a 'Reactivate' action via POST /api/admin/verification/{providerId}/reactivate; the prototype says reversal happens in Users & providers.
+- **Audit log** `ADMIN-33` (screen) — reached via Admin -> sidebar 'Audit log' (or Dashboard 'View full audit log'). Source: ui_kits/aiwa-app/admin-modules.jsx:276-317
+  - Build: GET /api/admin/audit?query=&page&size (AuditController.java:23) returns AuditLogDto {id, actor, action, target, ipAddress, createdAt}, which matches the columns. Map action to tone on the client. Missing backend: an audit CSV export endpoint. Reset to page 1 when the query changes.
+- **Audit log — no results empty state** `ADMIN-34` (state) — reached via Admin -> Audit log -> search with no matches. Source: ui_kits/aiwa-app/admin-modules.jsx:302-303
+  - Build: Shown when GET /api/admin/audit?query= returns an empty page.
+- **Policies & support — Terms & policies tab** `ADMIN-35` (tab) — reached via Admin -> sidebar 'Policies & support' (default tab 'terms'). Source: ui_kits/aiwa-app/admin-modules.jsx:178-233
+  - Build: GET /api/terms (ADMIN list; TermsController.java:61); POST /api/terms?version=&type=CUSTOMER_TERMS&contentEn=&contentAr= (SUPER_ADMIN, publishes as Live and deactivates older versions; line 74); PATCH /api/terms/{id}/deactivate (SUPER_ADMIN). Missing backend: draft storage ('Save draft'; POST publishes immediately), preview, a per-version note/changelog field, and author (the prototype shows 'by AIWA Admin'). The backend has contentAr and a type (customer vs provider terms), but the prototype has one English textarea and no type selector. That is a design gap; add an EN/AR editor pair and a type switch.
+- **Policies & support — Booking rules tab** `ADMIN-36` (tab) — reached via Admin -> Policies & support -> 'Booking rules' chip. Source: ui_kits/aiwa-app/admin-modules.jsx:235-255
+  - Build: GET /api/admin/settings/booking-rules and PATCH ?cancellationCutoffHours=&providerCancelPenaltyPercent=&responseWindowMinutes= (SUPER_ADMIN; AdminSettingsController.java:44-56). A per-provider override exists at PATCH /api/admin/providers/{providerId}/booking-rules (SUPER_ADMIN) with no prototype UI. Disable sliders for non-SUPER_ADMIN.
+- **Policies & support — Support settings tab** `ADMIN-37` (tab) — reached via Admin -> Policies & support -> 'Support' chip. Source: ui_kits/aiwa-app/admin-modules.jsx:257-266
+  - Build: GET /api/support/admin/settings and PATCH (SUPER_ADMIN; SupportController.java:57-66). The mobile apps read GET /api/support/contact. Check that the support-settings DTO has hours and escalation-email fields (not read); add them if missing. Validate phone (E.164) and email.
+- **Publish new terms version confirm** `ADMIN-38` (dialog) — reached via Admin -> Policies & support -> 'Publish new version'. Source: ui_kits/aiwa-app/admin-modules.jsx:187,198,268-271; states.jsx:227-257
+  - Build: On confirm call POST /api/terms?version=v1.2.0&contentEn=&lt;draft> (SUPER_ADMIN). The response message is 'Version … published — users will re-accept on next open', which fits a success toast. Then refresh version history. The mobile re-accept flow uses GET /api/terms/latest and POST /api/terms/accept. Guard against a duplicate version; the backend throws 'Version already exists'.
+- **Admin placeholder ('Coming next')** `ADMIN-39` (state) — reached via Unreachable. Defined but never rendered: AdminPanel routes every sidebar id to a real screen (admin-screens.jsx:119-131), and grep finds no other reference.. Source: ui_kits/aiwa-app/admin-screens.jsx:707-721
+  - Build: Not needed as a screen, since it's dead code in the prototype. At most, reuse the layout as a 404 / unknown-route or 'no permission' page in the admin web app.
+- **TableToolbar (search + filters + Export CSV)** `ADMIN-40` (component) — reached via Used by Bookings, Reviews and Audit log. Source: ui_kits/aiwa-app/states.jsx:330-356
+  - Build: Build as a shared admin web component. Debounce the query into the list endpoint (q/query params exist on /admin/users and /admin/audit only).
+- **AdminHeader (section eyebrow + title + right slot)** `ADMIN-41` (component) — reached via Used by Bookings, Reviews, Policies and Audit log (older screens inline their own header). Source: ui_kits/aiwa-app/states.jsx:358-369
+  - Build: Inconsistency inside the prototype: older sections (Dashboard, Verifications, Complaints, Users, Flags, Moderation, Settlements) inline an h1 at fontSize 36, margin '6px 0 0', marginBottom 24 (e.g. admin-screens.jsx:146), while AdminHeader uses 34, '5px 0 0' and 22. Standardise on one AdminHeader component in the build.
+- **Admin table shell (AdminCard + AdminTableHead + AdminTableRow)** `ADMIN-42` (component) — reached via Used by Bookings, Reviews, Audit log and Policies. Source: ui_kits/aiwa-app/states.jsx:371-395
+  - Build: Build shared table components. Older screens hand-roll tables with 11px headers and '14px 22px' padding (admin-screens.jsx:329-335); converge them on this shell. Add SkeletonRows (states.jsx:67) as the loading state; the prototype admin never uses it.
+- **Tag (status/permission chip)** `ADMIN-43` (component) — reached via Used across admin (permissions, dispute, live version, audit action, queue count). Source: ui_kits/aiwa-app/states.jsx:397-410
+  - Build: Shared admin web component. Several screens inline equivalent pills with slightly different padding/weight ('4px 9px' / 600 in Complaints and Users status); use Tag everywhere.
+- **Pagination** `ADMIN-44` (component) — reached via Bookings (4 pages), Audit log (6 pages). Source: ui_kits/aiwa-app/states.jsx:290-318
+  - Build: Drive from Spring Page totalPages/number. The admin list endpoints return Page&lt;>, 0-based, so convert to 1-based for display.
+- **Bookings — expanded row 'Payment disputed' banner (pre-resolution)** `ADMIN-V01` (banner) — reached via Admin -> sidebar 'Bookings' -> click the disputed row BK-2838 (dispute: true) -> expanded panel, before any resolution. Source: ui_kits/aiwa-app/admin-modules.jsx:95; states.jsx:148-168
+  - Build: Render when BookingDto.paymentStatus == DISPUTED (aiwa-backend ApiResponse.java:246). Hide it after POST /api/admin/bookings/{id}/resolve-dispute?outcome=PAID|UNPAID|NO_SHOW|CANCEL (FINANCE, AdminBookingController.java:39) returns 200, then show ADMIN-17. The 'Customer reports the cash payment was not made' copy needs the dispute reason and the disputing party. BookingDto (ApiResponse.java:232-262) has neither field, so add them from the mobile PaymentConfirm 'What happened?' submission (flow-additions-v4.jsx:142-151), or show generic copy. Replace the prototype's hardcoded amount*0.15 commission with BookingDto.commissionAmount.
+- **Bookings — expanded row cancellation/penalty flag banner** `ADMIN-V02` (banner) — reached via Admin -> sidebar 'Bookings' -> click row BK-2839 (status cancelled, flag set) -> expanded panel. Source: ui_kits/aiwa-app/admin-modules.jsx:94; admin-modules.jsx:11
+  - Build: Derive the message from BookingDto.cancelledBy, penaltyApplied and cancellationReason (ApiResponse.java:252-258), e.g. `${cancelledBy} cancelled — penalty applied` when penaltyApplied is true. Booking.java:94 says penaltyApplied is also true for no-shows. The prototype's no-show row BK-2836 has no flag banner, so decide the no-show copy with design.
+- **Admin table loading skeleton (SkeletonRows)** `ADMIN-V03` (state) — reached via Not mounted by any prototype screen (grep finds only its definition at states.jsx:67). README.md:110 designates it as the loading placeholder for admin tables.. Source: ui_kits/aiwa-app/states.jsx:24-34,67-77
+  - Build: Show while any admin Page&lt;> list request is in flight: /api/admin/verification/pending, /admin/complaints, /admin/flags, /admin/users, /admin/bookings, /admin/audit, /admin/settlements/providers, /admin/reviews/moderation, /admin/moderation. Match cols to each table's column count, reuse AdminCard + AdminTableHead above it, and keep the header visible while loading. Pick shimmer colors with visible contrast (e.g. base cream #F6F0E6 -> hover #F0E8DC), because the runtime themes make cream and hover identical. Honour prefers-reduced-motion.
+
+## 7. Flutter screens not in the prototype
+
+- [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) — PageTitle (lines 85-129): no prototype primitive. It mirrors the inline tab-root headers (e.g. prototype.jsx:152-155 Discover, :294-297 Saved), but h1.copyWith(28) keeps -0.56px tracking that the JSX does not have.
+- [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) — MetaDot (lines 407-423) mirrors the inline 3px separators (prototype.jsx:224). AiwaGlow (lines 426-453) mirrors the inline radial-gradient overlays (prototype.jsx:51, 358). Both are helpers, not prototype primitives.
+- [Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart) — AiwaButtonVariant.light (line 13, 188-189), the `loading` label pulse (48-53, 107-109) and disabled opacity 0.45 (111-112) have no counterpart in Btn.
+- [Android/aiwa_app/lib/shared/widgets/aiwa_avatar.dart](Android/aiwa_app/lib/shared/widgets/aiwa_avatar.dart) — imageUrl support through CachedNetworkImage with initials as placeholder/error (lines 48-61). The prototype Avatar is initials-only.
+- [Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart](Android/aiwa_app/lib/shared/widgets/confirm_sheet.dart) — Optional `input` / `inputHint` reason TextField inside the confirm sheet (lines 21-22, 87-104). This is not part of ConfirmSheet.
+- [Android/aiwa_app/lib/shared/widgets/star_rating.dart](Android/aiwa_app/lib/shared/widgets/star_rating.dart) — Half-star rendering (lines 23-25) and custom active/inactive colors.
+- [Android/aiwa_app/lib/shared/widgets/status_pill.dart](Android/aiwa_app/lib/shared/widgets/status_pill.dart) — Backend enum aliases (accepted, on_the_way, in_progress, no_show) mapped onto the kit's statuses.
+- [Android/aiwa_app/lib/core/theme/theme_controller.dart](Android/aiwa_app/lib/core/theme/theme_controller.dart) — Palette persistence in SharedPreferences key 'aiwa_theme' (lines 14, 19-40). app.dart:24-31 also re-applies the palette from the user's gender on AuthAuthenticated. The prototype theme is in-memory and applied only during signup.
+- [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart) — Manual 'App palette' row and picker sheet (lines 61-69, 114-168) that let the user switch Charcoal/Mauve independently of gender. There is no prototype counterpart.
+- [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart) — The activeIcon field in each tab tuple (lines 43-67) is never used, because _TabItem always renders `icon` (line 139). This is dead code.
+- [Android/aiwa_app/lib/core/theme/app_text_styles.dart](Android/aiwa_app/lib/core/theme/app_text_styles.dart) — aiwaUseGoogleFonts test seam (line 106) and the 'smcp' font feature on eyebrow (line 62). These are implementation details with no design counterpart.
+- [Android/aiwa_app/lib/core/theme/app_theme.dart](Android/aiwa_app/lib/core/theme/app_theme.dart) — elevatedButtonTheme / outlinedButtonTheme (lines 145-163, pill with 26x15 padding), dialogTheme (201-206) and sliderTheme (207-212) are configured, but lib/ contains no ElevatedButton, OutlinedButton, showDialog or Slider (grep). TextButton appears once (provider_business_page.dart:256). This is dead theme configuration with no prototype counterpart.
+- [Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart](Android/aiwa_app/lib/shared/widgets/aiwa_text_field.dart) — `enabled` flag (lines 28, 51, 95) that renders a disabled state with a cream fill and divider border (113, 118). Neither ValidatedInput nor the auth TextInput has a disabled state.
+- [Android/aiwa_app/lib/main.dart](Android/aiwa_app/lib/main.dart) — Lines 9-12 lock the app to portrait with SystemChrome.setPreferredOrientations. This is a platform decision with no prototype counterpart.
+- [Android/aiwa_app/lib/shared/widgets/screen_chrome.dart](Android/aiwa_app/lib/shared/widgets/screen_chrome.dart) — ScreenHeader adds `titleSuffix` (a rose500 13px accent span, lines 19-20, 63-70) and `titleSize` (line 21). The kit's ScreenHeader has only eyebrow/title/onBack/right.
+- [Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart) — Session-aware splash: 900ms fade-in (:26-33); choices hidden behind SizedBox(160) until AuthCheckSessionEvent resolves (:35-44, 149-151); signed-in users are redirected to Home or ProviderDashboard (:68-79). The prototype has no equivalent.
+- [Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/splash_page.dart) — Writes SharedPreferences 'aiwa_language' (:55). Nothing in lib/ reads it.
+- [Android/aiwa_app/lib/shared/widgets/aiwa_button.dart](Android/aiwa_app/lib/shared/widgets/aiwa_button.dart) — Loading state (pulsing label, :107-109) used on Send code, Verify, Sign in and Continue while AuthBloc is AuthLoading. The prototype has no loading states in the auth flow.
+- [Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/otp_page.dart) — Wrong or failed code: SnackBar with the server message, then the pin is cleared (:100-106). The prototype has no wrong-code error state; any 6 digits are accepted (auth-screens.jsx:293).
+- [Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/phone_entry_page.dart) — Send-OTP failure SnackBar (:74-78). Not in the prototype.
+- [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart) — Registration failure SnackBar (:74-78). Initial-letter avatar plus caption 'You can add a photo later from your profile.' (:124-143) in place of the photo upload.
+- [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart) — 'Password reset is coming soon — contact support for now.' SnackBar (:224-230), a placeholder for the missing Forgot-password flow.
+- [Android/aiwa_app/lib/core/theme/theme_controller.dart](Android/aiwa_app/lib/core/theme/theme_controller.dart) — Palette persisted to SharedPreferences 'aiwa_theme' and restored at launch (:19-40). app.dart:24-31 re-applies user.gender on every AuthAuthenticated. The prototype only swaps the palette in memory.
+- [Android/aiwa_app/lib/features/auth/presentation/pages/role_choice_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/role_choice_page.dart) — Deep-link fallbacks when there is nothing to pop: go(splash) (:47-53). Similar in auth_choice_page.dart:79-81 and sign_in_page.dart:112-114 (go roleChoice).
+- [Android/aiwa_app/lib/core/network/api_client.dart](Android/aiwa_app/lib/core/network/api_client.dart) — _ErrorInterceptor (:138-162) throws ServerException, UnauthorizedException and NetworkException inside Dio's error chain. dio 5.9.2 re-wraps them as DioException(type: unknown) (dio_mixin.dart:516-523), and no auth repository catches that. As a result, the Flutter-only error SnackBars the audit lists (otp_page.dart:100-106 wrong code, phone_entry_page.dart:74-78 send-OTP failure, avatar_gender_page.dart:74-78 registration failure) never appear for HTTP 4xx/5xx or offline errors. The AuthBloc handlers throw (bloc 8.1.4 rethrows), the state stays AuthLoading, and every auth CTA bound to the global bloc keeps pulsing and stays disabled until the app restarts.
+- [Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/sign_in_page.dart) — Keyboard submit: `onSubmitted: (_) => _submit()` on the Password field (:174) signs in from the keyboard action. The prototype signs in only from the button (auth-screens.jsx:968).
+- [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart) — Every palette tap is persisted: `_pick` (:39-42) calls ThemeController.applyGender(gender) with persist defaulting to true (theme_controller.dart:29-39), writing 'aiwa_theme' before any account exists. Backing out of sign-up leaves that palette on the next cold start's Splash. The prototype swaps the palette in memory only (auth-screens.jsx:396-398) and always boots male (theme.jsx:66).
+- [Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/provider_verification_page.dart) — Lines 52-56: error SnackBar on AuthError, and lines 60-66: AiwaButton loading pulse while the provider account is registered. The prototype has no network step or error/loading state on this screen.
+- [Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart](Android/aiwa_app/lib/features/auth/presentation/pages/avatar_gender_page.dart) — Lines 49-59 and 68-78: the customer account is created at the Avatar/gender step (AuthRegisterEvent, loading pulse, error SnackBar) and the app goes directly to Home. In the prototype, account creation completes after Terms and Preferences, and Avatar/gender only pushes 'terms'.
+- [Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart) — Lines 61-83: a cold OS location prompt on the first Home load, with silent fallback to Cairo (30.0444, 31.2357). It stands in for the prototype's perm-location priming, which Flutter does not have.
+- [Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/home_page.dart) — Home adds states and controls the prototype does not have: HomeError -> ErrorState (111-118), 'Nobody nearby yet' EmptyState (353-365), carousel and list skeletons (431-453), 'Load more' ghost button (415-426) and pull-to-refresh RefreshIndicator (99-101). The RefreshIndicator is a spinner, which contradicts the 'No spinners anywhere' rule stated in loading_shimmer.dart:6. It also adds navigation on elements that are static in the prototype: search pill -> Discover (201-202), 'Explore →' -> Discover?category=MAKEUP (301-302), 'See all' -> Discover, avatar -> Profile (177-178). HomePage also requests OS location permission directly (64-69), bypassing the prototype's permission-priming screen (onboarding partition).
+- [Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart) — SaveHeartButton (121-172) turns the decorative trending-card heart into a working save/unsave with a guest -> auth-gate redirect. `initiallySaved` is never passed (line 86), so already-saved providers show an empty heart and tapping it saves them again.
+- [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart) — Flutter-only states: loading skeleton (109-129), error page with ScreenHeader + ErrorState (89-101), empty states 'No services listed' / 'No reviews yet' / 'No photos yet' (381-392, 452-462, 490-500), dimmed 'Unavailable' service rows (688-698, 712-713), disabled 'Book now' when no service is available (170), a service description line (670-680), working Call/WhatsApp/Directions via url_launcher (338-360), and a save-heart toggle with guest gating (71-77, 245-253).
+- [Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart](Android/aiwa_app/lib/features/home/presentation/pages/search_page.dart) — Discover adds ErrorState with retry (371-380) and a paginated 'Load more' button that replaces EndOfList while more pages exist (430-441).
+- [Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart](Android/aiwa_app/lib/features/saved/presentation/pages/saved_page.dart) — Saved adds a loading SkeletonList (108-113), ErrorState (100-107), 'Load more' pagination (131-142) and pull-to-refresh (74-76).
+- [Android/aiwa_app/lib/features/shell/shell_page.dart](Android/aiwa_app/lib/features/shell/shell_page.dart) — Dead code: tabs declare filled `activeIcon` variants (43-67) but _TabItem only renders `icon` (139). The prototype uses the same glyph for both states, so delete activeIcon.
+- [Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart](Android/aiwa_app/lib/features/home/presentation/widgets/provider_card.dart) — A 'New' fallback label replaces the rating when averageRating is null or 0: RatingMeta at lines 293-296 (Home trending, Available now and Discover rows), the provider cover at provider_detail_page.dart:282-284 and the Saved card at saved_page.dart:228-230. The prototype always shows a numeric rating.
+- [Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart](Android/aiwa_app/lib/features/providers/presentation/pages/provider_detail_page.dart) — Three additions the prototype does not have. The real profile photo is used as the cover (209-217), with a plum900 @ 55% bottom legibility scrim over photos only (218-232). The sticky CTA falls back to 'Ask provider' when no available service has a price (158-160). The prototype cover is always the gradient placeholder, and its CTA always shows 'EGP n'.
+- [Android/aiwa_app/lib/core/constants/api_constants.dart](Android/aiwa_app/lib/core/constants/api_constants.dart) — Dead constant: `checkSaved(id)` => '/users/me/saved/$id/check' (line 62) is never used. provider_remote_datasource.dart:78 calls the non-existent '/users/me/saved/$id' instead (see DISC-08-V2).
+- [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart:199-213, 431-489](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart#L199) — 'Service' picker section (_ServiceOption rows) on the booking screen. In the prototype the service is chosen on the provider profile before booking.
+- [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart:322-328](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart#L322) — 'Note for the provider' optional text field (placeholder 'Any special requests...'). Not in the prototype BookingScreen.
+- [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart:238-251](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart#L238) — Empty-slots message 'No free slots on this day - try another date.'
+- [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart:147-162, 357-361](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart#L147) — Skeleton/ErrorState while the provider loads, and CTA label variants 'Choose a service' / 'Choose a time'.
+- [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_confirmed_page.dart:126-131](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_confirmed_page.dart#L126) — 'Back to home' ghost button (the prototype has 'Add to calendar').
+- [Android/aiwa_app/lib/core/router/app_router.dart:197-205](Android/aiwa_app/lib/core/router/app_router.dart#L197) — Redirect from /booking-confirmed/:id to the bookings list when no BookingEntity extra is present.
+- [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart:202-212, 135-137, 168-172](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart#L202) — 'Load more' button, 'That's everything' EndOfList, pull-to-refresh and a list ErrorState. None are in the prototype.
+- [Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart:95-117, 414-437](Android/aiwa_app/lib/features/bookings/presentation/pages/my_bookings_page.dart#L95) — Per-card 'Cancel' button with a generic confirm sheet, and Directions that open Google Maps (the prototype Directions has no handler).
+- [Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart:89-94](Android/aiwa_app/lib/features/bookings/presentation/bloc/booking_bloc.dart#L89) — BookingRescheduleEvent handler that always emits BookingError('Reschedule not yet supported'). Dead code with no prototype counterpart.
+- [Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart:94-98, 156-161](Android/aiwa_app/lib/features/reviews/presentation/pages/review_page.dart#L94) — Review error SnackBar and pulsing loading state on Submit.
+- [Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart:354-366](Android/aiwa_app/lib/features/bookings/presentation/pages/booking_page.dart#L354) — The 'Confirm booking' CTA shows a pulsing loading state while BookingLoading (AiwaButton loading:). The prototype confirm is instant.
+- [Android/aiwa_app/lib/features/bookings/domain/usecases/get_available_slots_usecase.dart:10-15](Android/aiwa_app/lib/features/bookings/domain/usecases/get_available_slots_usecase.dart#L10) — GetAvailableSlotsUseCase is a placeholder that always returns Right(null). It is injected into BookingBloc (booking_bloc.dart:12, 21; injection_container.dart:168) but never called. Dead code with no prototype counterpart.
+- [Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart:91-103](Android/aiwa_app/lib/features/bookings/data/datasources/booking_remote_datasource.dart#L91) — rescheduleBooking (PATCH /bookings/{id}/reschedule with newDate/newTime). There is no customer reschedule UI in the prototype, and the bloc handler always errors.
+- [Android/aiwa_app/lib/shared/widgets/status_pill.dart:122-128](Android/aiwa_app/lib/shared/widgets/status_pill.dart#L122) — StatusPill default branch renders the raw status string on cream/ink3. The prototype falls back to the 'Pending' style (components.jsx:161).
+- [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart:61-69, 114-169, 238-292](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart#L61) — 'App palette' Profile row that opens a bottom sheet with two _PaletteOption cards ('Charcoal & stone' / 'Mauve & dusty rose') calling ThemeController.set. There's no direct counterpart on the prototype Profile: the prototype puts a 2-column 'Theme' (Mauve / Charcoal) picker inside Personal info (account-screens.jsx:40-59).
+- [Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart:77-82](Android/aiwa_app/lib/features/profile/presentation/pages/profile_page.dart#L77) — Read-only 'Email' SettingsRow on the Profile tab. In the prototype email is only an editable field in Personal info (account-screens.jsx:38).
+- [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart:91-101](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart#L91) — Inbox empty state: EmptyState(icon: notifications_none, title: "You're all caught up", subtitle: 'Booking updates, reviews and news from AIWA will show up here.'). The prototype NotificationsScreen has no empty state; with no items it renders only the header (customer-extras.jsx:133-136 returns null per empty group).
+- [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart:72-90](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart#L72) — Inbox loading (SkeletonList count 4) and ErrorState with 'Try again'. The prototype inbox has no loading or error variant. The error branch is effectively unreachable (ACCT-20-F3).
+- [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart:152-162](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart#L152) — 'Load more' TextButton for server pagination (NotificationLoadMoreEvent). Not in the prototype.
+- [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart:103-124](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart#L103) — Dashboard loading skeleton (ShimmerBox 230 + SkeletonList), full-page ErrorState with Try again, and pull-to-refresh RefreshIndicator. The prototype provider dashboard has no loading/error states.
+- [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart:52-67](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart#L52) — Decline confirm sheet ('Decline request' / 'Decline {service}?' + optional reason TextField). In the prototype, Decline just pops (prototype.jsx:459).
+- [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart:69-79,662-669](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart#L69) — 'No-show' button on IN_PROGRESS cards and the 'Customer didn't show up?' confirm sheet (PATCH /no-show). The prototype provider app has no no-show action.
+- [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart:42](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart#L42) — Extra 'Cancelled' status tab (the prototype has Pending/Upcoming/Past only).
+- [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart:243-248](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart#L243) — Glass logout icon button in the Today hero (the prototype places sign-out in the Profile tab).
+- [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart:131-133](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart#L131) — Tapping the pending callout filters to PENDING (the prototype callout has no handler).
+- [Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart:91-101,152-162](Android/aiwa_app/lib/features/notifications/presentation/pages/notifications_page.dart#L91) — Notifications empty state ("You're all caught up") and 'Load more' pagination button: no prototype counterpart (shared with the customer app).
+- [Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart:660-677](Android/aiwa_app/lib/features/provider_dashboard/presentation/pages/dashboard_page.dart#L660) — The Flutter-only 'No-show' button (with its 'Mark no-show' sheet, :69-79) is rendered only on IN_PROGRESS cards. aiwa-backend BookingStatus.canTransitionTo (BookingStatus.java:31) allows IN_PROGRESS -> COMPLETED only; NO_SHOW is valid only from ACCEPTED or ARRIVED. PATCH /bookings/{id}/no-show therefore always fails, and the failure is swallowed (dashboard_bloc.dart:84-88). The primary audit lists the control but not that it cannot work.
+
+## 8. Prioritized fix list
+
+### Critical — missing screens & broken flows
+
+- **Build missing design system & shared components (5):** SkeletonRows (table skeleton) `DS-17`, OfflineBanner `DS-20`, Toggle (switch) `DS-23`, SuccessSheet `DS-25`, Pagination `DS-26`
+- **Build missing customer sign-in / sign-up (6):** Toast - 'Welcome back, Layla.' `AUTH-09`, Make it yours - photo selected `AUTH-18`, Forgot password - step 1: where to send the code `AUTH-20`, Forgot password - step 2: enter the code `AUTH-21`, Forgot password - step 3: set a new password `AUTH-22`, Toast - 'Password reset. Please sign in.' `AUTH-23`
+- **Build missing onboarding tail & provider onboarding (14):** Terms & safety policy (signup) `ONB-01`, Preferences (area, min/max search radius, language, theme commit) `ONB-02`, Toast 'Account created. Verification in review.' `ONB-03`, SystemScreen (shared full-screen system message shell) `ONB-04`, Permission priming — location (onboarding route 'perm-location') `ONB-05`, Permission priming — notifications (onboarding route 'perm-notifications') `ONB-06`, Permission priming — camera `ONB-07`, Permission priming — contacts (trusted contact) `ONB-08`, Permission priming — in-app re-prompt (Preview states -> 'Permission priming', route 'permission') `ONB-09`, Terms re-accept (policy updated) `ONB-10`, Toast 'Thanks — terms accepted.' `ONB-11`, Terms — agree checkbox gating (unchecked / checked) `ONB-V01`, Preferences — search radius min/max range pair `ONB-V02`, Preferences — App language pills (English / العربية) `ONB-V03`
+- **Build missing customer discovery (3):** FlagProviderSheet (report a provider) `DISC-12`, Toast - 'Thanks — flag received. Our team reviews every report.' `DISC-13`, StaffPickerScreen ('Pick your stylist.' - shop-type providers) `DISC-14`
+- **Build missing customer booking lifecycle (45):** Booking type choice (Now or later) `BOOK-01`, Book Now availability check - checking state (and AVAILABLE pass-through) `BOOK-02`, Book Now blocked - OFFLINE `BOOK-03`, Book Now blocked - BUSY `BOOK-04`, Book Now blocked - VACATION `BOOK-05`, Book Now blocked - SETTLEMENT_PAUSED `BOOK-06`, Book Now blocked - NOT_APPROVED (defined, not reachable in prototype) `BOOK-07`, Booking screen - Book Now mode variant `BOOK-09`, Booking screen - 'Where' home vs salon toggle `BOOK-10`, Booking screen - saved address selector (Home / Work / Add new address) `BOOK-11`, Slot conflict sheet ('Someone booked that slot.') `BOOK-13`, Tracking - Pending `BOOK-15`, Tracking - Accepted (confirmed) `BOOK-16`, Tracking - On the way `BOOK-17`, Tracking - Arrived `BOOK-18`, Tracking - In progress `BOOK-19`, Tracking - Completed (confirm cash payment + review) `BOOK-20`, Tracking - provider contact card (call + chat entry) `BOOK-21`, Tracking - home-service safety card (live location + ID, SOS button) `BOOK-22`, Tracking - SOS stage 1: alerting `BOOK-23`, Tracking - SOS stage 2: support notified `BOOK-24`, Tracking - SOS stage 3: incident logged `BOOK-25`, Tracking - venue check-in card `BOOK-26`, Tracking - travel fee quote (accept / decline) + total row `BOOK-27`, Tracking - travel fee declined ('No problem - no fee applied.') `BOOK-28`, Proposed time - provider suggested a different time (active countdown) `BOOK-30`, Proposed time - offer expired `BOOK-31`, Booking rejected - reason + alternatives `BOOK-32`, Expired booking ('No answer in time.') `BOOK-33`, Complaint ('Open a complaint / What happened?') `BOOK-35`, Chat with provider (masked number) `BOOK-36`, Chat - report message sheet + '[message removed by admin]' state `BOOK-37`, Payment confirm (customer) - 'Did you pay {provider} in cash?' `BOOK-38`, Payment confirm - paid / confirmed state `BOOK-39`, Payment confirm - unpaid / dispute form `BOOK-40`, Toast - 'Booking placed. Waiting to confirm.' `BOOK-53`, Toast - 'Provider is on the way.' `BOOK-54`, Toast - 'Complaint submitted. We will reach out via WhatsApp.' `BOOK-57`, Toast - 'New time confirmed - your calendar and reminders are updated.' `BOOK-58`, Toast - 'Payment confirmed. Receipt sent.' `BOOK-59`, Toast - 'Reported as unpaid. AIWA support has been notified.' `BOOK-60`, Toast - 'Rebooked for {time}.' `BOOK-61`, Proposed time - countdown under 2 minutes (urgent) `BOOK-V01`, Slot conflict sheet - alternative selected `BOOK-V02`, Cancel sheet - 'Something else' selected with note field `BOOK-V03`
+- **Build missing customer account, notifications & system (32):** Delete account sheet (type DELETE to confirm) `ACCT-04`, Toast: 'Account deleted. Sorry to see you go.' `ACCT-05`, Saved addresses list `ACCT-06`, New address form (add mode) `ACCT-07`, Edit address form (edit mode) `ACCT-08`, Delete address confirm sheet `ACCT-09`, Toast: 'Address added.' `ACCT-10`, Toast: 'Address updated.' `ACCT-11`, Toast: 'Address deleted.' `ACCT-12`, Personal info (edit profile) `ACCT-13`, Toast: 'Profile updated.' `ACCT-14`, Safety & policies `ACCT-15`, Trusted contacts (list) `ACCT-16`, Trusted contacts - empty state `ACCT-17`, Trusted contacts - add contact inline form `ACCT-18`, Remove trusted contact confirm sheet `ACCT-19`, Notification preferences (channels + quiet hours) `ACCT-21`, WhatsApp support ('Talk to AIWA') `ACCT-22`, Toast: 'Opening WhatsApp…' `ACCT-23`, Session expired `ACCT-24`, Account locked `ACCT-25`, Forbidden (no access) `ACCT-26`, Not found `ACCT-27`, Permission denied - location `ACCT-28`, Permission denied - camera `ACCT-29`, Permission denied - notifications `ACCT-30`, Offline banner `ACCT-31`, Personal info - saving state ('Saving…') `ACCT-V01`, Personal info - inline validation errors `ACCT-V02`, Address form - validation error state `ACCT-V03`, Safety & policies - expanded policy (accordion open) `ACCT-V04`, Notification preferences - quiet hours off `ACCT-V05`
+- **Build missing provider app (39):** ProviderTabBar (Today / Bookings / Services / Schedule / Profile) `PROV-01`, 'Confirmed today' section (today's confirmed bookings) `PROV-06`, 'Confirmed today' empty state `PROV-07`, Booking request detail — Review & respond (pending) `PROV-13`, Quote a travel fee sheet `PROV-15`, Travel-fee state banners (no address / quote sent / fee accepted) `PROV-16`, Propose a different time + toast 'Alternative time sent to customer.' `PROV-17`, ProviderCancelSheet — cancelling after accepting (penalty warning) `PROV-18`, Toast 'Booking cancelled. Penalty applied to your ledger.' `PROV-19`, PaymentConfirmScreen (provider role) — 'Did {customer} pay in cash?' `PROV-20`, PaymentConfirm — 'Cash received · job closed' state `PROV-21`, PaymentConfirm — dispute form state `PROV-22`, Toast 'Marked as disputed. Admin has been notified.' `PROV-23`, RateCustomerScreen (two-way rating) `PROV-24`, Toast 'Rating submitted. Slot freed — next booking notified.' `PROV-25`, Provider Services tab `PROV-26`, Provider Schedule tab (weekly availability) `PROV-27`, Travel buffer stepper `PROV-28`, Provider Profile tab `PROV-29`, Vacation / offline mode toggle `PROV-30`, Verified provider banner `PROV-31`, Toast 'Signed out.' `PROV-33`, Provider Wallet (commission & settlement) `PROV-34`, Wallet — blocked (over negative limit) state `PROV-35`, Business info (edit) screen with validation `PROV-36`, Business info — re-review notice banner `PROV-37`, Toast 'Business info saved.' `PROV-38`, Gallery manager (grid, cover badge, count, add tile) `PROV-39`, Gallery — upload progress card with cancel `PROV-40`, Gallery — moderation-hidden photo overlay + warning banner `PROV-41`, Gallery — delete photo ConfirmSheet `PROV-42`, Gallery — empty state `PROV-43`, Provider Reviews screen (summary, distribution, filters, list) `PROV-44`, Reviews — reply composer (char count) and posted reply block `PROV-45`, Reviews — filter empty state `PROV-46`, Staff & availability (shop plan) `PROV-47`, Booking detail — travel-fee quote pending (action bar locked) `PROV-V01`, Booking detail — read-only state for completed / past bookings `PROV-V02`, Business info — validation error / unsaved (Save disabled) state `PROV-V03`
+- **Admin web panel (47 entries) is absent** — the handoff README allows a separate web stack; decide the stack and build it (see §6).
+- `DS-36-F1` **GuestLockedScreen (shared guest gate)** — CTA goes to role choice instead of the auth gate
+- `AUTH-01-F3` **Splash - language picker + Browse as guest** — Language choices never appear if the stored-session check fails; splash fades in over 900ms instead of sliding in
+- `AUTH-06-F1` **Sign in - phone mode** — 'Forgot password?' is a dead end
+- `AUTH-06-F2` **Sign in - phone mode** — Provider sign-in skips the pending-verification gate
+- `AUTH-08-F1` **Sign in - wrong credentials error** — Wrong password never shows an error; Sign in stays stuck in its loading pulse
+- `AUTH-11-F1` **Phone entry - email mode** — Email sign-up skips the verification code step
+- `AUTH-11-V1` **Phone entry - email mode** — Email sign-up can never finish: the email identifier is dropped from the register call
+- `AUTH-13-F1` **OTP - resend available (timer at 0)** — Tapping Resend pushes a second OTP page
+- `AUTH-17-F1` **Make it yours - avatar + gender (sign-up step 4)** — Continue creates the account and jumps to Home, skipping Terms, Preferences and the permission screens
+- `AUTH-CF-03` **Cross-cutting (Customer sign-in / sign-up)** — Pages under the current route still react to the shared AuthBloc
+- `ONB-01-F1` **Terms & safety policy (signup)** — Signup skips the Terms step: account is created at Avatar/gender
+- `ONB-02-F1` **Preferences (area, min/max search radius, language, theme commit)** — Preferences step missing; search radius is never collected
+- `ONB-05-F1` **Permission priming — location (onboarding route 'perm-location')** — Location priming step missing; OS prompt fires cold on Home
+- `ONB-05-F2` **Permission priming — location (onboarding route 'perm-location')** — No platform location permission declared, so location can never be granted
+- `ONB-06-F1` **Permission priming — notifications (onboarding route 'perm-notifications')** — Notification priming step missing; onboarding ends at Avatar/gender
+- `ONB-10-F1` **Terms re-accept (policy updated)** — Terms re-accept screen missing; terms notification is a dead end
+- `ONB-12-F1` **Provider business — 'Set up your studio' (Individual default)** — Business profile (name, type, staff, bio, category, address, lat/lng) is never sent to the backend
+- `ONB-15-F1` **UploadSlot — empty (tap to upload)** — Upload slots never capture an image; tap just toggles 'done'
+- `ONB-17-F1` **Provider verification — 'Verify your identity'** — Submit registers and jumps to Pending, skipping Terms, Preferences and the toast
+- `ONB-17-F2` **Provider verification — 'Verify your identity'** — ID and selfie are never uploaded for review
+- `DISC-08-F1` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Report chip missing: the FlagProviderSheet flow cannot be reached
+- `DISC-08-F2` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Book routing has no shop -> staff-picker branch and skips the booking-type step
+- `DISC-08-V1` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Provider detail model reads keys the backend does not send, so name, category, Verified and Call/WhatsApp/Directions disappear
+- `DISC-08-V2` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Save heart calls endpoints that do not exist, so saving never persists
+- `DISC-10-V1` **Provider profile - Reviews tab** — Reviews are never loaded, so the tab always shows 'No reviews yet'
+- `DISC-15-F1` **AuthGateScreen ('Sign in to book.')** — Signing in or creating an account from the gate does not resume the booking
+- `DISC-16-F1` **Saved (favorites list)** — 'Book again' jumps straight to the booking page instead of the provider profile
+- `DISC-16-V1` **Saved (favorites list)** — Saved list never loads: the page stays on the skeleton
+- `DISC-18-F1` **GuestLockedScreen (shared guest gate for Bookings / Saved / Profile)** — CTA pushes /role-choice instead of the auth gate
+- `DISC-19-F2` **Bookings tab - guest locked variant** — CTA goes to /role-choice instead of the auth gate (shared widget)
+- `DISC-20-F2` **Saved tab - guest locked variant** — CTA goes to /role-choice instead of the auth gate (shared widget)
+- `DISC-21-F2` **Profile tab - guest locked variant** — CTA goes to /role-choice instead of the auth gate (shared widget)
+- `BOOK-08-F1` **Booking screen - scheduled (date & slot picker + CTA)** — Create-booking request uses field names the backend rejects
+- `BOOK-08-F2` **Booking screen - scheduled (date & slot picker + CTA)** — Flow skips the Booking type (Now/Schedule) step
+- `BOOK-08-V1` **Booking screen - scheduled (date & slot picker + CTA)** — Slots come from the weekly-hours endpoint, so the slot grid is always empty
+- `BOOK-14-F1` **Booking confirmed ('You said aiwa. We told Nadia.')** — 'View my bookings' goes to the list instead of Tracking
+- `BOOK-29-F1` **Cancel booking sheet (with reasons)** — Cancellation reasons not collected
+- `BOOK-41-F1` **My Bookings - Upcoming tab** — Tapping a live booking card does nothing
+- `BOOK-41-F2` **My Bookings - Upcoming tab** — 'Track' button missing; 'Cancel' shown instead
+- `BOOK-45-F1` **Bookings - rejected reason card + 'See alternatives'** — 'See alternatives' goes to Search instead of the Rejected screen
+- `BOOK-46-V1` **Bookings - expired card in Past (tappable)** — Expired booking card is not tappable (no Expired booking screen)
+- `BOOK-49-F1` **Bookings - guest locked state** — Guest CTA opens Role choice instead of Auth gate
+- `BOOK-50-F1` **Booking data model (MY_BOOKINGS seed fields)** — fromJson reads keys the backend never sends
+- `ACCT-01-F1` **Profile tab (signed-in customer)** — 7 of 10 Profile rows missing; their destinations are unreachable
+- `ACCT-02-F2` **Profile tab - guest-locked state** — CTA goes to Role choice instead of the Auth gate
+- `ACCT-20-F1` **Notifications inbox (customer)** — Notification rows are dead: no routing to Tracking or Terms re-accept
+- `ACCT-24-V1` **Session expired** — Expired session at launch leaves the app stuck on the splash with no choices instead of 'Your session expired.'
+- `ACCT-C07` **Cross-cutting (Customer account, notifications & system)** — No global HTTP-status to system-screen routing and no SystemScreen shell
+- `PROV-02-F1` **Provider post-sign-in / session-restore routing** — Unapproved providers skip the pending-verification gate on sign-in and on session restore
+- `PROV-03-F1` **Provider Today dashboard (hero header + stat tiles + section structure)** — Dashboard stats call hits a non-existent endpoint, so the page never leaves the loading skeleton
+- `PROV-03-F7` **Provider Today dashboard (hero header + stat tiles + section structure)** — Today is a dead-end route with no navigation to the other provider tabs
+- `PROV-05-F1` **'New requests' section and booking request card (Decline / Accept)** — Request card is not tappable, so there is no way into the booking detail
+- `PROV-05-F2` **'New requests' section and booking request card (Decline / Accept)** — Decline sends the reason in the body, but the backend requires a query parameter, so every decline fails silently
+- `PROV-08-F1` **Provider Bookings screen (header + Pending/Upcoming/Past tab row + list)** — Status tabs are dead: the backend ignores the status parameter, so every tab lists the same bookings
+- `PROV-09-F3` **Bookings tab: Pending** — Rows do not open booking detail, and the tab does not actually filter
+- `PROV-10-F4` **Bookings tab: Upcoming** — Rows do not open booking detail
+- `PROV-11-F3` **Bookings tab: Past** — Past rows do not open booking detail
+- `PROV-14-F1` **Booking detail — job progress stepper and status-advance action bar** — 'Mark completed' completes the booking directly and skips the cash-confirmation / dispute step and the customer rating
+- `PROV-14-F2` **Booking detail — job progress stepper and status-advance action bar** — Provider cannot cancel an accepted booking (the penalty flow is missing)
+- `PROV-48-F1` **Provider notifications inbox (PROVIDER_NOTIFICATIONS)** — Provider notifications inbox is unreachable from the provider app
+- `PROV-C3` **Cross-cutting (Provider app)** — Provider data layer targets endpoints and parameters the backend does not expose
+
+### Major
+
+- `DS-22-F1` **ValidatedInput (per-field validated text input)** — Error is not gated on blur (touched)
+- `DS-24-F1` **ConfirmSheet (destructive / neutral confirm)** — Sheet opens on the shell navigator, so the tab bar stays above the barrier and remains tappable
+- `DS-32-F1` **Toast overlay** — Toast appears at the bottom instead of the top
+- `DS-32-F2` **Toast overlay** — Success check badge is missing
+- `DS-33-F1` **Screen transitions (push / pop / tab switch)** — Push/pop use the platform default route transition instead of the 320ms soft door
+- `DS-34-F1` **Gender theme swap** — Gender step preselects MALE instead of FEMALE, so the live palette differs
+- `DS-35-F1` **Wordmark / logo assets / app icon** — Launcher icons are the default Flutter logo
+- `DS-35-F2` **Wordmark / logo assets / app icon** — No logo assets are shipped (assets/ is empty)
+- `DS-RTL-F2` **RTL / Arabic localization** — The chosen language never reaches the backend
+- `DS-C4` **Design-system consistency** — 'No spinners' rule broken by four RefreshIndicators
+- `DS-C5` **Design-system consistency** — Page transitions ignore the 320ms soft-door motion
+- `DS-C9` **Design-system consistency** — Modal sheets opened from tab roots sit under the tab bar
+- `AUTH-01-F1` **Splash - language picker + Browse as guest** — Splash glows use themed stone tokens at about half the prototype's size instead of fixed rose/gold washes
+- `AUTH-01-F2` **Splash - language picker + Browse as guest** — Picking Arabic is discarded and never reaches the signup payload
+- `AUTH-05-F1` **Auth choice - Create account vs I already have an account (customer & provider copy)** — Auth-choice hero glows are themed and undersized; the primary card shadow is themed instead of the literal
+- `AUTH-17-F2` **Make it yours - avatar + gender (sign-up step 4)** — Photo upload is missing
+- `AUTH-17-F3` **Make it yours - avatar + gender (sign-up step 4)** — Copy drops the photo step
+- `AUTH-19-F1` **Gender pick -> live palette swap** — 'Man' card's Warm Stone swatch has the wrong colour
+- `AUTH-19-F2` **Gender pick -> live palette swap** — 'Man' is preselected where the prototype preselects 'Woman'
+- `AUTH-21-V1` **Forgot password - step 2: enter the code** — Build-note correction: calling /auth/verify-otp at step 2 would break the reset at step 3
+- `AUTH-CF-04` **Cross-cutting (Customer sign-in / sign-up)** — No toast component; auth feedback uses default bottom SnackBars
+- `ONB-02-F2` **Preferences (area, min/max search radius, language, theme commit)** — App language choice has nowhere to live; locale is hardcoded English
+- `ONB-02-V1` **Preferences (area, min/max search radius, language, theme commit)** — Existing language API sends 'language' instead of 'preferredLanguage'
+- `ONB-03-F1` **Toast 'Account created. Verification in review.'** — Provider account-created toast missing
+- `ONB-04-F1` **SystemScreen (shared full-screen system message shell)** — Shared SystemScreen shell not implemented
+- `ONB-07-F1` **Permission priming — camera** — Camera priming variant not implemented
+- `ONB-08-F1` **Permission priming — contacts (trusted contact)** — Contacts priming variant not implemented
+- `ONB-09-F1` **Permission priming — in-app re-prompt (Preview states -> 'Permission priming', route 'permission')** — Pushed (pop-back) location priming state missing
+- `ONB-11-F1` **Toast 'Thanks — terms accepted.'** — Terms-accepted confirmation toast missing
+- `ONB-16-F1` **UploadSlot — uploaded state (photo preview, tap to replace)** — Uploaded slot shows a flat gradient, not the captured photo
+- `ONB-16-F3` **UploadSlot — uploaded state (photo preview, tap to replace)** — 'Tap to replace' actually clears the upload
+- `ONB-18-F1` **Provider pending — 'We're reviewing your documents.'** — Pending is unreachable from sign-in; reached before Terms/Preferences at signup
+- `DISC-01-F1` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Category grid tiles overflow on 360dp and 375dp phones
+- `DISC-01-F2` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — 'Open now' status is never shown on Available now rows
+- `DISC-01-V1` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — 'From EGP' price column never renders on Available now rows
+- `DISC-02-F1` **Discover (search, category chips, sort, result list)** — Query and category chip are never applied together
+- `DISC-02-F2` **Discover (search, category chips, sort, result list)** — 'Open' status missing on result rows
+- `DISC-02-V1` **Discover (search, category chips, sort, result list)** — 'Price' sort and 'Max price' filter have no effect
+- `DISC-04-F1` **Discover - empty results** — 'Notify me when someone joins' secondary action missing
+- `DISC-04-F2` **Discover - empty results** — 'Widen my radius' primary action missing; category-only case uses a different label
+- `DISC-08-F3` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Share button missing from the cover
+- `DISC-09-F1` **Provider profile - Services tab** — Price-type label and 'From' eyebrow missing
+- `BOOK-08-F3` **Booking screen - scheduled (date & slot picker + CTA)** — 'Where' section (home vs salon + saved addresses) missing
+- `BOOK-08-F5` **Booking screen - scheduled (date & slot picker + CTA)** — Unavailable slots are hidden instead of shown disabled
+- `BOOK-08-F6` **Booking screen - scheduled (date & slot picker + CTA)** — Slot-taken conflict shown as a raw SnackBar
+- `BOOK-14-F2` **Booking confirmed ('You said aiwa. We told Nadia.')** — 'Add to calendar' button missing (replaced by 'Back to home')
+- `BOOK-14-F3` **Booking confirmed ('You said aiwa. We told Nadia.')** — Headline and summary render blank provider/date from the data mapping
+- `BOOK-14-F6` **Booking confirmed ('You said aiwa. We told Nadia.')** — 'Booking placed. Waiting to confirm.' toast not shown
+- `BOOK-29-F2` **Cancel booking sheet (with reasons)** — Reason not sent to the cancel endpoint
+- `BOOK-29-F3` **Cancel booking sheet (with reasons)** — Cancel is opened from the list card instead of Tracking
+- `BOOK-29-F4` **Cancel booking sheet (with reasons)** — Copy differs from prototype
+- `BOOK-29-F5` **Cancel booking sheet (with reasons)** — 'Something else' note field and reason gating missing
+- `BOOK-34-F1` **Leave a review ('How was it?')** — Review only reachable from the bookings list
+- `BOOK-41-F3` **My Bookings - Upcoming tab** — Upcoming list filtered client-side from an unfiltered page
+- `BOOK-42-F1` **My Bookings - Past tab** — Past tab shows live bookings too
+- `BOOK-43-F1` **Bookings - cancelled reason card (incl. provider-penalty variant)** — Cancelled-by, time and reason not shown
+- `BOOK-43-F2` **Bookings - cancelled reason card (incl. provider-penalty variant)** — Provider late-cancel penalty line missing
+- `BOOK-44-F1` **Bookings - no-show reason card** — No-show time and reason not shown
+- `BOOK-45-F2` **Bookings - rejected reason card + 'See alternatives'** — Provider's rejection reason replaced by generic text
+- `BOOK-50-F2` **Booking data model (MY_BOOKINGS seed fields)** — Lifecycle fields missing from BookingEntity
+- `BOOK-52-F1` **Toast component (success toast)** — Toast renders at the bottom as a SnackBar
+- `BOOK-52-F2` **Toast component (success toast)** — Success check badge missing
+- `BOOK-55-F1` **Toast - 'Booking cancelled. Reason: {reason}'** — Toast omits the cancellation reason
+- `BOOK-C1` **Cross-cutting (Customer booking lifecycle)** — Toasts implemented with Material SnackBar instead of the kit Toast
+- `ACCT-01-F2` **Profile tab (signed-in customer)** — Header stats tiles (Bookings / Favorites / Reviews) missing
+- `ACCT-01-F3` **Profile tab (signed-in customer)** — Row order/set differs; Flutter-only 'App palette' and 'Email' rows
+- `ACCT-03-F1` **Sign-out confirm sheet** — Sign-out body/eyebrow copy changes the message
+- `ACCT-20-F2` **Notifications inbox (customer)** — Mark read / Mark all read never clear a row's unread styling
+- `ACCT-20-F3` **Notifications inbox (customer)** — Server/offline errors leave the inbox on an endless skeleton
+- `ACCT-V06-F1` **Notifications inbox - all read (after 'Mark all read')** — After 'Mark all read' the header clears but every row still looks unread
+- `ACCT-C01` **Cross-cutting (Customer account, notifications & system)** — No top Toast component; SnackBars are used instead
+- `ACCT-C02` **Cross-cutting (Customer account, notifications & system)** — Arabic typography and localization not wired
+- `ACCT-C04` **Cross-cutting (Customer account, notifications & system)** — No shared Toggle widget
+- `PROV-03-F2` **Provider Today dashboard (hero header + stat tiles + section structure)** — Section structure replaced by a status filter row
+- `PROV-03-F3` **Provider Today dashboard (hero header + stat tiles + section structure)** — Stat tiles show pending count and lifetime compact revenue instead of today's count and today's EGP
+- `PROV-03-F6` **Provider Today dashboard (hero header + stat tiles + section structure)** — Accept/decline/advance failures are swallowed, and every action reloads to a full-screen skeleton and resets the filter
+- `PROV-05-F3` **'New requests' section and booking request card (Decline / Accept)** — Request card shows the placeholder 'Customer' instead of the customer's name
+- `PROV-05-F4` **'New requests' section and booking request card (Decline / Accept)** — Date/time line renders empty because of wrong JSON keys; time is 24h instead of 12h
+- `PROV-05-F5` **'New requests' section and booking request card (Decline / Accept)** — 'New requests' section header with the pending count is missing
+- `PROV-05-V1` **'New requests' section and booking request card (Decline / Accept)** — Inline Accept/Decline act immediately instead of opening the booking detail
+- `PROV-08-F2` **Provider Bookings screen (header + Pending/Upcoming/Past tab row + list)** — No standalone Bookings tab screen with its 'Manage / Bookings' header
+- `PROV-08-F3` **Provider Bookings screen (header + Pending/Upcoming/Past tab row + list)** — List rows reuse the big action card instead of the compact booking row
+- `PROV-08-F5` **Provider Bookings screen (header + Pending/Upcoming/Past tab row + list)** — Tab switch failures are silently ignored and no loading feedback is shown
+- `PROV-09-F1` **Bookings tab: Pending** — Pending rows carry inline Decline/Accept buttons instead of the compact row
+- `PROV-09-F2` **Bookings tab: Pending** — Rows show the placeholder 'Customer' and an empty date (same root cause as PROV-05-F3/F4)
+- `PROV-10-F1` **Bookings tab: Upcoming** — In-flight jobs (ON_THE_WAY / ARRIVED / IN_PROGRESS) belong to no tab once filtering works
+- `PROV-10-F2` **Bookings tab: Upcoming** — Upcoming rows embed status-advance buttons instead of the compact row
+- `PROV-10-F3` **Bookings tab: Upcoming** — Wrong name and empty date (BookingModel mapping)
+- `PROV-11-F2` **Bookings tab: Past** — Past rows use the large request card (price 18, radius 18) instead of the compact row with the pill on the right
+- `PROV-14-F3` **Booking detail — job progress stepper and status-advance action bar** — Venue (non-home) bookings are wrongly offered 'On my way'
+- `PROV-14-F4` **Booking detail — job progress stepper and status-advance action bar** — Actions are inline in list cards instead of a sticky bottom action bar on the detail screen
+- `PROV-14-F5` **Booking detail — job progress stepper and status-advance action bar** — 'Job progress' stepper card is missing
+- `PROV-14-F8` **Booking detail — job progress stepper and status-advance action bar** — Advance-step failures (e.g. invalid transition) are silently ignored
+- `PROV-C1` **Cross-cutting (Provider app)** — No shared toast matching the kit Toast; the 6 ProviderApp toasts and 2 provider auth toasts are unimplemented
+- `PROV-C2` **Cross-cutting (Provider app)** — BookingModel JSON keys do not match the backend BookingDto used by every provider booking view
+
+### Minor
+
+- `DS-02-F1` **Typography: font families & type scale** — CSS h3/h4 token styles (sans 600 20/17) have no Flutter equivalent; Flutter h3/h4 are serif
+- `DS-02-F2` **Typography: font families & type scale** — price style is 22px with no tracking (token is 20px, -0.02em)
+- `DS-02-F3` **Typography: font families & type scale** — body-sm color, meta line-height and paragraph 1.65 line-height are off
+- `DS-02-F4` **Typography: font families & type scale** — Heading letter-spacing baked into h2/h3 leaks into titles that have none
+- `DS-02-F5` **Typography: font families & type scale** — Fonts are fetched at runtime and not bundled
+- `DS-03-F1` **Spacing, radii & elevation tokens** — shadow3 is a single 0.18 layer instead of two layers
+- `DS-03-F2` **Spacing, radii & elevation tokens** — shadow-4 and shadow-card are not defined
+- `DS-03-F3` **Spacing, radii & elevation tokens** — Sheet shadow is lighter than in the prototype
+- `DS-04-F1` **Motion tokens & keyframes** — Missing ease-out/ease-in/ease-bounce curves and dur-1/dur-4
+- `DS-04-F2` **Motion tokens & keyframes** — No shared equivalents of the aiwa-pop / aiwa-drop / aiwa-toast keyframes
+- `DS-05-F1` **Icon (Lucide helper)** — Material Icons are used instead of Lucide
+- `DS-05-F2` **Icon (Lucide helper)** — Filled/rounded Material glyph weight instead of a 2px round-cap stroke
+- `DS-06-F1` **Btn (pill button, 6 variants x 3 sizes)** — Press scale is 0.97 instead of 0.96
+- `DS-07-F1` **IconBtn (round icon button)** — Glass variant has no backdrop blur and uses a theme divider instead of the literal border
+- `DS-07-F2` **IconBtn (round icon button)** — No press feedback
+- `DS-08-V1` **Avatar (initial + gradient, verified badge)** — Verified-badge check is a Material glyph sized by a different rule
+- `DS-09-F1` **Chip (default / active / tonal)** — No press feedback
+- `DS-10-F1` **StatusPill (booking status)** — Unknown status falls back to a neutral pill showing the raw value
+- `DS-11-F1` **Stars (rating)** — Rounded Material star glyphs instead of the Lucide polygon
+- `DS-11-F2` **Stars (rating)** — Empty stars use divider instead of an ink4 outline
+- `DS-11-F3` **Stars (rating)** — Half-star rendering differs from the prototype's integer fill
+- `DS-11-F4` **Stars (rating)** — No 1px gap between stars
+- `DS-13-F1` **SectionHeader** — Action is bare text with no press feedback and a tiny hit area
+- `DS-14-F1` **Customer bottom TabBar (+ visibility rule)** — Bookings badge dot is missing
+- `DS-14-F2` **Customer bottom TabBar (+ visibility rule)** — Active pill shrink-wraps its label instead of filling up to 80px
+- `DS-14-F3` **Customer bottom TabBar (+ visibility rule)** — Tab items give no press feedback
+- `DS-14-F4` **Customer bottom TabBar (+ visibility rule)** — Bottom padding is 8 + safe inset instead of 26
+- `DS-15-F1` **Skeleton / SkeletonCard / SkeletonList (shimmer loading)** — Shimmer highlights to white at 1.5s instead of hover at 1.25s
+- `DS-16-F1` **SkeletonTile** — Default tile size is 200x110 instead of 132x168
+- `DS-18-F1` **EmptyState** — Vertical rhythm is 3px tighter at each step
+- `DS-18-F2` **EmptyState** — Icon circle has no pop-in animation
+- `DS-18-F3` **EmptyState** — Buttons hide unless a callback is also passed
+- `DS-18-F4` **EmptyState** — Title gets -0.22px tracking the prototype does not have
+- `DS-19-F1` **ErrorState** — ErrorState has no optional 'Contact support' secondary action
+- `DS-19-F2` **ErrorState** — Title gets -0.22px tracking
+- `DS-21-F1` **InlineBanner** — Body text drops the .92 opacity
+- `DS-21-F2` **InlineBanner** — Action is top-aligned instead of vertically centred
+- `DS-21-V1` **InlineBanner** — Action sits 8px from the text column instead of 10px
+- `DS-22-F2` **ValidatedInput (per-field validated text input)** — No trailing alert icon, and the prefix icon does not turn red on error
+- `DS-22-F3` **ValidatedInput (per-field validated text input)** — Label, hint, counter and focus styling differ
+- `DS-22-F4` **ValidatedInput (per-field validated text input)** — Optional marker copy and placement differ
+- `DS-22-F5` **ValidatedInput (per-field validated text input)** — Character counter does not update while typing
+- `DS-22-F6` **ValidatedInput (per-field validated text input)** — No built-in 14px bottom margin; multiline padding and height differ
+- `DS-22-V1` **ValidatedInput (per-field validated text input)** — Error row icon is 12px with a 4px gap instead of 11px with 5px
+- `DS-24-F2` **ConfirmSheet (destructive / neutral confirm)** — Enter animation differs
+- `DS-24-F3` **ConfirmSheet (destructive / neutral confirm)** — Barrier and shadow colors follow the theme instead of the plum literals
+- `DS-24-F4` **ConfirmSheet (destructive / neutral confirm)** — Title gets -0.22px tracking
+- `DS-24-F5` **ConfirmSheet (destructive / neutral confirm)** — Bottom padding is 24 + inset instead of 34
+- `DS-28-F1` **ScreenHeader** — Title gets -0.22px tracking
+- `DS-28-V1` **ScreenHeader** — No 12px gap before the trailing slot
+- `DS-29-F1` **StickyBar** — Single child with no built-in row/gap, and different bottom padding
+- `DS-30-F1` **SettingsRow** — Missing `right` slot and gold tone; icon is required
+- `DS-30-F2` **SettingsRow** — Boxed variant uses profile-row internals
+- `DS-30-F3` **SettingsRow** — Danger rows lose the chevron, and a ripple is used instead of row hover
+- `DS-31-F1` **Interaction state classes (press / row-hover / focus ring)** — Press scale exists only on AiwaButton
+- `DS-31-F2` **Interaction state classes (press / row-hover / focus ring)** — No keyboard focus ring and no button semantics
+- `DS-31-F3` **Interaction state classes (press / row-hover / focus ring)** — Material ripple used where the prototype uses a hover tint
+- `DS-32-F3` **Toast overlay** — Text size, background, shadow and blur differ
+- `DS-32-F4` **Toast overlay** — Auto-dismiss is 4s (default) instead of 2.8s, with a different entrance
+- `DS-32-F5` **Toast overlay** — The same toast is used for error messages
+- `DS-33-F2` **Screen transitions (push / pop / tab switch)** — Tab switches have no animation (prototype slides the new tab root in)
+- `DS-33-F3` **Screen transitions (push / pop / tab switch)** — Back navigation does not use the scale .98 to 1 reveal
+- `DS-35-F3` **Wordmark / logo assets / app icon** — Wordmark renders about 19% too large (size means font size, not box height)
+- `DS-35-F4` **Wordmark / logo assets / app icon** — App display name and native launch background are unbranded
+- `DS-35-V1` **Wordmark / logo assets / app icon** — Wordmark dot is anchored to the text box bottom, not to the baseline
+- `DS-36-F2` **GuestLockedScreen (shared guest gate)** — Per-tab titles, bodies and icons differ from the prototype
+- `DS-36-F3` **GuestLockedScreen (shared guest gate)** — Title gets -0.26px tracking
+- `DS-RTL-F1` **RTL / Arabic localization** — No Arabic font fallback (IBM Plex Sans Arabic / Markazi Text) in the text styles
+- `DS-RTL-F3` **RTL / Arabic localization** — No localization infrastructure for the promised bilingual app
+- `DS-V01-F1` **Shell back behaviour (pop / root no-op)** — System back on a tab root closes the app; the prototype's pop() does nothing on a one-entry stack
+- `DS-C1` **Design-system consistency** — Colors are centralized; only 6 raw Colors.white literals remain
+- `DS-C2` **Design-system consistency** — 116 fontSize overrides (all copyWith on AppTextStyles) with off-scale sizes
+- `DS-C3` **Design-system consistency** — Radii are mostly inline literals: 66 BorderRadius.circular calls outside the theme, only 14 via AppTheme
+- `DS-C6` **Design-system consistency** — Press-scale feedback exists only on AiwaButton
+- `DS-C7` **Design-system consistency** — No keyboard focus ring or semantics
+- `DS-C8` **Design-system consistency** — Hard-coded animation durations are off the motion scale
+- `DS-C10` **Design-system consistency** — Error feedback goes through the success-style toast
+- `DS-C11` **Design-system consistency** — Material Icons are used app-wide instead of Lucide
+- `AUTH-02-F1` **Wordmark (AIWA serif logotype + dot)** — Wordmark glyphs are about 19% too large
+- `AUTH-02-F2` **Wordmark (AIWA serif logotype + dot)** — Dot size and position differ from the SVG
+- `AUTH-04-F1` **Role choice - How will you be using AIWA?** — Selected check icon is a filled Material glyph instead of an outline
+- `AUTH-05-F2` **Auth choice - Create account vs I already have an account (customer & provider copy)** — Glass back button is missing the backdrop blur
+- `AUTH-05-F3` **Auth choice - Create account vs I already have an account (customer & provider copy)** — Hero half stays pinned while the cards scroll
+- `AUTH-06-F3` **Sign in - phone mode** — 'Create an account' keeps Sign in on the back stack
+- `AUTH-06-F4` **Sign in - phone mode** — Password eye toggle is an 18px Material IconButton
+- `AUTH-06-F5` **Sign in - phone mode** — 'Remember me' has no effect
+- `AUTH-06-V1` **Sign in - phone mode** — Gap between Password and the Remember-me row is 14px instead of 16px
+- `AUTH-07-V1` **Sign in - email mode** — Autofocused email field opens with a plum700 focus ring
+- `AUTH-08-F2` **Sign in - wrong credentials error** — Uses InlineBanner geometry instead of the compact error box
+- `AUTH-08-F3` **Sign in - wrong credentials error** — Spacing around the error box is off
+- `AUTH-10-F1` **Phone entry - phone mode (sign-up step 1)** — Phone/Email toggle segments have no 4px gap between them
+- `AUTH-10-F2` **Phone entry - phone mode (sign-up step 1)** — Phone input grabs focus on entry
+- `AUTH-12-F1` **OTP - enter the 6-digit code (countdown running)** — Code boxes are fixed 44x54 and centred instead of spanning the full width
+- `AUTH-12-F2` **OTP - enter the 6-digit code (countdown running)** — Fixed cell widths overflow on 320dp screens
+- `AUTH-12-F3` **OTP - enter the 6-digit code (countdown running)** — Destination is not bold plum900 and loses the user's spacing
+- `AUTH-12-F4` **OTP - enter the 6-digit code (countdown running)** — Tip box copy differs
+- `AUTH-12-F5` **OTP - enter the 6-digit code (countdown running)** — Code auto-submits on the 6th digit
+- `AUTH-12-F6` **OTP - enter the 6-digit code (countdown running)** — Focused empty cell gets a plum700 border
+- `AUTH-12-V1` **OTP - enter the 6-digit code (countdown running)** — OTP field grabs focus and opens the keyboard on arrival
+- `AUTH-13-F2` **OTP - resend available (timer at 0)** — Focus is not returned to the first box after resend
+- `AUTH-14-F1` **Account setup - name, optional email, password** — Password eye toggle is 18px instead of 16px
+- `AUTH-15-F1` **Account setup - inline validation errors** — Hint is hidden while an error shows
+- `AUTH-15-F2` **Account setup - inline validation errors** — Error line gets an icon the prototype doesn't use here
+- `AUTH-15-F3` **Account setup - inline validation errors** — Input border turns danger500 on error
+- `AUTH-16-F1` **Password strength meter** — Meter renders below the hint instead of directly under the input
+- `AUTH-17-F4` **Make it yours - avatar + gender (sign-up step 4)** — Vertical spacing around the avatar and gender field differs
+- `AUTH-25-F1` **Field + TextInput (form atoms)** — Inputs show a plum700 focus border the prototype doesn't have
+- `AUTH-25-V1` **Field + TextInput (form atoms)** — Input text starts 4px further in than the prototype (Material 3 input gaps)
+- `AUTH-CF-01` **Cross-cutting (Customer sign-in / sign-up)** — Tappable cards and pills have no pressed scale
+- `AUTH-CF-02` **Cross-cutting (Customer sign-in / sign-up)** — Route transitions use platform defaults instead of the prototype slide/fade
+- `ONB-12-F2` **Provider business — 'Set up your studio' (Individual default)** — Bio counter shares a row with the hint; textarea height differs
+- `ONB-12-F3` **Provider business — 'Set up your studio' (Individual default)** — Category tiles are about 18px taller than in the prototype
+- `ONB-12-F4` **Provider business — 'Set up your studio' (Individual default)** — Bio text size 15 instead of 14
+- `ONB-12-F5` **Provider business — 'Set up your studio' (Individual default)** — 'Use GPS' rendered as a Material TextButton
+- `ONB-12-F6` **Provider business — 'Set up your studio' (Individual default)** — Lucide icons swapped for different Material glyphs
+- `ONB-12-V1` **Provider business — 'Set up your studio' (Individual default)** — Step scaffold top offset and sticky-bar bottom padding differ (also ONB-17)
+- `ONB-13-F1` **Provider business — Shop / salon variant (staff members)** — Staff remove control is a 48dp IconButton with an 18px icon
+- `ONB-13-F2` **Provider business — Shop / salon variant (staff members)** — 'Add staff member' border is solid, not dashed
+- `ONB-14-F1` **Provider business — GPS status card (locked / no GPS)** — Initial GPS state inverted (No GPS instead of GPS locked)
+- `ONB-14-F2` **Provider business — GPS status card (locked / no GPS)** — GPS card border is solid, not dashed
+- `ONB-15-F2` **UploadSlot — empty (tap to upload)** — Empty slot border solid instead of dashed
+- `ONB-15-F3` **UploadSlot — empty (tap to upload)** — Inner gaps differ (8 vs 12 before the upload icon; 3 vs 2 under the label)
+- `ONB-16-F2` **UploadSlot — uploaded state (photo preview, tap to replace)** — Caption scrim gradient differs
+- `ONB-16-V1` **UploadSlot — uploaded state (photo preview, tap to replace)** — Uploaded caption icon is filled; Lucide check-circle is an outline
+- `ONB-17-F3` **Provider verification — 'Verify your identity'** — Private-docs note padding and icon gap differ (InlineBanner)
+- `ONB-17-F4` **Provider verification — 'Verify your identity'** — Private-docs note text 12.5px instead of 12px
+- `ONB-18-F2` **Provider pending — 'We're reviewing your documents.'** — Glow uses the theme rose300 in a 340px circle instead of the full-screen #E7BAB6 radial
+- `ONB-18-F3` **Provider pending — 'We're reviewing your documents.'** — Icon tile missing the 8px backdrop blur
+- `ONB-18-F4` **Provider pending — 'We're reviewing your documents.'** — Hourglass glyph differs
+- `ONB-18-F5` **Provider pending — 'We're reviewing your documents.'** — Footnote gap and bottom padding differ (top padding matches)
+- `ONB-18-F6` **Provider pending — 'We're reviewing your documents.'** — Fixed Column with Spacers overflows on short screens or large text
+- `DISC-01-F3` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Search pill location label is 'Near me' instead of the area name
+- `DISC-01-F4` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Trending section action copy differs
+- `DISC-01-F5` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Hero glow and search-pill shadow use theme tokens instead of the prototype literals
+- `DISC-01-F6` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Rating star is 12px with a 2px gap instead of 11px with a 3px gap
+- `DISC-01-F7` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Category tile horizontal padding is 4 instead of 8
+- `DISC-01-F8` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Header gap between bell and avatar is 8 instead of 12
+- `DISC-01-F9` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Available-now price column spacing differs
+- `DISC-01-F10` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Available now shows the whole page (20) plus 'Load more' instead of 4 rows
+- `DISC-01-F11` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Bell sends guests to the auth gate
+- `DISC-01-F12` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Category icon glyphs swapped
+- `DISC-01-V2` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Available now meta items are 6px apart instead of 8px
+- `DISC-01-V3` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Trending carousel has a fixed 196px height that clips at larger text sizes
+- `DISC-01-V4` **Home (greeting, search pill, hero promo, categories, trending, available now, bell)** — Home fires the OS location permission dialog directly
+- `DISC-02-F3` **Discover (search, category chips, sort, result list)** — Eight category chips instead of five
+- `DISC-02-F4` **Discover (search, category chips, sort, result list)** — Search pill right inset, height and filter-button padding differ
+- `DISC-02-F5` **Discover (search, category chips, sort, result list)** — Chip row bottom padding is 4 instead of 6
+- `DISC-02-F6` **Discover (search, category chips, sort, result list)** — Filter icon glyph differs
+- `DISC-02-F7` **Discover (search, category chips, sort, result list)** — Row rating star is 12px (shared RatingMeta)
+- `DISC-02-F8` **Discover (search, category chips, sort, result list)** — 'Nearest' sort and distances use hard-coded Cairo coordinates
+- `DISC-02-V2` **Discover (search, category chips, sort, result list)** — Result-row meta items are 6px apart instead of 8px
+- `DISC-02-V3` **Discover (search, category chips, sort, result list)** — 'Discover' title carries -0.64px letter-spacing
+- `DISC-02-V4` **Discover (search, category chips, sort, result list)** — Category chip row has a fixed height that clips chips at any text scale above ~1.03
+- `DISC-03-F1` **Discover - loading skeleton** — Shimmer highlight is paper white instead of the hover token, and the period is 1.5s instead of 1.25s
+- `DISC-04-F3` **Discover - empty results** — EmptyState icon has no pop-in animation
+- `DISC-04-V1` **Discover - empty results** — Empty-results icon glyph differs
+- `DISC-05-F1` **Discover - active filter chips** — Chip wrap padding is inverted (8 top / 0 bottom instead of 0 top / 4 bottom)
+- `DISC-05-F2` **Discover - active filter chips** — Two spaces before '×'
+- `DISC-06-F1` **Discover - Filters bottom sheet (rating / price)** — Sheet shadow and scrim colours differ from the prototype literals
+- `DISC-06-F2` **Discover - Filters bottom sheet (rating / price)** — Bottom padding and slider vertical rhythm differ
+- `DISC-06-F3` **Discover - Filters bottom sheet (rating / price)** — Open/close animation uses Flutter defaults
+- `DISC-08-F4` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Cover rating star uses gold300 instead of gold500
+- `DISC-08-F5` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Location meta shows the full address instead of 'distance · area'
+- `DISC-08-F6` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Cover meta spacing and tab gap differ
+- `DISC-08-F7` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Cover height grows by half the safe-area inset
+- `DISC-08-F8` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Provider name inherits h1 letter-spacing
+- `DISC-08-F9` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Cover glows are theme-mapped and smaller than the prototype's
+- `DISC-08-F10` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Bio fallback copy differs
+- `DISC-08-F11` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — WhatsApp chip glyph differs
+- `DISC-08-F12` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — 'Book now' CTA does not preselect the first service
+- `DISC-08-F13` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Push transition is the platform default instead of the 8% slide-in
+- `DISC-08-V3` **Provider profile (cover, bio, action chips, tab bar, sticky Book CTA)** — Sticky CTA price line-height is 1.1 instead of 1
+- `DISC-09-F2` **Provider profile - Services tab** — Extra description line not in the prototype
+- `DISC-09-F3` **Provider profile - Services tab** — Name-to-meta spacing is 3 instead of 2
+- `DISC-09-F4` **Provider profile - Services tab** — Plus button has no press feedback
+- `DISC-09-V1` **Provider profile - Services tab** — Service availability is parsed from a key the backend does not send
+- `DISC-10-F1` **Provider profile - Reviews tab** — Extra 3px gap between the name row and the stars
+- `DISC-10-F2` **Provider profile - Reviews tab** — Empty stars use a divider-coloured outline icon instead of an ink4 stroke
+- `DISC-10-V2` **Provider profile - Reviews tab** — 38px summary rating carries -0.96px letter-spacing
+- `DISC-15-F2` **AuthGateScreen ('Sign in to book.')** — Top and bottom padding differ from the prototype
+- `DISC-15-F3` **AuthGateScreen ('Sign in to book.')** — Title letter-spacing is computed for 32px
+- `DISC-16-F2` **Saved (favorites list)** — Tile gradient has 3 stops instead of plum500 -> plum900
+- `DISC-16-F3` **Saved (favorites list)** — Rating star is 13px with a 2px gap instead of 11 / 3
+- `DISC-16-F4` **Saved (favorites list)** — Unsave waits for the API and removes the item even if the call fails
+- `DISC-16-V2` **Saved (favorites list)** — Saved title and tile initial carry negative letter-spacing; the initial's colour is theme-mapped
+- `DISC-17-F1` **Saved - empty state ('No favorites yet')** — 'Browse providers' opens Discover instead of a provider profile
+- `DISC-18-V1` **GuestLockedScreen (shared guest gate for Bookings / Saved / Profile)** — Guest-locked title carries -0.26px letter-spacing
+- `DISC-19-F1` **Bookings tab - guest locked variant** — Guest Bookings copy differs from the prototype
+- `DISC-20-F1` **Saved tab - guest locked variant** — Guest Saved copy differs from the prototype
+- `DISC-21-F1` **Profile tab - guest locked variant** — Guest Profile copy differs from the prototype
+- `DISC-22-F1` **Customer bottom tab bar + onTabChange behaviour** — Bookings tab badge dot missing
+- `DISC-22-F2` **Customer bottom tab bar + onTabChange behaviour** — Tab switch has no fade/scale transition
+- `DISC-22-F3` **Customer bottom tab bar + onTabChange behaviour** — Re-tapping the active tab re-navigates and can drop Discover's category
+- `BOOK-08-F4` **Booking screen - scheduled (date & slot picker + CTA)** — Day picker is a fixed-width horizontal scroller, not equal-width chips
+- `BOOK-08-F7` **Booking screen - scheduled (date & slot picker + CTA)** — Summary avatar ignores provider palette
+- `BOOK-08-F8` **Booking screen - scheduled (date & slot picker + CTA)** — Duration rendered as raw minutes
+- `BOOK-08-F9` **Booking screen - scheduled (date & slot picker + CTA)** — No default day/slot selection
+- `BOOK-12-F1` **Booking screen - Cash on visit payment card** — banknote icon replaced by payments icon
+- `BOOK-12-F2` **Booking screen - Cash on visit payment card** — Title line-height collapsed to 1.0
+- `BOOK-14-F4` **Booking confirmed ('You said aiwa. We told Nadia.')** — Date/time format differs
+- `BOOK-14-F5` **Booking confirmed ('You said aiwa. We told Nadia.')** — Headline gets h1 tracking the prototype does not use
+- `BOOK-14-V1` **Booking confirmed ('You said aiwa. We told Nadia.')** — Headline uses the business name and the body says 'they' instead of 'she'
+- `BOOK-29-F6` **Cancel booking sheet (with reasons)** — Icon circle and spacing not in prototype sheet
+- `BOOK-29-F7` **Cancel booking sheet (with reasons)** — Scrim, shadow and button size differ
+- `BOOK-29-V1` **Cancel booking sheet (with reasons)** — Sheet eyebrow colour, title size and handle spacing differ
+- `BOOK-34-F2` **Leave a review ('How was it?')** — Provider avatar lacks palette and verified badge
+- `BOOK-34-F3` **Leave a review ('How was it?')** — Provider name/avatar disappear without route extra
+- `BOOK-34-F4` **Leave a review ('How was it?')** — Star spacing tighter and glyph differs
+- `BOOK-34-F5` **Leave a review ('How was it?')** — Header and field label spacing
+- `BOOK-34-F6` **Leave a review ('How was it?')** — Textarea text size 15 instead of 14 and height by lines
+- `BOOK-41-F4` **My Bookings - Upcoming tab** — Meta shows the provider address and 24h time instead of distance and 12h time
+- `BOOK-41-F5` **My Bookings - Upcoming tab** — Avatar palette by list index and no verified badge
+- `BOOK-41-F6` **My Bookings - Upcoming tab** — Card shadow differs
+- `BOOK-41-F7` **My Bookings - Upcoming tab** — Avatar and name not vertically centred
+- `BOOK-41-V1` **My Bookings - Upcoming tab** — Tab spacing 18 instead of 24, and the underline does not overlap the divider
+- `BOOK-41-V2` **My Bookings - Upcoming tab** — 'Bookings' title inherits -0.64 letterSpacing
+- `BOOK-42-F2` **My Bookings - Past tab** — Past status filter constant omits EXPIRED
+- `BOOK-42-F3` **My Bookings - Past tab** — Card shadow differs (same as Upcoming)
+- `BOOK-42-F4` **My Bookings - Past tab** — Time format and location meta
+- `BOOK-43-V1` **Bookings - cancelled reason card (incl. provider-penalty variant)** — Reason box shown even when no reason exists
+- `BOOK-47-F1` **Bookings - Upcoming empty state ('Nothing booked yet')** — calendar-plus glyph replaced
+- `BOOK-47-F2` **Bookings - Upcoming empty state ('Nothing booked yet')** — 'Find a provider' target differs (prototype stub)
+- `BOOK-47-F3` **Bookings - Upcoming empty state ('Nothing booked yet')** — Empty state lacks the 22px list gutter
+- `BOOK-47-V1` **Bookings - Upcoming empty state ('Nothing booked yet')** — EmptyState internal gaps 3px tighter and no pop-in
+- `BOOK-48-F1` **Bookings - Past empty state ('No past appointments')** — Empty state lacks the 22px list gutter
+- `BOOK-49-F2` **Bookings - guest locked state** — Title/body copy differs
+- `BOOK-49-F3` **Bookings - guest locked state** — Padding differs
+- `BOOK-52-F3` **Toast component (success toast)** — Background, text size and shadow differ
+- `BOOK-52-F4` **Toast component (success toast)** — Dismiss timing and entrance animation
+- `BOOK-55-F2` **Toast - 'Booking cancelled. Reason: {reason}'** — Rendered as Material SnackBar
+- `BOOK-56-F1` **Toast - 'Thanks - your review is live.'** — Rendered as Material SnackBar
+- `BOOK-C2` **Cross-cutting (Customer booking lifecycle)** — Material Icons used instead of the Lucide set
+- `BOOK-C3` **Cross-cutting (Customer booking lifecycle)** — Sheet scrim and shadow derived from theme colours instead of the kit literals
+- `BOOK-C4` **Cross-cutting (Customer booking lifecycle)** — Serif heading styles bake in tracking that screens then inherit
+- `BOOK-C5` **Cross-cutting (Customer booking lifecycle)** — No shared reason-picker sheet; the generic ConfirmSheet is used instead
+- `ACCT-01-F4` **Profile tab (signed-in customer)** — Header glow colour/geometry and name letter-spacing
+- `ACCT-01-F5` **Profile tab (signed-in customer)** — Language row is missing the chevron the prototype draws on every non-danger row
+- `ACCT-01-F6` **Profile tab (signed-in customer)** — Guest view is keyed on AuthAuthenticated, so a future profile update would flip signed-in users to the guest lock
+- `ACCT-01-F7` **Profile tab (signed-in customer)** — Tab-switch transition missing
+- `ACCT-01-F8` **Profile tab (signed-in customer)** — Arabic language value rendered without the Arabic font or locale support
+- `ACCT-01-V1` **Profile tab (signed-in customer)** — Row value and chevron sit 8px / 6px apart instead of the 14px row gap
+- `ACCT-01-V2` **Profile tab (signed-in customer)** — Profile hero content sits 4px lower than the same 68px header on Home
+- `ACCT-02-F1` **Profile tab - guest-locked state** — Guest profile title/body copy differs
+- `ACCT-02-V1` **Profile tab - guest-locked state** — Guest title carries h2 negative letter-spacing (tokens dimension should be 'deviates')
+- `ACCT-03-F2` **Sign-out confirm sheet** — Danger tone used instead of neutral; sheet shadow/scrim/padding differ
+- `ACCT-20-F4` **Notifications inbox (customer)** — Header '· N new' counts only the first page
+- `ACCT-20-F5` **Notifications inbox (customer)** — Status notifications use a calendar glyph instead of navigation / check-circle
+- `ACCT-20-F6` **Notifications inbox (customer)** — Title line-heights / letter-spacing slightly off
+- `ACCT-20-F7` **Notifications inbox (customer)** — Unread dot sits 8px from the text column instead of 12px
+- `ACCT-20-V1` **Notifications inbox (customer)** — Title/time row is top-aligned instead of baseline-aligned
+- `ACCT-C03` **Cross-cutting (Customer account, notifications & system)** — SettingsRow boxed variant diverges from the kit's SettingsRow
+- `ACCT-C05` **Cross-cutting (Customer account, notifications & system)** — Serif headings inherit negative letter-spacing where the kit has none
+- `ACCT-C06` **Cross-cutting (Customer account, notifications & system)** — Pushed routes don't use the prototype slide-in transition
+- `PROV-02-F2` **Provider post-sign-in / session-restore routing** — 'Welcome back' toast after sign-in is missing
+- `PROV-03-F4` **Provider Today dashboard (hero header + stat tiles + section structure)** — Extra sign-out icon button in the hero
+- `PROV-03-F5` **Provider Today dashboard (hero header + stat tiles + section structure)** — Hero overlay colour, tile blur, star size and label tracking differ
+- `PROV-03-V1` **Provider Today dashboard (hero header + stat tiles + section structure)** — Verified badge on the hero avatar never renders
+- `PROV-05-F6` **'New requests' section and booking request card (Decline / Accept)** — Customer avatar palette cycles instead of plum
+- `PROV-05-F7` **'New requests' section and booking request card (Decline / Accept)** — Card shadow is a stronger double shadow
+- `PROV-05-F8` **'New requests' section and booking request card (Decline / Accept)** — Duration is always minutes ('150 min' instead of '2h 30m')
+- `PROV-05-V2` **'New requests' section and booking request card (Decline / Accept)** — Gap before the StatusPill is 8px instead of 12px
+- `PROV-08-F4` **Provider Bookings screen (header + Pending/Upcoming/Past tab row + list)** — Tab labels differ: 'Done' + 'Cancelled' instead of 'Past'
+- `PROV-11-F1` **Bookings tab: Past** — Tab label 'Done' instead of 'Past'
+- `PROV-12-F1` **Bookings list empty state** — Full EmptyState (icon circle + serif title + body) instead of a single text line
+- `PROV-12-F2` **Bookings list empty state** — Title renders DM Serif 19 plum900 instead of Plus Jakarta 13 ink3
+- `PROV-12-F3` **Bookings list empty state** — Copy differs: 'No new requests' plus a subtitle
+- `PROV-14-F6` **Booking detail — job progress stepper and status-advance action bar** — Helper notes under each step are missing
+- `PROV-14-F7` **Booking detail — job progress stepper and status-advance action bar** — Buttons are sm instead of lg; the complete icon is a single check
+- `PROV-32-F1` **Provider sign-out ConfirmSheet** — Eyebrow reads 'Sign out' instead of 'Provider account', and the body copy is missing
+- `PROV-32-F3` **Provider sign-out ConfirmSheet** — Sheet shadow colour and opacity differ
+- `PROV-32-F4` **Provider sign-out ConfirmSheet** — Triggered from a hero icon instead of the Profile 'Sign out' row; no 'Signed out.' toast
+- `PROV-48-F2` **Provider notifications inbox (PROVIDER_NOTIFICATIONS)** — Settlement, payment-dispute and moderation notifications fall back to generic glyphs
+- `PROV-C4` **Cross-cutting (Provider app)** — Tab bar is private to the customer shell and cannot be reused for the provider shell
+- `PROV-C5` **Cross-cutting (Provider app)** — Missing shared primitives the provider screens need: Toggle, Tag, stepper
+- `PROV-C6` **Cross-cutting (Provider app)** — Hard-coded rgba literals in the prototype are mapped to theme tokens in Flutter
+
+## Appendix A — What the auditors could not see
+
+- (ds) The Flutter app was not run and no runtime screenshots were taken. All Flutter visual comparisons come from reading the code.
+- (ds) The AIWA-Prototype.html bundle was not diffed; I relied on the stated sha256 equivalence with ui_kits/aiwa-app/*.jsx and prototype.html.
+- (ds) Lucide glyphs were compared by name only; the CDN icons were not rendered.
+- (ds) Exact default page transition for the installed Flutter SDK: pubspec.lock requires flutter >=3.44.0, but `flutter --version` returned no output, so the platform default (zoom vs fade-forwards) is not confirmed.
+- (ds) Whether the Plus Jakarta Sans served by google_fonts contains the 'smcp' feature used by AppTextStyles.eyebrow (it has no effect on uppercased text either way).
+- (ds) The iOS device-frame status-bar height in ios-frame.jsx (ignored per scope), so the ScreenHeader top-padding equivalence (60px fixed vs safe-area + 14) is approximate.
+- (ds) The DS-24/DS-C9 claim that sheets render under the tab bar is inferred from go_router ShellRoute and Scaffold(extendBody) semantics, not observed on a device.
+- (ds) Which screens trigger each prototype toast, and whether Flutter screens show the equivalent confirmations; this belongs to the screen auditors.
+- (ds) ios/Runner LaunchScreen storyboard contents: only LaunchImage.png (68-byte placeholders) was seen.
+- (ds) The Android/aiwa_app/assets/images, icons and animations folders exist but are empty, so no logo files are present.
+- (auth) I compared the Flutter UI from source only. The app was not run on a device or emulator, so rendered pixels, font fallback and keyboard insets were not checked.
+- (auth) Lucide and Material glyphs were compared by icon name and shape, not rendered side by side.
+- (auth) Wordmark glyph metrics are derived from the SVG viewBox arithmetic; the DM Serif Display rendering was not measured.
+- (auth) The prototype TextInput placeholder colour is the browser default (no ::placeholder rule), so it could not be compared exactly with Flutter's AppColors.ink4 hint colour.
+- (auth) OTP delivery and verification on the backend (OtpService) were not exercised. AuthController only exposes phone-based /auth/send-otp and /auth/verify-otp, so email OTP support is absent there.
+- (auth) The 320dp overflow of the Pinput row is inferred from its fixed widths; it was not run.
+- (auth) Terms, Preferences, permission priming and the provider onboarding pages were not audited here (ONB partition). Only AvatarGender's navigation target into them was checked, and app_router.dart has no /terms or /preferences route.
+- (auth) lib/shared/widgets has no toast widget (a grep for 'Toast' found nothing), so the prototype Toast has no Flutter counterpart to compare.
+- (onb) Prototype: the 'customer terms' and 'safety policy' spans in TermsScreen (flow-screens.jsx:63) have no onClick, so their link destinations are undefined.
+- (onb) Prototype: the camera and contacts PermissionPrimingScreen kinds have no caller. Route 'permission' renders them only if s.kind is set (prototype.jsx:684), and the Preview-states dispatcher pushes without a kind (prototype.jsx:589). Their intended entry points are inferred from the copy.
+- (onb) Prototype: TermsScreen stores acceptedTermsVersion 'v1.0.2' (prototype.jsx:653), while TermsReacceptScreen shows v1.1.0. The versioning source is mock data only.
+- (onb) Flutter: the shared toast/overlay helper used by other screens, if any exists outside lib/shared/widgets, was not checked. None exists in lib/shared/widgets.
+- (onb) Flutter: I did not check how the Profile palette picker (profile_page.dart:112+) and ThemeController persistence interact with a Preferences screen. This belongs to another auditor's scope.
+- (onb) Backend: the ProviderProfileRequest field names and the StaffController request body for POST /provider/staff were not read. The payload keys in ONB-12-F1 mirror the Flutter extra map and need checking against ProviderProfileRequest.java.
+- (onb) Backend: whether POST /terms/accept requires authentication (and so must run after register) was inferred from SecurityConfig.java:79, which permits only GET /terms/latest. The full security config was not read.
+- (onb) iOS: ios/Runner/Info.plist contains no *UsageDescription keys (grep empty). The remaining plist contents were not reviewed.
+- (disc) Backend/API contract (aiwa-backend not examined): whether provider detail exposes type/staff, openNow or bookNowStatus, per-service fixed-price flags and distance, and whether a provider flag/report endpoint exists. The Flutter entities have none of these fields; provider_detail_model.dart and home_remote_datasource.dart were not read line by line, and field availability was inferred from the entities
+- (disc) No runtime rendering: no emulator or screenshots were available. The category-grid overflow (DISC-01-F1) was computed analytically from sizes in the code
+- (disc) Booking-type screen, BookingPage internals, and Notifications page content belong to other partitions and were not audited here. Only their entry points from discovery screens were checked
+- (disc) prototype.jsx lines 800-952 (Page chrome/role switcher) were not read beyond the previewStates list; none of the preview states are in the discovery scope
+- (disc) Whether google_fonts downloads DM Serif Display / Plus Jakarta Sans at runtime or bundles them (no font assets are declared in pubspec dependencies)
+- (book) Runtime behaviour was not executed. Backend contract conclusions (field names, the ignored status filter, and the missing book-now availability and customer travel-fee endpoints) come from reading aiwa-backend source: BookingController.java, BookingRequest.java, ApiResponse.java and BookingServiceImpl.java.
+- (book) The customer-side masked phone number and the chat message 'removed' flag in backend DTOs were not verified.
+- (book) The endpoint to resolve an SOS incident ('I'm safe') is not visible; SafetyController exposes only GET/POST /bookings/{bookingId}/safety.
+- (book) AuthGatePage continuation after sign-in/sign-up (whether it returns to the booking flow as prototype auth-gate -> booking-type does) belongs to the auth partition and was not traced.
+- (book) How ProviderBloc/GetProviderSlotsUseCase build the slot list (and whether unavailable slots are available from the API) was only partially read (provider_bloc.dart:68-82).
+- (book) The prototype gives no navigation target for the phone IconBtn on Tracking/Chat or for 'Add new address' / 'Check in' (no onClick), so the intended behaviour cannot be verified.
+- (book) Real-device rendering (google_fonts runtime fetch, safe-area sizes) was not observed. Spacing comparisons assume the prototype's ~54px iOS status-bar offset.
+- (acct) Backend endpoints/payloads for addresses, trusted contacts, account deletion, notification preferences and support contact. Only the paths ApiConstants.mePreferences ('/auth/me/preferences') and supportContact ('/support/contact') exist in api_constants.dart; their request and response shapes are not visible.
+- (acct) Backend notification `type` values. The Flutter icon mapping keyword-matches BOOKING/STATUS/PAYMENT/REVIEW/VERIF/SUPPORT/TERMS/PROMO (notifications_page.dart:173-191), so I couldn't confirm a TERMS type exists for the re-accept routing.
+- (acct) Flutter equivalents of TermsReacceptScreen and TrackingScreen (the targets of notification taps) belong to other partitions. app_router.dart has no route for either.
+- (acct) ForbiddenScreen, NotFoundScreen and PermissionDeniedScreen are defined in system-screens.jsx but never mounted by the prototype's CustomerApp. Their navPaths come from the file header comment (system-screens.jsx:1-4) and component props, not from a prototype route.
+- (acct) Runtime behaviour was not executed. The Dio exception re-wrapping claim (ACCT-20-F3) comes from reading dio-5.9.2 dio_mixin.dart:434-523, not from running the app.
+- (acct) Arabic font fallback on real devices and the prototype's ProviderApp notifications (PROVIDER_NOTIFICATIONS) are outside this customer-scope audit / not verified.
+- (acct) Contents of Android/aiwa_app/assets/ (animations, icons, images) were not inspected; no custom icon assets are referenced by the in-scope Flutter files.
+- (acct) Whether AiwaChip supports a tonal gold 'Tag' variant (needed for the trusted-contact relationship tag) was not checked.
+- (prov) Runtime behaviour was not executed. The claims that GET /api/provider/stats 404s, that the status query param is ignored, and that PATCH /reject returns 400 come from static reading of aiwa-backend (ProviderController.java:89, BookingController.java:68-76,102-110, BookingServiceImpl.java:251-256). No server was run.
+- (prov) ApiClient.patch signature beyond lines 54-60 (whether it forwards queryParameters) and its interceptors were not read in full.
+- (prov) AiwaTextField (shared/widgets/aiwa_text_field.dart) support for error text, counters and multiline was not verified; relevant to PROV-36/45.
+- (prov) loading_shimmer.dart and aiwa_icon_button.dart were only skimmed (sizes/variants), not read line by line.
+- (prov) Whether the backend gallery GET payload exposes hidden/hiddenReason, whether provider profile payloads expose vacationMode/verifiedAt, and whether POST /reviews infers PROVIDER_TO_CUSTOMER direction were not verified.
+- (prov) pubspec.yaml was not checked for image_picker (needed for the gallery upload).
+- (prov) Lucide vs Material glyphs were compared by name only, not rendered side by side.
+- (prov) Prototype top paddings (60/68px) include the iOS frame status bar (ios-frame.jsx ignored per instructions); Flutter uses MediaQuery top inset + 14/22, treated as equivalent.
+- (admin) AdminFlags warn/suspend/ban confirms: the task scope mentions them, but admin-extras.jsx:181-187 renders only three buttons with no onClick and no ConfirmSheet, so there is no confirm screen to inventory. README.md:151 does require a secondary confirmation for admin suspend/ban.
+- (admin) Destinations never designed in the prototype: complaint detail (Complaints 'Open', admin-screens.jsx:514), user profile ('View profile', admin-screens.jsx:608), booking chat viewer ('View chat', admin-modules.jsx:98), terms 'Preview' (admin-modules.jsx:214), and the 'Request more info' message input (admin-screens.jsx:453).
+- (admin) No admin sign-in / 2FA screen in the prototype; AdminPanel renders without auth.
+- (admin) No loading or error states in the admin prototype: grep for SkeletonRows/ErrorState in admin-*.jsx and flow-additions-v4.jsx finds nothing, although README.md:110 says admin tables use SkeletonRows.
+- (admin) No Arabic/RTL admin layout in the prototype, so the rtl dimension doesn't apply.
+- (admin) Backend DTO fields not read: ComplaintDto (priority), UserDto (bookings count, joined date, flagged status), ProviderVerificationDto (reshoot flag, submitted-at), the moderation case DTO (image URL), and the support settings DTO (hours, escalation email). Build notes that depend on them say 'verify'.
+- (admin) The AIWA-Prototype.html bundle itself was not opened. Per the harness, its scripts are sha256-identical to ui_kits/aiwa-app/*.jsx, which were read instead.
+- (admin) Flutter has no admin code to compare, so no Flutter token or theme values were compared for this partition.
+
+## Appendix B — Findings refuted during verification (removed)
+
+<details><summary>4 refuted findings</summary>
+
+- (ds) `DS-03-F4` Input radius 14 has no named constant — Every Flutter input and toast radius is 14 (app_theme.dart:95, :192), which matches README.md:37 and states.jsx:191. A missing named constant is code hygiene already covered by DS-C3, not a visual deviation.
+- (ds) `DS-34-F2` The preview palette is persisted before signup completes — The prototype also never reverts the preview: auth-screens.jsx:397 mutates window.aiwa and nothing restores it on pop, so the previewed palette stays for the session in both apps. Surviving a restart is the Flutter-only SharedPreferences persistence already listed in flutterOnly.
+- (onb) `ONB-14-F3` 'Use GPS' only flips a flag; every studio gets hardcoded Cairo coordinates — Flutter does exactly what the prototype does. Prototype 'Use GPS' is `onClick={() => setHasLocation(true)}` (auth-screens.jsx:591) and it submits hardcoded `latitude: 30.0444, longitude: 31.2357` (:615). Flutter's :257 `setState(() => _hasLocation = true)` and :28 constants match. Real geolocation is a product requirement outside prototype fidelity, so ONB-14's interaction dimension should read 'match'.
+- (prov) `PROV-32-F2` Sheet uses the danger tone instead of neutral — Rendering is identical in both runtime palettes. danger100 == plum100 (#E8E2D9 / #F2D9D3), danger700 == plum700, and AiwaButtonVariant.danger bg danger500 == primary bg plum700 (#2E2A26 / #6B3A3A); the icon is passed explicitly. Passing danger:false is optional hygiene, not a visible deviation.
+
+</details>
+
+## Appendix C — Verification stats
+
+| Area | Confirmed | Corrected | Refuted | Added findings | Status changes | Entries added |
+|---|---|---|---|---|---|---|
+| ds | 77 | 8 | 2 | 5 | 1 | 1 |
+| auth | 38 | 6 | 0 | 6 | 1 | 0 |
+| onb | 35 | 4 | 1 | 3 | 0 | 3 |
+| disc | 59 | 7 | 0 | 18 | 0 | 0 |
+| book | 64 | 3 | 0 | 8 | 1 | 3 |
+| acct | 22 | 4 | 0 | 5 | 0 | 6 |
+| prov | 47 | 7 | 1 | 3 | 0 | 3 |
+| admin | 0 | 0 | 0 | 0 | 0 | 3 |
+
+Completeness sweep added 0 entries.

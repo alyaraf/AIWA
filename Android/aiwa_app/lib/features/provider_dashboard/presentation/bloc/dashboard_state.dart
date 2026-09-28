@@ -14,32 +14,12 @@ class DashboardLoading extends DashboardState {}
 
 class DashboardLoaded extends DashboardState {
   final DashboardStats stats;
-  final List<BookingEntity> bookings;
-  final bool hasMore;
-  final String? filterStatus;
+  final List<BookingEntity> pending;
 
-  const DashboardLoaded({
-    required this.stats,
-    required this.bookings,
-    required this.hasMore,
-    this.filterStatus,
-  });
-
-  DashboardLoaded copyWith({
-    DashboardStats? stats,
-    List<BookingEntity>? bookings,
-    bool? hasMore,
-    String? filterStatus,
-  }) =>
-      DashboardLoaded(
-        stats: stats ?? this.stats,
-        bookings: bookings ?? this.bookings,
-        hasMore: hasMore ?? this.hasMore,
-        filterStatus: filterStatus ?? this.filterStatus,
-      );
+  const DashboardLoaded({required this.stats, required this.pending});
 
   @override
-  List<Object?> get props => [stats, bookings, hasMore, filterStatus];
+  List<Object?> get props => [stats, pending];
 }
 
 class DashboardError extends DashboardState {

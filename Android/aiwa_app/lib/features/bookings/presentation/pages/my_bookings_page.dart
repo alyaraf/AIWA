@@ -10,7 +10,6 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
-import '../../../../shared/widgets/confirm_sheet.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/guest_locked_view.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
@@ -22,6 +21,7 @@ import '../../domain/entities/booking_entity.dart';
 import '../bloc/booking_bloc.dart';
 import '../bloc/booking_event.dart';
 import '../bloc/booking_state.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class MyBookingsPage extends StatelessWidget {
   const MyBookingsPage({super.key});
@@ -34,12 +34,11 @@ class MyBookingsPage extends StatelessWidget {
         if (state is! AuthAuthenticated) {
           return Scaffold(
             backgroundColor: AppColors.bone,
-            body: const Padding(
-              padding: EdgeInsets.only(bottom: 90),
+            body: Padding(
+              padding: const EdgeInsets.only(bottom: 90),
               child: GuestLockedView(
-                title: 'Your bookings live here',
-                body:
-                    'Sign in to book providers, track them on the way, and see your history.',
+                title: AppLocalizations.of(context).bookingsGuestTitle,
+                body: AppLocalizations.of(context).bookingsGuestBody,
                 icon: Icons.event_available_outlined,
               ),
             ),
@@ -62,7 +61,7 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
   late BookingBloc _bloc;
   String _tab = 'upcoming';
 
-  static const _pastStatuses = 'COMPLETED,CANCELLED,REJECTED,NO_SHOW';
+  static const _pastStatuses = 'COMPLETED,CANCELLED,REJECTED,NO_SHOW,EXPIRED';
   static const _liveStatuses = {
     'PENDING',
     'ACCEPTED',
@@ -92,17 +91,11 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
     _load();
   }
 
-  Future<void> _confirmCancel(BookingEntity b) async {
-    final ok = await showConfirmSheet(
-      context,
-      eyebrow: 'Cancel booking',
-      title: 'Cancel ${b.serviceName}?',
-      body:
-          '${b.displayProviderName} will be notified right away. This can’t be undone.',
-      confirmLabel: 'Cancel booking',
-      cancelLabel: 'Keep it',
-    );
-    if (ok) _bloc.add(BookingCancelEvent(b.id));
+  /// Live -> Tracking, expired -> Expired booking (prototype.jsx:700-704).
+  /// Reloads on return: the booking may have moved on meanwhile.
+  Future<void> _open(BookingEntity b, String screen) async {
+    await context.push('/booking/${b.id}/$screen', extra: b);
+    if (mounted) _load();
   }
 
   Future<void> _directions(BookingEntity b) async {
@@ -120,54 +113,46 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
   Widget build(BuildContext context) {
     return BlocProvider.value(
       value: _bloc,
-      child: BlocListener<BookingBloc, BookingState>(
-        bloc: _bloc,
-        listener: (context, state) {
-          if (state is BookingCancelled) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('Booking cancelled')));
-            _load();
-          }
-        },
-        child: Scaffold(
-          backgroundColor: AppColors.bone,
-          body: RefreshIndicator(
-            color: AppColors.plum700,
-            onRefresh: () async => _load(),
-            child: CustomScrollView(
-              slivers: [
-                const SliverToBoxAdapter(
-                  child: PageTitle(
-                    eyebrow: 'Your appointments',
-                    title: 'Bookings',
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: _UnderlineTabs(
-                    tabs: const [('upcoming', 'Upcoming'), ('past', 'Past')],
-                    active: _tab,
-                    onChanged: _switchTab,
-                  ),
-                ),
-                BlocBuilder<BookingBloc, BookingState>(
-                  bloc: _bloc,
-                  builder: (context, state) => _buildBody(state),
-                ),
-                const SliverToBoxAdapter(child: SizedBox(height: 110)),
-              ],
+      child: Scaffold(
+        backgroundColor: AppColors.bone,
+        body: CustomScrollView(
+          physics: AiwaRefresh.physics,
+          slivers: [
+            AiwaRefresh(onRefresh: () async => _load()),
+            SliverToBoxAdapter(
+              child: PageTitle(
+                eyebrow: AppLocalizations.of(context).bookingsEyebrow,
+                title: AppLocalizations.of(context).bookingsTitle,
+                letterSpacing: 0,
+              ),
             ),
-          ),
+            SliverToBoxAdapter(
+              child: _UnderlineTabs(
+                tabs: [
+                  ('upcoming', AppLocalizations.of(context).bookingsUpcoming),
+                  ('past', AppLocalizations.of(context).bookingsPast),
+                ],
+                active: _tab,
+                onChanged: _switchTab,
+              ),
+            ),
+            BlocBuilder<BookingBloc, BookingState>(
+              bloc: _bloc,
+              builder: (context, state) => _buildBody(state),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 110)),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildBody(BookingState state) {
+    final l = AppLocalizations.of(context);
     const pad = EdgeInsets.fromLTRB(AppTheme.gutter, 14, AppTheme.gutter, 0);
     if (state is BookingError) {
       return SliverToBoxAdapter(
-        child: ErrorState(body: state.message, onRetry: _load),
+        child: ErrorState(body: l.error(state.message), onRetry: _load),
       );
     }
     if (state is! BookingListLoaded) {
@@ -176,22 +161,32 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
         sliver: SliverToBoxAdapter(child: SkeletonList(count: 3)),
       );
     }
-    final bookings = _tab == 'upcoming'
-        ? state.bookings.where((b) => _liveStatuses.contains(b.status)).toList()
-        : state.bookings;
+    // /bookings/my ignores `status`, so both tabs filter client-side.
+    final bookings = state.bookings
+        .where(
+          (b) => _tab == 'upcoming'
+              ? _liveStatuses.contains(b.status)
+              : _pastStatuses.split(',').contains(b.status),
+        )
+        .toList();
     if (bookings.isEmpty) {
       final upcoming = _tab == 'upcoming';
-      return SliverToBoxAdapter(
-        child: EmptyState(
-          icon: upcoming
-              ? Icons.calendar_month_outlined
-              : Icons.history_rounded,
-          title: upcoming ? 'Nothing booked yet' : 'No past appointments',
-          subtitle: upcoming
-              ? 'When you book a provider, it shows up here so you can track them on the way.'
-              : 'Once an appointment is finished it moves here, ready to re-book in a tap.',
-          actionLabel: upcoming ? 'Find a provider' : null,
-          onAction: upcoming ? () => context.go(AppRoutes.search) : null,
+      return SliverPadding(
+        padding: pad,
+        sliver: SliverToBoxAdapter(
+          child: EmptyState(
+            icon: upcoming
+                ? Icons.edit_calendar_outlined
+                : Icons.history_rounded,
+            title: upcoming
+                ? l.bookingsEmptyUpcomingTitle
+                : l.bookingsEmptyPastTitle,
+            subtitle: upcoming
+                ? l.bookingsEmptyUpcomingBody
+                : l.bookingsEmptyPastBody,
+            actionLabel: upcoming ? l.bookingsFindProvider : null,
+            onAction: upcoming ? () => context.go(AppRoutes.search) : null,
+          ),
         ),
       );
     }
@@ -203,7 +198,7 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
             return state.hasMore
                 ? Center(
                     child: AiwaButton(
-                      label: 'Load more',
+                      label: l.commonLoadMore,
                       variant: AiwaButtonVariant.ghost,
                       size: AiwaButtonSize.sm,
                       onPressed: () => _bloc.add(BookingLoadMoreEvent()),
@@ -216,8 +211,13 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
             padding: const EdgeInsets.only(bottom: 12),
             child: _BookingCard(
               booking: b,
-              index: i,
-              onCancel: () => _confirmCancel(b),
+              onTap: _liveStatuses.contains(b.status)
+                  ? () => _open(b, 'track')
+                  : b.status == 'EXPIRED'
+                  ? () => _open(b, 'expired')
+                  : null,
+              onTrack: () => _open(b, 'track'),
+              onAlternatives: () => _open(b, 'rejected'),
               onDirections: () => _directions(b),
               onReview: () => context.push('/review/${b.id}', extra: b),
               onRebook: () => context.push('/provider/${b.providerId}'),
@@ -260,7 +260,9 @@ class _UnderlineTabs extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
               duration: AppTheme.dur2,
-              margin: const EdgeInsets.only(right: 18),
+              margin: const EdgeInsetsDirectional.only(end: 24),
+              // Underline sits over the row's 1px divider (marginBottom -1).
+              transform: Matrix4.translationValues(0, 1, 0),
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 border: Border(
@@ -287,35 +289,26 @@ class _UnderlineTabs extends StatelessWidget {
 
 class _BookingCard extends StatelessWidget {
   final BookingEntity booking;
-  final int index;
-  final VoidCallback onCancel;
+  final VoidCallback? onTap;
+  final VoidCallback onTrack;
+  final VoidCallback onAlternatives;
   final VoidCallback onDirections;
   final VoidCallback onReview;
   final VoidCallback onRebook;
 
   const _BookingCard({
     required this.booking,
-    required this.index,
-    required this.onCancel,
+    required this.onTap,
+    required this.onTrack,
+    required this.onAlternatives,
     required this.onDirections,
     required this.onReview,
     required this.onRebook,
   });
 
-  String get _when {
-    final t = booking.scheduledTime.length >= 5
-        ? booking.scheduledTime.substring(0, 5)
-        : booking.scheduledTime;
-    try {
-      final d = DateTime.parse(booking.scheduledDate);
-      return '${DateFormat('EEE, MMM d').format(d)} · $t';
-    } catch (_) {
-      return '${booking.scheduledDate} · $t';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final b = booking;
     final hasAddress =
         b.providerAddress != null && b.providerAddress!.isNotEmpty;
@@ -324,154 +317,185 @@ class _BookingCard extends StatelessWidget {
       color: AppColors.ink2,
     );
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.paper,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppColors.divider),
-        boxShadow: AppTheme.shadow1,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AiwaAvatar(
-                name: b.displayProviderName,
-                size: 42,
-                imageUrl: b.providerImageUrl,
-                palette:
-                    AvatarPalette.values[index % AvatarPalette.values.length],
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      b.displayProviderName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.h4.copyWith(
-                        fontSize: 18,
-                        height: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      b.serviceName,
-                      style: AppTextStyles.micro.copyWith(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              StatusPill(status: b.status),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 14,
-            runSpacing: 6,
-            children: [
-              _Meta(
-                icon: Icons.calendar_today_outlined,
-                text: _when,
-                style: metaStyle,
-              ),
-              if (hasAddress)
-                _Meta(
-                  icon: Icons.location_on_outlined,
-                  text: b.providerAddress!,
-                  style: metaStyle,
-                ),
-            ],
-          ),
-          if (b.status == 'CANCELLED' ||
-              b.status == 'NO_SHOW' ||
-              b.status == 'REJECTED') ...[
-            const SizedBox(height: 12),
-            _ReasonBox(
-              icon: b.status == 'NO_SHOW'
-                  ? Icons.person_off_outlined
-                  : Icons.cancel_outlined,
-              title: b.status == 'NO_SHOW'
-                  ? 'Marked no-show'
-                  : b.status == 'REJECTED'
-                  ? 'Rejected by provider'
-                  : 'Booking cancelled',
-              body: b.status == 'REJECTED'
-                  ? 'The provider couldn’t take this slot. Try another time or provider.'
-                  : null,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.paper,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          border: Border.all(color: AppColors.divider),
+          // 0 1px 2px rgba(74,31,56,.04) (screens.jsx:537).
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.plum700.withValues(alpha: .04),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
             ),
           ],
-          if (b.canCancel || hasAddress && _isLive(b.status)) ...[
-            const SizedBox(height: 14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
-              children: [
-                if (b.canCancel)
-                  Expanded(
-                    child: AiwaButton(
-                      label: 'Cancel',
-                      variant: AiwaButtonVariant.secondary,
-                      size: AiwaButtonSize.sm,
-                      fullWidth: true,
-                      onPressed: onCancel,
-                    ),
-                  ),
-                if (b.canCancel && hasAddress) const SizedBox(width: 8),
-                if (hasAddress)
-                  Expanded(
-                    child: AiwaButton(
-                      label: 'Directions',
-                      icon: Icons.map_outlined,
-                      size: AiwaButtonSize.sm,
-                      fullWidth: true,
-                      onPressed: onDirections,
-                    ),
-                  ),
-              ],
-            ),
-          ],
-          if (b.status == 'COMPLETED') ...[
-            const SizedBox(height: 14),
-            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: AiwaButton(
-                    label: 'Re-book',
-                    variant: AiwaButtonVariant.ghost,
-                    size: AiwaButtonSize.sm,
-                    fullWidth: true,
-                    onPressed: onRebook,
+                  child: Row(
+                    children: [
+                      AiwaAvatar(
+                        name: b.displayProviderName,
+                        size: 42,
+                        imageUrl: b.providerImageUrl,
+                        verified: b.providerVerified,
+                        palette: AiwaAvatar.paletteFor(b.providerId),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              b.displayProviderName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.h4.copyWith(
+                                fontSize: 18,
+                                height: 1.1,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              b.serviceName,
+                              style: AppTextStyles.micro.copyWith(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: AiwaButton(
-                    label: 'Leave a review',
-                    icon: Icons.star_rounded,
-                    size: AiwaButtonSize.sm,
-                    fullWidth: true,
-                    onPressed: onReview,
-                  ),
-                ),
+                StatusPill(status: b.status),
               ],
             ),
-          ],
-          if (b.status == 'REJECTED') ...[
-            const SizedBox(height: 14),
-            AiwaButton(
-              label: 'See alternatives',
-              variant: AiwaButtonVariant.secondary,
-              size: AiwaButtonSize.sm,
-              fullWidth: true,
-              onPressed: () => context.go(AppRoutes.search),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 14,
+              runSpacing: 6,
+              children: [
+                _Meta(
+                  icon: Icons.calendar_today_outlined,
+                  text: l.formatWhen(b.scheduledDate, b.scheduledTime),
+                  style: metaStyle,
+                ),
+                // Kit shows distance; fall back to the address without it.
+                if (b.providerDistanceKm != null || hasAddress)
+                  _Meta(
+                    icon: Icons.location_on_outlined,
+                    text: b.providerDistanceKm != null
+                        ? l.distanceKm(b.providerDistanceKm!.toStringAsFixed(1))
+                        : b.providerAddress!,
+                    style: metaStyle,
+                  ),
+              ],
             ),
+            // Only with a reason to show (screens.jsx:552, 565).
+            if ((b.status == 'CANCELLED' || b.status == 'NO_SHOW') &&
+                    b.cancellationReason != null ||
+                b.status == 'REJECTED' && b.rejectionReason != null) ...[
+              const SizedBox(height: 12),
+              _ReasonBox(
+                icon: b.status == 'NO_SHOW'
+                    ? Icons.person_off_outlined
+                    : Icons.cancel_outlined,
+                title: switch (b.status) {
+                  'NO_SHOW' => l.bookingsNoShow,
+                  'REJECTED' => l.bookingsRejectedByProvider,
+                  _ => switch (b.cancelledBy) {
+                    null || 'CUSTOMER' => l.bookingsCancelledByYou,
+                    'PROVIDER' => l.bookingsCancelledByProvider,
+                    final who => l.bookingsCancelledBy(who),
+                  },
+                },
+                meta: b.status != 'REJECTED' && b.cancelledAt != null
+                    ? ' · ${DateFormat('MMM d · h:mm a', l.localeName).format(b.cancelledAt!)}'
+                    : null,
+                body: switch (b.status == 'REJECTED'
+                    ? b.rejectionReason
+                    : b.cancellationReason) {
+                  final r? => l.commonQuoted(r),
+                  null => null,
+                },
+                footnote: b.status == 'CANCELLED' && b.penaltyApplied
+                    ? l.bookingsPenaltyApplied
+                    : null,
+              ),
+            ],
+            if (_isLive(b.status)) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: AiwaButton(
+                      label: l.bookingsTrack,
+                      variant: AiwaButtonVariant.secondary,
+                      size: AiwaButtonSize.sm,
+                      fullWidth: true,
+                      onPressed: onTrack,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: AiwaButton(
+                      label: l.bookingsDirections,
+                      icon: Icons.map_outlined,
+                      size: AiwaButtonSize.sm,
+                      fullWidth: true,
+                      onPressed: hasAddress ? onDirections : null,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (b.status == 'COMPLETED') ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: AiwaButton(
+                      label: l.bookingsRebook,
+                      variant: AiwaButtonVariant.ghost,
+                      size: AiwaButtonSize.sm,
+                      fullWidth: true,
+                      onPressed: onRebook,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: AiwaButton(
+                      label: l.bookingsLeaveReview,
+                      icon: Icons.star_rounded,
+                      size: AiwaButtonSize.sm,
+                      fullWidth: true,
+                      onPressed: onReview,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (b.status == 'REJECTED') ...[
+              const SizedBox(height: 14),
+              AiwaButton(
+                label: l.bookingsSeeAlternatives,
+                variant: AiwaButtonVariant.secondary,
+                size: AiwaButtonSize.sm,
+                fullWidth: true,
+                onPressed: onAlternatives,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -517,9 +541,17 @@ class _Meta extends StatelessWidget {
 class _ReasonBox extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String? meta;
   final String? body;
+  final String? footnote;
 
-  const _ReasonBox({required this.icon, required this.title, this.body});
+  const _ReasonBox({
+    required this.icon,
+    required this.title,
+    this.meta,
+    this.body,
+    this.footnote,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -547,10 +579,32 @@ class _ReasonBox extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: style.copyWith(fontWeight: FontWeight.w600)),
+                Text.rich(
+                  TextSpan(
+                    text: title,
+                    style: style.copyWith(fontWeight: FontWeight.w600),
+                    children: [
+                      if (meta != null)
+                        TextSpan(
+                          text: meta,
+                          style: style.copyWith(
+                            fontWeight: FontWeight.w400,
+                            color: AppColors.ink3,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 if (body != null) ...[
                   const SizedBox(height: 2),
                   Text(body!, style: style.copyWith(color: AppColors.ink2)),
+                ],
+                if (footnote != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    footnote!,
+                    style: style.copyWith(fontWeight: FontWeight.w600),
+                  ),
                 ],
               ],
             ),

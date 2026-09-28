@@ -21,14 +21,18 @@ class SavedRemoteDataSourceImpl implements SavedRemoteDataSource {
     int page = 0,
     int size = 20,
   }) async {
-    final response = await _api.get(
-      ApiConstants.savedProviders,
-      queryParameters: {'page': page, 'size': size},
-    );
-    final data = response.data['data'] ?? response.data;
-    return PagedData.fromJson(
-      data,
-      (e) => ProviderSummaryModel.fromJson(e as Map<String, dynamic>),
+    // GET /users/me/saved returns a plain List<ProviderSummaryDto>, unpaged.
+    final response = await _api.get(ApiConstants.savedProviders);
+    final list = (response.data['data'] as List)
+        .map((e) => ProviderSummaryModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return PagedData(
+      content: list,
+      totalElements: list.length,
+      totalPages: 1,
+      number: 0,
+      size: list.length,
+      last: true,
     );
   }
 

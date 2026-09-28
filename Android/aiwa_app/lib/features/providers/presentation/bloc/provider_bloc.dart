@@ -56,12 +56,14 @@ class ProviderBloc extends Bloc<ProviderEvent, ProviderState> {
   ) async {
     final current = state;
     if (current is! ProviderLoaded) return;
-    if (current.isSaved) {
-      await saveProvider.unsave(event.providerId);
-      emit(current.copyWith(isSaved: false));
-    } else {
-      await saveProvider.save(event.providerId);
-      emit(current.copyWith(isSaved: true));
+    final next = !current.isSaved;
+    emit(current.copyWith(isSaved: next));
+    final result = next
+        ? await saveProvider.save(event.providerId)
+        : await saveProvider.unsave(event.providerId);
+    final latest = state;
+    if (result.isLeft() && latest is ProviderLoaded) {
+      emit(latest.copyWith(isSaved: !next));
     }
   }
 
@@ -69,7 +71,11 @@ class ProviderBloc extends Bloc<ProviderEvent, ProviderState> {
     ProviderLoadSlotsEvent event,
     Emitter<ProviderState> emit,
   ) async {
-    final result = await getSlots(event.providerId, event.date);
+    final result = await getSlots(
+      event.providerId,
+      event.serviceId,
+      event.date,
+    );
     final fetched = result.fold((_) => <AvailabilitySlot>[], (s) => s);
     final fmt = DateFormat('yyyy-MM-dd');
     // Replace any slots we already had for the requested date.

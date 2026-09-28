@@ -1,8 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
@@ -13,9 +13,11 @@ import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_chip.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
+import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
+import '../../../../shared/widgets/press_scale.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../../shared/widgets/star_rating.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -25,6 +27,8 @@ import '../../domain/entities/provider_detail_entity.dart';
 import '../bloc/provider_bloc.dart';
 import '../bloc/provider_event.dart';
 import '../bloc/provider_state.dart';
+import '../widgets/flag_provider_sheet.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class ProviderDetailPage extends StatefulWidget {
   final String providerId;
@@ -39,17 +43,6 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
   late ProviderBloc _bloc;
   String _tab = 'services';
 
-  static const _categoryLabels = {
-    'HAIR': 'Hair',
-    'NAILS': 'Nails',
-    'SPA': 'Spa',
-    'MAKEUP': 'Makeup',
-    'LASHES': 'Lashes',
-    'SKIN': 'Skin',
-    'MASSAGE': 'Massage',
-    'OTHER': 'Other',
-  };
-
   @override
   void initState() {
     super.initState();
@@ -59,13 +52,36 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
 
   bool get _isSignedIn => context.read<AuthBloc>().state is AuthAuthenticated;
 
-  void _book({ServiceEntity? service}) {
-    if (!_isSignedIn) {
-      context.push(AppRoutes.authGate);
+  /// prototype.jsx:661-667 — shop -> staff picker, guest -> auth gate,
+  /// otherwise the booking-type step.
+  void _book(ProviderDetailEntity p, {ServiceEntity? service}) {
+    if (p.isShop) {
+      final q = service != null ? '?serviceId=${service.id}' : '';
+      context.push('/provider/${p.id}/staff$q', extra: p);
       return;
     }
-    final query = service != null ? '?serviceId=${service.id}' : '';
-    context.push('/booking/${widget.providerId}$query');
+    final target = AppRoutes.bookingTypeFor(p.id, serviceId: service?.id);
+    if (_isSignedIn) {
+      context.push(target);
+    } else {
+      context.push(AppRoutes.authGate, extra: target);
+    }
+  }
+
+  // ponytail: copies a text blurb; no share_plus and no public deep-link
+  // host yet. Swap for Share.share(url) once both exist.
+  Future<void> _share(ProviderDetailEntity p) async {
+    await Clipboard.setData(
+      ClipboardData(
+        text: [
+          AppLocalizations.of(context).providerShareText(p.displayName),
+          if (p.address != null && p.address!.isNotEmpty) p.address!,
+        ].join(' · '),
+      ),
+    );
+    if (mounted) {
+      showAiwaToast(context, AppLocalizations.of(context).providerCopied);
+    }
   }
 
   void _toggleSave() {
@@ -92,7 +108,9 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                       ScreenHeader(title: '', onBack: () => context.pop()),
                       Expanded(
                         child: ErrorState(
-                          body: state.message,
+                          body: AppLocalizations.of(
+                            context,
+                          ).error(state.message),
                           onRetry: () =>
                               _bloc.add(ProviderLoadEvent(widget.providerId)),
                         ),
@@ -134,6 +152,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
     final startsAt = prices.isEmpty
         ? null
         : prices.reduce((a, b) => a < b ? a : b);
+    final l = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: AppColors.bone,
@@ -152,22 +171,26 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const EyebrowLabel('Starts at', fontSize: 10),
+                  EyebrowLabel(l.providerStartsAt, fontSize: 10),
                   const SizedBox(height: 2),
                   Text(
-                    startsAt != null
-                        ? 'EGP ${_money(startsAt)}'
-                        : 'Ask provider',
-                    style: AppTextStyles.price.copyWith(height: 1.1),
+                    startsAt != null ? l.egp(startsAt) : l.providerAskProvider,
+                    style: AppTextStyles.price,
                   ),
                 ],
               ),
             ),
             AiwaButton(
-              label: 'Book now',
+              label: l.providerBookNow,
               icon: Icons.event_available_rounded,
               size: AiwaButtonSize.lg,
-              onPressed: p.services.any((s) => s.available) ? _book : null,
+              // Preselects the first bookable service (screens.jsx:320).
+              onPressed: p.services.any((s) => s.available)
+                  ? () => _book(
+                      p,
+                      service: p.services.firstWhere((s) => s.available),
+                    )
+                  : null,
             ),
           ],
         ),
@@ -175,7 +198,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
     );
   }
 
-  double get _coverHeight => 280 + MediaQuery.paddingOf(context).top * 0.5;
+  double get _coverHeight => 280;
 
   /// Cover with the bone body card overlapping its bottom 24px.
   Widget _buildHero(ProviderDetailEntity p, bool isSaved) {
@@ -198,8 +221,9 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
 
   Widget _buildCover(ProviderDetailEntity p, bool isSaved) {
     final top = MediaQuery.paddingOf(context).top;
+    final l = AppLocalizations.of(context);
     final category = p.categories.isNotEmpty
-        ? p.categories.map((c) => _categoryLabels[c] ?? c).join(' · ')
+        ? p.categories.map(l.category).join(' · ')
         : null;
     return SizedBox(
       height: _coverHeight,
@@ -230,10 +254,10 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                 ),
               ),
             ),
-          Positioned(
+          PositionedDirectional(
             top: top + 12,
-            left: 18,
-            right: 18,
+            start: 18,
+            end: 18,
             child: Row(
               children: [
                 AiwaIconButton(
@@ -242,6 +266,12 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                   onTap: () => context.pop(),
                 ),
                 const Spacer(),
+                AiwaIconButton(
+                  icon: Icons.share_outlined,
+                  variant: AiwaIconButtonVariant.glass,
+                  onTap: () => _share(p),
+                ),
+                const SizedBox(width: 8),
                 AiwaIconButton(
                   icon: isSaved
                       ? Icons.favorite_rounded
@@ -253,9 +283,9 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
               ],
             ),
           ),
-          Positioned(
-            left: AppTheme.gutter,
-            right: AppTheme.gutter,
+          PositionedDirectional(
+            start: AppTheme.gutter,
+            end: AppTheme.gutter,
             bottom: 44,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,11 +299,13 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                     color: AppColors.bone,
                     fontSize: 32,
                     height: 1.05,
+                    letterSpacing: 0,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
                   runSpacing: 4,
                   children: [
                     _CoverMeta(
@@ -281,22 +313,22 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                       iconColor: AppColors.gold300,
                       text: p.totalReviews > 0
                           ? '${p.averageRating.toStringAsFixed(1)} (${p.totalReviews})'
-                          : 'New',
+                          : l.providerNew,
                       bold: true,
                     ),
                     if (p.address != null && p.address!.isNotEmpty) ...[
-                      MetaDot(color: AppColors.rose300),
+                      MetaDot(color: AppColors.rose300, gap: 0),
                       _CoverMeta(
                         icon: Icons.location_on_outlined,
                         text: p.address!,
                       ),
                     ],
                     if (p.isVerified) ...[
-                      MetaDot(color: AppColors.rose300),
+                      MetaDot(color: AppColors.rose300, gap: 0),
                       _CoverMeta(
                         icon: Icons.verified_rounded,
                         iconColor: AppColors.gold300,
-                        text: 'Verified',
+                        text: l.providerVerified,
                       ),
                     ],
                   ],
@@ -310,6 +342,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
   }
 
   Widget _buildBody(ProviderDetailEntity p) {
+    final l = AppLocalizations.of(context);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bone,
@@ -327,7 +360,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
           Text(
             (p.bio != null && p.bio!.trim().isNotEmpty)
                 ? p.bio!
-                : 'Top-rated provider in your area. Browse the services, recent reviews and gallery below.',
+                : l.providerBioFallback,
             style: AppTextStyles.bodySm.copyWith(color: AppColors.ink2),
           ),
           const SizedBox(height: 14),
@@ -337,26 +370,38 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
             children: [
               if (p.phone.isNotEmpty)
                 AiwaChip(
-                  label: 'Call',
+                  label: l.providerCall,
                   icon: Icons.phone_outlined,
                   onTap: () => _launch('tel:${p.phone}'),
                 ),
               if (p.phone.isNotEmpty)
                 AiwaChip(
-                  label: 'WhatsApp',
-                  icon: Icons.chat_bubble_outline_rounded,
+                  label: l.providerWhatsApp,
+                  icon: Icons.mode_comment_outlined,
                   onTap: () => _launch(
                     'https://wa.me/${p.phone.replaceAll(RegExp(r'[^0-9]'), '')}',
                   ),
                 ),
               if (p.latitude != null && p.longitude != null)
                 AiwaChip(
-                  label: 'Directions',
+                  label: l.bookingsDirections,
                   icon: Icons.map_outlined,
                   onTap: () => _launch(
                     'https://maps.google.com/?q=${p.latitude},${p.longitude}',
                   ),
                 ),
+              AiwaChip(
+                label: l.providerReport,
+                icon: Icons.flag_outlined,
+                onTap: _isSignedIn
+                    ? () => showFlagProviderSheet(
+                        context,
+                        providerId: p.id,
+                        providerName: p.displayName,
+                      )
+                    // POST /complaints needs a reporter account.
+                    : () => context.push(AppRoutes.authGate),
+              ),
             ],
           ),
           const SizedBox(height: 22),
@@ -370,6 +415,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
     // Content sits under the body card, which is shifted up by 24px.
     // Design: 8px above the services list, 16px above reviews and gallery.
     const pad = EdgeInsets.fromLTRB(AppTheme.gutter, 16, AppTheme.gutter, 0);
+    final l = AppLocalizations.of(context);
     const servicesPad = EdgeInsets.fromLTRB(
       AppTheme.gutter,
       8,
@@ -380,11 +426,11 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
       case 'reviews':
         if (p.reviews.isEmpty) {
           return [
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: EmptyState(
                 icon: Icons.star_outline_rounded,
-                title: 'No reviews yet',
-                subtitle: 'Be the first to book and leave a review.',
+                title: l.providerNoReviews,
+                subtitle: l.providerNoReviewsBody,
                 tone: EmptyStateTone.gold,
                 compact: true,
               ),
@@ -411,6 +457,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                       style: AppTextStyles.display.copyWith(
                         fontSize: 38,
                         height: 1,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -420,7 +467,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                         StarRating(value: p.averageRating),
                         const SizedBox(height: 2),
                         Text(
-                          'Based on ${p.totalReviews} reviews',
+                          l.providerBasedOn(p.totalReviews),
                           style: AppTextStyles.micro.copyWith(fontSize: 12),
                         ),
                       ],
@@ -451,11 +498,11 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
       case 'gallery':
         if (p.galleryImages.isEmpty) {
           return [
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: EmptyState(
                 icon: Icons.photo_library_outlined,
-                title: 'No photos yet',
-                subtitle: "This provider hasn't added gallery photos.",
+                title: l.providerNoPhotos,
+                subtitle: l.providerNoPhotosBody,
                 compact: true,
               ),
             ),
@@ -489,11 +536,11 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
       default:
         if (p.services.isEmpty) {
           return [
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: EmptyState(
                 icon: Icons.content_cut_rounded,
-                title: 'No services listed',
-                subtitle: 'This provider has not published services yet.',
+                title: l.providerNoServices,
+                subtitle: l.providerNoServicesBody,
                 compact: true,
               ),
             ),
@@ -506,7 +553,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
               delegate: SliverChildBuilderDelegate(
                 (_, i) => _ServiceRow(
                   service: p.services[i],
-                  onBook: () => _book(service: p.services[i]),
+                  onBook: () => _book(p, service: p.services[i]),
                 ),
                 childCount: p.services.length,
               ),
@@ -522,32 +569,6 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
-}
-
-String _money(double v) => NumberFormat.decimalPattern('en').format(v.round());
-
-/// "2 weeks ago" style, as in the design's review list.
-String _relative(DateTime date) {
-  final days = DateTime.now().difference(date.toLocal()).inDays;
-  if (days < 1) return 'Today';
-  if (days == 1) return 'Yesterday';
-  if (days < 7) return '$days days ago';
-  if (days < 30) {
-    final w = days ~/ 7;
-    return w == 1 ? '1 week ago' : '$w weeks ago';
-  }
-  if (days < 365) {
-    final m = days ~/ 30;
-    return m == 1 ? '1 month ago' : '$m months ago';
-  }
-  return DateFormat('MMM yyyy').format(date.toLocal());
-}
-
-String _duration(int minutes) {
-  if (minutes < 60) return '$minutes min';
-  final h = minutes ~/ 60;
-  final m = minutes % 60;
-  return m == 0 ? '${h}h' : '${h}h ${m}min';
 }
 
 class _CoverMeta extends StatelessWidget {
@@ -595,44 +616,50 @@ class _Tabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const tabs = [
-      ('services', 'Services'),
-      ('reviews', 'Reviews'),
-      ('gallery', 'Gallery'),
+    final l = AppLocalizations.of(context);
+    final tabs = [
+      ('services', l.providerTabServices),
+      ('reviews', l.providerTabReviews),
+      ('gallery', l.providerTabGallery),
     ];
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: Row(
-        children: tabs.map((t) {
+        children: tabs.indexed.expand((e) {
+          final (i, t) = e;
           final on = t.$1 == active;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(t.$1),
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: AppTheme.dur2,
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: on ? AppColors.plum700 : Colors.transparent,
-                      width: 2,
+          return [
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => onChanged(t.$1),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: AppTheme.dur2,
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: on ? AppColors.plum700 : Colors.transparent,
+                        width: 2,
+                      ),
                     ),
                   ),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  t.$2,
-                  style: AppTextStyles.label.copyWith(
-                    fontSize: 14,
-                    color: on ? AppColors.plum700 : AppColors.ink3,
+                  alignment: Alignment.center,
+                  child: Text(
+                    t.$2,
+                    style: AppTextStyles.label.copyWith(
+                      fontSize: 14,
+                      height: 1.3,
+                      color: on ? AppColors.plum700 : AppColors.ink3,
+                    ),
                   ),
                 ),
               ),
             ),
-          );
+          ];
         }).toList(),
       ),
     );
@@ -667,28 +694,19 @@ class _ServiceRow extends StatelessWidget {
                     height: 1.3,
                   ),
                 ),
-                if (service.description != null &&
-                    service.description!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      service.description!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.micro.copyWith(fontSize: 12),
-                    ),
-                  ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Row(
                   children: [
                     Text(
-                      _duration(service.durationMinutes),
+                      AppLocalizations.of(
+                        context,
+                      ).durationLabel(service.durationMinutes),
                       style: AppTextStyles.micro.copyWith(fontSize: 12),
                     ),
                     if (!available) ...[
                       const MetaDot(),
                       Text(
-                        'Unavailable',
+                        AppLocalizations.of(context).providerUnavailable,
                         style: AppTextStyles.micro.copyWith(
                           fontSize: 12,
                           color: AppColors.danger700,
@@ -703,11 +721,11 @@ class _ServiceRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            'EGP ${_money(service.price)}',
+            AppLocalizations.of(context).egp(service.price),
             style: AppTextStyles.h4.copyWith(fontSize: 18, height: 1),
           ),
           const SizedBox(width: 12),
-          GestureDetector(
+          PressScale(
             onTap: available ? onBook : null,
             child: Opacity(
               opacity: available ? 1 : 0.35,
@@ -762,10 +780,12 @@ class _ReviewRow extends StatelessWidget {
                       style: AppTextStyles.label.copyWith(fontSize: 14),
                     ),
                   ),
-                  Text(_relative(review.createdAt), style: AppTextStyles.micro),
+                  Text(
+                    AppLocalizations.of(context).relativeDay(review.createdAt),
+                    style: AppTextStyles.micro,
+                  ),
                 ],
               ),
-              const SizedBox(height: 3),
               StarRating(value: review.rating, size: 11),
               if (review.comment != null && review.comment!.isNotEmpty) ...[
                 const SizedBox(height: 6),

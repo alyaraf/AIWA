@@ -18,6 +18,7 @@ dependencies:
 
   # Network
   dio: ^5.4.3+1
+  # ponytail: unused (0 imports in lib/), delete once no native plugin config needs it
   pretty_dio_logger: ^1.3.1
 
   # Dependency injection
@@ -58,6 +59,7 @@ dependencies:
   intl: ^0.20.2
 
   # Local notifications
+  # ponytail: unused (0 imports in lib/), delete once no native plugin config needs it
   flutter_local_notifications: ^17.2.3
 
   # Connectivity
@@ -67,17 +69,32 @@ dependencies:
   pinput: ^5.0.0
 
   # Cupertino icons
+  # ponytail: unused (0 imports in lib/), delete once no native plugin config needs it
   cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # ponytail: unused (no @GenerateMocks in test/), delete or start using it
   mockito: ^5.4.4
+  flutter_launcher_icons: ^0.14.4
+
+# Regenerate with: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icons/app_icon.png
+  remove_alpha_ios: true
+  adaptive_icon_background: '#2A1320'
+  adaptive_icon_foreground: assets/icons/app_icon_foreground.png
 
 flutter:
+  generate: true
   uses-material-design: true
   assets:
     - assets/images/
     - assets/icons/
     - assets/animations/
+    # Bundled so google_fonts never downloads at runtime (see main.dart).
+    - assets/google_fonts/

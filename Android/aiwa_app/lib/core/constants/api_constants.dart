@@ -15,19 +15,31 @@ class ApiConstants {
   static const String mePreferences = '/auth/me/preferences';
   static const String sendOtp = '/auth/send-otp';
   static const String verifyOtp = '/auth/verify-otp';
+  static const String resetPassword = '/auth/reset-password';
+  static const String meAvatar = '/auth/me/avatar';
+  static const String meNotificationPreferences =
+      '/auth/me/notification-preferences';
 
   // Providers (public browse)
   static const String nearbyProviders = '/providers/nearby';
   static const String searchProviders = '/providers/search';
   static String providerProfile(String id) => '/providers/$id';
   static String providerServices(String id) => '/providers/$id/services';
-  static String providerAvailability(String id) => '/providers/$id/availability';
+  static String providerAvailability(String id) =>
+      '/providers/$id/availability';
   static String providerReviews(String id) => '/providers/$id/reviews';
-  static String providerGallery(String id) => '/providers/$id/gallery';
+  static String providerGallery(String id) => '/provider/gallery/$id';
+  static String providerStaffList(String id) => '/providers/$id/staff';
 
   // Provider self-management (PROVIDER role)
   static const String myProviderProfile = '/provider/profile';
-  static const String providerStats = '/provider/stats';
+  static const String providerDashboard = '/provider/dashboard';
+  static const String providerStaff = '/provider/staff';
+  static String providerStaffById(String id) => '/provider/staff/$id';
+  static const String providerMode = '/provider/mode';
+  static const String providerTravelFee = '/provider/mode/travel-fee';
+  static const String providerSettlement = '/provider/settlement';
+  static const String providerSettlementPay = '/provider/settlement/pay';
   static const String providerServiceCreate = '/provider/services';
   static String providerServiceUpdate(String id) => '/provider/services/$id';
   static String providerServiceDelete(String id) => '/provider/services/$id';
@@ -52,6 +64,23 @@ class ApiConstants {
   static String bookingComplete(String id) => '/bookings/$id/complete';
   static String bookingNoShow(String id) => '/bookings/$id/no-show';
   static String bookingReschedule(String id) => '/bookings/$id/reschedule';
+  static String bookingProposeTime(String id) => '/bookings/$id/propose-time';
+  static String bookingProposalResponse(String id) =>
+      '/bookings/$id/proposal-response';
+  static String bookingCheckIn(String id) => '/bookings/$id/check-in';
+  static String bookingConfirmPayment(String id) =>
+      '/bookings/$id/confirm-payment';
+  static String bookingChat(String id) => '/bookings/$id/chat';
+  static String bookingChatReport(String id, String messageId) =>
+      '/bookings/$id/chat/$messageId/report';
+  static String bookingSafety(String id) => '/bookings/$id/safety';
+
+  // Saved addresses (AccountController)
+  static const String savedAddresses = '/account/addresses';
+  static String savedAddressById(String id) => '/account/addresses/$id';
+
+  /// DELETE: anonymize the account and cancel active bookings.
+  static const String account = '/account';
 
   // Reviews
   static const String reviews = '/reviews';

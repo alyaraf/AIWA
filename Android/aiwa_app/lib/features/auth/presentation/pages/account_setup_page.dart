@@ -3,9 +3,11 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_text_field.dart';
 import '../widgets/step_header.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class AccountSetupPage extends StatefulWidget {
   final String role;
@@ -36,7 +38,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
   String? get _nameError {
     final name = _nameCtrl.text.trim();
     if (name.isNotEmpty && name.split(RegExp(r'\s+')).length < 2) {
-      return 'Enter your first and last name';
+      return AppLocalizations.of(context).authNameError;
     }
     return null;
   }
@@ -44,14 +46,14 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
   String? get _emailError {
     final email = _emailCtrl.text;
     if (email.isNotEmpty && !RegExp(r'.+@.+\..+').hasMatch(email)) {
-      return "Doesn't look like a valid email";
+      return AppLocalizations.of(context).authEmailError;
     }
     return null;
   }
 
   String? get _passwordError {
     if (_passwordCtrl.text.isNotEmpty && _passwordCtrl.text.length < 6) {
-      return 'At least 6 characters';
+      return AppLocalizations.of(context).authPasswordMinError;
     }
     return null;
   }
@@ -63,8 +65,6 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
     if (len >= 6) return 1;
     return 0;
   }
-
-  static const _strengthLabels = ['Weak', 'Okay', 'Good', 'Strong'];
 
   Color _strengthColor(int s) {
     switch (s) {
@@ -96,12 +96,19 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final strength = _strength;
+    final strengthLabels = [
+      l.authStrengthWeak,
+      l.authStrengthOkay,
+      l.authStrengthGood,
+      l.authStrengthStrong,
+    ];
     final strengthColor = _strengthColor(strength);
 
     return AuthStepScaffold(
       bottom: AiwaButton(
-        label: 'Continue',
+        label: l.commonContinue,
         fullWidth: true,
         size: AiwaButtonSize.lg,
         onPressed: _isValid
@@ -123,89 +130,99 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
         StepHeader(
           step: 3,
           total: _totalSteps,
-          title: 'Set up your account',
-          subtitle:
-              "A name and a password — that's it. We'll add the rest later.",
+          title: l.authSetupTitle,
+          subtitle: l.authSetupSubtitle,
           onBack: () => context.pop(),
         ),
         const SizedBox(height: 22),
         AiwaTextField(
-          label: 'Full name',
-          placeholder: 'e.g. Layla Hassan',
-          hint: 'Your real name — providers see it on bookings.',
+          label: l.authFullName,
+          placeholder: l.authNamePlaceholder,
+          hint: l.authNameHint,
           controller: _nameCtrl,
           icon: Icons.person_outline_rounded,
           error: _nameError,
+          inlineError: true,
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 14),
         if (_showEmailField) ...[
           AiwaTextField(
-            label: 'Email',
+            label: l.authModeEmail,
             placeholder: 'you@example.com',
-            hint: 'For receipts and account recovery.',
+            hint: l.authEmailHint,
             optional: true,
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
             icon: Icons.mail_outline_rounded,
             error: _emailError,
+            inlineError: true,
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 14),
         ],
         AiwaTextField(
-          label: 'Password',
+          label: l.authPassword,
           placeholder: '••••••••',
-          hint: 'At least 6 characters.',
+          hint: l.authPasswordHint,
           controller: _passwordCtrl,
           obscureText: !_showPassword,
           icon: Icons.lock_outline_rounded,
           suffixIcon: IconButton(
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(),
             icon: Icon(
               _showPassword
                   ? Icons.visibility_off_outlined
                   : Icons.visibility_outlined,
-              size: 18,
+              size: 16,
               color: AppColors.ink3,
             ),
             onPressed: () => setState(() => _showPassword = !_showPassword),
           ),
           error: _passwordError,
+          inlineError: true,
+          belowInput: _passwordCtrl.text.isEmpty
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      ...List.generate(
+                        4,
+                        (i) => Expanded(
+                          child: AnimatedContainer(
+                            duration: AppTheme.dur2,
+                            height: 4,
+                            margin: EdgeInsetsDirectional.only(
+                              end: i < 3 ? 4 : 0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: i < strength
+                                  ? strengthColor
+                                  : AppColors.divider,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 48,
+                        child: Text(
+                          strengthLabels[strength],
+                          textAlign: TextAlign.end,
+                          style: AppTextStyles.micro.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: strengthColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
           onChanged: (_) => setState(() {}),
         ),
-        if (_passwordCtrl.text.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              ...List.generate(
-                4,
-                (i) => Expanded(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    height: 4,
-                    margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
-                    decoration: BoxDecoration(
-                      color: i < strength ? strengthColor : AppColors.divider,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 48,
-                child: Text(
-                  _strengthLabels[strength],
-                  textAlign: TextAlign.right,
-                  style: AppTextStyles.micro.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: strengthColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
       ],
     );
   }

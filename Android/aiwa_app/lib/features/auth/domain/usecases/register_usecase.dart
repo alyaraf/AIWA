@@ -14,14 +14,15 @@ class RegisterUseCase {
     required String role,
     String? gender,
     String? profileImageUrl,
-  }) =>
-      _repository.register(
-        fullName: fullName,
-        password: password,
-        email: email,
-        phone: phone,
-        role: role,
-        gender: gender,
-        profileImageUrl: profileImageUrl,
-      );
+    String? preferredLanguage,
+  }) => _repository.register(
+    fullName: fullName,
+    password: password,
+    email: email,
+    phone: phone,
+    role: role,
+    gender: gender,
+    profileImageUrl: profileImageUrl,
+    preferredLanguage: preferredLanguage,
+  );
 }

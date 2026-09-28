@@ -22,6 +22,15 @@ class ProviderDetailEntity extends Equatable {
   final List<ReviewSummaryEntity> reviews;
   final List<AvailabilitySlot> availableSlots;
 
+  /// ProviderDetailDto.providerType: 'INDIVIDUAL' or 'SHOP'.
+  final String providerType;
+  final List<StaffEntity> staff;
+
+  /// ProviderDetailDto flags that block Book Now (BOOK-03..06).
+  final bool offlineMode;
+  final bool vacationMode;
+  final bool settlementPaused;
+
   const ProviderDetailEntity({
     required this.id,
     required this.providerName,
@@ -43,9 +52,15 @@ class ProviderDetailEntity extends Equatable {
     this.services = const [],
     this.reviews = const [],
     this.availableSlots = const [],
+    this.providerType = 'INDIVIDUAL',
+    this.staff = const [],
+    this.offlineMode = false,
+    this.vacationMode = false,
+    this.settlementPaused = false,
   });
 
   String get displayName => businessName ?? providerName;
+  bool get isShop => providerType == 'SHOP';
 
   @override
   List<Object?> get props => [id, providerName, businessName];
@@ -97,10 +112,31 @@ class ReviewSummaryEntity extends Equatable {
 
 class AvailabilitySlot extends Equatable {
   final DateTime date;
+
+  /// Free start times.
   final List<String> times;
 
-  const AvailabilitySlot({required this.date, required this.times});
+  /// Taken start times — shown struck through (BOOK-08-F5).
+  final List<String> booked;
+
+  const AvailabilitySlot({
+    required this.date,
+    required this.times,
+    this.booked = const [],
+  });
 
   @override
-  List<Object?> get props => [date, times];
+  List<Object?> get props => [date, times, booked];
+}
+
+/// ProviderDetailDto.staffMembers (StaffMemberDto).
+class StaffEntity extends Equatable {
+  final String id;
+  final String fullName;
+  final String? title;
+
+  const StaffEntity({required this.id, required this.fullName, this.title});
+
+  @override
+  List<Object?> get props => [id];
 }

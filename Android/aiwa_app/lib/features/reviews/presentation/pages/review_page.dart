@@ -10,13 +10,15 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_chip.dart';
-import '../../../../shared/widgets/aiwa_text_field.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../bookings/domain/entities/booking_entity.dart';
+import '../../../bookings/domain/repositories/booking_repository.dart';
 import '../bloc/review_bloc.dart';
 import '../bloc/review_event.dart';
 import '../bloc/review_state.dart';
+import '../../../../shared/widgets/aiwa_toast.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class ReviewPage extends StatefulWidget {
   final String bookingId;
@@ -32,10 +34,12 @@ class ReviewPage extends StatefulWidget {
 
 class _ReviewPageState extends State<ReviewPage> {
   late ReviewBloc _bloc;
+  late BookingEntity? _booking = widget.booking;
   int _rating = 0;
   final _commentController = TextEditingController();
   final _selectedTags = <String>{};
 
+  /// Sent to the backend as-is; shown via [AiwaL10n.reviewTag].
   static const _tags = [
     'Punctual',
     'Skilled',
@@ -45,19 +49,18 @@ class _ReviewPageState extends State<ReviewPage> {
     'Great with hair',
   ];
 
-  static const _adjectives = [
-    'Tap a star',
-    'Disappointing',
-    'Below expectations',
-    'Good',
-    'Great',
-    'Outstanding',
-  ];
-
   @override
   void initState() {
     super.initState();
     _bloc = sl<ReviewBloc>();
+    if (_booking == null) _loadBooking();
+  }
+
+  /// Deep links to /review/:id carry no extra (BOOK-34-F3).
+  Future<void> _loadBooking() async {
+    final r = await sl<BookingRepository>().getBookingDetail(widget.bookingId);
+    if (!mounted) return;
+    r.fold((_) {}, (b) => setState(() => _booking = b));
   }
 
   @override
@@ -87,14 +90,16 @@ class _ReviewPageState extends State<ReviewPage> {
         bloc: _bloc,
         listener: (ctx, state) {
           if (state is ReviewSubmitted) {
+            showAiwaToast(context, AppLocalizations.of(context).reviewThanks);
             context.go(AppRoutes.myBookings);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Thanks — your review is live.')),
-            );
           } else if (state is ReviewError) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(state.message)));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context).error(state.message),
+                ),
+              ),
+            );
           }
         },
         child: Scaffold(
@@ -103,10 +108,12 @@ class _ReviewPageState extends State<ReviewPage> {
             padding: EdgeInsets.zero,
             children: [
               ScreenHeader(
-                eyebrow: 'Leave a review',
-                title: 'How was it?',
+                eyebrow: AppLocalizations.of(context).reviewEyebrow,
+                title: AppLocalizations.of(context).reviewTitle,
                 onBack: () => context.pop(),
               ),
+              // Kit header bottom padding is 12, ScreenHeader's 8.
+              const SizedBox(height: 4),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppTheme.gutter,
@@ -119,7 +126,7 @@ class _ReviewPageState extends State<ReviewPage> {
                   children: [
                     _buildRatingCard(),
                     const SizedBox(height: 22),
-                    const EyebrowLabel('Quick tags (optional)'),
+                    EyebrowLabel(AppLocalizations.of(context).reviewQuickTags),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
@@ -127,7 +134,7 @@ class _ReviewPageState extends State<ReviewPage> {
                       children: _tags.map((tag) {
                         final on = _selectedTags.contains(tag);
                         return AiwaChip(
-                          label: tag,
+                          label: AppLocalizations.of(context).reviewTag(tag),
                           active: on,
                           onTap: () => setState(() {
                             on
@@ -138,12 +145,36 @@ class _ReviewPageState extends State<ReviewPage> {
                       }).toList(),
                     ),
                     const SizedBox(height: 22),
-                    AiwaTextField(
-                      controller: _commentController,
-                      label: 'Tell others what stood out',
-                      placeholder:
-                          "Optional — your review will be public on the provider's profile.",
-                      maxLines: 4,
+                    EyebrowLabel(AppLocalizations.of(context).reviewStoodOut),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 100,
+                      child: TextField(
+                        controller: _commentController,
+                        expands: true,
+                        maxLines: null,
+                        textAlignVertical: TextAlignVertical.top,
+                        cursorColor: AppColors.plum700,
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.ink,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: AppLocalizations.of(context).reviewHint,
+                          hintStyle: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.ink4,
+                          ),
+                          filled: true,
+                          fillColor: AppColors.paper,
+                          contentPadding: const EdgeInsets.all(14),
+                          border: AppTheme.inputBorder(AppColors.divider),
+                          enabledBorder: AppTheme.inputBorder(
+                            AppColors.divider,
+                          ),
+                          focusedBorder: AppTheme.inputBorder(
+                            AppColors.plum700,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -154,7 +185,7 @@ class _ReviewPageState extends State<ReviewPage> {
             child: BlocBuilder<ReviewBloc, ReviewState>(
               bloc: _bloc,
               builder: (ctx, state) => AiwaButton(
-                label: 'Submit review',
+                label: AppLocalizations.of(context).reviewSubmit,
                 onPressed: _rating > 0 ? _submit : null,
                 loading: state is ReviewLoading,
                 fullWidth: true,
@@ -168,12 +199,13 @@ class _ReviewPageState extends State<ReviewPage> {
   }
 
   Widget _buildRatingCard() {
-    final b = widget.booking;
+    final b = _booking;
+    final l = AppLocalizations.of(context);
     String? subtitle;
     if (b != null) {
       try {
         subtitle =
-            '${b.serviceName} · ${DateFormat('EEE, MMM d').format(DateTime.parse(b.scheduledDate))}';
+            '${b.serviceName} · ${DateFormat('EEE, MMM d', l.localeName).format(DateTime.parse(b.scheduledDate))}';
       } catch (_) {
         subtitle = b.serviceName;
       }
@@ -193,6 +225,8 @@ class _ReviewPageState extends State<ReviewPage> {
               name: b.displayProviderName,
               size: 64,
               imageUrl: b.providerImageUrl,
+              verified: b.providerVerified,
+              palette: AiwaAvatar.paletteFor(b.providerId),
             ),
             const SizedBox(height: 10),
             Text(
@@ -217,7 +251,8 @@ class _ReviewPageState extends State<ReviewPage> {
                   duration: const Duration(milliseconds: 180),
                   curve: AppTheme.easeSoft,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    // gap 10 + 2x4 button padding ≈ 18 between stars.
+                    padding: const EdgeInsets.symmetric(horizontal: 9),
                     child: Icon(
                       on ? Icons.star_rounded : Icons.star_outline_rounded,
                       size: 38,
@@ -230,7 +265,14 @@ class _ReviewPageState extends State<ReviewPage> {
           ),
           const SizedBox(height: 10),
           Text(
-            _adjectives[_rating],
+            [
+              l.reviewTapStar,
+              l.reviewDisappointing,
+              l.reviewBelow,
+              l.reviewGood,
+              l.reviewGreat,
+              l.reviewOutstanding,
+            ][_rating],
             style: AppTextStyles.h4.copyWith(
               color: _rating > 0 ? AppColors.plum900 : AppColors.ink3,
             ),

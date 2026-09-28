@@ -10,109 +10,71 @@ class DashboardRepositoryImpl implements DashboardRepository {
   final DashboardRemoteDataSource _remote;
   DashboardRepositoryImpl(this._remote);
 
-  @override
-  Future<Either<Failure, DashboardStats>> getStats() async {
+  Future<Either<Failure, T>> _guard<T>(Future<T> Function() call) async {
     try {
-      final stats = await _remote.getStats();
-      return Right(stats);
+      return Right(await call());
     } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
     } on NetworkException catch (e) {
       return Left(NetworkFailure(e.message));
     }
   }
+
+  @override
+  Future<Either<Failure, DashboardStats>> getStats() =>
+      _guard(_remote.getStats);
 
   @override
   Future<Either<Failure, PagedData<BookingEntity>>> getProviderBookings({
     String? status,
     int page = 0,
     int size = 20,
-  }) async {
-    try {
-      final result = await _remote.getProviderBookings(
-          status: status, page: page, size: size);
-      return Right(PagedData(
-        content: result.content,
-        totalElements: result.totalElements,
-        totalPages: result.totalPages,
-        number: result.number,
-        size: result.size,
-        last: result.last,
-      ));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    } on NetworkException catch (e) {
-      return Left(NetworkFailure(e.message));
-    }
-  }
+  }) => _guard(
+    () => _remote.getProviderBookings(status: status, page: page, size: size),
+  );
 
   @override
-  Future<Either<Failure, BookingEntity>> acceptBooking(
-      String bookingId) async {
-    try {
-      return Right(await _remote.acceptBooking(bookingId));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
+  Future<Either<Failure, BookingEntity>> acceptBooking(String bookingId) =>
+      _guard(() => _remote.acceptBooking(bookingId));
 
   @override
   Future<Either<Failure, BookingEntity>> rejectBooking(
-      String bookingId, String reason) async {
-    try {
-      return Right(await _remote.rejectBooking(bookingId, reason));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
+    String bookingId,
+    String reason,
+  ) => _guard(() => _remote.rejectBooking(bookingId, reason));
 
   @override
   Future<Either<Failure, BookingEntity>> completeBooking(
-      String bookingId) async {
-    try {
-      return Right(await _remote.completeBooking(bookingId));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
+    String bookingId, {
+    bool cashCollected = true,
+  }) => _guard(
+    () => _remote.completeBooking(bookingId, cashCollected: cashCollected),
+  );
 
   @override
-  Future<Either<Failure, BookingEntity>> markNoShow(
-      String bookingId) async {
-    try {
-      return Right(await _remote.markNoShow(bookingId));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
+  Future<Either<Failure, BookingEntity>> bookingOnTheWay(String bookingId) =>
+      _guard(() => _remote.onTheWay(bookingId));
 
   @override
-  Future<Either<Failure, BookingEntity>> bookingOnTheWay(
-      String bookingId) async {
-    try {
-      return Right(await _remote.onTheWay(bookingId));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
+  Future<Either<Failure, BookingEntity>> bookingArrived(String bookingId) =>
+      _guard(() => _remote.arrived(bookingId));
 
   @override
-  Future<Either<Failure, BookingEntity>> bookingArrived(
-      String bookingId) async {
-    try {
-      return Right(await _remote.arrived(bookingId));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
+  Future<Either<Failure, BookingEntity>> bookingInProgress(String bookingId) =>
+      _guard(() => _remote.inProgress(bookingId));
 
   @override
-  Future<Either<Failure, BookingEntity>> bookingInProgress(
-      String bookingId) async {
-    try {
-      return Right(await _remote.inProgress(bookingId));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
+  Future<Either<Failure, BookingEntity>> proposeTime(
+    String bookingId,
+    String date,
+    String time,
+  ) => _guard(() => _remote.proposeTime(bookingId, date, time));
+
+  // BACKEND GAP: no per-booking travel-fee quote endpoint (only the flat
+  // PATCH /provider/mode/travel-fee).
+  @override
+  Future<Either<Failure, BookingEntity>> quoteTravelFee(
+    String bookingId,
+    double amount,
+  ) async => const Left(NotSupportedFailure('Quoting a travel fee'));
 }

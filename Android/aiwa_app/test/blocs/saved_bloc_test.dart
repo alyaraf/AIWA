@@ -20,6 +20,7 @@ ProviderSummaryEntity _p(int id, String name) => ProviderSummaryEntity(
 
 class _FakeSavedRepository implements SavedRepository {
   final removed = <String>[];
+  bool fail = false;
 
   @override
   Future<Either<Failure, PagedData<ProviderSummaryEntity>>> getSavedProviders({
@@ -41,7 +42,9 @@ class _FakeSavedRepository implements SavedRepository {
   @override
   Future<Either<Failure, void>> removeProvider(String providerId) async {
     removed.add(providerId);
-    return const Right(null);
+    return fail
+        ? const Left(ServerFailure('Could not unsave'))
+        : const Right(null);
   }
 }
 
@@ -66,6 +69,28 @@ void main() {
 
     expect(repo.removed, ['1']);
     expect(after.providers.single.businessName, 'Layla Beauty');
+    await bloc.close();
+  });
+
+  test('a failed unsave restores the provider with an error', () async {
+    final repo = _FakeSavedRepository()..fail = true;
+    final bloc = SavedBloc(
+      getSavedProviders: GetSavedProvidersUseCase(repo),
+      repository: repo,
+    );
+
+    bloc.add(SavedLoadEvent());
+    await bloc.stream.firstWhere((s) => s is SavedLoaded);
+
+    bloc.add(const SavedRemoveEvent('1'));
+    final restored =
+        await bloc.stream
+                .firstWhere((s) => s is SavedLoaded && s.error != null)
+                .timeout(const Duration(seconds: 2))
+            as SavedLoaded;
+
+    expect(restored.providers.length, 2);
+    expect(restored.error, 'Could not unsave');
     await bloc.close();
   });
 }

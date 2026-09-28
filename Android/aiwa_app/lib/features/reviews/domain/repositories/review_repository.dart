@@ -7,5 +7,6 @@ abstract class ReviewRepository {
     required double rating,
     String? comment,
     List<String> tags,
+    String? direction,
   });
 }

@@ -16,20 +16,25 @@ class SavedRepositoryImpl implements SavedRepository {
     int size = 20,
   }) async {
     try {
-      final result =
-          await _remote.getSavedProviders(page: page, size: size);
-      return Right(PagedData(
-        content: result.content,
-        totalElements: result.totalElements,
-        totalPages: result.totalPages,
-        number: result.number,
-        size: result.size,
-        last: result.last,
-      ));
+      final result = await _remote.getSavedProviders(page: page, size: size);
+      // ponytail: field-by-field copy of a PagedData the datasource already returns; `return Right(result);` works (Model extends Entity, generics are covariant)
+      return Right(
+        PagedData(
+          content: result.content,
+          totalElements: result.totalElements,
+          totalPages: result.totalPages,
+          number: result.number,
+          size: result.size,
+          last: result.last,
+        ),
+      );
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
       return Left(NetworkFailure(e.message));
+    } catch (_) {
+      // A payload we can't parse must reach ErrorState, not hang the skeleton.
+      return const Left(ServerFailure('Something went wrong'));
     }
   }
 

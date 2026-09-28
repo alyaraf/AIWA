@@ -24,7 +24,7 @@ class AppTextStyles {
     fontSize: 26,
     color: AppColors.plum900,
     height: 1.15,
-    letterSpacing: -0.01 * 26,
+    letterSpacing: -0.02 * 26,
   );
 
   static TextStyle get h3 => _serif(
@@ -45,10 +45,10 @@ class AppTextStyles {
       _sans(fontSize: 15, color: AppColors.ink, height: 1.5);
 
   static TextStyle get bodySm =>
-      _sans(fontSize: 14, color: AppColors.ink, height: 1.55);
+      _sans(fontSize: 14, color: AppColors.ink2, height: 1.55);
 
   static TextStyle get meta =>
-      _sans(fontSize: 13, color: AppColors.ink3, height: 1.4);
+      _sans(fontSize: 13, color: AppColors.ink3, height: 1.45);
 
   static TextStyle get micro =>
       _sans(fontSize: 11, color: AppColors.ink3, height: 1.4);

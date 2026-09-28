@@ -26,12 +26,11 @@ class NotificationLoaded extends NotificationState {
     List<NotificationEntity>? notifications,
     int? unreadCount,
     bool? hasMore,
-  }) =>
-      NotificationLoaded(
-        notifications: notifications ?? this.notifications,
-        unreadCount: unreadCount ?? this.unreadCount,
-        hasMore: hasMore ?? this.hasMore,
-      );
+  }) => NotificationLoaded(
+    notifications: notifications ?? this.notifications,
+    unreadCount: unreadCount ?? this.unreadCount,
+    hasMore: hasMore ?? this.hasMore,
+  );
 
   @override
   List<Object?> get props => [notifications, unreadCount, hasMore];

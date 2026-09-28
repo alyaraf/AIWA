@@ -1,6 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -8,10 +9,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
-import '../bloc/auth_bloc.dart';
-import '../bloc/auth_event.dart';
-import '../bloc/auth_state.dart';
+import '../../../../shared/widgets/press_scale.dart';
 import '../widgets/step_header.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// "Make it yours" — the gender choice sets the app palette, previewed live.
 class AvatarGenderPage extends StatefulWidget {
@@ -29,148 +29,173 @@ class AvatarGenderPage extends StatefulWidget {
 }
 
 class _AvatarGenderPageState extends State<AvatarGenderPage> {
-  late String _gender = ThemeController.mode.value == ThemeController.female
-      ? 'FEMALE'
-      : 'MALE';
+  // Woman is preselected (prototype.jsx:535); its palette previews at once
+  // and is only persisted on Continue.
+  String _gender = 'FEMALE';
+  String? _avatar;
 
   bool get _isProvider => widget.role == 'PROVIDER';
   int get _totalSteps => _isProvider ? 6 : 4;
 
-  void _pick(String gender) {
-    setState(() => _gender = gender);
-    ThemeController.applyGender(gender);
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => ThemeController.applyGender(_gender, persist: false),
+    );
   }
 
+  void _pick(String gender) {
+    setState(() => _gender = gender);
+    ThemeController.applyGender(gender, persist: false);
+  }
+
+  Future<void> _pickPhoto() async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (file != null && mounted) setState(() => _avatar = file.path);
+  }
+
+  /// Account creation waits for Terms + Preferences (prototype.jsx:644-645).
   void _continue() {
-    final data = {...widget.registrationData, 'gender': _gender};
-    if (_isProvider) {
-      context.push(AppRoutes.providerBusiness, extra: data);
-    } else {
-      final mode = data['mode'] as String? ?? 'phone';
-      context.read<AuthBloc>().add(
-        AuthRegisterEvent(
-          fullName: data['fullName'] as String,
-          password: data['password'] as String,
-          email: data['email'] as String?,
-          phone: mode == 'phone' ? data['identifier'] as String? : null,
-          role: widget.role,
-          gender: _gender,
-        ),
-      );
-    }
+    ThemeController.applyGender(_gender);
+    context.push(
+      _isProvider ? AppRoutes.providerBusiness : AppRoutes.terms,
+      extra: {
+        ...widget.registrationData,
+        'gender': _gender,
+        'avatarPath': _avatar,
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = widget.registrationData['fullName'] as String? ?? '';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : null;
-
-    return BlocListener<AuthBloc, AuthState>(
-      listener: (context, state) {
-        if (state is AuthAuthenticated) {
-          context.go(
-            state.user.isProvider ? AppRoutes.providerPending : AppRoutes.home,
-          );
-        } else if (state is AuthError) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(state.message)));
-        }
-      },
-      child: AuthStepScaffold(
-        bottom: BlocBuilder<AuthBloc, AuthState>(
-          builder: (context, state) => AiwaButton(
-            label: 'Continue',
-            fullWidth: true,
-            size: AiwaButtonSize.lg,
-            loading: state is AuthLoading,
-            onPressed: _continue,
-          ),
+    return AuthStepScaffold(
+      bottom: AiwaButton(
+        label: _avatar == null
+            ? AppLocalizations.of(context).authContinueWithoutPhoto
+            : AppLocalizations.of(context).commonContinue,
+        fullWidth: true,
+        size: AiwaButtonSize.lg,
+        onPressed: _continue,
+      ),
+      children: [
+        StepHeader(
+          step: 4,
+          total: _totalSteps,
+          title: AppLocalizations.of(context).authMakeItYours,
+          subtitle: AppLocalizations.of(context).authMakeItYoursSub,
+          onBack: () => context.pop(),
         ),
-        children: [
-          StepHeader(
-            step: 4,
-            total: _totalSteps,
-            title: 'Make it yours',
-            subtitle: 'Pick your palette. You can change it later.',
-            onBack: () => context.pop(),
-          ),
-          const SizedBox(height: 22),
-          Center(
-            child: Column(
-              children: [
-                AnimatedContainer(
-                  duration: AppTheme.dur3,
-                  curve: AppTheme.easeSoft,
-                  width: 128,
-                  height: 128,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [AppColors.plum500, AppColors.plum900],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    border: Border.all(color: AppColors.paper, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.plum700.withOpacity(0.18),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: initial != null
-                      ? Text(
-                          initial,
-                          style: AppTextStyles.display.copyWith(
-                            color: AppColors.bone,
-                            fontSize: 54,
-                            height: 1,
+        const SizedBox(height: 22),
+        Center(
+          child: Column(
+            children: [
+              GestureDetector(
+                onTap: _pickPhoto,
+                child: Stack(
+                  children: [
+                    AnimatedContainer(
+                      duration: AppTheme.dur3,
+                      curve: AppTheme.easeSoft,
+                      width: 128,
+                      height: 128,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [AppColors.plum500, AppColors.plum900],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        image: _avatar == null
+                            ? null
+                            : DecorationImage(
+                                image: FileImage(File(_avatar!)),
+                                fit: BoxFit.cover,
+                              ),
+                        border: Border.all(color: AppColors.paper, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.plum700.withValues(alpha: .18),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
                           ),
-                        )
-                      : Icon(
-                          Icons.person_outline_rounded,
-                          size: 40,
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: _avatar == null
+                          ? Icon(
+                              Icons.camera_alt_outlined,
+                              size: 36,
+                              color: AppColors.bone,
+                            )
+                          : null,
+                    ),
+                    PositionedDirectional(
+                      end: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: AppColors.plum700,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.bone, width: 3),
+                        ),
+                        child: Icon(
+                          _avatar == null
+                              ? Icons.add_rounded
+                              : Icons.edit_outlined,
+                          size: 16,
                           color: AppColors.bone,
                         ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  'You can add a photo later from your profile.',
-                  style: AppTextStyles.meta.copyWith(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          const EyebrowLabel("I'm signing up as"),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _GenderOption(
-                label: 'Woman',
-                swatches: AiwaPalettes.female,
-                selected: _gender == 'FEMALE',
-                onTap: () => _pick('FEMALE'),
               ),
-              const SizedBox(width: 10),
-              _GenderOption(
-                label: 'Man',
-                swatches: AiwaPalettes.male,
-                selected: _gender == 'MALE',
-                onTap: () => _pick('MALE'),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: _pickPhoto,
+                child: Text(
+                  _avatar == null
+                      ? AppLocalizations.of(context).authUploadPhoto
+                      : AppLocalizations.of(context).authReplacePhoto,
+                  style: AppTextStyles.label.copyWith(color: AppColors.plum700),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'This sets the palette of your app.',
-            style: AppTextStyles.micro.copyWith(fontSize: 11.5),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 18),
+        EyebrowLabel(AppLocalizations.of(context).authSigningUpAs),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            _GenderOption(
+              label: AppLocalizations.of(context).authWoman,
+              swatches: AiwaPalettes.female,
+              selected: _gender == 'FEMALE',
+              onTap: () => _pick('FEMALE'),
+            ),
+            const SizedBox(width: 10),
+            _GenderOption(
+              label: AppLocalizations.of(context).authMan,
+              swatches: AiwaPalettes.male,
+              selected: _gender == 'MALE',
+              onTap: () => _pick('MALE'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Text(
+          AppLocalizations.of(context).authPaletteNote,
+          style: AppTextStyles.micro.copyWith(fontSize: 11.5),
+        ),
+      ],
     );
   }
 }
@@ -190,9 +215,9 @@ class _GenderOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = [swatches.plum700, swatches.rose500, swatches.bone];
+    final colors = [swatches.plum700, swatches.plum300, swatches.bone];
     return Expanded(
-      child: GestureDetector(
+      child: PressScale(
         onTap: onTap,
         child: AnimatedContainer(
           duration: AppTheme.dur2,
@@ -215,7 +240,7 @@ class _GenderOption extends StatelessWidget {
                       (c) => Container(
                         width: 18,
                         height: 18,
-                        margin: const EdgeInsets.only(right: 4),
+                        margin: const EdgeInsetsDirectional.only(end: 4),
                         decoration: BoxDecoration(
                           color: c,
                           borderRadius: BorderRadius.circular(6),

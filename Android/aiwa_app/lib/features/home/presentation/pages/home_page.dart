@@ -17,6 +17,7 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../../shared/widgets/section_header.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../../profile/data/account_repository.dart';
 import '../../../notifications/presentation/bloc/notification_bloc.dart';
 import '../../../notifications/presentation/bloc/notification_event.dart';
 import '../../../notifications/presentation/bloc/notification_state.dart';
@@ -26,9 +27,14 @@ import '../bloc/home_state.dart';
 import '../widgets/category_tile.dart';
 import '../widgets/provider_card.dart';
 import '../widgets/provider_list_item.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  /// Last position Home resolved (Cairo until then); Discover reuses it.
+  // ponytail: static field, move to a LocationCubit if more screens need it.
+  static ({double lat, double lng}) position = (lat: 30.0444, lng: 31.2357);
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -37,15 +43,18 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late HomeBloc _homeBloc;
 
+  /// Default saved address label; null shows 'Near me'.
+  String? _area;
+
   static const _categories = [
-    _Cat('HAIR', 'Hair', Icons.content_cut_rounded, 'plum'),
-    _Cat('NAILS', 'Nails', Icons.back_hand_outlined, 'rose'),
-    _Cat('SPA', 'Spa', Icons.spa_outlined, 'cream'),
-    _Cat('MAKEUP', 'Makeup', Icons.brush_outlined, 'gold'),
-    _Cat('LASHES', 'Lashes', Icons.visibility_outlined, 'rose'),
-    _Cat('SKIN', 'Skin', Icons.water_drop_outlined, 'plum'),
-    _Cat('MASSAGE', 'Massage', Icons.volunteer_activism_outlined, 'cream'),
-    _Cat('ALL', 'All', Icons.auto_awesome_outlined, 'gold'),
+    _Cat('HAIR', Icons.content_cut_rounded, 'plum'),
+    _Cat('NAILS', Icons.back_hand_outlined, 'rose'),
+    _Cat('SPA', Icons.eco_outlined, 'cream'),
+    _Cat('MAKEUP', Icons.brush_outlined, 'gold'),
+    _Cat('LASHES', Icons.visibility_outlined, 'rose'),
+    _Cat('SKIN', Icons.water_drop_outlined, 'plum'),
+    _Cat('MASSAGE', Icons.volunteer_activism_outlined, 'cream'),
+    _Cat('ALL', Icons.auto_awesome_outlined, 'gold'),
   ];
 
   @override
@@ -59,14 +68,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadData() async {
-    double lat = 30.0444, lng = 31.2357;
+    var (:lat, :lng) = HomePage.position;
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (serviceEnabled) {
-        var perm = await Geolocator.checkPermission();
-        if (perm == LocationPermission.denied) {
-          perm = await Geolocator.requestPermission();
-        }
+        // Asked on the priming screen (/perm-location), never cold here.
+        final perm = await Geolocator.checkPermission();
         if (perm != LocationPermission.denied &&
             perm != LocationPermission.deniedForever) {
           final pos = await Geolocator.getCurrentPosition(
@@ -75,19 +82,41 @@ class _HomePageState extends State<HomePage> {
           );
           lat = pos.latitude;
           lng = pos.longitude;
+          HomePage.position = (lat: lat, lng: lng);
         }
       }
     } catch (_) {}
     if (mounted) {
-      _homeBloc.add(HomeLoadEvent(lat: lat, lng: lng));
+      final auth = context.read<AuthBloc>().state;
+      if (auth is AuthAuthenticated) _loadArea();
+      _homeBloc.add(
+        HomeLoadEvent(
+          lat: lat,
+          lng: lng,
+          radiusKm: auth is AuthAuthenticated
+              ? auth.user.searchRadiusMaxKm ?? 5
+              : 5,
+        ),
+      );
     }
+  }
+
+  // Search-pill label: the default saved address, 'Near me' otherwise.
+  // ponytail: no reverse geocoding (no geocoding package); add it for guests.
+  Future<void> _loadArea() async {
+    final res = await sl<AccountRepository>().addresses();
+    res.fold((_) {}, (list) {
+      final def = list.where((a) => a.isDefault && a.label.isNotEmpty);
+      if (def.isNotEmpty && mounted) setState(() => _area = def.first.label);
+    });
   }
 
   String get _greeting {
     final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
+    final l = AppLocalizations.of(context);
+    if (h < 12) return l.homeGoodMorning;
+    if (h < 17) return l.homeGoodAfternoon;
+    return l.homeGoodEvening;
   }
 
   @override
@@ -96,34 +125,32 @@ class _HomePageState extends State<HomePage> {
       value: _homeBloc,
       child: Scaffold(
         backgroundColor: AppColors.bone,
-        body: RefreshIndicator(
-          color: AppColors.plum700,
-          onRefresh: _loadData,
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: _buildHeader()),
-              SliverToBoxAdapter(child: _buildSearchBar()),
-              SliverToBoxAdapter(child: _buildHeroPromo()),
-              SliverToBoxAdapter(child: _buildCategories()),
-              BlocBuilder<HomeBloc, HomeState>(
-                bloc: _homeBloc,
-                builder: (context, state) {
-                  if (state is HomeError) {
-                    return SliverToBoxAdapter(
-                      child: ErrorState(
-                        body: state.message,
-                        onRetry: _loadData,
-                        compact: true,
-                      ),
-                    );
-                  }
-                  if (state is HomeLoaded) return _buildContent(state);
-                  return _buildSkeletons();
-                },
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 110)),
-            ],
-          ),
+        body: CustomScrollView(
+          physics: AiwaRefresh.physics,
+          slivers: [
+            AiwaRefresh(onRefresh: _loadData),
+            SliverToBoxAdapter(child: _buildHeader()),
+            SliverToBoxAdapter(child: _buildSearchBar()),
+            SliverToBoxAdapter(child: _buildHeroPromo()),
+            SliverToBoxAdapter(child: _buildCategories()),
+            BlocBuilder<HomeBloc, HomeState>(
+              bloc: _homeBloc,
+              builder: (context, state) {
+                if (state is HomeError) {
+                  return SliverToBoxAdapter(
+                    child: ErrorState(
+                      body: AppLocalizations.of(context).error(state.message),
+                      onRetry: _loadData,
+                      compact: true,
+                    ),
+                  );
+                }
+                if (state is HomeLoaded) return _buildContent(state);
+                return _buildSkeletons();
+              },
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 110)),
+          ],
         ),
       ),
     );
@@ -148,11 +175,15 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     EyebrowLabel(
-                      first != null ? '$_greeting, $first' : _greeting,
+                      first != null
+                          ? AppLocalizations.of(
+                              context,
+                            ).homeGreetingName(_greeting, first)
+                          : _greeting,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Who's making you\nfeel new tonight?",
+                      AppLocalizations.of(context).homeHeadline,
                       style: AppTextStyles.h2.copyWith(height: 1.1),
                     ),
                   ],
@@ -173,7 +204,7 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               GestureDetector(
                 onTap: () => context.go(AppRoutes.profile),
                 child: AiwaAvatar(
@@ -220,16 +251,22 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Service or provider',
+                  AppLocalizations.of(context).homeSearchHint,
                   style: AppTextStyles.body.copyWith(color: AppColors.ink3),
                 ),
               ),
               Container(width: 1, height: 20, color: AppColors.divider),
               const SizedBox(width: 10),
-              Icon(Icons.location_on_outlined, size: 14, color: AppColors.plum700),
+              Icon(
+                Icons.location_on_outlined,
+                size: 14,
+                color: AppColors.plum700,
+              ),
               const SizedBox(width: 5),
               Text(
-                'Near me',
+                _area != null
+                    ? AppLocalizations.of(context).addressLabel(_area!)
+                    : AppLocalizations.of(context).homeNearMe,
                 style: AppTextStyles.label.copyWith(color: AppColors.plum700),
               ),
             ],
@@ -255,8 +292,8 @@ class _HomePageState extends State<HomePage> {
         ),
         child: Stack(
           children: [
-            Positioned(
-              right: -40,
+            PositionedDirectional(
+              end: -40,
               top: -40,
               child: AiwaGlow(
                 size: 180,
@@ -269,12 +306,15 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  EyebrowLabel('This week · 20% off', color: AppColors.rose300),
+                  EyebrowLabel(
+                    AppLocalizations.of(context).homePromoEyebrow,
+                    color: AppColors.rose300,
+                  ),
                   const SizedBox(height: 6),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 220),
                     child: Text(
-                      'Bridal lookbook season',
+                      AppLocalizations.of(context).homePromoTitle,
                       style: AppTextStyles.h3.copyWith(
                         color: AppColors.bone,
                         fontSize: 24,
@@ -286,7 +326,7 @@ class _HomePageState extends State<HomePage> {
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 240),
                     child: Text(
-                      'Top-rated makeup & lash artists, with package pricing.',
+                      AppLocalizations.of(context).homePromoBody,
                       style: AppTextStyles.meta.copyWith(
                         color: AppColors.rose300,
                         height: 1.5,
@@ -295,7 +335,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 14),
                   AiwaButton(
-                    label: 'Explore →',
+                    label: AppLocalizations.of(context).homeExplore,
                     variant: AiwaButtonVariant.accent,
                     size: AiwaButtonSize.sm,
                     onPressed: () =>
@@ -315,24 +355,30 @@ class _HomePageState extends State<HomePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
-          title: 'Categories',
-          action: 'See all',
+          title: AppLocalizations.of(context).homeCategories,
+          action: AppLocalizations.of(context).commonSeeAll,
           onAction: () => context.go(AppRoutes.search),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppTheme.gutter),
-          child: GridView.count(
+          // Fixed row height, not an aspect ratio: tiles are ~72dp wide on a
+          // 360dp phone and the 88dp content overflowed at 0.86.
+          child: GridView(
             shrinkWrap: true,
             padding: EdgeInsets.zero,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 4,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 0.86,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              mainAxisExtent: MediaQuery.textScalerOf(context).scale(12) + 80,
+            ),
             children: _categories
                 .map(
                   (c) => CategoryTile(
-                    label: c.label,
+                    label: c.id == 'ALL'
+                        ? AppLocalizations.of(context).homeAll
+                        : AppLocalizations.of(context).category(c.id),
                     icon: c.icon,
                     palette: c.palette,
                     onTap: c.id == 'ALL'
@@ -350,14 +396,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildContent(HomeLoaded state) {
+    final l = AppLocalizations.of(context);
     if (state.trending.isEmpty && state.providers.isEmpty) {
       return SliverToBoxAdapter(
         child: EmptyState(
           icon: Icons.location_searching_rounded,
-          title: 'Nobody nearby yet',
-          subtitle:
-              'No providers within your radius right now. Try browsing all categories.',
-          actionLabel: 'Browse all',
+          title: l.homeNobodyNearby,
+          subtitle: l.homeNobodyNearbyBody,
+          actionLabel: l.homeBrowseAll,
           onAction: () => context.go(AppRoutes.search),
           compact: true,
         ),
@@ -367,63 +413,48 @@ class _HomePageState extends State<HomePage> {
       delegate: SliverChildListDelegate([
         if (state.trending.isNotEmpty) ...[
           SectionHeader(
-            title: 'Trending near you',
-            action: 'View all',
+            title: l.homeTrending,
+            action: l.homeViewMap,
             onAction: () => context.go(AppRoutes.search),
           ),
-          SizedBox(
-            height: 196,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: AppTheme.gutter),
-              itemCount: state.trending.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (ctx, i) => ProviderCard(
-                provider: state.trending[i],
-                onTap: () => context.push('/provider/${state.trending[i].id}'),
-              ),
+          // Content-height row so the cards don't clip at large text scales.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.gutter),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (i, p) in state.trending.indexed) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  ProviderCard(
+                    provider: p,
+                    onTap: () => context.push('/provider/${p.id}'),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
         if (state.providers.isNotEmpty) ...[
-          const SectionHeader(title: 'Available now'),
-          ...state.providers.map(
-            (p) => Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppTheme.gutter,
-                0,
-                AppTheme.gutter,
-                10,
+          SectionHeader(title: l.homeAvailableNow),
+          // Prototype shows 4; the full list lives in Discover.
+          ...state.providers
+              .take(4)
+              .map(
+                (p) => Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppTheme.gutter,
+                    0,
+                    AppTheme.gutter,
+                    10,
+                  ),
+                  child: ProviderListItem(
+                    provider: p,
+                    onTap: () => context.push('/provider/${p.id}'),
+                  ),
+                ),
               ),
-              child: ProviderListItem(
-                provider: p,
-                onTap: () => context.push('/provider/${p.id}'),
-              ),
-            ),
-          ),
         ],
-        if (state is HomeLoadingMore)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppTheme.gutter,
-              0,
-              AppTheme.gutter,
-              10,
-            ),
-            child: ProviderCardShimmer(),
-          )
-        else if (state.hasMore)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: AiwaButton(
-                label: 'Load more',
-                variant: AiwaButtonVariant.ghost,
-                size: AiwaButtonSize.sm,
-                onPressed: () => _homeBloc.add(HomeLoadMoreEvent()),
-              ),
-            ),
-          ),
       ]),
     );
   }
@@ -440,7 +471,7 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.symmetric(horizontal: AppTheme.gutter),
             itemCount: 3,
             separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (_, __) => const SkeletonTile(),
+            itemBuilder: (_, __) => const SkeletonTile(width: 200, height: 110),
           ),
         ),
         const SizedBox(height: 22),
@@ -454,7 +485,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _Cat {
-  final String id, label, palette;
+  final String id, palette;
   final IconData icon;
-  const _Cat(this.id, this.label, this.icon, this.palette);
+  const _Cat(this.id, this.icon, this.palette);
 }

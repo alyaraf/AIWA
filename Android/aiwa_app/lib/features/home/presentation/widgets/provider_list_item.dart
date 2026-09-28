@@ -5,6 +5,7 @@ import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../domain/entities/provider_summary_entity.dart';
 import 'provider_card.dart';
+import 'package:aiwa_app/l10n/l10n.dart';
 
 /// Row card for a provider.
 ///
@@ -61,7 +62,9 @@ class ProviderListItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    provider.categoryLabel,
+                    AppLocalizations.of(
+                      context,
+                    ).category(provider.primaryCategory),
                     style: AppTextStyles.micro.copyWith(fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -69,30 +72,44 @@ class ProviderListItem extends StatelessWidget {
                   const SizedBox(height: 6),
                   FittedBox(
                     fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
+                    alignment: AlignmentDirectional.centerStart,
                     child: RatingMeta(
                       rating: provider.averageRating,
                       reviews: discover ? null : provider.totalReviews,
-                      distance: provider.distanceText,
+                      distance: AppLocalizations.of(
+                        context,
+                      ).distance(provider.distanceKm),
+                      openNow: provider.openNow,
+                      openLabel: discover
+                          ? AppLocalizations.of(context).homeOpen
+                          : null,
+                      gap: 8,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            if (!discover && provider.startingPrice != null)
+            const SizedBox(width: 12),
+            if (!discover)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const EyebrowLabel('From', fontSize: 9),
-                  const SizedBox(height: 2),
+                  EyebrowLabel(
+                    AppLocalizations.of(context).homeFrom,
+                    fontSize: 9,
+                  ),
                   Text(
-                    'EGP ${provider.startingPrice!.toStringAsFixed(0)}',
+                    // ponytail: '—' until ProviderSummaryDto sends startingPrice.
+                    provider.startingPrice != null
+                        ? AppLocalizations.of(
+                            context,
+                          ).egp(provider.startingPrice!)
+                        : '—',
                     style: AppTextStyles.h4.copyWith(fontSize: 17, height: 1),
                   ),
                 ],
               )
-            else if (discover)
+            else
               Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
