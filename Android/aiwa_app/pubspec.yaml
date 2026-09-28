@@ -98,3 +98,25 @@ flutter:
     - assets/animations/
     # Bundled so google_fonts never downloads at runtime (see main.dart).
     - assets/google_fonts/
+
+  # Arabic fallbacks for the Latin families (AppTextStyles). Declared natively
+  # so fontFamilyFallback resolves every weight without google_fonts.
+  fonts:
+    - family: IBM Plex Sans Arabic
+      fonts:
+        - asset: assets/google_fonts/IBMPlexSansArabic-Regular.ttf
+        - asset: assets/google_fonts/IBMPlexSansArabic-Medium.ttf
+          weight: 500
+        - asset: assets/google_fonts/IBMPlexSansArabic-SemiBold.ttf
+          weight: 600
+        - asset: assets/google_fonts/IBMPlexSansArabic-Bold.ttf
+          weight: 700
+    - family: Markazi Text
+      fonts:
+        - asset: assets/google_fonts/MarkaziText-Regular.ttf
+        - asset: assets/google_fonts/MarkaziText-Medium.ttf
+          weight: 500
+        - asset: assets/google_fonts/MarkaziText-SemiBold.ttf
+          weight: 600
+        - asset: assets/google_fonts/MarkaziText-Bold.ttf
+          weight: 700

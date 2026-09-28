@@ -221,8 +221,10 @@ class _ErrorInterceptor extends Interceptor {
           statusCode: statusCode,
         );
       default:
+        // Dio's own err.message is English developer text; keep the mapped
+        // fallback so AiwaL10n.error() can translate it.
         return ServerException(
-          message: err.message ?? 'Something went wrong',
+          message: 'Something went wrong',
           statusCode: err.response?.statusCode,
         );
     }

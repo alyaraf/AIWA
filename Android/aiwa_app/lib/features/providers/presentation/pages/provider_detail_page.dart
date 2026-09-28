@@ -343,6 +343,9 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
 
   Widget _buildBody(ProviderDetailEntity p) {
     final l = AppLocalizations.of(context);
+    final bio = (p.bio != null && p.bio!.trim().isNotEmpty)
+        ? p.bio!
+        : l.providerBioFallback;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bone,
@@ -358,9 +361,8 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            (p.bio != null && p.bio!.trim().isNotEmpty)
-                ? p.bio!
-                : l.providerBioFallback,
+            bio,
+            textDirection: textDirectionOf(bio),
             style: AppTextStyles.bodySm.copyWith(color: AppColors.ink2),
           ),
           const SizedBox(height: 14),
@@ -791,6 +793,7 @@ class _ReviewRow extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   review.comment!,
+                  textDirection: textDirectionOf(review.comment!),
                   style: AppTextStyles.meta.copyWith(
                     color: AppColors.ink2,
                     height: 1.55,

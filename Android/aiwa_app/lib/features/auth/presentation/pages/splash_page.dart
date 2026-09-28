@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -236,25 +235,15 @@ class _LanguageButton extends StatelessWidget {
   }
 }
 
-/// Markazi Text for the Arabic language buttons (plain family in tests).
+/// Markazi Text for the Arabic language buttons (native pubspec family).
 TextStyle arabicStyle(
   Color color, {
   double size = 20,
   FontWeight weight = FontWeight.w500,
-}) {
-  if (aiwaUseGoogleFonts) {
-    return GoogleFonts.markaziText(
-      fontSize: size,
-      fontWeight: weight,
-      color: color,
-      height: 1,
-    );
-  }
-  return TextStyle(
-    fontFamily: 'Markazi Text',
-    fontSize: size,
-    fontWeight: weight,
-    color: color,
-    height: 1,
-  );
-}
+}) => TextStyle(
+  fontFamily: kArabicSerif,
+  fontSize: size,
+  fontWeight: weight,
+  color: color,
+  height: 1,
+);

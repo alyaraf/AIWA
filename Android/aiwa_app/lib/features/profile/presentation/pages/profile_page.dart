@@ -259,6 +259,8 @@ class _Header extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               contact,
+                              // Phone/email: keep '+20…' intact in Arabic.
+                              textDirection: TextDirection.ltr,
                               style: AppTextStyles.meta.copyWith(
                                 color: AppColors.rose300,
                               ),

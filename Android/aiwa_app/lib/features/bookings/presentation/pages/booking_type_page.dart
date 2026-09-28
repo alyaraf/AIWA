@@ -203,66 +203,78 @@ class _TypeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = dark ? AppColors.bone : AppColors.ink2;
-    return Material(
-      color: dark ? AppColors.plum700 : AppColors.paper,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: dark
-            ? BorderSide.none
-            : BorderSide(color: AppColors.divider, width: 1.5),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Stack(
-          children: [
-            if (dark)
-              PositionedDirectional(
-                end: -30,
-                top: -30,
-                child: AiwaGlow(size: 140, color: AppColors.bone, opacity: .15),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  EyebrowLabel(eyebrow, color: dark ? AppColors.rose300 : null),
-                  const SizedBox(height: 6),
-                  Text(
-                    title,
-                    style: AppTextStyles.h1.copyWith(
-                      fontSize: 26,
-                      height: 1.1,
-                      color: dark ? AppColors.bone : AppColors.plum900,
+    // Full width: the page Column is start-aligned, which would otherwise
+    // shrink-wrap each card to its (shorter, Arabic) copy.
+    return SizedBox(
+      width: double.infinity,
+      child: Material(
+        color: dark ? AppColors.plum700 : AppColors.paper,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: dark
+              ? BorderSide.none
+              : BorderSide(color: AppColors.divider, width: 1.5),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          child: Stack(
+            children: [
+              if (dark)
+                PositionedDirectional(
+                  end: -30,
+                  top: -30,
+                  child: AiwaGlow(
+                    size: 140,
+                    color: AppColors.bone,
+                    opacity: .15,
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    EyebrowLabel(
+                      eyebrow,
+                      color: dark ? AppColors.rose300 : null,
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 18,
-                    runSpacing: 6,
-                    children: [
-                      for (final (icon, text) in facts)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(icon, size: 14, color: fg),
-                            const SizedBox(width: 5),
-                            Text(
-                              text,
-                              style: AppTextStyles.body.copyWith(
-                                fontSize: 13,
-                                color: fg,
+                    const SizedBox(height: 6),
+                    Text(
+                      title,
+                      style: AppTextStyles.h1.copyWith(
+                        fontSize: 26,
+                        height: 1.1,
+                        color: dark ? AppColors.bone : AppColors.plum900,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 18,
+                      runSpacing: 6,
+                      children: [
+                        for (final (icon, text) in facts)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, size: 14, color: fg),
+                              const SizedBox(width: 5),
+                              Text(
+                                text,
+                                style: AppTextStyles.body.copyWith(
+                                  fontSize: 13,
+                                  color: fg,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ],
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

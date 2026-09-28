@@ -287,6 +287,8 @@ class _ContactCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   contact.phone,
+                  // Keeps '+20…' intact in the Arabic UI.
+                  textDirection: TextDirection.ltr,
                   style: AppTextStyles.mono.copyWith(
                     fontSize: 12,
                     color: AppColors.ink3,

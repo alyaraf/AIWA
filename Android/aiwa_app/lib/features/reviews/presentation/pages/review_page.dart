@@ -212,7 +212,7 @@ class _ReviewPageState extends State<ReviewPage> {
     if (b != null) {
       try {
         subtitle =
-            '${b.serviceName} · ${DateFormat('EEE, MMM d', l.localeName).format(DateTime.parse(b.scheduledDate))}';
+            '${bidiIsolate(b.serviceName)} · ${DateFormat.MMMEd(l.localeName).format(DateTime.parse(b.scheduledDate))}';
       } catch (_) {
         subtitle = b.serviceName;
       }

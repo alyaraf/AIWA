@@ -637,7 +637,7 @@ class _SummaryCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   service != null
-                      ? '${service!.name} · ${AppLocalizations.of(context).durationLabel(service!.durationMinutes)}'
+                      ? '${bidiIsolate(service!.name)} · ${AppLocalizations.of(context).durationLabel(service!.durationMinutes)}'
                       : AppLocalizations.of(context).bookingChooseServiceBelow,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

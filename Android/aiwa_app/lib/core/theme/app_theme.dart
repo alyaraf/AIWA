@@ -129,6 +129,7 @@ class AppTheme {
           (aiwaUseGoogleFonts
                   ? GoogleFonts.plusJakartaSansTextTheme(base.textTheme)
                   : base.textTheme)
+              .apply(fontFamilyFallback: const [kArabicSans])
               .copyWith(
                 displayLarge: AppTextStyles.display,
                 headlineLarge: AppTextStyles.h1,

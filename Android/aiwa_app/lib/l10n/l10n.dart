@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'app_localizations.dart';
 
 export 'app_localizations.dart';
@@ -63,15 +63,18 @@ extension AiwaL10n on AppLocalizations {
   String egp(num v) =>
       moneyEgp(NumberFormat.decimalPattern(localeName).format(v.round()));
 
-  /// 'EGP 1,250.50' — two decimals, for ledgers.
-  String egpCents(num v) =>
-      moneyEgp(NumberFormat('#,##0.00', localeName).format(v));
+  /// 'EGP 1,250.50' — two decimals, for ledgers. [sign] ('+' / '−') is
+  /// kept on the number's left in RTL too ('+110.00 ج.م', not '110.00+').
+  String egpCents(num v, {String sign = ''}) {
+    final n = NumberFormat('#,##0.00', localeName).format(v);
+    return moneyEgp(sign.isEmpty ? n : '\u2066$sign$n\u2069');
+  }
 
   /// 'Tue, May 19 · 12:30 PM' from BookingDto's `yyyy-MM-dd` + `HH:mm[:ss]`.
   String formatWhen(String date, String time) {
     final dt = _parse(date, time);
     if (dt == null) return '$date · $time';
-    return '${DateFormat('EEE, MMM d', localeName).format(dt)} · '
+    return '${DateFormat.MMMEd(localeName).format(dt)} · '
         '${DateFormat('h:mm a', localeName).format(dt)}';
   }
 
@@ -126,6 +129,15 @@ extension AiwaL10n on AppLocalizations {
   static DateTime? _parse(String date, String time) =>
       DateTime.tryParse('$date ${time.length == 5 ? '$time:00' : time}');
 }
+
+/// Direction of text people wrote (bios, reviews, chat), so an English bio
+/// keeps its punctuation in place inside the Arabic UI and vice versa.
+TextDirection textDirectionOf(String text) =>
+    Bidi.detectRtlDirectionality(text) ? TextDirection.rtl : TextDirection.ltr;
+
+/// Wraps a server-provided name (FSI…PDI) so a Latin name followed by a
+/// number ('Gel Manicure · 45 دقيقة') doesn't swallow the number in RTL.
+String bidiIsolate(String s) => '\u2068$s\u2069';
 
 /// Splits a translated [template] on its `{name}` slots and drops the styled
 /// [parts] in, so word order can differ per language.

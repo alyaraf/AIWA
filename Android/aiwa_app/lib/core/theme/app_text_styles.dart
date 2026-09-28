@@ -107,10 +107,21 @@ bool aiwaUseGoogleFonts = true;
 
 typedef _GoogleFont = TextStyle Function({TextStyle? textStyle});
 
-TextStyle _styled(String family, _GoogleFont google, TextStyle base) =>
-    aiwaUseGoogleFonts
-    ? google(textStyle: base)
-    : base.copyWith(fontFamily: family);
+/// Arabic glyphs aren't in the Latin families; these (pubspec `fonts:`)
+/// catch them so Arabic never falls back to the system font.
+const kArabicSans = 'IBM Plex Sans Arabic';
+const kArabicSerif = 'Markazi Text';
+
+TextStyle _styled(
+  String family,
+  _GoogleFont google,
+  TextStyle base, {
+  String arabic = kArabicSans,
+}) =>
+    (aiwaUseGoogleFonts
+            ? google(textStyle: base)
+            : base.copyWith(fontFamily: family))
+        .copyWith(fontFamilyFallback: [arabic]);
 
 TextStyle _base({
   double? fontSize,
@@ -146,6 +157,7 @@ TextStyle _serif({
     letterSpacing: letterSpacing,
     fontFeatures: fontFeatures,
   ),
+  arabic: kArabicSerif,
 );
 
 TextStyle _sans({

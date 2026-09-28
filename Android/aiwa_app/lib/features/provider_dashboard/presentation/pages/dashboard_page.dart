@@ -452,7 +452,7 @@ class _RequestCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${b.serviceName} · ${l.durationLabel(b.serviceDurationMinutes)}',
+                          '${bidiIsolate(b.serviceName)} · ${l.durationLabel(b.serviceDurationMinutes)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.micro.copyWith(fontSize: 12),

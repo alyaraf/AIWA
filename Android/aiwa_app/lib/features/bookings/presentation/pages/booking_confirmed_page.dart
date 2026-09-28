@@ -24,7 +24,7 @@ class BookingConfirmedPage extends StatelessWidget {
       return l.formatWhen(booking.scheduledDate, booking.scheduledTime);
     }
     return l.bookingWhenLong(
-      DateFormat('EEEE, MMMM d', l.localeName).format(dt),
+      DateFormat.MMMMEEEEd(l.localeName).format(dt),
       DateFormat('h:mm a', l.localeName).format(dt),
     );
   }

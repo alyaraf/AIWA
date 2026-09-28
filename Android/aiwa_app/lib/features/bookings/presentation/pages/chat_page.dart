@@ -344,6 +344,7 @@ class _Bubble extends StatelessWidget {
                     children: [
                       Text(
                         m.message,
+                        textDirection: textDirectionOf(m.message),
                         style: AppTextStyles.bodySm.copyWith(
                           height: 1.45,
                           color: mine ? AppColors.bone : AppColors.ink,

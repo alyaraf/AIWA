@@ -224,10 +224,7 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                       child: Text(
                         next == null
                             ? '—'
-                            : DateFormat(
-                                'EEE, MMM d',
-                                l.localeName,
-                              ).format(next),
+                            : DateFormat.MMMEd(l.localeName).format(next),
                         style: AppTextStyles.h3.copyWith(
                           fontSize: 18,
                           color: AppColors.plum900,
@@ -387,7 +384,7 @@ class _LedgerRow extends StatelessWidget {
             ),
           ),
           Text(
-            '${settled ? '+' : '−'}${l.egpCents(amount)}',
+            l.egpCents(amount, sign: settled ? '+' : '−'),
             style: AppTextStyles.h3.copyWith(
               fontSize: 15,
               color: settled ? AppColors.success700 : AppColors.plum900,

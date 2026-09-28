@@ -541,7 +541,7 @@ class _ProviderCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${b.serviceName} · ${AppLocalizations.of(context).formatWhen(b.scheduledDate, b.scheduledTime)}',
+                  '${bidiIsolate(b.serviceName)} · ${AppLocalizations.of(context).formatWhen(b.scheduledDate, b.scheduledTime)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.micro.copyWith(fontSize: 12),

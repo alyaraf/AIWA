@@ -54,6 +54,14 @@ void main() {
     expect(ar.error('رسالة من الخادم'), 'رسالة من الخادم');
   });
 
+  test('RTL: signs, dates and written text keep their direction', () {
+    expect(en.egpCents(110, sign: '+'), 'EGP \u2066+110.00\u2069');
+    expect(ar.egpCents(110, sign: '+'), startsWith('\u2066+110.00\u2069'));
+    expect(ar.formatWhen('2026-05-19', '12:30'), contains('،'));
+    expect(textDirectionOf('Trusted nails specialists.'), TextDirection.ltr);
+    expect(textDirectionOf('أفضل صالون'), TextDirection.rtl);
+  });
+
   test('spansOf keeps word order from the template', () {
     final spans = spansOf(ar.authCodeSentTo('{destination}'), {
       'destination': const TextSpan(text: 'X'),
