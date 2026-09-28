@@ -23,6 +23,7 @@ NotificationEntity _n(String id) => NotificationEntity(
 
 class _FakeRepo implements NotificationRepository {
   final marked = <String>[];
+  bool fail = false;
 
   @override
   Future<Either<Failure, PagedData<NotificationEntity>>> getNotifications({
@@ -45,11 +46,12 @@ class _FakeRepo implements NotificationRepository {
   @override
   Future<Either<Failure, void>> markAsRead(String id) async {
     marked.add(id);
-    return const Right(null);
+    return fail ? const Left(ServerFailure('404')) : const Right(null);
   }
 
   @override
-  Future<Either<Failure, void>> markAllAsRead() async => const Right(null);
+  Future<Either<Failure, void>> markAllAsRead() async =>
+      fail ? const Left(ServerFailure('500')) : const Right(null);
 }
 
 void main() {
@@ -88,6 +90,22 @@ void main() {
     await pumpEventQueue();
     expect(reads(), [true, true, true]);
     expect((bloc.state as NotificationLoaded).unreadCount, 0);
+  });
+
+  test('a failed mark read puts the row back to unread', () async {
+    repo.fail = true;
+    bloc.add(NotificationMarkReadEvent('2'));
+    await pumpEventQueue();
+    expect(reads(), [false, false, false]);
+    expect((bloc.state as NotificationLoaded).unreadCount, 3);
+  });
+
+  test('a failed mark all read puts every row back', () async {
+    repo.fail = true;
+    bloc.add(NotificationMarkAllReadEvent());
+    await pumpEventQueue();
+    expect(reads(), [false, false, false]);
+    expect((bloc.state as NotificationLoaded).unreadCount, 3);
   });
 
   test('quiet-hours times parse from every LocalTime shape', () {

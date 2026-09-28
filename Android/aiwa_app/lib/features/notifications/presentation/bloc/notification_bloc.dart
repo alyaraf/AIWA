@@ -86,7 +86,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     );
   }
 
-  // Optimistic: the row loses its unread styling before the PUT returns.
+  // Optimistic: the row loses its unread styling before the call returns,
+  // and gets it back if the server never saved it.
   Future<void> _onMarkRead(
     NotificationMarkReadEvent event,
     Emitter<NotificationState> emit,
@@ -104,7 +105,10 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         ),
       );
     }
-    await _repository.markAsRead(event.id);
+    final result = await _repository.markAsRead(event.id);
+    if (result.isLeft() && current is NotificationLoaded) {
+      _restoreUnread(current, {event.id}, emit);
+    }
   }
 
   Future<void> _onMarkAll(
@@ -122,6 +126,41 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         ),
       );
     }
-    await _repository.markAllAsRead();
+    final result = await _repository.markAllAsRead();
+    if (result.isLeft() && current is NotificationLoaded) {
+      _restoreUnread(current, {
+        for (final n in current.notifications)
+          if (!n.read) n.id,
+      }, emit);
+    }
+  }
+
+  /// Puts [ids] back to their [before] (unread) version in the latest state,
+  /// leaving any other rows the user touched meanwhile alone.
+  void _restoreUnread(
+    NotificationLoaded before,
+    Set<String> ids,
+    Emitter<NotificationState> emit,
+  ) {
+    final now = state;
+    if (now is! NotificationLoaded || ids.isEmpty) return;
+    final original = {
+      for (final n in before.notifications)
+        if (ids.contains(n.id)) n.id: n,
+    };
+    final rows = [
+      for (final n in now.notifications)
+        n.read && original.containsKey(n.id) ? original[n.id]! : n,
+    ];
+    final restored =
+        now.notifications.where((n) => n.read).length -
+        rows.where((n) => n.read).length;
+    if (restored == 0) return;
+    emit(
+      now.copyWith(
+        notifications: rows,
+        unreadCount: now.unreadCount + restored,
+      ),
+    );
   }
 }
