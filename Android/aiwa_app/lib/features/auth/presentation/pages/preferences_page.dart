@@ -15,6 +15,7 @@ import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/aiwa_text_field.dart';
 import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
+import '../../../../shared/widgets/screen_chrome.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
@@ -39,6 +40,7 @@ class _PreferencesPageState extends State<PreferencesPage> {
   double _min = 1, _max = 5;
   String _lang = LocaleController.locale.value.languageCode;
   bool _busy = false;
+  String? _error;
 
   /// Post-register steps already done, so a retry after a failure skips them
   /// (a second POST /provider/profile is rejected as already_exists).
@@ -73,6 +75,7 @@ class _PreferencesPageState extends State<PreferencesPage> {
   }
 
   void _save() {
+    setState(() => _error = null);
     // Already registered (a later step failed): just retry the rest.
     if (context.read<AuthBloc>().state is AuthAuthenticated) {
       _finish();
@@ -138,15 +141,14 @@ class _PreferencesPageState extends State<PreferencesPage> {
     // ponytail: photo is optional; a failed upload can be redone from Profile.
     if (error == null && avatar != null) await repo.uploadAvatar(avatar);
     if (!mounted) return;
-    setState(() => _busy = false);
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).error(error.message)),
-        ),
-      );
-      return;
-    }
+    final message = error == null
+        ? null
+        : AppLocalizations.of(context).error(error.message);
+    setState(() {
+      _busy = false;
+      _error = message;
+    });
+    if (message != null) return;
     ThemeController.applyGender(_d['gender'] as String?);
     LocaleController.set(_lang);
     // Pick up the saved radius / terms version on the signed-in user.
@@ -170,10 +172,8 @@ class _PreferencesPageState extends State<PreferencesPage> {
         if (state is AuthAuthenticated) {
           _finish();
         } else if (state is AuthError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).error(state.message)),
-            ),
+          setState(
+            () => _error = AppLocalizations.of(context).error(state.message),
           );
         }
       },
@@ -313,6 +313,14 @@ class _PreferencesPageState extends State<PreferencesPage> {
             ],
           ),
           const SizedBox(height: 28),
+          // Sits right above the Save button that failed.
+          if (_error != null)
+            InlineBanner(
+              tone: BannerTone.danger,
+              icon: Icons.error_outline_rounded,
+              body: _error,
+              compact: true,
+            ),
         ],
       ),
     );

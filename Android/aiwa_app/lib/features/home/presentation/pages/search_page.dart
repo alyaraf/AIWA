@@ -38,6 +38,7 @@ class _SearchPageState extends State<SearchPage> {
   String _sort = 'nearest';
   double _minRating = 0;
   double _maxPrice = _priceCap;
+  String? _notifyError;
 
   static const double _priceCap = 2500;
 
@@ -124,13 +125,14 @@ class _SearchPageState extends State<SearchPage> {
   );
 
   Future<void> _notifyMe() async {
+    setState(() => _notifyError = null);
     final result = await sl<HomeRepository>().notifyWhenProviderJoins(
       category: _activeCategory,
     );
     if (!mounted) return;
     result.fold(
-      (f) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).error(f.message))),
+      (f) => setState(
+        () => _notifyError = AppLocalizations.of(context).error(f.message),
       ),
       (_) => showAiwaToast(
         context,
@@ -142,6 +144,7 @@ class _SearchPageState extends State<SearchPage> {
   void _clearAll() {
     _controller.clear();
     setState(() {
+      _notifyError = null;
       _activeCategory = null;
       _minRating = 0;
       _maxPrice = _priceCap;
@@ -485,6 +488,18 @@ class _SearchPageState extends State<SearchPage> {
             onSecondary: _notifyMe,
           ),
         ),
+        if (_notifyError != null)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.gutter),
+            sliver: SliverToBoxAdapter(
+              child: InlineBanner(
+                tone: BannerTone.danger,
+                icon: Icons.error_outline_rounded,
+                body: _notifyError,
+                compact: true,
+              ),
+            ),
+          ),
       ];
     }
     return [

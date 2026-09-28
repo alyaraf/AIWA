@@ -7,6 +7,7 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
+import '../../../../shared/widgets/screen_chrome.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -38,6 +39,7 @@ class _OtpPageState extends State<OtpPage> {
   final _focus = FocusNode();
   int _seconds = 45;
   Timer? _timer;
+  String? _error;
 
   bool get _isProvider => widget.role == 'PROVIDER';
   int get _totalSteps => _isProvider ? 6 : 4;
@@ -71,6 +73,7 @@ class _OtpPageState extends State<OtpPage> {
 
   void _verify() {
     if (_controller.text.length != 6) return;
+    setState(() => _error = null);
     context.read<AuthBloc>().add(
       AuthVerifyOtpEvent(phone: widget.identifier, code: _controller.text),
     );
@@ -106,13 +109,10 @@ class _OtpPageState extends State<OtpPage> {
             },
           );
         } else if (state is AuthError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).error(state.message)),
-            ),
-          );
           _controller.clear();
-          setState(() {});
+          setState(
+            () => _error = AppLocalizations.of(context).error(state.message),
+          );
         }
       },
       child: AuthStepScaffold(
@@ -160,11 +160,20 @@ class _OtpPageState extends State<OtpPage> {
                   defaultPinTheme: _pinTheme(AppColors.divider, w),
                   focusedPinTheme: _pinTheme(AppColors.divider, w),
                   submittedPinTheme: _pinTheme(AppColors.plum700, w),
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (_) => setState(() => _error = null),
                 ),
               );
             },
           ),
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            InlineBanner(
+              tone: BannerTone.danger,
+              icon: Icons.error_outline_rounded,
+              body: _error,
+              compact: true,
+            ),
+          ],
           const SizedBox(height: 18),
           Center(
             child: _seconds > 0
@@ -189,6 +198,7 @@ class _OtpPageState extends State<OtpPage> {
                 : GestureDetector(
                     onTap: () {
                       _controller.clear();
+                      setState(() => _error = null);
                       _focus.requestFocus();
                       _startTimer();
                       context.read<AuthBloc>().add(

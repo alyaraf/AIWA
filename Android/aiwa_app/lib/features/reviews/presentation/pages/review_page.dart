@@ -92,15 +92,8 @@ class _ReviewPageState extends State<ReviewPage> {
           if (state is ReviewSubmitted) {
             showAiwaToast(context, AppLocalizations.of(context).reviewThanks);
             context.go(AppRoutes.myBookings);
-          } else if (state is ReviewError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  AppLocalizations.of(context).error(state.message),
-                ),
-              ),
-            );
           }
+          // ReviewError shows inline above Submit (bottomNavigationBar).
         },
         child: Scaffold(
           backgroundColor: AppColors.bone,
@@ -184,12 +177,26 @@ class _ReviewPageState extends State<ReviewPage> {
           bottomNavigationBar: StickyBar(
             child: BlocBuilder<ReviewBloc, ReviewState>(
               bloc: _bloc,
-              builder: (ctx, state) => AiwaButton(
-                label: AppLocalizations.of(context).reviewSubmit,
-                onPressed: _rating > 0 ? _submit : null,
-                loading: state is ReviewLoading,
-                fullWidth: true,
-                size: AiwaButtonSize.lg,
+              builder: (ctx, state) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (state is ReviewError) ...[
+                    InlineBanner(
+                      tone: BannerTone.danger,
+                      icon: Icons.error_outline_rounded,
+                      body: AppLocalizations.of(context).error(state.message),
+                      compact: true,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  AiwaButton(
+                    label: AppLocalizations.of(context).reviewSubmit,
+                    onPressed: _rating > 0 ? _submit : null,
+                    loading: state is ReviewLoading,
+                    fullWidth: true,
+                    size: AiwaButtonSize.lg,
+                  ),
+                ],
               ),
             ),
           ),

@@ -244,15 +244,8 @@ class _BookingPageState extends State<BookingPage> {
             );
           } else if (state is BookingError && state.slotTaken && !_isNow) {
             _onSlotTaken();
-          } else if (state is BookingError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  AppLocalizations.of(context).error(state.message),
-                ),
-              ),
-            );
           }
+          // Other BookingErrors show inline above Confirm (_buildCtaBar).
         },
         child: BlocConsumer<ProviderBloc, ProviderState>(
           bloc: _providerBloc,
@@ -572,18 +565,32 @@ class _BookingPageState extends State<BookingPage> {
           const SizedBox(height: 10),
           BlocBuilder<BookingBloc, BookingState>(
             bloc: _bookingBloc,
-            builder: (ctx, state) => AiwaButton(
-              label: _selectedService == null
-                  ? l.bookingChooseService
-                  : !_isNow && _selectedTime == null
-                  ? l.bookingChooseTime
-                  : _toAddress && _addressId == null
-                  ? l.bookingChooseAddress
-                  : l.bookingConfirm,
-              onPressed: _canSubmit ? _submit : null,
-              loading: state is BookingLoading,
-              fullWidth: true,
-              size: AiwaButtonSize.lg,
+            builder: (ctx, state) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (state is BookingError && !(state.slotTaken && !_isNow)) ...[
+                  InlineBanner(
+                    tone: BannerTone.danger,
+                    icon: Icons.error_outline_rounded,
+                    body: l.error(state.message),
+                    compact: true,
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                AiwaButton(
+                  label: _selectedService == null
+                      ? l.bookingChooseService
+                      : !_isNow && _selectedTime == null
+                      ? l.bookingChooseTime
+                      : _toAddress && _addressId == null
+                      ? l.bookingChooseAddress
+                      : l.bookingConfirm,
+                  onPressed: _canSubmit ? _submit : null,
+                  loading: state is BookingLoading,
+                  fullWidth: true,
+                  size: AiwaButtonSize.lg,
+                ),
+              ],
             ),
           ),
         ],

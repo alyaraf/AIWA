@@ -7,6 +7,7 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
+import '../../../../shared/widgets/screen_chrome.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 
@@ -22,6 +23,8 @@ class TermsReacceptPage extends StatefulWidget {
 class _TermsReacceptPageState extends State<TermsReacceptPage> {
   final _repo = sl<AuthRepository>();
   ({String version, String content})? _terms;
+
+  /// Load error (shown in the terms box) or, once loaded, accept error.
   String? _error;
   bool _busy = false;
 
@@ -41,13 +44,16 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
   }
 
   Future<void> _accept() async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     final r = await _repo.acceptTerms(_terms!.version);
     if (!mounted) return;
     setState(() => _busy = false);
     r.fold(
-      (f) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).error(f.message))),
+      (f) => setState(
+        () => _error = AppLocalizations.of(context).error(f.message),
       ),
       (_) {
         showAiwaToast(context, AppLocalizations.of(context).authTermsAccepted);
@@ -130,6 +136,15 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
                       ),
               ),
             const Spacer(),
+            if (_terms != null && _error != null) ...[
+              InlineBanner(
+                tone: BannerTone.danger,
+                icon: Icons.error_outline_rounded,
+                body: _error,
+                compact: true,
+              ),
+              const SizedBox(height: 12),
+            ],
             AiwaButton(
               label: AppLocalizations.of(context).authAgreeContinue,
               size: AiwaButtonSize.lg,
