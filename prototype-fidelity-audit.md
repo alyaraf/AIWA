@@ -6,15 +6,15 @@ Source of truth: `AIWA-Prototype.html` (its 21 bundled JSX modules are byte-iden
 
 ## 0. Recheck status — 2026-09-28
 
-Sections 1–8 below are the original audit of 2026-09-27 and are kept as the baseline. This section is the current state after the eight fidelity phases and the frontend launch commits `d90acc2` … `777812c`. Every original finding was re-checked against the code; the interactive version with filters is the "AIWA launch readiness" artifact.
+Sections 1–8 below are the original audit of 2026-09-27 and are kept as the baseline. This section is the current state after the eight fidelity phases and the frontend launch commits `d90acc2` … `777812c` plus the FE-14 pass (Lucide icons, radius and type tokens, real provider GPS). Every original finding was re-checked against the code; the interactive version with filters is the "AIWA launch readiness" artifact.
 
 ### Readiness
 
 | | Score | How it is calculated |
 |---|---|---|
-| Frontend (Flutter) | **78%** | 50% mobile prototype fidelity (90%) + 50% frontend launch checklist (65%) |
+| Frontend (Flutter) | **83%** | 50% mobile prototype fidelity (91%) + 50% frontend launch checklist (75%) |
 | Backend (Spring Boot) | **51%** | 50% API coverage (84%: 154 endpoints, 29 capabilities missing) + 50% backend launch checklist (18%) |
-| Whole application | **52%** | 40% frontend + 40% backend + 20% admin panel & operations (0%) |
+| Whole application | **54%** | 40% frontend + 40% backend + 20% admin panel & operations (0%) |
 
 Launch checklists weight blockers 8, major 3, minor 1; done = 1, partial = 0.5. Fidelity = (implemented + 0.5 × deviates) ÷ entries, where an entry counts as implemented once all its findings are fixed.
 
@@ -22,33 +22,33 @@ Launch checklists weight blockers 8, major 3, minor 1; done = 1, partial = 0.5. 
 
 | Area | Entries | ✅ | ⚠️ | ❌ | Before | Now |
 |---|---|---|---|---|---|---|
-| Design system & shared components | 38 | 30 | 8 | 0 | 47% | **89%** |
+| Design system & shared components | 38 | 34 | 4 | 0 | 47% | **95%** |
 | Customer sign-in / sign-up | 24 | 20 | 4 | 0 | 40% | **92%** |
-| Onboarding tail & provider onboarding | 21 | 17 | 4 | 0 | 17% | **90%** |
+| Onboarding tail & provider onboarding | 21 | 18 | 3 | 0 | 17% | **93%** |
 | Customer discovery | 22 | 16 | 6 | 0 | 48% | **86%** |
 | Customer booking lifecycle | 64 | 55 | 9 | 0 | 16% | **93%** |
 | Customer account, notifications & system | 37 | 27 | 10 | 0 | 7% | **86%** |
 | Provider app | 51 | 39 | 12 | 0 | 13% | **88%** |
 | Admin web panel | 46 | 0 | 0 | 46 | 0% | **0%** |
-| **Mobile apps (excl. admin)** | | | | | 24% | **90%** |
-| **Whole prototype (incl. admin)** | | | | | 20% | **76%** |
+| **Mobile apps (excl. admin)** | | | | | 24% | **91%** |
+| **Whole prototype (incl. admin)** | | | | | 20% | **77%** |
 
-Findings: **377 fixed**, 29 partial, 25 open (of 431). The admin web panel is not built yet, so it stays at 0%.
+Findings: **392 fixed**, 26 partial, 13 open (of 431). The admin web panel is not built yet, so it stays at 0%.
 
 Checks: `flutter analyze` 0 errors (5 warnings); `flutter test` 98 passed (unit, bloc, widget, l10n, telemetry, 16 goldens) plus `integration_test/booking_lifecycle_test.dart` against a seeded backend; backend `mvn test` 130 passed.
 
-### Frontend launch checklist (15 of 21 done)
+### Frontend launch checklist (16 of 21 done)
 
 | ID | Status | Severity | Type | Item | What we found | What to do |
 |---|---|---|---|---|---|---|
 | FE-1 | ⚠️ partial | blocker | Configure | API address is the Android emulator loopback | Commit a35ec81: baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8080/api') (api_constants.dart:4-8), so a build can target staging or prod. Still left: the default is the emulator over plain HTTP, and there are no dev / staging / prod flavors, so a release built without the flag is broken. | Make release builds fail (or default to https://api.&lt;domain>/api) when API_BASE_URL is missing; add flavors or a build script that always passes --dart-define=API_BASE_URL and SENTRY_DSN. |
 | FE-2 | ❌ to do | blocker | Configure | Release build is signed with the debug key | android/app/build.gradle.kts:34 — signingConfig = signingConfigs.getByName("debug"). Google Play rejects debug-signed bundles. | Create an upload keystore, load it from key.properties (not committed) into signingConfigs.release, enable Play App Signing. iOS: set the team, distribution certificate and provisioning profile for com.aiwa.aiwaApp. |
 | FE-3 | ❌ to do | blocker | Add | Push notifications are not wired | pubspec.yaml has no firebase_core / firebase_messaging. Nothing calls PATCH /auth/me/push-token, so booking accepted / on the way / SOS / reminders never reach a phone. The notification priming screen asks for permission that nothing uses. | Add firebase_core + firebase_messaging, google-services.json and GoogleService-Info.plist, register the token after notification priming and on every sign-in (PATCH /auth/me/push-token), DELETE it on sign-out, route taps by type (booking → Tracking, terms → re-accept). Needs BE-2. |
-| FE-4 | ❌ to do | blocker | Edit | Every provider is saved at the same location | provider_business_page.dart:29 — final double _lat = 30.0444, _lng = 31.2357. "Use GPS" only flips a flag, so every provider registers in downtown Cairo; nearby search, distance and travel fees are wrong. | Call Geolocator.getCurrentPosition() on "Use GPS" (as preferences_page.dart does), or add a map pin picker, and send the real coordinates. Let providers correct it later in Business info. |
 | FE-13 | ⚠️ partial | minor | Add | "Add to calendar" and real sharing | Commit 777812c: "Add to calendar" on Booking confirmed opens a Google Calendar event template (url_launcher); provider Share uses the native sheet (share_plus) with name and address. Still left: no https app link to /provider/{id}, no Android App Links / iOS Universal Links, and iOS gets the web calendar rather than the native sheet. | Add a public link host (e.g. https://aiwa.app/p/{id}) with assetlinks.json / apple-app-site-association, route it in go_router, and put the link in the share text. Swap to add_2_calendar if iOS needs the native sheet. |
-| FE-14 | ⚠️ partial | minor | Edit | Remaining prototype deviations | Open/partial findings are listed in the Fix list tab; 20 design tokens are still open or partial (Design tokens tab). Most are design-token debt: Material icons instead of Lucide, off-scale fontSize overrides, inline radii, SVG logos shipped without flutter_svg, and theme-tinted glows / scrims instead of the prototype literals. | Work the Fix list filtered to Open/Partial. Adopt lucide_icons_flutter and radius/type tokens in one pass. |
+| FE-14 | ⚠️ partial | minor | Edit | Remaining prototype deviations | FE-14 pass (2026-09-28): Lucide icons, radius and half-step type tokens, ErrorState support action, real provider GPS and pushed location priming are done, and the unrenderable SVG logos were dropped. Still left: 17 partial and 3 open design tokens, almost all theme-tinted glows, scrims and shadows (plum900 / rose300 instead of the fixed #2A1320 / pink literals), plus design/product decisions and backend-gated rows in the Fix list. | Make a design call on the tinting: record the theme-aware tint as intentional (literal pink and gold would clash with the male palette) or switch to the literals. Backend-gated rows need their endpoints. |
 | FE-D1 | ✅ done | blocker | Add | Every mobile prototype screen is built | 257 of 257 customer/provider entries now exist in Flutter (192 were missing on 2026-09-27). 0 missing. | — |
 | FE-D2 | ✅ done | blocker | Edit | Data layer matches the backend contract | Booking create (bookingDate/startTime/bookingType/idempotency key), decline reason as query param, /provider/dashboard, /users/me/saved, reviews, BookingModel/ProviderDetailModel mapping. Every path in api_constants.dart exists in the backend. | — |
+| FE-4 | ✅ done | blocker | Edit | Every provider is saved at the same location | FE-14 pass: "Use GPS" calls Geolocator.getCurrentPosition() and sends the real latitude/longitude; the fixed Cairo coordinates are gone and nothing is sent until a fix succeeds (provider_business_page.dart). | — |
 | FE-D3 | ✅ done | major | Add | Error routing, offline banner and system screens | ApiClient._send unwraps exceptions; 401/403/423 go through ApiClient.authEvents (app.dart:75); NotFoundPage is the router errorBuilder; OfflineBanner is mounted over every route. | — |
 | FE-D4 | ✅ done | major | Edit | Static analysis and tests are green | flutter analyze: 0 errors, 5 warnings. flutter test: 98 passed (unit, bloc, widget, l10n, telemetry and 16 goldens) plus the integration test against a seeded backend. | — |
 | FE-D5 | ✅ done | major | Configure | Branding and offline fonts | Launcher icons generated, app label "AIWA" on Android and iOS, native launch background #2E2A26, fonts bundled with runtime fetching disabled (main.dart). | — |
@@ -117,25 +117,13 @@ Checks: `flutter analyze` 0 errors (5 warnings); `flutter test` 98 passed (unit,
 | AUTH-07-V1 | open | minor | Autofocused email field opens with a plum700 focus ring | Inputs still get a plum700 focus border (design decision pending, see AUTH-25-F1). |
 | AUTH-25-F1 | open | minor | Inputs show a plum700 focus border the prototype doesn't have | Design decision still pending: focused inputs show a plum700 border. |
 | BOOK-47-F2 | open | minor | 'Find a provider' target differs (prototype stub) | Keeps Search (design decision). |
-| BOOK-C2 | open | minor | Material Icons used instead of the Lucide set | Material Icons. |
 | DISC-01-F11 | open | minor | Bell sends guests to the auth gate | Bell still sends guests to the auth gate (product decision to record). |
 | DISC-01-F5 | open | minor | Hero glow and search-pill shadow use theme tokens instead of the prototype literals | Hero glow and pill shadow still theme tokens (acceptable if recorded as intentional). |
 | DISC-02-F3 | open | minor | Eight category chips instead of five | Still 8 chips (kept for Home tiles; needs design sign-off). |
-| DISC-02-F6 | open | minor | Filter icon glyph differs | Material tune glyph. |
-| DISC-04-V1 | open | minor | Empty-results icon glyph differs | Material glyph. |
 | DISC-08-F4 | open | minor | Cover rating star uses gold300 instead of gold500 | Cover rating star still gold300 (contrast decision). |
 | DISC-08-F5 | open | minor | Location meta shows the full address instead of 'distance · area' | Location meta still shows the full address, not 'distance · area'. |
 | DISC-09-F2 | open | minor | Extra description line not in the prototype | Extra description line kept (design sign-off). |
 | DISC-17-F1 | open | minor | 'Browse providers' opens Discover instead of a provider profile | Keeps Discover (design decision to record). |
-| DS-05-F1 | open | minor | Material Icons are used instead of Lucide | Still Material Icons (405 Icons.* uses); no Lucide package. |
-| DS-05-F2 | open | minor | Filled/rounded Material glyph weight instead of a 2px round-cap stroke | Follows DS-05-F1. |
-| DS-11-F1 | open | minor | Rounded Material star glyphs instead of the Lucide polygon | Still Material star_rounded glyphs. |
-| DS-19-F1 | open | minor | ErrorState has no optional 'Contact support' secondary action | ErrorState still has no optional 'Contact support' action. |
-| DS-C11 | open | minor | Material Icons are used app-wide instead of Lucide | Material Icons app-wide. |
-| DS-C2 | open | minor | 116 fontSize overrides (all copyWith on AppTextStyles) with off-scale sizes | fontSize overrides grew from 116 to 319; no named styles for the recurring 11.5/12.5/13.5 sizes. |
-| DS-C3 | open | minor | Radii are mostly inline literals: 66 BorderRadius.circular calls outside the theme, only 14 via AppTheme | 181 inline BorderRadius.circular calls; no radius14/16/20/22 tokens. |
-| ONB-12-F6 | open | minor | Lucide icons swapped for different Material glyphs | Material glyphs (Lucide not adopted). |
-| ONB-14-F1 | open | minor | Initial GPS state inverted (No GPS instead of GPS locked) | CRITICAL for launch: 'Use GPS' only flips _hasLocation; the business location is the constant 30.0444, 31.2357 (downtown Cairo) for every provider, so nearby search and travel distance are wrong. Use Geolocator.getCurrentPosition (as preferences_page.dart does) and send the real coordinates. |
 | PROV-C6 | open | minor | Hard-coded rgba literals in the prototype are mapped to theme tokens in Flutter | Theme tokens instead of literals (document as intentional). |
 | PROV-08-F1 | partial | critical | Status tabs are dead: the backend ignores the status parameter, so every tab lists the same bookings | Pending/Upcoming/Past filter client-side because GET /bookings/provider ignores status; a busy provider's older bookings fall off the first page. Needs a backend status filter. |
 | PROV-09-F3 | partial | critical | Rows do not open booking detail, and the tab does not actually filter | Rows open the detail; filtering is client-side (PROV-08-F1). |
@@ -148,15 +136,12 @@ Checks: `flutter analyze` 0 errors (5 warnings); `flutter test` 98 passed (unit,
 | DISC-02-V1 | partial | major | 'Price' sort and 'Max price' filter have no effect | 'Price' sort and Max price are hidden until prices are known; they stay hidden until the backend sends startingPrice. |
 | DISC-04-F1 | partial | major | 'Notify me when someone joins' secondary action missing | 'Notify me when someone joins' button added; backend has no waitlist endpoint, so it shows an error. |
 | DISC-08-F3 | partial | major | Share button missing from the cover | Update 2026-09-28 (commit 777812c): Share now opens the native share sheet (share_plus) with the provider name and address. There is still no https app link / deep-link host to include. |
-| DS-35-F2 | partial | major | No logo assets are shipped (assets/ is empty) | SVG logos copied to assets/images but flutter_svg is not a dependency, so nothing can render them; the wordmark is still code-drawn. |
 | ONB-08-F1 | partial | major | Contacts priming variant not implemented | Contacts copy exists in PermissionPrimingPage, but nothing opens it: trusted contacts are backend-gapped (no endpoints). |
-| ONB-09-F1 | partial | major | Pushed (pop-back) location priming state missing | Pushed /permission?kind= route exists, but Home/Search never push it with kind=location when location is denied. |
 | ACCT-01-F4 | partial | minor | Header glow colour/geometry and name letter-spacing | Update 2026-09-28 (commit 777812c): Header glow is AiwaGlow.fill at 70% 30%, .4, transparent 60%. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
 | BOOK-34-F2 | partial | minor | Provider avatar lacks palette and verified badge | Palette fixed; no verified flag on BookingEntity. |
 | BOOK-41-F4 | partial | minor | Meta shows the provider address and 24h time instead of distance and 12h time | 12h time; distance still not available on the booking. |
 | BOOK-41-F5 | partial | minor | Avatar palette by list index and no verified badge | Palette from provider id; no verified badge. |
 | BOOK-42-F4 | partial | minor | Time format and location meta | Time format fixed; no distance. |
-| DISC-01-F12 | partial | minor | Category icon glyphs swapped | spa_outlined replaced by eco_outlined; other glyphs still Material. |
 | DISC-08-F9 | partial | minor | Cover glows are theme-mapped and smaller than the prototype's | Update 2026-09-28 (commit 777812c): The glows are now full-screen farthest-corner radial gradients (AiwaGlow.fill) at the prototype positions, strengths and stops. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
 | DS-04-F2 | partial | minor | No shared equivalents of the aiwa-pop / aiwa-drop / aiwa-toast keyframes | EmptyState has the pop-in inline and Toast/OfflineBanner animate, but there is no shared AiwaPopIn/AiwaDropIn helper. |
 | DS-22-F6 | partial | minor | No built-in 14px bottom margin; multiline padding and height differ | Multiline padding is 14; no built-in 14px bottom margin. |
