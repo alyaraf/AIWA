@@ -1,0 +1,83 @@
+{
+  "success": true,
+  "data": {
+    "content": [
+      {
+        "id": 2,
+        "businessName": "Layla Beauty",
+        "address": "Zamalek, Cairo",
+        "latitude": 30.06,
+        "longitude": 31.22,
+        "primaryCategory": "NAILS",
+        "averageRating": 4.6,
+        "totalReviews": 128,
+        "verificationStatus": "APPROVED",
+        "ownerName": "Layla Beauty",
+        "distanceKm": 2.300506981273175,
+        "providerType": "INDIVIDUAL",
+        "vacationMode": false,
+        "offlineMode": false,
+        "settlementPaused": false
+      },
+      {
+        "id": 3,
+        "businessName": "Maadi Hammam",
+        "address": "Maadi, Cairo",
+        "latitude": 29.96,
+        "longitude": 31.25,
+        "primaryCategory": "SPA",
+        "averageRating": 4.9,
+        "totalReviews": 87,
+        "verificationStatus": "APPROVED",
+        "ownerName": "Maadi Hammam",
+        "distanceKm": 9.485338279855169,
+        "providerType": "INDIVIDUAL",
+        "vacationMode": false,
+        "offlineMode": false,
+        "settlementPaused": true
+      },
+      {
+        "id": 1,
+        "businessName": "Nadia Studio",
+        "address": "New Cairo, Cairo",
+        "latitude": 30.03,
+        "longitude": 31.47,
+        "primaryCategory": "HAIR",
+        "averageRating": 4.8,
+        "totalReviews": 312,
+        "verificationStatus": "APPROVED",
+        "ownerName": "Nadia Studio",
+        "distanceKm": 22.610835306105148,
+        "providerType": "SHOP",
+        "vacationMode": false,
+        "offlineMode": false,
+        "settlementPaused": false
+      }
+    ],
+    "pageable": {
+      "pageNumber": 0,
+      "pageSize": 20,
+      "sort": {
+        "empty": true,
+        "sorted": false,
+        "unsorted": true
+      },
+      "offset": 0,
+      "paged": true,
+      "unpaged": false
+    },
+    "last": true,
+    "totalElements": 3,
+    "totalPages": 1,
+    "first": true,
+    "size": 20,
+    "number": 0,
+    "sort": {
+      "empty": true,
+      "sorted": false,
+      "unsorted": true
+    },
+    "numberOfElements": 3,
+    "empty": false
+  }
+}

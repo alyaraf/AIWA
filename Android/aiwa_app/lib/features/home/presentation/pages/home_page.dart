@@ -36,6 +36,10 @@ class HomePage extends StatefulWidget {
   // ponytail: static field, move to a LocationCubit if more screens need it.
   static ({double lat, double lng}) position = (lat: 30.0444, lng: 31.2357);
 
+  /// Greeting clock; goldens pin it so the golden doesn't change by hour.
+  @visibleForTesting
+  static DateTime Function() now = DateTime.now;
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -112,7 +116,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String get _greeting {
-    final h = DateTime.now().hour;
+    final h = HomePage.now().hour;
     final l = AppLocalizations.of(context);
     if (h < 12) return l.homeGoodMorning;
     if (h < 17) return l.homeGoodAfternoon;

@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "Balayage",
+      "description": "Balayage by Nadia Studio",
+      "price": 1100.0,
+      "durationMinutes": 150,
+      "category": "HAIR",
+      "pricingType": "FIXED",
+      "transportIncluded": false,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Haircut & Style",
+      "description": "Haircut & Style by Nadia Studio",
+      "price": 350.0,
+      "durationMinutes": 60,
+      "category": "HAIR",
+      "pricingType": "FIXED",
+      "transportIncluded": false,
+      "active": true
+    }
+  ]
+}

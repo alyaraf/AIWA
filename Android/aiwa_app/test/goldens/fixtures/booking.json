@@ -1,0 +1,47 @@
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "customer": {
+      "id": 8,
+      "fullName": "Hana Kamal",
+      "email": "hana@example.com",
+      "phone": "+201000000004",
+      "role": "CUSTOMER",
+      "gender": "FEMALE",
+      "termsAccepted": false,
+      "active": true
+    },
+    "provider": {
+      "id": 1,
+      "businessName": "Nadia Studio",
+      "address": "New Cairo, Cairo",
+      "averageRating": 4.8,
+      "verificationStatus": "APPROVED",
+      "vacationMode": false,
+      "offlineMode": false,
+      "settlementPaused": false
+    },
+    "service": {
+      "id": 1,
+      "name": "Balayage",
+      "price": 1100.0,
+      "durationMinutes": 150,
+      "pricingType": "FIXED",
+      "transportIncluded": false,
+      "active": false
+    },
+    "bookingDate": "2026-09-28",
+    "startTime": "16:00:00",
+    "endTime": "18:30:00",
+    "bookingType": "SCHEDULED",
+    "homeService": true,
+    "status": "IN_PROGRESS",
+    "paymentStatus": "CASH_PENDING",
+    "paymentMethod": "CASH",
+    "totalPrice": 1100.0,
+    "penaltyApplied": false,
+    "createdAt": "2026-09-28T13:38:42.657292",
+    "reviewed": false
+  }
+}

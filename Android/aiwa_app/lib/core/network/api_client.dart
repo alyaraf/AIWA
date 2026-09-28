@@ -16,7 +16,8 @@ class ApiClient {
   /// Emits `true` on connection errors and `false` on the next response.
   static final offline = StreamController<bool>.broadcast();
 
-  ApiClient(this._storage) {
+  /// [adapter] is a test seam: goldens serve JSON fixtures through it.
+  ApiClient(this._storage, {HttpClientAdapter? adapter}) {
     _dio = Dio(
       BaseOptions(
         baseUrl: ApiConstants.baseUrl,
@@ -29,6 +30,7 @@ class ApiClient {
         },
       ),
     );
+    if (adapter != null) _dio.httpClientAdapter = adapter;
     _dio.interceptors.addAll([
       _AuthInterceptor(_storage, _dio),
       _ErrorInterceptor(),

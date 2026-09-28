@@ -1,0 +1,62 @@
+{
+  "success": true,
+  "data": {
+    "content": [
+      {
+        "id": 3,
+        "user": {
+          "id": 6,
+          "fullName": "Karim Helmi",
+          "termsAccepted": false,
+          "active": false
+        },
+        "rating": 2,
+        "comment": "Late arrival and poor communication.",
+        "quickTags": [],
+        "direction": "CUSTOMER_TO_PROVIDER",
+        "hidden": false,
+        "createdAt": "2026-09-28T13:38:42.694272"
+      },
+      {
+        "id": 1,
+        "user": {
+          "id": 10,
+          "fullName": "Nour Hassan",
+          "termsAccepted": false,
+          "active": false
+        },
+        "rating": 5,
+        "comment": "Great result and very clean setup.",
+        "quickTags": [],
+        "direction": "CUSTOMER_TO_PROVIDER",
+        "hidden": false,
+        "createdAt": "2026-09-28T13:38:42.684127"
+      }
+    ],
+    "pageable": {
+      "pageNumber": 0,
+      "pageSize": 20,
+      "sort": {
+        "empty": true,
+        "sorted": false,
+        "unsorted": true
+      },
+      "offset": 0,
+      "paged": true,
+      "unpaged": false
+    },
+    "last": true,
+    "totalElements": 2,
+    "totalPages": 1,
+    "first": true,
+    "size": 20,
+    "number": 0,
+    "sort": {
+      "empty": true,
+      "sorted": false,
+      "unsorted": true
+    },
+    "numberOfElements": 2,
+    "empty": false
+  }
+}

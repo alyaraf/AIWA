@@ -1,0 +1,75 @@
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "businessName": "Nadia Studio",
+    "bio": "Nadia Studio — trusted hair specialists.",
+    "address": "New Cairo, Cairo",
+    "latitude": 30.03,
+    "longitude": 31.47,
+    "primaryCategory": "HAIR",
+    "averageRating": 4.8,
+    "totalReviews": 312,
+    "verificationStatus": "APPROVED",
+    "providerType": "SHOP",
+    "vacationMode": false,
+    "offlineMode": false,
+    "travelBufferMinutes": 30,
+    "settlementPaused": false,
+    "owner": {
+      "id": 11,
+      "fullName": "Nadia Studio",
+      "email": "nadia.studio@aiwa.com",
+      "phone": "+20118785699",
+      "role": "PROVIDER",
+      "gender": "FEMALE",
+      "preferredLanguage": "EN",
+      "termsAccepted": true,
+      "active": true
+    },
+    "services": [
+      {
+        "id": 1,
+        "name": "Balayage",
+        "description": "Balayage by Nadia Studio",
+        "price": 1100.0,
+        "durationMinutes": 150,
+        "category": "HAIR",
+        "pricingType": "FIXED",
+        "transportIncluded": false,
+        "active": true
+      },
+      {
+        "id": 2,
+        "name": "Haircut & Style",
+        "description": "Haircut & Style by Nadia Studio",
+        "price": 350.0,
+        "durationMinutes": 60,
+        "category": "HAIR",
+        "pricingType": "FIXED",
+        "transportIncluded": false,
+        "active": true
+      }
+    ],
+    "availabilities": [],
+    "staffMembers": [
+      {
+        "id": 1,
+        "providerId": 1,
+        "fullName": "Salma Adel",
+        "title": "Senior Stylist",
+        "phone": "+201007770001",
+        "active": true
+      },
+      {
+        "id": 2,
+        "providerId": 1,
+        "fullName": "Rania Fathy",
+        "title": "Stylist",
+        "phone": "+201007770002",
+        "active": true
+      }
+    ],
+    "galleryImages": []
+  }
+}
