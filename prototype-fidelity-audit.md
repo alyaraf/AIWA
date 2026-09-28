@@ -4,6 +4,264 @@ Source of truth: `AIWA-Prototype.html` (its 21 bundled JSX modules are byte-iden
 
 > **Prototype colours:** `theme.jsx` applies `MALE_THEME` at load, so the default rendered palette is charcoal `#2E2A26` / stone `#B5A898` / off-white `#F5F2ED`; picking female at signup swaps to mauve `#6B3A3A` / dusty rose `#C4837A` / blush `#FDF6F4`. The plum/rose/gold hexes in `tokens/colors_and_type.css` are base tokens that the runtime overwrites.
 
+## 0. Recheck status — 2026-09-28
+
+Sections 1–8 below are the original audit of 2026-09-27 and are kept as the baseline. This section is the current state after the eight fidelity phases and the frontend launch commits `d90acc2` … `777812c`. Every original finding was re-checked against the code; the interactive version with filters is the "AIWA launch readiness" artifact.
+
+### Readiness
+
+| | Score | How it is calculated |
+|---|---|---|
+| Frontend (Flutter) | **78%** | 50% mobile prototype fidelity (90%) + 50% frontend launch checklist (65%) |
+| Backend (Spring Boot) | **51%** | 50% API coverage (84%: 154 endpoints, 29 capabilities missing) + 50% backend launch checklist (18%) |
+| Whole application | **52%** | 40% frontend + 40% backend + 20% admin panel & operations (0%) |
+
+Launch checklists weight blockers 8, major 3, minor 1; done = 1, partial = 0.5. Fidelity = (implemented + 0.5 × deviates) ÷ entries, where an entry counts as implemented once all its findings are fixed.
+
+### Fidelity: before → now
+
+| Area | Entries | ✅ | ⚠️ | ❌ | Before | Now |
+|---|---|---|---|---|---|---|
+| Design system & shared components | 38 | 30 | 8 | 0 | 47% | **89%** |
+| Customer sign-in / sign-up | 24 | 20 | 4 | 0 | 40% | **92%** |
+| Onboarding tail & provider onboarding | 21 | 17 | 4 | 0 | 17% | **90%** |
+| Customer discovery | 22 | 16 | 6 | 0 | 48% | **86%** |
+| Customer booking lifecycle | 64 | 55 | 9 | 0 | 16% | **93%** |
+| Customer account, notifications & system | 37 | 27 | 10 | 0 | 7% | **86%** |
+| Provider app | 51 | 39 | 12 | 0 | 13% | **88%** |
+| Admin web panel | 46 | 0 | 0 | 46 | 0% | **0%** |
+| **Mobile apps (excl. admin)** | | | | | 24% | **90%** |
+| **Whole prototype (incl. admin)** | | | | | 20% | **76%** |
+
+Findings: **377 fixed**, 29 partial, 25 open (of 431). The admin web panel is not built yet, so it stays at 0%.
+
+Checks: `flutter analyze` 0 errors (5 warnings); `flutter test` 98 passed (unit, bloc, widget, l10n, telemetry, 16 goldens) plus `integration_test/booking_lifecycle_test.dart` against a seeded backend; backend `mvn test` 130 passed.
+
+### Frontend launch checklist (15 of 21 done)
+
+| ID | Status | Severity | Type | Item | What we found | What to do |
+|---|---|---|---|---|---|---|
+| FE-1 | ⚠️ partial | blocker | Configure | API address is the Android emulator loopback | Commit a35ec81: baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8080/api') (api_constants.dart:4-8), so a build can target staging or prod. Still left: the default is the emulator over plain HTTP, and there are no dev / staging / prod flavors, so a release built without the flag is broken. | Make release builds fail (or default to https://api.&lt;domain>/api) when API_BASE_URL is missing; add flavors or a build script that always passes --dart-define=API_BASE_URL and SENTRY_DSN. |
+| FE-2 | ❌ to do | blocker | Configure | Release build is signed with the debug key | android/app/build.gradle.kts:34 — signingConfig = signingConfigs.getByName("debug"). Google Play rejects debug-signed bundles. | Create an upload keystore, load it from key.properties (not committed) into signingConfigs.release, enable Play App Signing. iOS: set the team, distribution certificate and provisioning profile for com.aiwa.aiwaApp. |
+| FE-3 | ❌ to do | blocker | Add | Push notifications are not wired | pubspec.yaml has no firebase_core / firebase_messaging. Nothing calls PATCH /auth/me/push-token, so booking accepted / on the way / SOS / reminders never reach a phone. The notification priming screen asks for permission that nothing uses. | Add firebase_core + firebase_messaging, google-services.json and GoogleService-Info.plist, register the token after notification priming and on every sign-in (PATCH /auth/me/push-token), DELETE it on sign-out, route taps by type (booking → Tracking, terms → re-accept). Needs BE-2. |
+| FE-4 | ❌ to do | blocker | Edit | Every provider is saved at the same location | provider_business_page.dart:29 — final double _lat = 30.0444, _lng = 31.2357. "Use GPS" only flips a flag, so every provider registers in downtown Cairo; nearby search, distance and travel fees are wrong. | Call Geolocator.getCurrentPosition() on "Use GPS" (as preferences_page.dart does), or add a map pin picker, and send the real coordinates. Let providers correct it later in Business info. |
+| FE-13 | ⚠️ partial | minor | Add | "Add to calendar" and real sharing | Commit 777812c: "Add to calendar" on Booking confirmed opens a Google Calendar event template (url_launcher); provider Share uses the native sheet (share_plus) with name and address. Still left: no https app link to /provider/{id}, no Android App Links / iOS Universal Links, and iOS gets the web calendar rather than the native sheet. | Add a public link host (e.g. https://aiwa.app/p/{id}) with assetlinks.json / apple-app-site-association, route it in go_router, and put the link in the share text. Swap to add_2_calendar if iOS needs the native sheet. |
+| FE-14 | ⚠️ partial | minor | Edit | Remaining prototype deviations | Open/partial findings are listed in the Fix list tab; 20 design tokens are still open or partial (Design tokens tab). Most are design-token debt: Material icons instead of Lucide, off-scale fontSize overrides, inline radii, SVG logos shipped without flutter_svg, and theme-tinted glows / scrims instead of the prototype literals. | Work the Fix list filtered to Open/Partial. Adopt lucide_icons_flutter and radius/type tokens in one pass. |
+| FE-D1 | ✅ done | blocker | Add | Every mobile prototype screen is built | 257 of 257 customer/provider entries now exist in Flutter (192 were missing on 2026-09-27). 0 missing. | — |
+| FE-D2 | ✅ done | blocker | Edit | Data layer matches the backend contract | Booking create (bookingDate/startTime/bookingType/idempotency key), decline reason as query param, /provider/dashboard, /users/me/saved, reviews, BookingModel/ProviderDetailModel mapping. Every path in api_constants.dart exists in the backend. | — |
+| FE-D3 | ✅ done | major | Add | Error routing, offline banner and system screens | ApiClient._send unwraps exceptions; 401/403/423 go through ApiClient.authEvents (app.dart:75); NotFoundPage is the router errorBuilder; OfflineBanner is mounted over every route. | — |
+| FE-D4 | ✅ done | major | Edit | Static analysis and tests are green | flutter analyze: 0 errors, 5 warnings. flutter test: 98 passed (unit, bloc, widget, l10n, telemetry and 16 goldens) plus the integration test against a seeded backend. | — |
+| FE-D5 | ✅ done | major | Configure | Branding and offline fonts | Launcher icons generated, app label "AIWA" on Android and iOS, native launch background #2E2A26, fonts bundled with runtime fetching disabled (main.dart). | — |
+| FE-D6 | ✅ done | major | Configure | Platform permissions declared | AndroidManifest: INTERNET, location, camera, POST_NOTIFICATIONS, READ_CONTACTS. Info.plist: location, camera, photos, contacts usage strings. | — |
+| FE-5 | ✅ done | major | Add | Arabic is selectable but not translated | Commits a35ec81 + l10n pass: 963 keys in app_en.arb / app_ar.arb, none untranslated (tool/check_arb.py); IBM Plex Sans Arabic and Markazi Text bundled (400–700) as fontFamilyFallback on every style; ApiClient fallback errors go through AiwaL10n.error(); RTL bidi fixes for service names, phones, wallet signs and date patterns; 16 goldens cover Home, Provider, Booking and Tracking in Arabic RTL. | — |
+| FE-6 | ✅ done | major | Edit | Notification read state is never saved | Commit d90acc2: mark-all-read now POSTs /notifications/mark-all-read and persists. Single-row mark read still calls PUT /notifications/{id}/read, which the backend lacks, and the row rolls back to unread on failure (TODO(BE-11) in notification_remote_datasource.dart:47). Nothing more to do in the app until BE-11 ships. | — |
+| FE-7 | ✅ done | major | Add | No crash reporting or analytics | Commit 75c7df7: sentry_flutter; SentryFlutter.init runs only when --dart-define=SENTRY_DSN is set (main.dart:20-23), sendDefaultPii off; SentryUser id set on sign-in and cleared on sign-out; trackFunnel breadcrumbs for search, book, accept and complete (ids only, lib/core/telemetry.dart). Needs a Sentry project and DSN in the release build (OPS-3). | — |
+| FE-8 | ✅ done | major | Edit | Hide email sign-up until email codes can be sent | Commit d71b8c8: the Email tab on sign-up and Forgot password is behind kEmailOtpEnabled = false (step_header.dart:143). Flip it when BE-10 ships. | — |
+| FE-9 | ✅ done | major | Edit | Errors still appear as bottom SnackBars on 7 screens | Commit 4c2d885: no showSnackBar calls remain in lib/. OTP, phone entry, preferences, terms re-accept, booking, search notify-me and review show InlineBanner(tone: danger) next to the action, cleared on retry. | — |
+| FE-10 | ✅ done | major | Add | No end-to-end tests of the booking lifecycle | Commit 9b4237c: integration_test/booking_lifecycle_test.dart runs sign-in → search → book → accept → on the way → arrived → start → complete → confirm payment → review across both roles against a LocalDataSeeder backend; 16 goldens (Home, Provider, Booking, Tracking × both palettes × LTR/RTL). Sign-up is not driven because OTP codes only go out by SMS. Not in CI yet (OPS-6). | — |
+| FE-11 | ✅ done | minor | Edit | Parallel 401s during a token refresh fail | Commit 777812c: _AuthInterceptor keeps one in-flight refresh Future (_refreshing); concurrent 401s await it and retry once (extra retried flag), the refresh call itself never re-triggers a refresh, and offline keeps the tokens (api_client.dart). Covered by test/core/api_client_test.dart. | — |
+| FE-12 | ✅ done | minor | Edit | Server messages are always English | _AuthInterceptor.onRequest sets Accept-Language from LocaleController (api_client.dart:135), so backend messages come back in Arabic; isSlotTaken matches both languages. | — |
+| FE-15 | ✅ done | minor | Edit | "Your area" on Preferences is not saved | Commit 777812c: the unsaved "Your area" field was removed from Preferences (nothing stored or read it); Home searches from GPS or the default address. Re-add with a backend field (BE-19) if search must start elsewhere. | — |
+
+### Backend launch checklist (5 of 28 done)
+
+| ID | Status | Severity | Type | Item | What we found | What to do |
+|---|---|---|---|---|---|---|
+| BE-1 | ❌ to do | blocker | Edit | Uploaded photos can never be displayed · Files & media | FileStorageServiceImpl.java:76 returns dest.toString(), a disk path such as "uploads/public/gallery/&lt;uuid>.jpg", which is stored as profileImageUrl and in galleryImages. The files are served at /api/files/public/** (StaticResourceConfig), but that path is not in SecurityConfig PUBLIC_URLS (SecurityConfig.java:49), so it also needs a token the image loader never sends. | Return a URL ("/files/public/gallery/" + filename, or an absolute URL built from a PUBLIC_BASE_URL setting), permitAll GET /files/public/**, and migrate existing rows. Longer term: object storage (S3/R2) behind a CDN. |
+| BE-2 | ❌ to do | blocker | Edit | Push uses the retired FCM legacy API · Notifications & push | FcmPushService.java:36 posts to https://fcm.googleapis.com/fcm/send with "key=&lt;server key>". Google shut the legacy API down in 2024, so no push is delivered even with a key. | Switch to FCM HTTP v1 (firebase-admin SDK or POST v1/projects/{id}/messages:send with a service-account OAuth token). Replace FCM_SERVER_KEY with GOOGLE_APPLICATION_CREDENTIALS in config and ProductionGuardConfig. |
+| BE-3 | ❌ to do | blocker | Configure | Production compose file cannot start, and loses uploads · Infrastructure | docker-compose.prod.yml passes no PUSH_PROVIDER or FCM variable, so the default dev-log applies and ProductionGuardConfig throws "PUSH_PROVIDER must not be dev-log in prod". The app service has no volume for uploads/, so ID documents, selfies, avatars and gallery photos disappear on every redeploy. | Add PUSH_PROVIDER and the FCM credentials to the app environment, and mount a named volume (or object storage) at /app/uploads. Add a HEALTHCHECK on /api/actuator/health. |
+| BE-4 | ❌ to do | blocker | Edit | SOS alerts the wrong people · Safety | SafetyController.java:55-66: an SOS notifies the customer and the provider — who may be the threat — and nobody else. No admin/support alert, no trusted contact, no SMS, and no admin screen or endpoint lists SOS events. "I'm safe" has no endpoint. | Stop notifying the provider. Alert on-call support by SMS + push, notify the customer's trusted contacts (BE-12), add GET /admin/safety (open SOS queue) and POST /bookings/{id}/safety/{eventId}/resolve. |
+| BE-5 | ❌ to do | blocker | Add | No terms policy exists in production · Accounts & terms | Terms are only created by LocalDataSeeder (@Profile("local"), LocalDataSeeder.java:193). On a fresh prod database GET /terms/latest fails, so every sign-up stops at the "accept terms" step (preferences_page.dart _acceptTerms). PROVIDER_TERMS is never seeded anywhere. | Add Flyway V13 inserting the launch CUSTOMER_TERMS and PROVIDER_TERMS, or publish them through POST /terms before opening sign-ups. |
+| BE-6 | ❌ to do | major | Edit | Providers' ratings of customers show on their own public profile · Reviews | ReviewServiceImpl.java:78 — findByProviderIdAndHiddenFalseOrderByCreatedAtDesc returns every review on the booking's provider, including PROVIDER_TO_CUSTOMER ones written by the provider (ReviewServiceImpl.java:52-56). | Filter by direction = CUSTOMER_TO_PROVIDER in the public query (new repository method), and do the same for totals. |
+| BE-7 | ❌ to do | major | Edit | Path traversal in the admin document download · Security | VerificationController.java:150-152 — new File(filePath) and abs.contains("uploads/private"). "uploads/private/../../etc/passwd" passes the check, so an admin token can read any file on the server. | Resolve against the private root: `Path p = root.resolve(rel).normalize(); if (!p.startsWith(root)) 403;` and accept a document id rather than a raw path. |
+| BE-8 | ❌ to do | major | Configure | Rate limiting breaks behind a proxy and misses SMS abuse · Security | RedisRateLimitFilter.java:29 keys on request.getRemoteAddr(). Behind nginx or a load balancer every user shares one IP, so 5 OTP sends per minute is shared by the whole country. There is no per-phone limit (SMS-pumping cost), and /auth/register and /auth/reset-password are not limited. | Set server.forward-headers-strategy=native (trusted proxy only), add a per-phone key for send-otp (e.g. 3 per 10 min, 10 per day), and include register and reset-password. |
+| BE-9 | ❌ to do | major | Add | Booking lists cannot be filtered by status · Bookings | BookingController.java:58 (/bookings/my) and :68 (/bookings/provider) take only page and size. The app filters 10 items client-side, so Upcoming or Pending can look empty for anyone with more than 10 bookings. | Add `@RequestParam(required=false) List&lt;BookingStatus> status` and findByCustomerIdAndStatusIn / findByProviderIdAndStatusIn. |
+| BE-10 | ❌ to do | major | Add | No email channel for verification codes · Accounts & terms | OtpRequest.java:11 has only `phone`; OtpServiceImpl sends through SmsService. Email sign-up and email password reset cannot work. | Add an identifier + channel to send/verify-otp and an EmailService (SES, Postmark, SendGrid). Or launch phone-only (FE-8). |
+| BE-11 | ❌ to do | major | Add | No endpoint to mark one notification read · Notifications & push | NotificationController has GET, GET unread-count and POST mark-all-read only. | Add PATCH /notifications/{id}/read (owner check). |
+| BE-12 | ❌ to do | major | Add | Trusted contacts API · Safety | No entity or endpoints. The Flutter Trusted contacts screen is built but returns "not supported yet" (account_repository.dart:130). | TrustedContact entity + GET/POST/DELETE /account/trusted-contacts, used by the SOS flow. |
+| BE-13 | ❌ to do | major | Add | Saved addresses cannot be edited · Accounts & terms | AccountController has GET, POST and DELETE /account/addresses only. | Add PUT /account/addresses/{id} (owner check, default flag handling). |
+| BE-14 | ❌ to do | major | Edit | A taken slot is reported as a generic 400 · Bookings | BookingServiceImpl.java:175 throws BusinessException("booking.error.conflict"), returned as HTTP 400. The app has to match the English message text to open the slot-conflict sheet. | Return 409 (or add an errorCode field to ApiResponse.Error). Also back the conflict check with a DB constraint or row lock so two simultaneous requests cannot book the same slot. |
+| BE-15 | ❌ to do | major | Add | Search results lack price and real opening status · Discovery | ProviderSummaryDto (ApiResponse.java:91-109) has no startingPrice and no open-now flag, so lists show "EGP —", hide price sort, and mark providers "Open" whenever they are not on vacation or offline. | Add startingPrice (min active service price) and openNow (today's availability vs. current Cairo time) in ProviderServiceImpl.toSummaryDto. |
+| BE-16 | ❌ to do | major | Add | The Call button has nothing to call · Live booking | BookingDto carries no phone and there is no masked-number proxy (booking_repository_impl.dart:163). Customer and provider cannot phone each other during a visit. | MVP: expose the other party's phone once a booking is ACCEPTED. Later: a masked-number provider. |
+| BE-17 | ❌ to do | minor | Add | Per-booking travel-fee quote · Live booking | Only a flat provider fee (PATCH /provider/mode/travel-fee). Quote, accept and decline screens are built and return "not supported". | PATCH /bookings/{id}/travel-fee-quote (provider) and /travel-fee-response?accept= (customer) with a quote status on BookingDto. |
+| BE-18 | ❌ to do | minor | Add | Providers cannot reply to reviews · Reviews | ReviewDto has no reply or service name; there is no reply endpoint (provider_manage_repository.dart:209). | reply + repliedAt on Review, POST /provider/reviews/{id}/reply, add serviceName to ReviewDto. |
+| BE-19 | ❌ to do | minor | Add | Smaller API gaps behind built screens · API coverage | Proposal expiry on BookingDto; verifiedAt for providers; hidden flag on gallery images; staff-to-service link and per-staff hours; negative limit on SettlementSummaryDto; explanation text on /complete?cashCollected=false; phone change with OTP; customer review count; terms PDF link and termsAcceptedAt on UserDto; waitlist ("Notify me"); search area on preferences; Book Now busy flag. | Each is small; ship the ones whose screens are in the launch scope and hide the rest. |
+| BE-20 | ❌ to do | minor | Configure | API docs are public in production · Security | /v3/api-docs and /swagger-ui are in PUBLIC_URLS and not disabled in application-prod.yml. | springdoc.api-docs.enabled=false and springdoc.swagger-ui.enabled=false in application-prod.yml. |
+| BE-21 | ❌ to do | minor | Edit | Dead code ships in the jar · Tests & code health | src/main/resources/SecurityConfig.java is a stale copy with the old /auth/** wildcard; OtpCode and OtpRepository are unused since OTP moved to Redis; mapstruct is unused; every service has a single-implementation interface. | Delete the stale file, OtpCode/OtpRepository (drop the table in a migration) and mapstruct. |
+| BE-22 | ❌ to do | minor | Configure | Container hardening · Infrastructure | Dockerfile runs as root with no HEALTHCHECK or JVM memory flags; port 8080 is published directly with no TLS. | Add a non-root user, HEALTHCHECK, -XX:MaxRAMPercentage=75, and put nginx or Caddy with TLS in front. |
+| BE-23 | ❌ to do | minor | Add | No API-level tests of customer and provider flows · Tests & code health | Tests are service and unit level; no MockMvc/Testcontainers run of the booking lifecycle or the security rules. | Add @SpringBootTest + Testcontainers Postgres/Redis tests for sign-up, booking lifecycle, access denial between users, and the SOS flow. |
+| BE-D1 | ✅ done | blocker | Add | REST API covers every app flow · API coverage | 154 endpoints in 30 controllers: auth + OTP + 2FA, discovery, booking lifecycle (accept, reject, on-the-way, arrived, in-progress, complete, no-show, propose-time, check-in, confirm-payment), chat, safety events, reviews, complaints, settlements, staff, gallery, terms, admin. | — |
+| BE-D2 | ✅ done | major | Edit | Authentication and access control basics · Security | JWT access + refresh with a Redis blacklist, admin TOTP 2FA, BCrypt, role rules in SecurityConfig, method-level @PreAuthorize on admin controllers, participant checks on booking/chat/safety (BookingServiceImpl.java:237, ChatController.java:156, SafetyController.java:75), JwtSecretGuardConfig and ProductionGuardConfig. | — |
+| BE-D3 | ✅ done | major | Configure | Versioned schema · Data | Flyway V1–V12; ddl-auto=validate and flyway.enabled=true in application-prod.yml. | — |
+| BE-D4 | ✅ done | major | Edit | Backend test suite passes · Tests & code health | 130 tests in 31 classes pass. Three test classes did not compile after phase 7a added a ProviderProfileRepository constructor argument (AuthControllerPushTokenTest, AuthServiceRefreshTest, AuthServiceResetPasswordTest); fixed during this recheck. | — |
+| BE-D5 | ✅ done | minor | Add | Background jobs and idempotency · Bookings | BookingExpiryScheduler (5 min) and BookingReminderScheduler (15 min) run under Redis locks; booking create is idempotent per key. | — |
+
+### Admin panel & operations (0 of 7 done)
+
+| ID | Status | Severity | Type | Item | What we found | What to do |
+|---|---|---|---|---|---|---|
+| OPS-1 | ❌ to do | blocker | Add | There is no admin panel | All 46 admin prototype entries are missing. The API exists, but without a UI nobody can approve providers, publish terms, handle complaints and payment disputes, watch SOS events or settle commissions except with raw API calls. | Build a minimal web admin (React/Vue, per the handoff README) for launch: sign-in with 2FA, verification queue with document viewer, terms, complaints/disputes, SOS queue, settlements, users. Admin screens are listed under Screens → Admin web panel. |
+| OPS-2 | ❌ to do | blocker | Configure | Production hosting | Only docker-compose files exist. No domain, TLS, managed database, backups or secret storage are set up. | Domain + TLS reverse proxy, managed Postgres with daily backups and point-in-time recovery, Redis, secrets in the host's secret store, staging environment. |
+| OPS-3 | ❌ to do | blocker | Configure | Third-party accounts | SMS_PROVIDER must be a real gateway in prod (ProductionGuardConfig); a Firebase project is needed for push; GOOGLE_MAPS_API_KEY defaults to a placeholder. | Sign an Egyptian SMS gateway with a registered sender ID, create the Firebase project (Android + iOS apps), restrict the Maps key. |
+| OPS-4 | ❌ to do | major | Add | Store listings and legal | Nothing prepared for Play / App Store review. | Privacy policy and terms URLs, Play data-safety form, a web page for account deletion (Play requires one), App Store privacy labels, screenshots in both palettes, content rating. |
+| OPS-5 | ❌ to do | major | Add | Monitoring and alerting | Actuator health only. No error tracking, metrics or uptime alerts. | Sentry for backend and app, Micrometer + Prometheus/Grafana (or the host's metrics), uptime checks, an on-call alert for SOS events. |
+| OPS-6 | ❌ to do | major | Configure | Source control and CI | The repo has one commit ("Initial commit"); all eight phases (232 changed or new files) are uncommitted. There is no CI. | Commit the phases now, then add CI: flutter analyze + test + build, mvn test, docker build, deploy to staging on main. |
+| OPS-7 | ❌ to do | major | Add | Real-device QA and a pilot | No record of device testing across both roles, both palettes, RTL, low-end Android and poor networks. | Run a test pass on 4–5 real phones, then a closed pilot with a handful of providers in one district before opening sign-ups. |
+
+### Findings still open or partial
+
+| ID | Status | Severity | Finding | Recheck note |
+|---|---|---|---|---|
+| BOOK-41-F3 | open | major | Upcoming list filtered client-side from an unfiltered page | Still client-side filtering of an unfiltered 10-item page: GET /bookings/my has no status param, so a customer with more than 10 bookings can see an empty or partial Upcoming tab. Needs a backend status filter. |
+| DISC-01-V1 | open | major | 'From EGP' price column never renders on Available now rows | Backend ProviderSummaryDto still has no startingPrice, so rows show 'EGP —'. |
+| AUTH-07-V1 | open | minor | Autofocused email field opens with a plum700 focus ring | Inputs still get a plum700 focus border (design decision pending, see AUTH-25-F1). |
+| AUTH-25-F1 | open | minor | Inputs show a plum700 focus border the prototype doesn't have | Design decision still pending: focused inputs show a plum700 border. |
+| BOOK-47-F2 | open | minor | 'Find a provider' target differs (prototype stub) | Keeps Search (design decision). |
+| BOOK-C2 | open | minor | Material Icons used instead of the Lucide set | Material Icons. |
+| DISC-01-F11 | open | minor | Bell sends guests to the auth gate | Bell still sends guests to the auth gate (product decision to record). |
+| DISC-01-F5 | open | minor | Hero glow and search-pill shadow use theme tokens instead of the prototype literals | Hero glow and pill shadow still theme tokens (acceptable if recorded as intentional). |
+| DISC-02-F3 | open | minor | Eight category chips instead of five | Still 8 chips (kept for Home tiles; needs design sign-off). |
+| DISC-02-F6 | open | minor | Filter icon glyph differs | Material tune glyph. |
+| DISC-04-V1 | open | minor | Empty-results icon glyph differs | Material glyph. |
+| DISC-08-F4 | open | minor | Cover rating star uses gold300 instead of gold500 | Cover rating star still gold300 (contrast decision). |
+| DISC-08-F5 | open | minor | Location meta shows the full address instead of 'distance · area' | Location meta still shows the full address, not 'distance · area'. |
+| DISC-09-F2 | open | minor | Extra description line not in the prototype | Extra description line kept (design sign-off). |
+| DISC-17-F1 | open | minor | 'Browse providers' opens Discover instead of a provider profile | Keeps Discover (design decision to record). |
+| DS-05-F1 | open | minor | Material Icons are used instead of Lucide | Still Material Icons (405 Icons.* uses); no Lucide package. |
+| DS-05-F2 | open | minor | Filled/rounded Material glyph weight instead of a 2px round-cap stroke | Follows DS-05-F1. |
+| DS-11-F1 | open | minor | Rounded Material star glyphs instead of the Lucide polygon | Still Material star_rounded glyphs. |
+| DS-19-F1 | open | minor | ErrorState has no optional 'Contact support' secondary action | ErrorState still has no optional 'Contact support' action. |
+| DS-C11 | open | minor | Material Icons are used app-wide instead of Lucide | Material Icons app-wide. |
+| DS-C2 | open | minor | 116 fontSize overrides (all copyWith on AppTextStyles) with off-scale sizes | fontSize overrides grew from 116 to 319; no named styles for the recurring 11.5/12.5/13.5 sizes. |
+| DS-C3 | open | minor | Radii are mostly inline literals: 66 BorderRadius.circular calls outside the theme, only 14 via AppTheme | 181 inline BorderRadius.circular calls; no radius14/16/20/22 tokens. |
+| ONB-12-F6 | open | minor | Lucide icons swapped for different Material glyphs | Material glyphs (Lucide not adopted). |
+| ONB-14-F1 | open | minor | Initial GPS state inverted (No GPS instead of GPS locked) | CRITICAL for launch: 'Use GPS' only flips _hasLocation; the business location is the constant 30.0444, 31.2357 (downtown Cairo) for every provider, so nearby search and travel distance are wrong. Use Geolocator.getCurrentPosition (as preferences_page.dart does) and send the real coordinates. |
+| PROV-C6 | open | minor | Hard-coded rgba literals in the prototype are mapped to theme tokens in Flutter | Theme tokens instead of literals (document as intentional). |
+| PROV-08-F1 | partial | critical | Status tabs are dead: the backend ignores the status parameter, so every tab lists the same bookings | Pending/Upcoming/Past filter client-side because GET /bookings/provider ignores status; a busy provider's older bookings fall off the first page. Needs a backend status filter. |
+| PROV-09-F3 | partial | critical | Rows do not open booking detail, and the tab does not actually filter | Rows open the detail; filtering is client-side (PROV-08-F1). |
+| ACCT-01-F2 | partial | major | Header stats tiles (Bookings / Favorites / Reviews) missing | Stats tiles added; Bookings and Favorites counts load, Reviews has no count (no backend endpoint counts a customer's reviews). |
+| ACCT-20-F2 | partial | major | Mark read / Mark all read never clear a row's unread styling | Update 2026-09-28 (commit d90acc2): Mark all read persists (POST). Single-row mark read still calls PUT /notifications/{id}/read, which the backend lacks (BE-11); the row now rolls back to unread on failure. |
+| AUTH-01-F1 | partial | major | Splash glows use themed stone tokens at about half the prototype's size instead of fixed rose/gold washes | Update 2026-09-28 (commit 777812c): The glows are now full-screen farthest-corner radial gradients (AiwaGlow.fill) at the prototype positions, strengths and stops. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| AUTH-05-F1 | partial | major | Auth-choice hero glows are themed and undersized; the primary card shadow is themed instead of the literal | Update 2026-09-28 (commit 777812c): The glows are now full-screen farthest-corner radial gradients (AiwaGlow.fill) at the prototype positions, strengths and stops. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| DISC-01-F2 | partial | major | 'Open now' status is never shown on Available now rows | 'Open now' renders, but openNow is derived from vacation/offline/settlement flags only; the backend has no today's-hours field, so a provider outside working hours still shows 'Open now'. |
+| DISC-02-F2 | partial | major | 'Open' status missing on result rows | 'Open' label renders; same availability-blind openNow as DISC-01-F2. |
+| DISC-02-V1 | partial | major | 'Price' sort and 'Max price' filter have no effect | 'Price' sort and Max price are hidden until prices are known; they stay hidden until the backend sends startingPrice. |
+| DISC-04-F1 | partial | major | 'Notify me when someone joins' secondary action missing | 'Notify me when someone joins' button added; backend has no waitlist endpoint, so it shows an error. |
+| DISC-08-F3 | partial | major | Share button missing from the cover | Update 2026-09-28 (commit 777812c): Share now opens the native share sheet (share_plus) with the provider name and address. There is still no https app link / deep-link host to include. |
+| DS-35-F2 | partial | major | No logo assets are shipped (assets/ is empty) | SVG logos copied to assets/images but flutter_svg is not a dependency, so nothing can render them; the wordmark is still code-drawn. |
+| ONB-08-F1 | partial | major | Contacts priming variant not implemented | Contacts copy exists in PermissionPrimingPage, but nothing opens it: trusted contacts are backend-gapped (no endpoints). |
+| ONB-09-F1 | partial | major | Pushed (pop-back) location priming state missing | Pushed /permission?kind= route exists, but Home/Search never push it with kind=location when location is denied. |
+| ACCT-01-F4 | partial | minor | Header glow colour/geometry and name letter-spacing | Update 2026-09-28 (commit 777812c): Header glow is AiwaGlow.fill at 70% 30%, .4, transparent 60%. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| BOOK-34-F2 | partial | minor | Provider avatar lacks palette and verified badge | Palette fixed; no verified flag on BookingEntity. |
+| BOOK-41-F4 | partial | minor | Meta shows the provider address and 24h time instead of distance and 12h time | 12h time; distance still not available on the booking. |
+| BOOK-41-F5 | partial | minor | Avatar palette by list index and no verified badge | Palette from provider id; no verified badge. |
+| BOOK-42-F4 | partial | minor | Time format and location meta | Time format fixed; no distance. |
+| DISC-01-F12 | partial | minor | Category icon glyphs swapped | spa_outlined replaced by eco_outlined; other glyphs still Material. |
+| DISC-08-F9 | partial | minor | Cover glows are theme-mapped and smaller than the prototype's | Update 2026-09-28 (commit 777812c): The glows are now full-screen farthest-corner radial gradients (AiwaGlow.fill) at the prototype positions, strengths and stops. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| DS-04-F2 | partial | minor | No shared equivalents of the aiwa-pop / aiwa-drop / aiwa-toast keyframes | EmptyState has the pop-in inline and Toast/OfflineBanner animate, but there is no shared AiwaPopIn/AiwaDropIn helper. |
+| DS-22-F6 | partial | minor | No built-in 14px bottom margin; multiline padding and height differ | Multiline padding is 14; no built-in 14px bottom margin. |
+| DS-29-F1 | partial | minor | Single child with no built-in row/gap, and different bottom padding | Bottom padding max(32, 14+inset) fixed; StickyBar still takes a single child with no row/gap helper. |
+| DS-31-F2 | partial | minor | No keyboard focus ring and no button semantics | PressScale adds button Semantics; there is still no keyboard focus ring. |
+| DS-C7 | partial | minor | No keyboard focus ring or semantics | Semantics added via PressScale; no focus ring. |
+| DS-C8 | partial | minor | Hard-coded animation durations are off the motion scale | Shared widgets use dur1/2/3; 16 literal Duration(milliseconds:) remain. |
+| ONB-12-V1 | partial | minor | Step scaffold top offset and sticky-bar bottom padding differ (also ONB-17) | Sticky bar bottom is max(32, 14+inset); top offset unchanged. |
+| PROV-03-F5 | partial | minor | Hero overlay colour, tile blur, star size and label tracking differ | Tile blur added; overlay colour still theme-mapped. |
+
+### Design tokens
+
+222 tokens compared. 138 matched at the audit; of the 84 that did not, **64 are now fixed**, 17 partial and 3 open. Most partial rows are deliberate theme-aware tinting: overlays, shadows and glows use the active palette instead of the prototype's fixed plum / pink literals.
+
+| Status | Area | Token | Recheck note |
+|---|---|---|---|
+| open | Customer account, notifications & system | Hero gradient (Profile header / Support hero) | Still 135deg; renders the same today because plum700 == plum900 in both palettes. |
+| open | Design system & shared components | Base brand palette (unthemed --aiwa-*) | Still only male/female palettes. Harmless: the base palette is never rendered through tokens. |
+| open | Design system & shared components | aiwa-heart-pop | Not implemented; unused in the prototype, so no action needed. |
+| partial | Customer account, notifications & system | Profile header glow | Update 2026-09-28 (commit 777812c): Profile header glow is AiwaGlow.fill at 70% 30%, .4, transparent 60%. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| partial | Customer account, notifications & system | Sheet scrim | Update 2026-09-28 (commit 777812c): Scrim is still theme plum900 (.48 / .5); the sheet bottom padding now includes the home indicator like the kit (max(bottom, inset)). |
+| partial | Customer sign-in / sign-up | Splash radial glow 1 | Update 2026-09-28 (commit 777812c): Full-screen AiwaGlow.fill at 30% 25%, .5, transparent at 55% (splash_page.dart), matching the prototype geometry and strength. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| partial | Customer sign-in / sign-up | Splash radial glow 2 | Update 2026-09-28 (commit 777812c): AiwaGlow.fill at 75% 80%, .3, transparent at 60%. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| partial | Customer sign-in / sign-up | Auth-choice glows | Update 2026-09-28 (commit 777812c): AiwaGlow.fill at 30% 25% (.45) and 75% 80% (.25), both transparent at 60% (auth_choice_page.dart). The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| partial | Customer booking lifecycle | Sheet scrim | Update 2026-09-28 (commit 777812c): showAiwaSheet takes a scrim; the reason/cancel sheet uses .45 and others .48. Still theme plum900 and no 2px backdrop blur on CancelSheet. |
+| partial | Customer discovery | Hero / cover radial glow | Update 2026-09-28 (commit 777812c): Provider cover glows now follow the prototype geometry, but the Home hero (home_page.dart:302) is still a sized AiwaGlow circle. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| partial | Customer discovery | Search pill shadow | Geometry matches (blur 8, (0,2), .06); tint is theme plum700. |
+| partial | Customer discovery | Sheet shadow / scrim | Scrim plum900 .45 and sheet shadow plum900 .20 are theme-derived instead of the literals. |
+| partial | Customer discovery | Row meta gap (RatingMeta) | Update 2026-09-28 (commit 777812c): Booking outcome rows now pass MetaDot(gap: 8); 2 call sites use a custom gap in total, so other rows that need 8 still get the default 6. |
+| partial | Design system & shared components | Hard-coded JSX color literals | Overlays and shadows are still theme-derived (plum900/plum700) instead of the fixed #2A1320 / #4A1F38 literals. Row hover is now a palette token (AppColors.hover, app_theme.dart highlightColor). No focus ring. |
+| partial | Design system & shared components | --shadow-1 | Geometry and alpha match; tint is still theme plum700 rather than the literal rgb(74,31,56). |
+| partial | Design system & shared components | --shadow-2 | Geometry and alpha match; tint is still theme plum700. |
+| partial | Design system & shared components | IconBtn shadow | Geometry and alpha match; tint is theme plum700. |
+| partial | Onboarding tail & provider onboarding | Pending glow | Update 2026-09-28 (commit 777812c): Now uses the shared AiwaGlow.fill (30% 25%, .45, stop .6). The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| partial | Onboarding tail & provider onboarding | Verification privacy note | InlineBanner plum is still used; padding and gap are close but not the kit's 14 / 8 / 12px. |
+| partial | Provider app | Hero radial overlay | Update 2026-09-28 (commit 777812c): Dashboard hero glow is AiwaGlow.fill at 80% 20%, .3, transparent 55%. The colour is still the theme rose300/gold300 (stone in the male theme) rather than the literal pink/gold, which matches the theme-aware choice elsewhere. |
+| fixed | Customer account, notifications & system | Sheet shadow / padding | Sheet shadow is plum900 .20; radius 24; padding matches. |
+| fixed | Customer account, notifications & system | Toast surface | showAiwaToast: top-anchored, success badge, 13/500. |
+| fixed | Customer account, notifications & system | Font: Arabic display / body | IBM Plex Sans Arabic and Markazi Text are bundled and set as fallbacks. |
+| fixed | Customer account, notifications & system | ScreenHeader title | ScreenHeader title now uses letterSpacing 0 (screen_chrome.dart:66-69). |
+| fixed | Customer account, notifications & system | Profile list row | Update 2026-09-28 (commit 777812c): SettingsRow label no longer forces height 1.3; spacing is 14 (13 boxed). |
+| fixed | Customer account, notifications & system | Toggle | AiwaToggle: 42x24, knob 18, plum700 / divider, 200ms easeSoft (aiwa_toggle.dart). |
+| fixed | Customer account, notifications & system | Form field (ValidatedInput vs AiwaTextField) | Update 2026-09-28 (commit 777812c): AiwaTextField(validated: true) renders the ValidatedInput look: sentence-case 12.5/600 ink2 label with " · optional", mono 11 counter in the label row, ink4 hint, 11px error icon with a 5px gap. Used by 12 fields on Addresses, Edit profile and Trusted contacts. |
+| fixed | Customer sign-in / sign-up | 'Man' palette swatch B (Warm Stone) | Swatches now read AiwaPalettes.male plum700 / plum300 (#B5A898) / bone (avatar_gender_page.dart:180-218). |
+| fixed | Customer sign-in / sign-up | Wordmark glyph size | AiwaWordmark is laid out like the 320x100 SVG: glyph fontSize = size * 0.84 (screen_chrome.dart:614-630). |
+| fixed | Customer sign-in / sign-up | OTP cell | OTP cell height = width * 1.15, DM Serif 28 (otp_page.dart:83-86). |
+| fixed | Customer sign-in / sign-up | Sign-in error box | InlineBanner(compact: true) on sign-in: radius 10, icon 14, tighter padding (screen_chrome.dart:311-377, sign_in_page.dart:210). |
+| fixed | Customer sign-in / sign-up | Toast | showAiwaToast: top-anchored, plum900 .96, radius 14, 26px success500 check badge, 13/500 bone. |
+| fixed | Customer sign-in / sign-up | Splash radial glow extent | Update 2026-09-28 (commit 777812c): Splash glows are farthest-corner radial gradients filling the screen (AiwaGlow.fill, screen_chrome.dart), no longer fixed-size circles. |
+| fixed | Customer sign-in / sign-up | Auth-choice glow extent | Update 2026-09-28 (commit 777812c): Auth-choice glows are farthest-corner gradients inside the 50% hero. |
+| fixed | Customer sign-in / sign-up | Phone/Email toggle segment | 4px gap between segments (spacing: 4, step_header.dart:168). |
+| fixed | Customer sign-in / sign-up | Input text inset | Prefix padding start 14 / end 6 with zero-min constraints gives the kit's 14px / 41px inset (aiwa_text_field.dart:126-137). |
+| fixed | Customer booking lifecycle | Sheet shadow | Sheet shadow is now plum900 .20, blur 32, (0,-12). |
+| fixed | Customer booking lifecycle | Toast background / text | Success toasts use showAiwaToast (13px w500 bone, shadow, badge). |
+| fixed | Customer booking lifecycle | Booking card shadow | Update 2026-09-28 (commit 777812c): Booking cards use the shared AppTheme.shadowHairline (plum700 .04 blur 2 (0,1)). |
+| fixed | Customer booking lifecycle | Heading tracking | Update 2026-09-28 (commit 777812c): Booking headings (action pages, Confirmed, Booking, Booking type, Book-now check sheet) set letterSpacing 0. |
+| fixed | Customer discovery | Skeleton shimmer | Shimmer is cream → hover over 1250ms. |
+| fixed | Customer discovery | Provider cover glow geometry | Update 2026-09-28 (commit 777812c): Provider cover glows are AiwaGlow.fill at 25% 30% (.4, stop .5) and 80% 70% (.25, stop .6) (provider_card.dart). |
+| fixed | Customer discovery | Tab-root PageTitle letter-spacing | PageTitle takes letterSpacing as an optional parameter (default none) (screen_chrome.dart:101-135). |
+| fixed | Design system & shared components | --font-arabic-display (Markazi Text) | Markazi Text bundled (assets/google_fonts, 400–700) and used as the serif Arabic fallback (kArabicSerif, app_text_styles.dart:113). |
+| fixed | Design system & shared components | --font-arabic-body (IBM Plex Sans Arabic) | IBM Plex Sans Arabic bundled (400–700) and set as fontFamilyFallback on every sans/mono style and the base TextTheme (app_text_styles.dart:112-124, app_theme.dart:132). |
+| fixed | Design system & shared components | --fs-h2 (26px) | h2 tracking is now -0.02em (letterSpacing -0.02 * 26, app_text_styles.dart:23-28). |
+| fixed | Design system & shared components | --fs-h3 / h3 | Update 2026-09-28 (commit 777812c): AppTextStyles.h3Sans (Plus Jakarta 600 20 / 1.25 / -0.005em) added; h3 stays DM Serif because the rendered JSX titles use it. h3Sans has no callers yet. |
+| fixed | Design system & shared components | --fs-h4 / h4 | Update 2026-09-28 (commit 777812c): AppTextStyles.h4Sans (Plus Jakarta 600 17 / 1.25) added; no callers yet. |
+| fixed | Design system & shared components | p / .body lh 1.65 (--lh-loose) | Update 2026-09-28 (commit 777812c): AppTextStyles.bodyLoose (16 / 1.65) added; no callers yet. |
+| fixed | Design system & shared components | --fs-body-sm (14) / .body-sm | bodySm is now ink2 (app_text_styles.dart:47-48). |
+| fixed | Design system & shared components | --fs-meta (13) / .meta | meta line-height is now 1.45 (app_text_styles.dart:50-51). |
+| fixed | Design system & shared components | .price | Update 2026-09-28 (commit 777812c): price is now DM Serif 20 with -0.02em and tabular figures. Provider detail keeps 22 / no tracking on purpose (screens.jsx:318). |
+| fixed | Design system & shared components | code / .mono | Update 2026-09-28 (commit 777812c): mono is plum700, and AppTextStyles.monoChip() gives the cream fill, .1em/.3em padding and 4px radius. |
+| fixed | Design system & shared components | Line-height tokens (--lh-tight/snug/base/loose) | Update 2026-09-28 (commit 777812c): lhTight 1.1 / lhSnug 1.25 / lhBase 1.5 / lhLoose 1.65 constants in AppTextStyles. |
+| fixed | Design system & shared components | --tracking-wide (0.08em) | Update 2026-09-28 (commit 777812c): AppTextStyles.trackingWide = 0.08 (em), used by the dashboard stat labels. |
+| fixed | Design system & shared components | --shadow-3 | shadow3 is now two layers: plum700 .14 blur 32 (0,12) + ink .06 blur 10 (0,4) (app_theme.dart:86-97). |
+| fixed | Design system & shared components | --shadow-4 | Update 2026-09-28 (commit 777812c): AppTheme.shadow4: plum900 .22, blur 60, (0,24) (tint theme-aware); no callers yet. |
+| fixed | Design system & shared components | --shadow-card | Update 2026-09-28 (commit 777812c): AppTheme.shadowCard: plum700 .05 blur 8 (0,2) + ink .04 blur 2 (0,1); no callers yet (cards use a divider border). |
+| fixed | Design system & shared components | Sheet shadow | sheetDecoration is now plum900 .20, blur 32, (0,-12) (app_theme.dart:44-52). |
+| fixed | Design system & shared components | Toast shadow | showAiwaToast (aiwa_toast.dart): plum700 .3 shadow, blur 32 (0,12) and an 8px backdrop blur. |
+| fixed | Design system & shared components | --ease-out | Update 2026-09-28 (commit 777812c): AppTheme.easeOut = Cubic(.22,.61,.36,1). |
+| fixed | Design system & shared components | --ease-in | Update 2026-09-28 (commit 777812c): AppTheme.easeIn = Cubic(.55,.055,.675,.19). |
+| fixed | Design system & shared components | --ease-bounce | AppTheme.easeBounce = Cubic(.34,1.56,.64,1) (app_theme.dart:32). |
+| fixed | Design system & shared components | --dur-1 | AppTheme.dur1 = 120ms, used by PressScale and AiwaButton. |
+| fixed | Design system & shared components | --dur-4 | Update 2026-09-28 (commit 777812c): AppTheme.dur4 = 480ms. |
+| fixed | Design system & shared components | Screen transition (aiwa-slide-in / aiwa-fade-in) | SoftDoorTransitionsBuilder: slide in from 8%, underlying page to .98, 320ms easeSoft on Android and iOS (app_theme.dart pageTransitionsTheme). |
+| fixed | Design system & shared components | Button press | PressScale and AiwaButton scale to .96 over 120ms easeSoft. |
+| fixed | Design system & shared components | aiwa-toast + auto-dismiss | showAiwaToast: fade + slide from -10px over 320ms easeSoft, auto-dismiss 2800ms, top-anchored. |
+| fixed | Design system & shared components | aiwa-shimmer | ShimmerBox: cream → hover, 1250ms (loading_shimmer.dart). |
+| fixed | Design system & shared components | aiwa-pop | aiwa-pop on EmptyState (.86 → 1) and SystemScreen icon (340ms bounce, system_screen.dart:128-140). |
+| fixed | Design system & shared components | aiwa-pulse | AiwaRefresh pulse dot animates opacity .55 → .9 (press_scale.dart / AiwaRefresh). |
+| fixed | Design system & shared components | aiwa-drop | OfflineBanner drops in with slide + fade over 260ms (offline_banner.dart:62-73). |
+| fixed | Onboarding tail & provider onboarding | UploadSlot uploaded scrim | Uploaded scrim is now plum900 .7 → transparent (provider_verification_page.dart:191-197). |
+| fixed | Onboarding tail & provider onboarding | Textarea (bio) font | Bio textarea uses bodySm (14px) (provider_business_page.dart:207). |
+| fixed | Onboarding tail & provider onboarding | aiwa-pop entrance (priming / SystemScreen icon) | aiwa-pop on SystemScreen / priming icons, 340ms easeBounce. |
+| fixed | Onboarding tail & provider onboarding | Toast (onboarding toasts ONB-03 / ONB-11) | showAiwaToast matches position, badge, padding, shadow, blur and 2800ms timing; colour is theme plum900 rather than the literal. |
+| fixed | Onboarding tail & provider onboarding | Dashed borders (Add staff member, GPS status card, empty UploadSlot) | DashedButton and DashedBorder painters (1.5px / 1px) on Add staff, GPS card and empty UploadSlot. |
+| fixed | Provider app | Hero stat tile background | Stat tiles use bone .12 behind a BackdropFilter blur (dashboard_page.dart:277-282). |
+| fixed | Provider app | Request card shadow | Request card uses AppTheme.shadowHairline (plum700 .04 blur 2 (0,1)). |
+| fixed | Provider app | Stat label tracking | Stat label tracking is 0.88px (dashboard_page.dart:319). |
+| fixed | Provider app | Bottom sheet | Sheet shadow plum900 .20 blur 32 (0,-12); radius 24; barrier .48. |
+| fixed | Provider app | Toast | showAiwaToast matches the prototype toast. |
+| fixed | Provider app | Provider tab bar | AiwaTabBar is shared by both roles: paper .94, blur 20, per-role itemMaxWidth (aiwa_tab_bar.dart:39-60). |
+| fixed | Provider app | Card radii (Bookings tab rows) | Bookings rows now use radius 16 and a DM Serif 16 price (provider_bookings_page.dart:195-259). |
+
+---
+
+# Original audit — 2026-09-27 (baseline)
+
 ## 1. Summary
 
 | Scope | Entries | ✅ Implemented | ⚠️ Deviates | ❌ Missing | Fidelity |
