@@ -120,7 +120,7 @@ class _AvatarGenderPageState extends State<AvatarGenderPage> {
                         border: Border.all(color: AppColors.paper, width: 3),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.plum700.withValues(alpha: .18),
+                            color: AppColors.shadowTint.withValues(alpha: .18),
                             blurRadius: 18,
                             offset: const Offset(0, 6),
                           ),

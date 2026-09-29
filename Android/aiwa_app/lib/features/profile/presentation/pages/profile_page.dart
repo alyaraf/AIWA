@@ -199,7 +199,7 @@ class _Header extends StatelessWidget {
           Positioned.fill(
             child: AiwaGlow.fill(
               center: const Alignment(.4, -.4),
-              color: AppColors.rose300,
+              color: AppColors.glowRose,
               opacity: .4,
               stop: .6,
             ),

@@ -260,7 +260,7 @@ class _HomePageState extends State<HomePage> {
             border: Border.all(color: AppColors.divider),
             boxShadow: [
               BoxShadow(
-                color: AppColors.plum700.withOpacity(0.06),
+                color: AppColors.shadowTint.withOpacity(0.06),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -304,7 +304,12 @@ class _HomePageState extends State<HomePage> {
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          gradient: AppTheme.heroGradient,
+          // screens.jsx:96 is 135deg, unlike the 160deg heroGradient.
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.plum700, AppColors.plum900],
+          ),
           borderRadius: BorderRadius.circular(AppTheme.radius22),
         ),
         child: Stack(
@@ -314,7 +319,7 @@ class _HomePageState extends State<HomePage> {
               top: -40,
               child: AiwaGlow(
                 size: 180,
-                color: AppColors.rose300,
+                color: AppColors.glowRose,
                 opacity: 0.4,
               ),
             ),

@@ -194,8 +194,8 @@ class _UploadSlot extends StatelessWidget {
               end: Alignment.topCenter,
               stops: const [0, .6],
               colors: [
-                AppColors.plum900.withValues(alpha: .7),
-                AppColors.plum900.withValues(alpha: 0),
+                AppColors.scrim.withValues(alpha: .7),
+                AppColors.scrim.withValues(alpha: 0),
               ],
             ),
           ),

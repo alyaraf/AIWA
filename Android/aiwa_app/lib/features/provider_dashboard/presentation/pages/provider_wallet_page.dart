@@ -146,7 +146,7 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                       top: -70,
                       child: AiwaGlow(
                         size: 220,
-                        color: AppColors.rose300,
+                        color: AppColors.glowRose,
                         opacity: .3,
                       ),
                     ),

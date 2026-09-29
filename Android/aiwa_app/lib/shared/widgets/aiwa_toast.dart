@@ -83,7 +83,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: Container(
-                    color: AppColors.plum900.withValues(alpha: .96),
+                    color: AppColors.scrim.withValues(alpha: .96),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,

@@ -319,7 +319,7 @@ class _Tile extends StatelessWidget {
           CachedNetworkImage(imageUrl: url, fit: BoxFit.cover),
           if (hidden)
             Container(
-              color: AppColors.plum900.withValues(alpha: .72),
+              color: AppColors.scrim.withValues(alpha: .72),
               padding: const EdgeInsets.all(8),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -371,7 +371,7 @@ class _Tile extends StatelessWidget {
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: AppColors.plum900.withValues(alpha: .6),
+                    color: AppColors.scrim.withValues(alpha: .6),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(

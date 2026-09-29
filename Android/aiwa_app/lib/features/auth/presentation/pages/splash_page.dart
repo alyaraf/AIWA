@@ -77,7 +77,7 @@ class _SplashPageState extends State<SplashPage>
               Positioned.fill(
                 child: AiwaGlow.fill(
                   center: const Alignment(-.4, -.5),
-                  color: AppColors.rose300,
+                  color: AppColors.glowRose,
                   opacity: .5,
                   stop: .55,
                 ),
@@ -85,7 +85,7 @@ class _SplashPageState extends State<SplashPage>
               Positioned.fill(
                 child: AiwaGlow.fill(
                   center: const Alignment(.5, .6),
-                  color: AppColors.gold300,
+                  color: AppColors.glowGold,
                   opacity: .3,
                   stop: .6,
                 ),

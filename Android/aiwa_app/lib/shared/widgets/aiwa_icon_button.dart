@@ -53,7 +53,7 @@ class AiwaIconButton extends StatelessWidget {
             variant == AiwaIconButtonVariant.glass
         ? [
             BoxShadow(
-              color: AppColors.plum700.withOpacity(0.05),
+              color: AppColors.shadowTint.withOpacity(0.05),
               blurRadius: 2,
               offset: const Offset(0, 1),
             ),
