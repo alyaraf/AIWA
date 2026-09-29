@@ -59,7 +59,7 @@ class AuthChoicePage extends StatelessWidget {
                     Positioned.fill(
                       child: AiwaGlow.fill(
                         center: const Alignment(-.4, -.5),
-                        color: AppColors.rose300,
+                        color: AppColors.glowRose,
                         opacity: .45,
                         stop: .6,
                       ),
@@ -67,7 +67,7 @@ class AuthChoicePage extends StatelessWidget {
                     Positioned.fill(
                       child: AiwaGlow.fill(
                         center: const Alignment(.5, .6),
-                        color: AppColors.gold300,
+                        color: AppColors.glowGold,
                         opacity: .25,
                         stop: .6,
                       ),

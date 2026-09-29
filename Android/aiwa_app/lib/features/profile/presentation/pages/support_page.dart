@@ -103,7 +103,7 @@ class _SupportPageState extends State<SupportPage> {
                 PositionedDirectional(
                   end: -40,
                   top: -40,
-                  child: AiwaGlow(size: 180, color: AppColors.rose300),
+                  child: AiwaGlow(size: 180, color: AppColors.glowRose),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(

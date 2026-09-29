@@ -29,7 +29,7 @@ Future<bool> showConfirmSheet(
     context: context,
     useRootNavigator: true,
     backgroundColor: Colors.transparent,
-    barrierColor: AppColors.plum900.withOpacity(0.48),
+    barrierColor: AppColors.scrim.withOpacity(0.48),
     isScrollControlled: true,
     sheetAnimationStyle: AnimationStyle(
       duration: AppTheme.dur3,
@@ -168,7 +168,7 @@ Future<void> showSuccessSheet(
     context: context,
     useRootNavigator: true,
     backgroundColor: Colors.transparent,
-    barrierColor: AppColors.plum900.withValues(alpha: 0.48),
+    barrierColor: AppColors.scrim.withValues(alpha: 0.48),
     isScrollControlled: true,
     builder: (ctx) => Container(
       decoration: AppTheme.sheetDecoration,
@@ -261,7 +261,7 @@ Future<bool> showDeleteAccountSheet(BuildContext context) async {
     context: context,
     useRootNavigator: true,
     backgroundColor: Colors.transparent,
-    barrierColor: AppColors.plum900.withValues(alpha: .5),
+    barrierColor: AppColors.scrim.withValues(alpha: .5),
     isScrollControlled: true,
     builder: (ctx) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),

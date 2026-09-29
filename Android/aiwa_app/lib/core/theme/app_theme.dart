@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -57,7 +58,7 @@ class AppTheme {
     borderRadius: const BorderRadius.vertical(top: Radius.circular(radiusXl)),
     boxShadow: [
       BoxShadow(
-        color: AppColors.plum900.withOpacity(0.20),
+        color: AppColors.scrim.withValues(alpha: 0.20), // states.jsx:240
         blurRadius: 32,
         offset: const Offset(0, -12),
       ),
@@ -66,19 +67,21 @@ class AppTheme {
 
   /// Hero gradient used on splash, profile header, provider cover, etc.
   static LinearGradient get heroGradient => LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+    // CSS 160deg (prototype.jsx:357): top-left of centre to bottom-right.
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    transform: const GradientRotation(-20 * math.pi / 180),
     colors: [AppColors.plum700, AppColors.plum900],
   );
 
   static List<BoxShadow> get shadow1 => [
     BoxShadow(
-      color: AppColors.plum700.withOpacity(0.06),
+      color: AppColors.shadowTint.withOpacity(0.06),
       blurRadius: 2,
       offset: const Offset(0, 1),
     ),
     BoxShadow(
-      color: AppColors.ink.withOpacity(0.04),
+      color: AppColors.shadowInk.withOpacity(0.04),
       blurRadius: 1,
       offset: const Offset(0, 1),
     ),
@@ -86,12 +89,12 @@ class AppTheme {
 
   static List<BoxShadow> get shadow2 => [
     BoxShadow(
-      color: AppColors.plum700.withOpacity(0.08),
+      color: AppColors.shadowTint.withOpacity(0.08),
       blurRadius: 14,
       offset: const Offset(0, 4),
     ),
     BoxShadow(
-      color: AppColors.ink.withOpacity(0.04),
+      color: AppColors.shadowInk.withOpacity(0.04),
       blurRadius: 4,
       offset: const Offset(0, 2),
     ),
@@ -99,12 +102,12 @@ class AppTheme {
 
   static List<BoxShadow> get shadow3 => [
     BoxShadow(
-      color: AppColors.plum700.withOpacity(0.14),
+      color: AppColors.shadowTint.withOpacity(0.14),
       blurRadius: 32,
       offset: const Offset(0, 12),
     ),
     BoxShadow(
-      color: AppColors.ink.withOpacity(0.06),
+      color: AppColors.shadowInk.withOpacity(0.06),
       blurRadius: 10,
       offset: const Offset(0, 4),
     ),
@@ -112,7 +115,7 @@ class AppTheme {
 
   static List<BoxShadow> get shadow4 => [
     BoxShadow(
-      color: AppColors.plum900.withValues(alpha: 0.22),
+      color: AppColors.scrim.withValues(alpha: 0.22),
       blurRadius: 60,
       offset: const Offset(0, 24),
     ),
@@ -120,12 +123,12 @@ class AppTheme {
 
   static List<BoxShadow> get shadowCard => [
     BoxShadow(
-      color: AppColors.plum700.withValues(alpha: 0.05),
+      color: AppColors.shadowTint.withValues(alpha: 0.05),
       blurRadius: 8,
       offset: const Offset(0, 2),
     ),
     BoxShadow(
-      color: AppColors.ink.withValues(alpha: 0.04),
+      color: AppColors.shadowInk.withValues(alpha: 0.04),
       blurRadius: 2,
       offset: const Offset(0, 1),
     ),
@@ -134,7 +137,7 @@ class AppTheme {
   /// Booking / request cards: `0 1px 2px rgba(74,31,56,.04)`.
   static List<BoxShadow> get shadowHairline => [
     BoxShadow(
-      color: AppColors.plum700.withValues(alpha: 0.04),
+      color: AppColors.shadowTint.withValues(alpha: 0.04),
       blurRadius: 2,
       offset: const Offset(0, 1),
     ),
@@ -142,7 +145,7 @@ class AppTheme {
 
   static List<BoxShadow> get toastShadow => [
     BoxShadow(
-      color: AppColors.plum700.withValues(alpha: 0.30),
+      color: AppColors.shadowTint.withValues(alpha: 0.30),
       blurRadius: 32,
       offset: const Offset(0, 12),
     ),
@@ -162,6 +165,7 @@ class AppTheme {
       // No ripple anywhere in the kit; rows tint to hover (states.jsx:16).
       splashFactory: NoSplash.splashFactory,
       highlightColor: AppColors.hover,
+      focusColor: AppColors.focusRing.withValues(alpha: .24),
       canvasColor: AppColors.bone,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.plum700,
@@ -246,7 +250,7 @@ class AppTheme {
         labelStyle: AppTextStyles.label,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.plum900.withOpacity(0.96),
+        backgroundColor: AppColors.scrim.withOpacity(0.96),
         contentTextStyle: AppTextStyles.bodySm.copyWith(
           color: AppColors.bone,
           fontWeight: FontWeight.w500,

@@ -149,6 +149,15 @@ class AppColors {
 
   static void use(AiwaPalette palette) => _p = palette;
 
+  // Base-brand literals the kit hard-codes in JSX/CSS, so they stay plum/pink
+  // in both themes (tokens/colors_and_type.css:22-65, not runtime-themed).
+  static const Color scrim = Color(0xFF2A1320); // base plum-900: scrims, toast
+  static const Color shadowTint = Color(0xFF4A1F38); // base plum-700
+  static const Color shadowInk = Color(0xFF1A1316); // base ink
+  static const Color glowRose = Color(0xFFE7BAB6); // base rose-300
+  static const Color glowGold = Color(0xFFD8B98A); // base gold-300
+  static const Color focusRing = Color(0xFF7E3A5C); // states.jsx:17
+
   // Primary
   static Color get plum900 => _p.plum900;
   static Color get plum700 => _p.plum700;

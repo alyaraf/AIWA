@@ -604,7 +604,7 @@ class _MapPlaceholder extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.plum900.withValues(alpha: .3),
+                  color: AppColors.scrim.withValues(alpha: .3),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),

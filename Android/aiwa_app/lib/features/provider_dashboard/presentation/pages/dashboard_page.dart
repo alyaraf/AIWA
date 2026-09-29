@@ -173,14 +173,11 @@ class _Hero extends StatelessWidget {
       decoration: BoxDecoration(gradient: AppTheme.heroGradient),
       child: Stack(
         children: [
-          // ponytail: intentional deviation (PROV-C6). The kit hard-codes
-          // rgba(231,186,182,.3) in both palettes; we keep the gender-aware
-          // rose300 token. Add AppColors.heroGlow if exact parity is required.
           // provider-screens.jsx:45 — circle at 80% 20%, transparent 55%.
           Positioned.fill(
             child: AiwaGlow.fill(
               center: const Alignment(.6, -.6),
-              color: AppColors.rose300,
+              color: AppColors.glowRose,
               opacity: .3,
               stop: .55,
             ),

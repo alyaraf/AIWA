@@ -248,7 +248,7 @@ class _SearchPageState extends State<SearchPage> {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: AppColors.plum700.withOpacity(0.06),
+              color: AppColors.shadowTint.withOpacity(0.06),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -543,7 +543,7 @@ class _SearchPageState extends State<SearchPage> {
       context: context,
       useRootNavigator: true,
       backgroundColor: Colors.transparent,
-      barrierColor: AppColors.plum900.withOpacity(0.45),
+      barrierColor: AppColors.scrim.withOpacity(0.45),
       isScrollControlled: true,
       sheetAnimationStyle: AnimationStyle(
         duration: AppTheme.dur3,

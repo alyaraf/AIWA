@@ -18,7 +18,7 @@ Future<T?> showAiwaSheet<T>(
   context: context,
   useRootNavigator: true,
   backgroundColor: Colors.transparent,
-  barrierColor: AppColors.plum900.withValues(alpha: scrim),
+  barrierColor: AppColors.scrim.withValues(alpha: scrim),
   isScrollControlled: true,
   // Blocking sheets (e.g. while checking) wrap their body in PopScope.
   enableDrag: false,

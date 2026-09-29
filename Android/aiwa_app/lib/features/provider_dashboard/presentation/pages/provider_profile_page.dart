@@ -121,7 +121,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   top: -80,
                   child: AiwaGlow(
                     size: 300,
-                    color: AppColors.rose300,
+                    color: AppColors.glowRose,
                     opacity: .4,
                   ),
                 ),

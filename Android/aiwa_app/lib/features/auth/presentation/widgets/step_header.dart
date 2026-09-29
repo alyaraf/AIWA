@@ -182,7 +182,7 @@ class IdentifierModeToggle extends StatelessWidget {
                   boxShadow: active && shadow
                       ? [
                           BoxShadow(
-                            color: AppColors.plum700.withOpacity(0.08),
+                            color: AppColors.shadowTint.withOpacity(0.08),
                             blurRadius: 3,
                             offset: const Offset(0, 1),
                           ),

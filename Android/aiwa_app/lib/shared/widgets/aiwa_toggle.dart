@@ -47,7 +47,7 @@ class AiwaToggle extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.plum900.withValues(alpha: .25),
+                    color: AppColors.scrim.withValues(alpha: .25),
                     blurRadius: 3,
                     offset: const Offset(0, 1),
                   ),

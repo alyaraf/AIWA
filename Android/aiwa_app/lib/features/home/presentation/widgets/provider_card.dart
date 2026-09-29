@@ -234,13 +234,13 @@ class CoverImage extends StatelessWidget {
             // 80% 70% (.25, transparent 60%).
             AiwaGlow.fill(
               center: const Alignment(-.5, -.4),
-              color: AppColors.rose300,
+              color: AppColors.glowRose,
               opacity: .4,
               stop: .5,
             ),
             AiwaGlow.fill(
               center: const Alignment(.6, .4),
-              color: AppColors.gold300,
+              color: AppColors.glowGold,
               opacity: .25,
               stop: .6,
             ),
@@ -248,7 +248,7 @@ class CoverImage extends StatelessWidget {
             Positioned(
               left: -30,
               top: -40,
-              child: AiwaGlow(size: 160, color: AppColors.rose300),
+              child: AiwaGlow(size: 160, color: AppColors.glowRose),
             ),
           if (showInitial && initial.isNotEmpty)
             Center(

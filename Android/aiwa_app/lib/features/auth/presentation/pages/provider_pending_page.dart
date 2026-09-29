@@ -29,7 +29,7 @@ class ProviderPendingPage extends StatelessWidget {
             Positioned.fill(
               child: AiwaGlow.fill(
                 center: const Alignment(-.4, -.5),
-                color: AppColors.rose300,
+                color: AppColors.glowRose,
                 opacity: .45,
                 stop: .6,
               ),

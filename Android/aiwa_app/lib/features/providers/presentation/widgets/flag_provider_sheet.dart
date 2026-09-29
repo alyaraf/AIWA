@@ -37,7 +37,7 @@ Future<void> showFlagProviderSheet(
     useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    barrierColor: AppColors.plum900.withValues(alpha: .45),
+    barrierColor: AppColors.scrim.withValues(alpha: .45),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setSheet) {
         Future<void> submit() async {

@@ -7,3 +7,6 @@ local.properties
 *.keystore
 key.properties
 .env
+
+# flutter golden test failure output
+test/goldens/failures/
