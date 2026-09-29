@@ -113,13 +113,5 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
   }
 }
 
-/// The backend reports a taken slot as HTTP 400 BusinessException
-/// 'booking.error.conflict', not 409.
-// ponytail: matches messages_en/ar.properties text (the app sends
-// Accept-Language). Drop the text match once the backend sends 409 or an
-// errorCode.
-bool isSlotTaken(Failure f) =>
-    f is ServerFailure &&
-    (f.statusCode == 409 ||
-        f.message.startsWith('This time slot is already booked') ||
-        f.message.startsWith('هذا الموعد محجوز بالفعل'));
+/// The backend reports a taken slot as HTTP 409 ('booking.error.conflict').
+bool isSlotTaken(Failure f) => f is ServerFailure && f.statusCode == 409;

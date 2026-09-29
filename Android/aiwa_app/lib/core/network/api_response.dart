@@ -55,17 +55,4 @@ class PagedData<T> {
   }
 
   bool get hasNextPage => !last;
-
-  // ponytail: the backend ignores `status` on /bookings/my and
-  // /bookings/provider, so pages are filtered client-side. A page can come
-  // back short or empty while hasNextPage is true; add a server-side filter
-  // (BookingController) when that shows up in practice.
-  PagedData<T> where(bool Function(T) test) => PagedData(
-    content: content.where(test).toList(),
-    totalElements: totalElements,
-    totalPages: totalPages,
-    number: number,
-    size: size,
-    last: last,
-  );
 }

@@ -42,15 +42,6 @@ void main() {
   });
 
   test('isSlotTaken spots the conflict error', () {
-    expect(
-      isSlotTaken(
-        const ServerFailure(
-          'This time slot is already booked. Please choose another time',
-          statusCode: 400,
-        ),
-      ),
-      isTrue,
-    );
     expect(isSlotTaken(const ServerFailure('x', statusCode: 409)), isTrue);
     expect(isSlotTaken(const ServerFailure('x', statusCode: 400)), isFalse);
     expect(isSlotTaken(const NetworkFailure()), isFalse);

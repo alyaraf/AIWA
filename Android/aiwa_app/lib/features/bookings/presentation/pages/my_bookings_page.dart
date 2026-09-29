@@ -63,6 +63,7 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
   String _tab = 'upcoming';
 
   static const _pastStatuses = 'COMPLETED,CANCELLED,REJECTED,NO_SHOW,EXPIRED';
+  static const _liveStatusesParam = 'PENDING,ACCEPTED,ON_THE_WAY,ARRIVED,IN_PROGRESS';
   static const _liveStatuses = {
     'PENDING',
     'ACCEPTED',
@@ -81,7 +82,7 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
   void _load() {
     _bloc.add(
       _tab == 'upcoming'
-          ? const BookingLoadMyEvent()
+          ? const BookingLoadMyEvent(status: _liveStatusesParam)
           : const BookingLoadMyEvent(status: _pastStatuses),
     );
   }
@@ -162,7 +163,8 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
         sliver: SliverToBoxAdapter(child: SkeletonList(count: 3)),
       );
     }
-    // /bookings/my ignores `status`, so both tabs filter client-side.
+    // The server filters by status; this also drops rows made stale by a
+    // live status change since the page loaded.
     final bookings = state.bookings
         .where(
           (b) => _tab == 'upcoming'

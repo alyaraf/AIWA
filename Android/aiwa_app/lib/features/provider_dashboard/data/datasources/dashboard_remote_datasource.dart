@@ -60,13 +60,10 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
       },
     );
     final data = response.data['data'] ?? response.data;
-    final paged = PagedData.fromJson(
+    return PagedData.fromJson(
       data,
       (e) => BookingModel.fromJson(e as Map<String, dynamic>),
     );
-    if (status == null) return paged;
-    final wanted = status.split(',');
-    return paged.where((b) => wanted.contains(b.status));
   }
 
   @override

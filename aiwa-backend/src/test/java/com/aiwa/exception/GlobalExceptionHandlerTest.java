@@ -71,6 +71,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void slotConflictMapsTo409Translated() {
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("ar"));
+
+        var response = handler.handleConflict(new ConflictException("booking.error.conflict"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getMessage()).contains("محجوز");
+    }
+
+    @Test
     void invalidTokenExceptionMapsTo401() {
         var response = handler.handleInvalidToken(new InvalidTokenException("auth.error.token_invalid"));
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);

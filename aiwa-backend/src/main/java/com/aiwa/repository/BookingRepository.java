@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -23,6 +24,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     Page<Booking> findByStatusOrderByCreatedAtDesc(BookingStatus status, Pageable pageable);
 
     Page<Booking> findByProviderIdOrderByBookingDateAscStartTimeAsc(Long providerId, Pageable pageable);
+
+    Page<Booking> findByCustomerIdAndStatusInOrderByCreatedAtDesc(Long customerId, Collection<BookingStatus> statuses, Pageable pageable);
+
+    Page<Booking> findByProviderIdAndStatusInOrderByBookingDateAscStartTimeAsc(Long providerId, Collection<BookingStatus> statuses, Pageable pageable);
 
     List<Booking> findByProviderIdAndBookingDate(Long providerId, LocalDate date);
 

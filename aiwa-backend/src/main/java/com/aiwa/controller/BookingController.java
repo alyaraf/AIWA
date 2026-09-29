@@ -56,23 +56,25 @@ public class BookingController {
     }
 
     @GetMapping("/my")
-    @Operation(summary = "Get current customer's bookings")
+    @Operation(summary = "Get current customer's bookings, optionally filtered by status (e.g. status=PENDING,ACCEPTED)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.BookingDto>>> myBookings(
+            @RequestParam(required = false) List<BookingStatus> status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                bookingService.getMyBookings(resolveUserId(userDetails), PageRequest.of(page, size))));
+                bookingService.getMyBookings(resolveUserId(userDetails), status, PageRequest.of(page, size))));
     }
 
     @GetMapping("/provider")
-    @Operation(summary = "Get all bookings for the authenticated provider")
+    @Operation(summary = "Get bookings for the authenticated provider, optionally filtered by status")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.BookingDto>>> providerBookings(
+            @RequestParam(required = false) List<BookingStatus> status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                bookingService.getProviderBookings(resolveUserId(userDetails), PageRequest.of(page, size))));
+                bookingService.getProviderBookings(resolveUserId(userDetails), status, PageRequest.of(page, size))));
     }
 
     // ── Gap 8: Split status updates by semantic action ─────────────────────────

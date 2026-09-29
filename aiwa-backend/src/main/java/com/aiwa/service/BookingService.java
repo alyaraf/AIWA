@@ -14,8 +14,9 @@ import java.util.List;
 public interface BookingService {
     ApiResponse.BookingDto create(Long customerId, BookingRequest request);
     ApiResponse.BookingDto getById(Long bookingId, Long requesterId);
-    Page<ApiResponse.BookingDto> getMyBookings(Long customerId, Pageable pageable);
-    Page<ApiResponse.BookingDto> getProviderBookings(Long userId, Pageable pageable);
+    /** @param statuses null/empty = all statuses */
+    Page<ApiResponse.BookingDto> getMyBookings(Long customerId, java.util.List<com.aiwa.enums.BookingStatus> statuses, Pageable pageable);
+    Page<ApiResponse.BookingDto> getProviderBookings(Long userId, java.util.List<com.aiwa.enums.BookingStatus> statuses, Pageable pageable);
     ApiResponse.BookingDto updateStatus(Long userId, Long bookingId, BookingStatus status);
     List<ApiResponse.TimeSlotDto> getAvailableSlots(Long providerId, Long serviceId, Long staffMemberId, LocalDate date);
     ApiResponse.BookingWithAlternativesDto rejectWithAlternatives(Long userId, Long bookingId, String reason);

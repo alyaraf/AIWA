@@ -18,6 +18,11 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
 
     Optional<ProviderProfile> findByUserId(Long userId);
 
+    /** Row lock on the provider — serialises slot conflict-check + insert per provider. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM ProviderProfile p WHERE p.id = :id")
+    Optional<ProviderProfile> lockById(@Param("id") Long id);
+
     // ── Geo search (only APPROVED providers) ─────────────────────────────────
     @Query("""
         SELECT p FROM ProviderProfile p

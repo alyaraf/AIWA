@@ -5,10 +5,8 @@ import '../../../../core/network/api_response.dart';
 import '../../../bookings/data/models/booking_model.dart';
 import '../../../bookings/domain/entities/booking_entity.dart';
 
-/// GET /bookings/provider ignores `status` and sorts oldest first, so lists
-/// fetch one big page and filter client-side.
-// ponytail: newest bookings drop off past 100; add the backend status filter
-// (PROV-08-F1) and page properly when a provider outgrows it.
+/// GET /bookings/provider filters by `status` and sorts oldest first.
+// ponytail: one page of 100 per tab; page properly when a provider outgrows it.
 const providerBookingsPageSize = 100;
 
 /// Bumped after any provider booking action so Today, Bookings and the tab

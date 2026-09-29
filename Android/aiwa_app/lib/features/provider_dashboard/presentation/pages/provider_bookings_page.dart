@@ -26,7 +26,7 @@ class ProviderBookingsPage extends StatefulWidget {
 }
 
 class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
-  /// Tabs filter client-side: the backend ignores `status`.
+  /// Statuses per tab, sent as GET /bookings/provider?status=.
   static const _tabs = [
     {'PENDING'},
     {'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'},
@@ -38,6 +38,7 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
 
   Future<Either<Failure, PagedData<BookingEntity>>> _fetch() =>
       sl<DashboardRepository>().getProviderBookings(
+        status: _tabs[_tab].join(','),
         size: providerBookingsPageSize,
       );
 
@@ -149,7 +150,10 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
       children: [
         for (var i = 0; i < _tabs.length; i++)
           GestureDetector(
-            onTap: () => setState(() => _tab = i),
+            onTap: () => setState(() {
+              _tab = i;
+              _load = _fetch();
+            }),
             behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
               duration: AppTheme.dur2,

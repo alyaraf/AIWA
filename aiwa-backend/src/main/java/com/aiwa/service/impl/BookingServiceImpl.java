@@ -6,6 +6,7 @@ import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.*;
 import com.aiwa.enums.*;
 import com.aiwa.exception.BusinessException;
+import com.aiwa.exception.ConflictException;
 import com.aiwa.exception.ResourceNotFoundException;
 import com.aiwa.repository.*;
 import com.aiwa.service.BookingService;
@@ -169,10 +170,8 @@ public class BookingServiceImpl implements BookingService {
 
         // Conflict is scoped to the chosen staff member's calendar when one is picked,
         // otherwise to the (individual) provider's calendar.
-        boolean conflict = staffMember != null
-                ? bookingRepo.existsConflictForStaff(staffMember.getId(), bookingDate, startTime, blockedEndTime)
-                : bookingRepo.existsConflict(provider.getId(), bookingDate, startTime, blockedEndTime);
-        if (conflict) throw new BusinessException("booking.error.conflict");
+        assertSlotFree(provider.getId(), staffMember != null ? staffMember.getId() : null,
+                bookingDate, startTime, blockedEndTime);
 
         // ── Gap 3: calculate ETA for BOOK_NOW ─────────────────────────────────
         Integer eta = (req.getBookingType() == BookingType.BOOK_NOW)
@@ -227,6 +226,21 @@ public class BookingServiceImpl implements BookingService {
         return toDto(saved);
     }
 
+    /**
+     * Locks the provider row, then checks the slot, so two concurrent requests for the
+     * same provider serialise here and the second one sees the first one's insert.
+     * Every caller is @Transactional, so the lock holds until commit.
+     */
+    // ponytail: per-provider row lock, not per-slot — fine at salon booking volumes;
+    // a Postgres EXCLUDE constraint on (provider, tsrange) if contention ever shows.
+    private void assertSlotFree(Long providerId, Long staffId, LocalDate date, LocalTime start, LocalTime end) {
+        providerRepo.lockById(providerId);
+        boolean taken = staffId != null
+                ? bookingRepo.existsConflictForStaff(staffId, date, start, end)
+                : bookingRepo.existsConflict(providerId, date, start, end);
+        if (taken) throw new ConflictException("booking.error.conflict");
+    }
+
     // ── READ ───────────────────────────────────────────────────────────────────
 
     @Override
@@ -242,16 +256,21 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ApiResponse.BookingDto> getMyBookings(Long customerId, Pageable pageable) {
-        return bookingRepo.findByCustomerIdOrderByCreatedAtDesc(customerId, pageable).map(this::toDto);
+    public Page<ApiResponse.BookingDto> getMyBookings(Long customerId, List<BookingStatus> statuses, Pageable pageable) {
+        return (statuses == null || statuses.isEmpty()
+                ? bookingRepo.findByCustomerIdOrderByCreatedAtDesc(customerId, pageable)
+                : bookingRepo.findByCustomerIdAndStatusInOrderByCreatedAtDesc(customerId, statuses, pageable))
+                .map(this::toDto);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ApiResponse.BookingDto> getProviderBookings(Long userId, Pageable pageable) {
+    public Page<ApiResponse.BookingDto> getProviderBookings(Long userId, List<BookingStatus> statuses, Pageable pageable) {
         ProviderProfile profile = providerRepo.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider profile not found"));
-        return bookingRepo.findByProviderIdOrderByBookingDateAscStartTimeAsc(profile.getId(), pageable)
+        return (statuses == null || statuses.isEmpty()
+                ? bookingRepo.findByProviderIdOrderByBookingDateAscStartTimeAsc(profile.getId(), pageable)
+                : bookingRepo.findByProviderIdAndStatusInOrderByBookingDateAscStartTimeAsc(profile.getId(), statuses, pageable))
                 .map(this::toDto);
     }
 
@@ -595,9 +614,7 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("booking.error.propose_requires_pending");
 
         LocalTime newEnd = req.getStartTime().plusMinutes(booking.getService().getDurationMinutes());
-        if (bookingRepo.existsConflict(booking.getProvider().getId(),
-                req.getBookingDate(), req.getStartTime(), newEnd))
-            throw new BusinessException("booking.error.conflict");
+        assertSlotFree(booking.getProvider().getId(), null, req.getBookingDate(), req.getStartTime(), newEnd);
 
         booking.setProposedDate(req.getBookingDate());
         booking.setProposedStartTime(req.getStartTime());
@@ -634,8 +651,7 @@ public class BookingServiceImpl implements BookingService {
             LocalDate d = booking.getProposedDate();
             LocalTime s = booking.getProposedStartTime();
             LocalTime e = s.plusMinutes(booking.getService().getDurationMinutes());
-            if (bookingRepo.existsConflict(booking.getProvider().getId(), d, s, e))
-                throw new BusinessException("booking.error.conflict");
+            assertSlotFree(booking.getProvider().getId(), null, d, s, e);
 
             booking.setBookingDate(d);
             booking.setStartTime(s);
@@ -912,9 +928,7 @@ public class BookingServiceImpl implements BookingService {
         LocalTime newStart = req.getStartTime();
         LocalTime newEnd   = newStart.plusMinutes(booking.getService().getDurationMinutes());
 
-        boolean conflict = bookingRepo.existsConflict(
-                booking.getProvider().getId(), newDate, newStart, newEnd);
-        if (conflict) throw new BusinessException("booking.error.conflict");
+        assertSlotFree(booking.getProvider().getId(), null, newDate, newStart, newEnd);
 
         booking.setBookingDate(newDate);
         booking.setStartTime(newStart);

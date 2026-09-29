@@ -39,6 +39,12 @@ public class GlobalExceptionHandler {
                 .body(buildError(HttpStatus.BAD_REQUEST, "Bad Request", messages.get(ex.getMessage())));
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiResponse.Error> handleConflict(ConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(buildError(HttpStatus.CONFLICT, "Conflict", messages.get(ex.getMessage())));
+    }
+
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ApiResponse.Error> handleInvalidToken(InvalidTokenException ex) {
         // Distinct from a generic BusinessException so mobile/web clients can
