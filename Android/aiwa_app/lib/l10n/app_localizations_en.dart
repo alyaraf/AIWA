@@ -593,13 +593,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get provRejectedTitle => 'Not approved yet';
 
   @override
-  String get provRejectedBody => 'Our team couldn\'t approve your documents. Fix the issue below and send them again.';
+  String get provRejectedBody =>
+      'Our team couldn\'t approve your documents. Fix the issue below and send them again.';
 
   @override
   String get provSuspendedTitle => 'Your provider account is suspended';
 
   @override
-  String get provSuspendedBody => 'You can\'t take bookings right now. Contact support to find out why and what to do next.';
+  String get provSuspendedBody =>
+      'You can\'t take bookings right now. Contact support to find out why and what to do next.';
 
   @override
   String get provResubmit => 'Send documents again';
@@ -1056,14 +1058,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get outcomeTheProvider => 'The provider';
 
   @override
-  String get outcomeThreeNearbyTitle =>
-      'Three providers nearby are free at the same time';
-
-  @override
-  String get outcomeThreeNearbyBody =>
-      'Same category, similar rating, all within your radius.';
-
-  @override
   String get outcomeSeeAlternatives => 'See alternative providers';
 
   @override
@@ -1209,7 +1203,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get paidCashCollected => 'Cash collected';
 
   @override
-  String get paidCommission => 'AIWA commission (15%) · added to ledger';
+  String paidCommission(String percent) {
+    return 'AIWA commission ($percent%) · added to ledger';
+  }
 
   @override
   String get paidBookingStatus => 'Booking status';
@@ -1404,11 +1400,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get trackTracking => 'Tracking';
 
   @override
-  String get trackSafetyTitle => 'Live location + ID shared';
+  String get trackSafetyTitle => 'SOS is one tap away';
 
   @override
   String get trackSafetySub =>
-      'Identity confirmed both ways. A trusted contact can follow along too.';
+      'SOS alerts AIWA support and texts your trusted contacts.';
 
   @override
   String get trackSos => 'SOS — alert a trusted contact & AIWA';
@@ -2057,7 +2053,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pbdNoShowTitle => 'Mark this booking as a no-show?';
 
   @override
-  String get pbdNoShowBody => 'Use this only if the customer never came and you couldn\'t reach them. It closes the booking without a strike for you and is recorded against the customer.';
+  String get pbdNoShowBody =>
+      'Use this only if the customer never came and you couldn\'t reach them. It closes the booking without a strike for you and is recorded against the customer.';
 
   @override
   String get pbdNoShowToast => 'Marked as a no-show.';
@@ -3177,31 +3174,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get permCamDeny => 'Upload from files instead';
 
   @override
-  String get permContEyebrow => 'Safety feature';
-
-  @override
-  String get permContTitle => 'Add a trusted contact.';
-
-  @override
-  String get permContBody =>
-      'If you ever press SOS during a home service, we alert this person instantly with your live location.';
-
-  @override
-  String get permContP1 => 'Only contacted if you trigger SOS';
-
-  @override
-  String get permContP2 => 'You choose exactly who';
-
-  @override
-  String get permContP3 => 'Change or remove them any time';
-
-  @override
-  String get permContAllow => 'Choose a contact';
-
-  @override
-  String get permContDeny => 'Enter manually';
-
-  @override
   String get permDeniedCamTitle => 'Camera access is off.';
 
   @override
@@ -3361,4 +3333,58 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get sysNotFoundBody =>
       'It may have been cancelled, removed, or the link is out of date.';
+
+  @override
+  String get trackReschedule => 'Reschedule';
+
+  @override
+  String get rescheduleTitle => 'Pick a new time.';
+
+  @override
+  String rescheduleBody(String name, String date) {
+    return '$name is free at these times on $date.';
+  }
+
+  @override
+  String get rescheduleNoSlots => 'No free times that day. Try another date.';
+
+  @override
+  String rescheduledToast(String time) {
+    return 'Moved to $time';
+  }
+
+  @override
+  String get reportsTitle => 'My reports';
+
+  @override
+  String get reportsEmpty => 'You haven\'t reported anything.';
+
+  @override
+  String reportsResolution(String note) {
+    return 'AIWA: $note';
+  }
+
+  @override
+  String get reportStatusOpen => 'Received';
+
+  @override
+  String get reportStatusReview => 'Under review';
+
+  @override
+  String get reportStatusResolved => 'Resolved';
+
+  @override
+  String get staffEditDetails => 'Edit details';
+
+  @override
+  String get staffServicesHint => 'Does these services (none picked = all)';
+
+  @override
+  String get staffSaved => 'Staff member updated.';
+
+  @override
+  String get staffDeactivate => 'Remove from bookings';
+
+  @override
+  String get staffDeactivated => 'Staff member deactivated.';
 }

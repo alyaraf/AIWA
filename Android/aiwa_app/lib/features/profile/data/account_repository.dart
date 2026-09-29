@@ -156,6 +156,20 @@ class AccountRepository {
     relationship: e['relationship'] as String? ?? '',
   );
 
+  /// GET /complaints/my (a Spring Page of ComplaintDto), newest first.
+  Future<Either<Failure, List<Map<String, dynamic>>>> myComplaints() =>
+      _run(() async {
+        final res = await _api.get(
+          ApiConstants.myComplaints,
+          queryParameters: {'size': 20},
+        );
+        final page = _data(res.data);
+        return [
+          for (final e in page?['content'] as List? ?? const [])
+            e as Map<String, dynamic>,
+        ];
+      });
+
   Future<Either<Failure, List<TrustedContact>>> trustedContacts() => _run(
     () async => [
       for (final e

@@ -17,27 +17,40 @@ class HomeLoaded extends HomeState {
   final bool hasMore;
   final String? selectedCategory;
 
+  /// A failed "Load more": the list stays, the error shows inline.
+  final String? loadMoreError;
+
   const HomeLoaded({
     required this.providers,
     required this.trending,
     required this.hasMore,
     this.selectedCategory,
+    this.loadMoreError,
   });
 
+  /// Clears [loadMoreError] unless one is passed.
   HomeLoaded copyWith({
     List<ProviderSummaryEntity>? providers,
     List<ProviderSummaryEntity>? trending,
     bool? hasMore,
     String? selectedCategory,
+    String? loadMoreError,
   }) => HomeLoaded(
     providers: providers ?? this.providers,
     trending: trending ?? this.trending,
     hasMore: hasMore ?? this.hasMore,
     selectedCategory: selectedCategory ?? this.selectedCategory,
+    loadMoreError: loadMoreError,
   );
 
   @override
-  List<Object?> get props => [providers, trending, hasMore, selectedCategory];
+  List<Object?> get props => [
+    providers,
+    trending,
+    hasMore,
+    selectedCategory,
+    loadMoreError,
+  ];
 }
 
 class HomeLoadingMore extends HomeLoaded {

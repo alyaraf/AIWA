@@ -14,6 +14,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   double _radiusKm = 5;
   int _page = 0;
   String? _category;
+
+  /// Set while showing name-search results, so Load more pages the search.
+  String? _query;
+
+  /// Bumped by every new list request; a response for an older one is
+  /// dropped, so a slow "na" can't overwrite the "nail" results.
+  int _seq = 0;
   static const int _pageSize = 20;
 
   HomeBloc({required this.getNearbyProviders, required this.searchProviders})
@@ -31,6 +38,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     _radiusKm = event.radiusKm;
     _category = event.category;
     _page = 0;
+    _query = null;
+    final seq = ++_seq;
 
     final result = await getNearbyProviders(
       lat: _lat,
@@ -40,6 +49,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       page: 0,
       size: _pageSize,
     );
+    if (seq != _seq) return;
 
     result.fold((failure) => emit(HomeError(failure.message)), (paged) {
       final providers = paged.content;
@@ -71,24 +81,32 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       ),
     );
 
-    _page++;
-    final result = await getNearbyProviders(
-      lat: _lat,
-      lng: _lng,
-      radiusKm: _radiusKm,
-      category: _category,
-      page: _page,
-      size: _pageSize,
-    );
+    final seq = _seq;
+    final page = _page + 1;
+    final query = _query;
+    final result = query != null
+        ? await searchProviders(query: query, page: page, size: _pageSize)
+        : await getNearbyProviders(
+            lat: _lat,
+            lng: _lng,
+            radiusKm: _radiusKm,
+            category: _category,
+            page: page,
+            size: _pageSize,
+          );
+    if (seq != _seq) return;
 
     result.fold(
-      (failure) => emit(HomeError(failure.message)),
-      (paged) => emit(
-        current.copyWith(
-          providers: [...current.providers, ...paged.content],
-          hasMore: paged.hasNextPage,
-        ),
-      ),
+      (failure) => emit(current.copyWith(loadMoreError: failure.message)),
+      (paged) {
+        _page = page;
+        emit(
+          current.copyWith(
+            providers: [...current.providers, ...paged.content],
+            hasMore: paged.hasNextPage,
+          ),
+        );
+      },
     );
   }
 
@@ -98,6 +116,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   ) async {
     _category = event.category;
     _page = 0;
+    _query = null;
+    final seq = ++_seq;
     emit(HomeLoading());
     final result = await getNearbyProviders(
       lat: _lat,
@@ -107,6 +127,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       page: 0,
       size: _pageSize,
     );
+    if (seq != _seq) return;
     result.fold(
       (failure) => emit(HomeError(failure.message)),
       (paged) => emit(
@@ -121,9 +142,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   Future<void> _onSearch(HomeSearchEvent event, Emitter<HomeState> emit) async {
+    _query = event.query;
+    _page = 0;
+    final seq = ++_seq;
     emit(HomeLoading());
     trackFunnel('search'); // not the query: it can hold names
-    final result = await searchProviders(query: event.query);
+    final result = await searchProviders(query: event.query, size: _pageSize);
+    if (seq != _seq) return;
     result.fold(
       (failure) => emit(HomeError(failure.message)),
       (paged) => emit(

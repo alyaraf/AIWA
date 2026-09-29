@@ -597,13 +597,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get provRejectedTitle => 'لم تتم الموافقة بعد';
 
   @override
-  String get provRejectedBody => 'لم يتمكن فريقنا من اعتماد مستنداتك. أصلح المشكلة الموضحة أدناه وأرسلها مرة أخرى.';
+  String get provRejectedBody =>
+      'لم يتمكن فريقنا من اعتماد مستنداتك. أصلح المشكلة الموضحة أدناه وأرسلها مرة أخرى.';
 
   @override
   String get provSuspendedTitle => 'حساب مقدم الخدمة موقوف';
 
   @override
-  String get provSuspendedBody => 'لا يمكنك استقبال الحجوزات حاليًا. تواصل مع الدعم لمعرفة السبب والخطوة التالية.';
+  String get provSuspendedBody =>
+      'لا يمكنك استقبال الحجوزات حاليًا. تواصل مع الدعم لمعرفة السبب والخطوة التالية.';
 
   @override
   String get provResubmit => 'أعد إرسال المستندات';
@@ -1071,14 +1073,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get outcomeTheProvider => 'مقدّم الخدمة';
 
   @override
-  String get outcomeThreeNearbyTitle =>
-      'ثلاثة مقدّمي خدمة بالقرب منك متاحون في الوقت نفسه';
-
-  @override
-  String get outcomeThreeNearbyBody =>
-      'الفئة نفسها وتقييم مشابه، وكلهم ضمن نطاقك.';
-
-  @override
   String get outcomeSeeAlternatives => 'اعرض مقدّمي خدمة بديلين';
 
   @override
@@ -1223,7 +1217,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paidCashCollected => 'المبلغ المُحصَّل نقدًا';
 
   @override
-  String get paidCommission => 'عمولة AIWA (15%) · أُضيفت إلى السجل';
+  String paidCommission(String percent) {
+    return 'عمولة AIWA ($percent%) · أُضيفت إلى السجل';
+  }
 
   @override
   String get paidBookingStatus => 'حالة الحجز';
@@ -1415,11 +1411,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get trackTracking => 'التتبّع';
 
   @override
-  String get trackSafetyTitle => 'تمت مشاركة الموقع المباشر والهوية';
+  String get trackSafetyTitle => 'زر الاستغاثة على بُعد لمسة';
 
   @override
   String get trackSafetySub =>
-      'تم التحقق من الهوية للطرفين. ويمكن لجهة اتصال موثوقة المتابعة أيضًا.';
+      'زر الاستغاثة ينبّه دعم AIWA ويرسل رسالة إلى جهات اتصالك الموثوقة.';
 
   @override
   String get trackSos => 'طوارئ — تنبيه جهة اتصال موثوقة وAIWA';
@@ -2098,7 +2094,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pbdNoShowTitle => 'تسجيل هذا الحجز كعدم حضور؟';
 
   @override
-  String get pbdNoShowBody => 'استخدم هذا فقط إذا لم يحضر العميل ولم تتمكن من الوصول إليه. يُغلق الحجز دون مخالفة عليك ويُسجَّل على العميل.';
+  String get pbdNoShowBody =>
+      'استخدم هذا فقط إذا لم يحضر العميل ولم تتمكن من الوصول إليه. يُغلق الحجز دون مخالفة عليك ويُسجَّل على العميل.';
 
   @override
   String get pbdNoShowToast => 'تم تسجيل عدم الحضور.';
@@ -3239,31 +3236,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get permCamDeny => 'ارفع من الملفات بدلًا من ذلك';
 
   @override
-  String get permContEyebrow => 'ميزة أمان';
-
-  @override
-  String get permContTitle => 'أضف جهة اتصال موثوقة.';
-
-  @override
-  String get permContBody =>
-      'إذا ضغطت زر الطوارئ أثناء خدمة منزلية، ننبّه هذا الشخص فورًا بموقعك المباشر.';
-
-  @override
-  String get permContP1 => 'لا نتواصل معه إلا عند ضغطك زر الطوارئ';
-
-  @override
-  String get permContP2 => 'أنت من يختار الشخص بالتحديد';
-
-  @override
-  String get permContP3 => 'غيّره أو أزِله في أي وقت';
-
-  @override
-  String get permContAllow => 'اختر جهة اتصال';
-
-  @override
-  String get permContDeny => 'أدخل يدويًا';
-
-  @override
   String get permDeniedCamTitle => 'الوصول إلى الكاميرا متوقف.';
 
   @override
@@ -3421,4 +3393,59 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get sysNotFoundBody => 'ربما أُلغيت أو أُزيلت، أو أن الرابط قديم.';
+
+  @override
+  String get trackReschedule => 'تغيير الموعد';
+
+  @override
+  String get rescheduleTitle => 'اختر موعدًا جديدًا.';
+
+  @override
+  String rescheduleBody(String name, String date) {
+    return '$name متاح في هذه الأوقات يوم $date.';
+  }
+
+  @override
+  String get rescheduleNoSlots =>
+      'لا توجد أوقات متاحة في ذلك اليوم. جرّب تاريخًا آخر.';
+
+  @override
+  String rescheduledToast(String time) {
+    return 'تم النقل إلى $time';
+  }
+
+  @override
+  String get reportsTitle => 'بلاغاتي';
+
+  @override
+  String get reportsEmpty => 'لم تقدّم أي بلاغ.';
+
+  @override
+  String reportsResolution(String note) {
+    return 'ردّ AIWA: $note';
+  }
+
+  @override
+  String get reportStatusOpen => 'تم الاستلام';
+
+  @override
+  String get reportStatusReview => 'قيد المراجعة';
+
+  @override
+  String get reportStatusResolved => 'تم الحل';
+
+  @override
+  String get staffEditDetails => 'تعديل البيانات';
+
+  @override
+  String get staffServicesHint => 'تقدّم هذه الخدمات (بدون اختيار = الكل)';
+
+  @override
+  String get staffSaved => 'تم تحديث بيانات الموظف.';
+
+  @override
+  String get staffDeactivate => 'إيقاف استقبال الحجوزات';
+
+  @override
+  String get staffDeactivated => 'تم إيقاف الموظف.';
 }

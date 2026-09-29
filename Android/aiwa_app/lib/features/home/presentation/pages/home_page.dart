@@ -37,6 +37,9 @@ class HomePage extends StatefulWidget {
   // ponytail: static field, move to a LocationCubit if more screens need it.
   static ({double lat, double lng}) position = (lat: 30.0444, lng: 31.2357);
 
+  /// True once [position] is a real GPS fix, not the Cairo default.
+  static bool hasFix = false;
+
   /// The pushed location priming screen is offered once per app run.
   static bool locationPrimed = false;
 
@@ -104,6 +107,7 @@ class _HomePageState extends State<HomePage> {
           lat = pos.latitude;
           lng = pos.longitude;
           HomePage.position = (lat: lat, lng: lng);
+          HomePage.hasFix = true;
         }
       }
     } catch (_) {}

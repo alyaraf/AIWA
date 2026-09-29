@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -96,12 +98,22 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
+  Timer? _debounce;
+
+  /// Typing waits 300 ms for a pause before searching.
   void _onSearch(String q) {
     setState(() {});
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () => _runSearch(q));
+  }
+
+  void _runSearch(String q) {
+    if (!mounted) return;
     if (q.trim().isEmpty) {
       _homeBloc.add(
         HomeLoadEvent(
@@ -526,13 +538,22 @@ class _SearchPageState extends State<SearchPage> {
           child: state is HomeLoadingMore
               ? const ProviderCardShimmer()
               : state.hasMore
-              ? Center(
-                  child: AiwaButton(
-                    label: l.commonLoadMore,
-                    variant: AiwaButtonVariant.ghost,
-                    size: AiwaButtonSize.sm,
-                    onPressed: () => _homeBloc.add(HomeLoadMoreEvent()),
-                  ),
+              ? Column(
+                  children: [
+                    if (state.loadMoreError != null)
+                      InlineBanner(
+                        tone: BannerTone.danger,
+                        body: l.error(state.loadMoreError!),
+                      ),
+                    Center(
+                      child: AiwaButton(
+                        label: l.commonLoadMore,
+                        variant: AiwaButtonVariant.ghost,
+                        size: AiwaButtonSize.sm,
+                        onPressed: () => _homeBloc.add(HomeLoadMoreEvent()),
+                      ),
+                    ),
+                  ],
                 )
               : EndOfList(label: l.searchInRange(results.length)),
         ),

@@ -126,16 +126,22 @@ class SystemScreen extends StatelessWidget {
   }
 }
 
-/// `aiwa-pop`: scale .86 -> 1 with fade, 340ms bounce.
+/// `aiwa-pop`: scale .86 -> 1 with fade. SuccessSheet uses the bounce,
+/// EmptyState [AppTheme.easeSoft] (states.jsx:95, :277).
 class PopIn extends StatelessWidget {
   final Widget child;
-  const PopIn({super.key, required this.child});
+  final Curve curve;
+  const PopIn({
+    super.key,
+    required this.child,
+    this.curve = AppTheme.easeBounce,
+  });
 
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
     tween: Tween(begin: 0, end: 1),
     duration: AppTheme.dur3,
-    curve: AppTheme.easeBounce,
+    curve: curve,
     builder: (_, t, c) => Opacity(
       opacity: t.clamp(0.0, 1.0),
       child: Transform.scale(scale: .86 + .14 * t, child: c),

@@ -154,13 +154,8 @@ class ExpiredBookingPage extends StatelessWidget {
             b?.displayProviderName ?? l.outcomeTheProvider,
           ),
           onBack: () => context.pop(),
-          // ponytail: static claim from the kit; not backed by a count.
-          extra: InlineBanner(
-            tone: BannerTone.plum,
-            icon: LucideIcons.sparkles,
-            title: l.outcomeThreeNearbyTitle,
-            body: l.outcomeThreeNearbyBody,
-          ),
+          // The kit's "Three providers nearby are free" banner was dropped:
+          // no count backs it (FE-29).
           actions: [
             AiwaButton(
               label: l.outcomeSeeAlternatives,

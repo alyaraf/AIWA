@@ -28,6 +28,13 @@ public class TermsPolicy extends BaseEntity {
     @Column(length = 512)
     private String pdfUrl;
 
+    /** One-line summary of what changed, shown in the admin version history. */
+    @Column(length = 500)
+    private String changeNote;
+
+    /** Admin who published this version. */
+    private String publishedBy;
+
     @Builder.Default
     private boolean active = true;
 }

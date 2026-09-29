@@ -54,6 +54,7 @@ class _AvatarGenderPageState extends State<AvatarGenderPage> {
   Future<void> _pickPhoto() async {
     final file = await ImagePicker().pickImage(
       source: ImageSource.gallery,
+      maxWidth: 512,
       imageQuality: 85,
     );
     if (file != null && mounted) setState(() => _avatar = file.path);

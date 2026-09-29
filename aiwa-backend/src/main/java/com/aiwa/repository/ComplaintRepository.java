@@ -13,4 +13,9 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Long> {
     Page<Complaint> findByStatusOrderByCreatedAtDesc(ComplaintStatus status, Pageable pageable);
     Page<Complaint> findByFlaggedTrueOrderByCreatedAtDesc(Pageable pageable);
     long countByStatus(ComplaintStatus status);
+
+    /** Same rule as ComplaintServiceImpl.priorityOf → HIGH. */
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(c) FROM Complaint c WHERE c.status = :status "
+            + "AND (c.flagged = true OR UPPER(c.category) IN ('SAFETY', 'PAYMENT'))")
+    long countHighPriorityByStatus(@org.springframework.data.repository.query.Param("status") ComplaintStatus status);
 }

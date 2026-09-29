@@ -34,6 +34,9 @@ class ProviderDetailEntity extends Equatable {
   final bool vacationMode;
   final bool settlementPaused;
 
+  /// An individual provider is with another client right now (BOOK-04).
+  final bool busyNow;
+
   const ProviderDetailEntity({
     required this.id,
     required this.providerName,
@@ -61,6 +64,7 @@ class ProviderDetailEntity extends Equatable {
     this.offlineMode = false,
     this.vacationMode = false,
     this.settlementPaused = false,
+    this.busyNow = false,
   });
 
   String get displayName => businessName ?? providerName;

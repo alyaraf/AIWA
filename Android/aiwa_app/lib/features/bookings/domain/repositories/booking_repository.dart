@@ -16,6 +16,7 @@ abstract class BookingRepository {
     bool homeService = false,
     String? savedAddressId,
     String? customerNote,
+    String? idempotencyKey,
   });
 
   Future<Either<Failure, PagedData<BookingEntity>>> getMyBookings({

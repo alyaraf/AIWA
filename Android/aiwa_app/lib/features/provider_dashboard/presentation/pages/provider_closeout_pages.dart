@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -14,6 +15,7 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../bookings/domain/entities/booking_entity.dart';
 import '../../../bookings/presentation/pages/booking_action_pages.dart';
 import '../../../reviews/domain/repositories/review_repository.dart';
+import '../../data/provider_manage_repository.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -40,6 +42,10 @@ class _ProviderPaymentConfirmPageState
   bool _busy = false;
   String? _error;
 
+  /// The provider's effective commission rate (GET /provider/settlement);
+  /// the row stays hidden until it loads rather than guessing a rate.
+  num? _commissionPercent;
+
   BookingEntity get _b => widget.booking;
   String get _name =>
       _b.customerName ?? AppLocalizations.of(context).closeTheCustomer;
@@ -48,6 +54,13 @@ class _ProviderPaymentConfirmPageState
   void initState() {
     super.initState();
     _reason.addListener(() => setState(() {}));
+    sl<ProviderManageRepository>().settlement().then((r) {
+      if (!mounted) return;
+      r.fold((_) {}, (s) {
+        final pct = s['commissionPercent'] as num?;
+        if (pct != null) setState(() => _commissionPercent = pct);
+      });
+    });
   }
 
   @override
@@ -97,8 +110,13 @@ class _ProviderPaymentConfirmPageState
     final l = AppLocalizations.of(context);
     final amount = l.egp(_b.servicePrice);
     // Commission is on the service price only; the travel fee is pass-through.
-    // ponytail: 15% mirrors the kit until completion returns commissionAmount.
-    final commission = l.egp(_b.commissionAmount ?? _b.basePrice * .15);
+    final pct = _commissionPercent;
+    final commission = pct == null
+        ? null
+        : (
+            amount: l.egp(_b.commissionAmount ?? _b.basePrice * pct / 100),
+            percent: NumberFormat.decimalPattern(l.localeName).format(pct),
+          );
     final lead = AppTextStyles.bodySm.copyWith(
       color: AppColors.ink2,
       height: 1.55,

@@ -42,6 +42,7 @@ import '../../features/profile/presentation/pages/addresses_page.dart';
 import '../../features/profile/presentation/pages/safety_policies_page.dart';
 import '../../features/profile/presentation/pages/trusted_contacts_page.dart';
 import '../../features/profile/presentation/pages/support_page.dart';
+import '../../features/profile/presentation/pages/my_reports_page.dart';
 import '../../features/bookings/domain/entities/saved_address_entity.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/notifications/presentation/pages/notification_preferences_page.dart';
@@ -119,6 +120,7 @@ class AppRoutes {
   static const String accountLocked = '/account-locked';
   static const String forbidden = '/forbidden';
   static const String support = '/support';
+  static const String myReports = '/support/reports';
 
   // Profile tab destinations (phase 6).
   static const String editProfile = '/profile/edit';
@@ -485,6 +487,7 @@ final router = GoRouter(
       (AppRoutes.notificationPreferences, const NotificationPreferencesPage()),
       (AppRoutes.safetyPolicies, const SafetyPoliciesPage()),
       (AppRoutes.support, const SupportPage()),
+      (AppRoutes.myReports, const MyReportsPage()),
     ])
       GoRoute(path: path, pageBuilder: (_, state) => _slide(state, page)),
     GoRoute(

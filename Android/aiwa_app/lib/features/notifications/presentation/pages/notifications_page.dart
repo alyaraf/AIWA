@@ -145,10 +145,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       );
                     }
                     final id = n.referenceId;
-                    // Providers only mark read (PROVIDER_NOTIFICATIONS'
-                    // onOpen is a no-op); the routes below are customer ones.
                     final auth = context.read<AuthBloc>().state;
                     if (auth is AuthAuthenticated && auth.user.isProvider) {
+                      final to = _providerTarget(n.type, id);
+                      if (to != null) context.push(to);
                       return;
                     }
                     if (n.type.toUpperCase().contains('TERMS')) {
@@ -192,6 +192,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ),
     ];
   }
+}
+
+/// Provider taps (FE-25): bookings open the job, money goes to the wallet,
+/// verification to the pending screen. Others only mark read.
+String? _providerTarget(String type, String? id) {
+  final t = type.toUpperCase();
+  if (t.contains('TERMS')) return AppRoutes.termsReaccept;
+  if (t.startsWith('COMMISSION_') || t.startsWith('SETTLEMENT_')) {
+    return AppRoutes.providerWallet;
+  }
+  if (t.startsWith('PROVIDER_VERIFICATION_') || t == 'PROVIDER_INFO_REQUESTED') {
+    return AppRoutes.providerPending;
+  }
+  if (id != null &&
+      RegExp(r'^(BOOKING|CHAT|PAYMENT|TRAVEL_FEE)_').hasMatch(t)) {
+    return AppRoutes.providerBooking(id);
+  }
+  return null;
 }
 
 class _NotificationRow extends StatelessWidget {

@@ -53,8 +53,8 @@ enum BookNowBlock {
       };
 }
 
-/// The backend has no GET /bookings/book-now/availability, so the result is
-/// derived from ProviderDetailDto flags plus today's /bookings/slots.
+/// Derived from ProviderDetailDto flags (busyNow = mid-booking right now)
+/// plus today's /bookings/slots (no Book Now slot left = busy too).
 /// [freeToday] is null when the slot lookup failed — the backend then decides.
 BookNowBlock? bookNowBlockFor(
   ProviderDetailEntity p, {
@@ -65,6 +65,7 @@ BookNowBlock? bookNowBlockFor(
   if (p.settlementPaused) return BookNowBlock.settlementPaused;
   if (p.offlineMode) return BookNowBlock.offline;
   if (!p.isVerified || !p.isActive) return BookNowBlock.notApproved;
+  if (p.busyNow) return BookNowBlock.busy;
   if (freeToday == null) return null;
   final hhmm = DateFormat('HH:mm').format(now);
   final anyLeft = freeToday.any((t) => t.compareTo(hhmm) > 0);

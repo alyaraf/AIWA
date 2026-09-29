@@ -70,6 +70,8 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
     List<ProviderProfile> findBySettlementReportedAtIsNotNullOrderBySettlementReportedAtAsc(Pageable pageable);
     long countByVerificationStatus(VerificationStatus status);
 
+    long countByVerificationStatusAndVerifiedAtAfter(VerificationStatus status, java.time.LocalDateTime after);
+
     /** True when this exact storage path was submitted by some provider as an ID / selfie document. */
     boolean existsByNationalIdFrontPathOrNationalIdBackPathOrSelfiePath(String front, String back, String selfie);
 

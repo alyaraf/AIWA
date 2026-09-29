@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/api_client.dart';
@@ -18,6 +17,7 @@ abstract class BookingRemoteDataSource {
     bool homeService = false,
     String? savedAddressId,
     String? customerNote,
+    String? idempotencyKey,
   });
 
   Future<PagedData<BookingModel>> getMyBookings({
@@ -84,13 +84,10 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
     bool homeService = false,
     String? savedAddressId,
     String? customerNote,
+    String? idempotencyKey,
   }) async {
-    // BookingRequest: bookingDate / startTime / notes. One key per tap so a
-    // retried request returns the original booking instead of a duplicate.
-    final key = List.generate(
-      16,
-      (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
-    ).join();
+    // BookingRequest: bookingDate / startTime / notes. The caller keeps one
+    // key per booking attempt, so a retry returns the original booking.
     final response = await _api.post(
       ApiConstants.bookings,
       data: {
@@ -106,7 +103,7 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
         'paymentMethod': 'CASH',
         if (customerNote != null) 'notes': customerNote,
       },
-      options: Options(headers: {'Idempotency-Key': key}),
+      options: Options(headers: {'Idempotency-Key': ?idempotencyKey}),
     );
     final data = response.data['data'] ?? response.data;
     return BookingModel.fromJson(data as Map<String, dynamic>);

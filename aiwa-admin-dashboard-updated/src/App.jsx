@@ -8,7 +8,9 @@ import {
   Bell,
   Calendar,
   CalendarCheck,
+  CalendarSearch,
   Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -27,15 +29,18 @@ import {
   Menu,
   MessageSquareWarning,
   MoreHorizontal,
+  Pencil,
   Plus,
   RotateCw,
   ScanFace,
   Search,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   Siren,
   Star,
   Trash2,
+  TrendingDown,
   TrendingUp,
   UserCog,
   UserPlus,
@@ -129,33 +134,48 @@ function ReadOnlyNote({ need }) {
   );
 }
 
-/* Global confirm dialog — replaces window.confirm with the AIWA sheet. */
+/* Global confirm dialog — replaces window.confirm with the AIWA sheet.
+ * opts.input = { label, placeholder } adds a required text field whose value
+ * is passed to onConfirm (resolution notes, cancel reasons). opts.icon swaps
+ * the default warning glyph. */
 const confirmListeners = new Set();
 function setConfirm(opts) {
   confirmListeners.forEach((fn) => fn(opts));
 }
 export function ConfirmHost() {
   const [state, setState] = useState(null);
+  const [text, setText] = useState("");
   useEffect(() => {
-    const listener = (opts) => setState(opts);
+    const listener = (opts) => { setText(""); setState(opts); };
     confirmListeners.add(listener);
     return () => confirmListeners.delete(listener);
   }, []);
   if (!state) return null;
   const close = () => setState(null);
+  const Glyph = state.icon || AlertTriangle;
+  const blocked = state.input && text.trim().length === 0;
   return (
     <div className="modal-backdrop" onClick={close}>
       <div className="confirm-card" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true">
         <span className={`confirm-icon ${state.tone === "danger" ? "danger" : "plum"}`}>
-          <AlertTriangle size={20} />
+          <Glyph size={20} />
         </span>
+        {state.eyebrow && <p className="eyebrow">{state.eyebrow}</p>}
         <h2>{state.title}</h2>
         {state.body && <p>{state.body}</p>}
+        {state.input && (
+          <label className="field-label" style={{ display: "grid", gap: 6, textAlign: "left" }}>
+            {state.input.label}
+            <textarea className="field-note" rows={3} autoFocus value={text} maxLength={2000}
+              placeholder={state.input.placeholder} onChange={(e) => setText(e.target.value)} />
+          </label>
+        )}
         <div className="modal-actions">
           <button className="btn btn-secondary" onClick={close}>{state.cancelLabel || "Cancel"}</button>
           <button
             className={`btn ${state.tone === "danger" ? "btn-danger" : "btn-primary"}`}
-            onClick={() => { close(); Promise.resolve().then(state.onConfirm); }}
+            disabled={blocked}
+            onClick={() => { const value = text.trim(); close(); Promise.resolve().then(() => state.onConfirm(value)); }}
           >
             {state.confirmLabel || "Confirm"}
           </button>
@@ -242,12 +262,12 @@ function SkeletonRows({ cols = 5, rows = 5 }) {
 }
 
 /* Full-panel empty / error state — icon + title + body + optional action. */
-function StateBlock({ variant = "empty", icon, title, body, actionLabel, onAction }) {
+function StateBlock({ variant = "empty", icon, tone, title, body, actionLabel, onAction }) {
   const isError = variant === "error";
   const Ico = icon || (isError ? AlertTriangle : Inbox);
   return (
     <div className="state-block">
-      <span className={`state-icon ${isError ? "danger" : "plum"}`}><Ico size={24} /></span>
+      <span className={`state-icon ${isError ? "danger" : tone || "plum"}`}><Ico size={24} /></span>
       <strong>{title || (isError ? "Couldn't load this" : "Nothing here yet")}</strong>
       {body && <p>{body}</p>}
       {onAction && (
@@ -279,12 +299,28 @@ function Toolbar({ query, onQuery, placeholder = "Search…", filters = [], acti
   );
 }
 
+/** First, last and a 3-page window around the current page, "…" for gaps:
+ *  1 … 4 5 6 … 12. */
+export function pageWindow(page, totalPages) {
+  const keep = new Set([1, totalPages, page - 1, page, page + 1]);
+  const out = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (!keep.has(p)) continue;
+    if (out.length && p - out[out.length - 1] > 1) out.push("…");
+    out.push(p);
+  }
+  return out;
+}
+
 function Pagination({ page, totalPages, onPage }) {
   if (totalPages <= 1) return null;
   return (
     <div className="pagination">
       <button className="pg-btn" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page"><ChevronLeft size={15} /></button>
-      <span className="pg-info">Page {page} of {totalPages}</span>
+      {pageWindow(page, totalPages).map((p, i) => p === "…"
+        ? <span key={`gap-${i}`} className="pg-info" aria-hidden="true">…</span>
+        : <button key={p} className={`pg-btn ${p === page ? "active" : ""}`} aria-current={p === page ? "page" : undefined}
+            aria-label={`Page ${p}`} onClick={() => onPage(p)}>{p}</button>)}
       <button className="pg-btn" disabled={page >= totalPages} onClick={() => onPage(page + 1)} aria-label="Next page"><ChevronRight size={15} /></button>
     </div>
   );
@@ -534,7 +570,29 @@ export function LoginScreen({ onLogin }) {
 }
 
 /* ─────────────────────────── Chrome ─────────────────────────── */
+/** Per-screen counts of what still needs handling, from the admin inbox
+ *  (GET /admin/inbox groups items by targetRoute). The inbox caps each source
+ *  at 20, so a full source shows "20+". */
+function useNavBadges() {
+  const [badges, setBadges] = useState({});
+  useEffect(() => {
+    const load = () => api.inbox(100)
+      .then((rows) => {
+        const counts = {};
+        for (const row of rows || []) counts[row.targetRoute] = (counts[row.targetRoute] || 0) + 1;
+        setBadges(Object.fromEntries(Object.entries(counts).map(([k, n]) => [k, n >= 20 ? "20+" : n])));
+      })
+      .catch(() => { /* badges are a hint; the screens show the real lists */ });
+    load();
+    const t = setInterval(load, 60_000);
+    appRefreshListeners.add(load);
+    return () => { clearInterval(t); appRefreshListeners.delete(load); };
+  }, []);
+  return badges;
+}
+
 function Sidebar({ route, user, open, onClose, onRoute, onLogout, onProfile }) {
+  const badges = useNavBadges();
   return (
     <>
       <button className={`overlay ${open ? "show" : ""}`} onClick={onClose} aria-label="Close menu" />
@@ -550,7 +608,7 @@ function Sidebar({ route, user, open, onClose, onRoute, onLogout, onProfile }) {
               <button key={item.id} className={`nav-item ${active ? "active" : ""}`} onClick={() => onRoute(item.id)}>
                 <span className="nav-icon"><Icon name={item.icon} size={16} /></span>
                 <span className="nav-label">{item.label}</span>
-                {item.badge ? <b>{item.badge}</b> : null}
+                {badges[item.id] ? <b>{badges[item.id]}</b> : null}
               </button>
             );
           })}
@@ -564,7 +622,7 @@ function Sidebar({ route, user, open, onClose, onRoute, onLogout, onProfile }) {
           <Avatar name={user?.fullName || "Admin"} palette="rose" size={32} />
           <div>
             <strong>Admin · {user?.fullName || "S. Mahmoud"}</strong>
-            <span>{user?.location || "Cairo HQ"}</span>
+            <span>{user?.location || user?.email || "Signed in"}</span>
           </div>
           <ChevronRight className="admin-card-chevron" size={15} />
         </button>
@@ -804,6 +862,8 @@ function formatWhen(value) {
 
 /* ─────────────────────────── Dashboard ─────────────────────────── */
 const RANGE_OPTIONS = [7, 14, 30, 90];
+/** Recent-activity glyph per audit tone (normalizeAudit). */
+const ACTIVITY_ICON = { success: Check, danger: Ban, warn: AlertTriangle, info: ScrollText };
 
 function Dashboard({ onRoute }) {
   const { data, loading } = useLoad(api.dashboard, mock.dashboard);
@@ -907,7 +967,12 @@ function Dashboard({ onRoute }) {
               <span className="icon-box"><Icon name={stat.icon} size={15} /></span>
             </div>
             <strong>{stat.value}</strong>
-            <span className="stat-sub">{stat.sub || stat.delta}</span>
+            {stat.delta && (
+              <span className="positive" style={stat.delta.startsWith("-") ? { color: "var(--danger-700)" } : undefined}>
+                {stat.delta.startsWith("-") ? <TrendingDown size={12} /> : <TrendingUp size={12} />} {stat.delta}
+              </span>
+            )}
+            {stat.sub && <span className="stat-sub">{stat.sub}</span>}
           </article>
         ))}
       </div>
@@ -980,7 +1045,7 @@ function Dashboard({ onRoute }) {
             {audit.length === 0 && <span className="dim" style={{ fontSize: 13 }}>No recorded admin activity yet.</span>}
             {audit.map((entry) => (
               <div className="activity-item" key={entry.id}>
-                <span className={`activity-icon ${entry.tone}`}><Icon name="ScrollText" size={14} /></span>
+                <span className={`activity-icon ${entry.tone}`}><Icon name={ACTIVITY_ICON[entry.tone] || ScrollText} size={14} /></span>
                 <div>
                   <strong>{prettyStatus(entry.action)} · {entry.target}</strong>
                   <span>{entry.actor} · {entry.when}</span>
@@ -993,9 +1058,9 @@ function Dashboard({ onRoute }) {
       </div>
 
       <div className="quick-grid">
-        <QuickLink tone="warn" icon={BadgeCheck} title="Review provider verifications" sub="Open verification queue" onClick={() => onRoute("verifications")} />
-        <QuickLink tone="danger" icon={Flag} title="Review complaints" sub="Open complaint queue" onClick={() => onRoute("complaints")} />
-        <QuickLink tone="info" icon={UserCog} title="Manage users" sub="Customers, providers and admins" onClick={() => onRoute("users")} />
+        <QuickLink tone="warn" icon={BadgeCheck} title={`${pv} provider${pv === 1 ? "" : "s"} awaiting review`} sub="SLA target: 24h" onClick={() => onRoute("verifications")} />
+        <QuickLink tone="danger" icon={Flag} title={`${oc} open complaint${oc === 1 ? "" : "s"}`} sub={`${data.highPriorityComplaints ?? 0} marked high priority`} onClick={() => onRoute("complaints")} />
+        <QuickLink tone="info" icon={UserCog} title="Manage users" sub={`${(data.totalAccounts ?? 0).toLocaleString()} accounts`} onClick={() => onRoute("users")} />
       </div>
     </section>
   );
@@ -1229,7 +1294,8 @@ function DocumentLightbox({ src, label, onClose }) {
 
 function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestInfo, onSuspend, onReactivate }) {
   const [decision, setDecision] = useState(null);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(provider.verificationNote || "");
+  const [savedNote, setSavedNote] = useState(provider.verificationNote || "");
   const [rejectReason, setRejectReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [lightbox, setLightbox] = useState(null);
@@ -1249,16 +1315,41 @@ function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestIn
     } catch { /* toast shown */ } finally { setSubmitting(false); }
   }
 
-  async function requestInfo() {
-    if (note.trim().length < 4) {
-      toast("Add a note describing what the provider should resubmit.", "error");
-      return;
-    }
+  function requestInfo() {
+    setConfirm({
+      eyebrow: "Provider verification",
+      title: `Ask ${provider.name} for more info?`,
+      body: "They stay in the pending queue and get this message as a notification.",
+      input: { label: "Message to the provider", placeholder: "e.g. The ID back photo is blurry — please retake it in good light." },
+      confirmLabel: "Send request",
+      onConfirm: async (message) => {
+        setSubmitting(true);
+        try { await onRequestInfo(provider.id, message); } catch { /* toast shown */ } finally { setSubmitting(false); }
+      }
+    });
+  }
+
+  /** Internal note: admins only, never sent to the provider. */
+  async function saveNote() {
     setSubmitting(true);
     try {
-      await onRequestInfo(provider.id, note.trim());
+      await runAction(() => api.saveVerificationNote(provider.id, note.trim()), { success: "Note saved" });
+      setSavedNote(note.trim());
     } catch { /* toast shown */ } finally { setSubmitting(false); }
   }
+  const noteField = (
+    <div>
+      <textarea
+        className="field-note"
+        placeholder="Internal note (visible to admins only)…"
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+      />
+      {note.trim() !== savedNote && (
+        <button className="btn btn-ghost sm" onClick={saveNote} disabled={submitting} style={{ marginTop: 6 }}>Save note</button>
+      )}
+    </div>
+  );
 
   function confirmSuspend() {
     setConfirm({
@@ -1291,11 +1382,16 @@ function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestIn
     { label: "National ID — back", icon: IdCard, path: dp.nationalIdBackPath },
     { label: "Live selfie", icon: ScanFace, path: dp.selfiePath }
   ];
+  const bp = provider.business || {};
   const rows = [
     ["Owner full name", provider.ownerName || "—"],
     ["Business name", provider.name],
     ["Category", provider.category],
     ["City / district", provider.city],
+    ["Coordinates", bp.coordinates || "Not set"],
+    ["Services declared", bp.services || "None yet"],
+    ["Gallery photos", bp.gallery],
+    ["Accepted terms", bp.terms || "Not accepted"],
     ["Documents", provider.documents],
     ["Submitted", provider.submitted],
     ["Current status", prettyStatus(status)]
@@ -1367,12 +1463,7 @@ function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestIn
 
           {can("SUPPORT") && isPending && (
             <>
-              <textarea
-                className="field-note"
-                placeholder="Note to the provider (used for “Request more info”)…"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-              />
+              {noteField}
               {decision === "reject" && (
                 <div>
                   <p className="eyebrow" style={{ marginBottom: 6 }}>Rejection reason · sent to provider</p>
@@ -1422,12 +1513,7 @@ function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestIn
               <button className="btn btn-primary full" onClick={() => onApprove(provider.id)} disabled={submitting}>
                 <Check size={16} /> Approve provider
               </button>
-              <textarea
-                className="field-note"
-                placeholder="Note to the provider (used for “Request more info”)…"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-              />
+              {noteField}
               <button className="btn btn-ghost full" onClick={requestInfo} disabled={submitting}>Request more info</button>
             </div>
           )}
@@ -1501,12 +1587,21 @@ function Complaints() {
 
   useEffect(() => { setPage(1); }, [filter, query]);
 
-  async function resolve(id) {
-    setBusyId(id);
-    try {
-      await runAction(() => api.resolveComplaint(id, "Resolved by admin"), { success: "Complaint resolved" });
-      setData((current) => current.map((item) => (item.id === id ? { ...item, status: "RESOLVED" } : item)));
-    } catch { /* toast shown */ } finally { setBusyId(null); }
+  function resolve(complaint) {
+    setConfirm({
+      eyebrow: [complaint.category, complaint.bookingId ? `Booking #${complaint.bookingId}` : null].filter(Boolean).join(" · ") || "Complaint",
+      title: `Resolve ${complaint.customer}'s complaint?`,
+      body: complaint.description || complaint.subject,
+      input: { label: "Resolution notes", placeholder: "What was done — saved on the complaint for other admins…" },
+      confirmLabel: "Mark resolved",
+      onConfirm: async (notes) => {
+        setBusyId(complaint.id);
+        try {
+          await runAction(() => api.resolveComplaint(complaint.id, notes), { success: "Complaint resolved" });
+          setData((current) => current.map((item) => (item.id === complaint.id ? { ...item, status: "RESOLVED", adminNotes: notes } : item)));
+        } catch { /* toast shown */ } finally { setBusyId(null); }
+      }
+    });
   }
 
   function flag(complaint) {
@@ -1562,7 +1657,7 @@ function Complaints() {
                     <ShieldAlert size={13} /> Escalate
                   </button>
                 )}
-                <button className="btn btn-ghost sm" onClick={() => resolve(complaint.id)} disabled={!can("SUPPORT") || complaint.status === "RESOLVED" || busyId === complaint.id}>
+                <button className="btn btn-ghost sm" onClick={() => resolve(complaint)} title={complaint.adminNotes || undefined} disabled={!can("SUPPORT") || complaint.status === "RESOLVED" || busyId === complaint.id}>
                   {complaint.status === "RESOLVED" ? "Resolved" : busyId === complaint.id ? "…" : "Resolve"}
                 </button>
               </span>
@@ -2906,10 +3001,49 @@ function BookingTimeline({ booking }) {
 }
 
 function Bookings() {
-  const { data, setData, error, loading, reload } = useLoad(api.bookings, mock.bookings);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All");
   const [page, setPage] = useState(1);
+  const [data, setData] = useState([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const reload = () => setReloadKey((k) => k + 1);
+
+  // Search, filter and paging run on the server (GET /admin/bookings), debounced.
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError("");
+    const handle = setTimeout(() => {
+      api.bookings({ query, filter, page: page - 1, size: BOOKINGS_PAGE_SIZE })
+        .then((result) => { if (alive) { setData(result.items); setTotalPages(result.totalPages); } })
+        .catch((err) => { if (alive) { setError(err.message || "Could not load bookings"); setData([]); } })
+        .finally(() => { if (alive) setLoading(false); });
+    }, 200);
+    return () => { alive = false; clearTimeout(handle); };
+  }, [query, filter, page, reloadKey]);
+
+  useEffect(() => {
+    let alive = true;
+    api.bookingStats().then((next) => { if (alive) setStats(next); }).catch(() => {});
+    return () => { alive = false; };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    appRefreshListeners.add(reload);
+    return () => appRefreshListeners.delete(reload);
+  }, []);
+
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      await runAction(() => api.exportBookingList(query, filter), { success: "Bookings exported", failure: "Could not export bookings" });
+    } catch { /* toast shown */ } finally { setExporting(false); }
+  }
   const [openId, setOpenId] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [chat, setChat] = useState({ id: null, messages: null, loading: false });
@@ -2924,22 +3058,23 @@ function Bookings() {
     setConfirm({
       title: `Force-cancel ${booking.ref}?`,
       body: "The booking is voided immediately and both parties are notified.",
+      input: { label: "Reason · logged and sent to both parties", placeholder: "e.g. Provider reported a safety concern at the address." },
       confirmLabel: "Force cancel",
       tone: "danger",
-      onConfirm: async () => {
+      onConfirm: async (reason) => {
         setBusyId(booking.id);
         try {
-          await runAction(() => api.forceCancelBooking(booking.id, "Cancelled by admin"), { success: `${booking.ref} cancelled` });
+          await runAction(() => api.forceCancelBooking(booking.id, reason), { success: `${booking.ref} cancelled` });
           patch(booking.id, { status: "CANCELLED", dispute: false });
         } catch { /* toast shown */ } finally { setBusyId(null); }
       }
     });
   }
 
-  async function resolveDispute(booking, outcome) {
+  async function resolveDispute(booking, outcome, reason) {
     setBusyId(booking.id);
     try {
-      await runAction(() => api.resolveDispute(booking.id, outcome), { success: `Dispute resolved — ${DISPUTE_OUTCOME_LABEL[outcome]}` });
+      await runAction(() => api.resolveDispute(booking.id, outcome, reason), { success: `Dispute resolved — ${DISPUTE_OUTCOME_LABEL[outcome]}` });
       const next = { dispute: false };
       if (outcome === "PAID") next.paymentStatus = "CASH_CONFIRMED";
       else if (outcome === "NO_SHOW") { next.paymentStatus = "UNPAID"; next.status = "NO_SHOW"; }
@@ -2964,41 +3099,33 @@ function Bookings() {
 
   const isActive = (status) => ["PENDING", "ACCEPTED", "ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(status);
 
-  const rows = useMemo(() => {
-    let list = data;
-    if (filter === "Disputes") list = list.filter((row) => row.dispute);
-    else if (filter === "Cancelled") list = list.filter((row) => row.status === "CANCELLED");
-    else if (filter === "No-show") list = list.filter((row) => row.status === "NO_SHOW");
-    else if (filter === "Completed") list = list.filter((row) => row.status === "COMPLETED");
-    const q = query.trim().toLowerCase();
-    if (q) list = list.filter((row) => [row.ref, row.customer, row.provider, row.service].some((value) => String(value).toLowerCase().includes(q)));
-    return list;
-  }, [data, filter, query]);
-
-  const totalPages = Math.max(1, Math.ceil(rows.length / BOOKINGS_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageRows = rows.slice((safePage - 1) * BOOKINGS_PAGE_SIZE, safePage * BOOKINGS_PAGE_SIZE);
-  const disputes = data.filter((row) => row.dispute).length;
-  const inProgress = data.filter((row) => row.status === "IN_PROGRESS" || row.status === "ON_THE_WAY" || row.status === "ARRIVED").length;
-  const completed = data.filter((row) => row.status === "COMPLETED").length;
-  const cancelRate = data.length ? ((data.filter((row) => row.status === "CANCELLED" || row.status === "NO_SHOW").length / data.length) * 100).toFixed(1) : "0.0";
+  const pageRows = data;
+  const disputes = stats?.openDisputes ?? 0;
 
   function changeFilter(next) { setFilter(next); setPage(1); setOpenId(null); }
   function changeQuery(next) { setQuery(next); setPage(1); }
+  function clearFilters() { setQuery(""); setFilter("All"); setPage(1); }
 
   return (
     <section className="page-content">
-      <PageHeader eyebrow="Operations" title="Bookings monitor" right={disputes > 0 ? <Tag tone="danger">{disputes} open dispute</Tag> : null} />
+      <PageHeader eyebrow="Operations" title="Bookings monitor"
+        right={disputes > 0 ? <Tag tone="danger">{disputes} open dispute{disputes === 1 ? "" : "s"}</Tag> : null} />
 
       <StatTiles tiles={[
-        { label: "Total", value: String(data.length), sub: "loaded" },
-        { label: "In progress", value: String(inProgress), sub: "right now" },
-        { label: "Disputes", value: String(disputes), sub: "need review" },
-        { label: "Cancel / no-show", value: `${cancelRate}%`, sub: "of loaded" }
+        { label: "Today", value: String(stats?.today ?? "—"), sub: "bookings" },
+        { label: "In progress", value: String(stats?.inProgress ?? "—"), sub: "right now" },
+        { label: "Disputes", value: String(stats?.openDisputes ?? "—"), sub: "need review" },
+        { label: "Cancel rate", value: stats ? `${Number(stats.cancelRate7d).toFixed(1)}%` : "—", sub: "last 7 days" }
       ]} />
 
       <Toolbar query={query} onQuery={changeQuery} placeholder="Search booking, customer, provider…"
-        filters={filters} activeFilter={filter} onFilter={changeFilter} />
+        filters={filters} activeFilter={filter} onFilter={changeFilter}
+        right={
+          <button className="btn btn-secondary sm" onClick={exportCsv} disabled={exporting}>
+            <Download size={14} /> {exporting ? "Exporting…" : "Export CSV"}
+          </button>
+        } />
       {!can("FINANCE") && (
         <InlineBanner tone="info" title="View only" body="Resolving disputes and force-cancelling bookings needs the Finance permission." />
       )}
@@ -3010,7 +3137,9 @@ function Bookings() {
           </div>
           {loading && <SkeletonRows cols={7} />}
           {error && !loading && <StateBlock variant="error" body={`Could not load bookings: ${error}`} onAction={reload} />}
-          {!loading && !error && pageRows.length === 0 && <StateBlock variant="empty" icon={CalendarCheck} title="No bookings" body="Nothing matches this search or filter." />}
+          {!loading && !error && pageRows.length === 0 && (query || filter !== "All"
+            ? <StateBlock variant="empty" icon={CalendarSearch} title="No bookings match" body="Try a different search term or clear the filters." actionLabel="Clear filters" onAction={clearFilters} />
+            : <StateBlock variant="empty" icon={CalendarCheck} title="No bookings yet" body="Bookings appear here as customers make them." />)}
           {pageRows.map((booking) => (
             <div key={booking.id}>
               <div className="table row bookings-monitor clickable" onClick={() => setOpenId(openId === booking.id ? null : booking.id)}>
@@ -3041,7 +3170,7 @@ function Bookings() {
                     </div>
                   )}
                   <BookingTimeline booking={booking} />
-                  {booking.penaltyApplied && <InlineBanner tone="warn" body="A cancellation / no-show penalty was applied to this booking." />}
+                  {booking.penaltyApplied && <InlineBanner tone="warn" body={penaltyFlag(booking)} />}
                   {booking.rejectionReason && <InlineBanner tone="warn" title="Provider rejected" body={booking.rejectionReason} />}
                   {booking.dispute && !resolved[booking.id] && <InlineBanner tone="danger" title="Payment disputed" body="Customer reports the cash payment was not made. Commission is withheld until resolved." />}
                   {resolved[booking.id] && <InlineBanner tone="success" title={`Resolved · ${resolved[booking.id]}`} body="Both parties were notified and the audit log was updated." />}
@@ -3084,11 +3213,19 @@ function Bookings() {
           booking={disputeFor}
           busy={busyId === disputeFor.id}
           onClose={() => setDisputeFor(null)}
-          onResolve={(outcome) => resolveDispute(disputeFor, outcome)}
+          onResolve={(outcome, reason) => resolveDispute(disputeFor, outcome, reason)}
         />
       )}
     </section>
   );
+}
+
+/** Kit flag copy: "Provider cancelled — penalty applied". */
+function penaltyFlag(booking) {
+  const who = booking.status === "NO_SHOW" ? "No-show" : booking.cancelledBy
+    ? `${String(booking.cancelledBy).charAt(0)}${String(booking.cancelledBy).slice(1).toLowerCase()} cancelled`
+    : "Cancelled";
+  return `${who} — penalty applied`;
 }
 
 const DISPUTE_OUTCOME_LABEL = { PAID: "paid", UNPAID: "unpaid", NO_SHOW: "no-show", CANCEL: "cancelled" };
@@ -3114,12 +3251,8 @@ function DisputeResolutionSheet({ booking, busy, onClose, onResolve }) {
     return () => { alive = false; };
   }, [tab, chat, booking.id]);
 
-  const history = [
-    { label: "Booking created", when: booking.date },
-    { label: "Provider accepted", when: booking.date },
-    { label: "Service completed", when: "on completion" },
-    { label: "Payment disputed", when: "reported by customer" }
-  ];
+  const [reason, setReason] = useState("");
+  const needsReason = picked === "CANCEL";
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -3153,16 +3286,7 @@ function DisputeResolutionSheet({ booking, busy, onClose, onResolve }) {
             ))}
           </div>
         )}
-        {tab === "history" && (
-          <div className="dispute-timeline">
-            {history.map((h) => (
-              <div className="dispute-tl-row" key={h.label}>
-                <span className="dot" />
-                <div><strong>{h.label}</strong><span className="dim">{h.when}</span></div>
-              </div>
-            ))}
-          </div>
-        )}
+        {tab === "history" && <BookingTimeline booking={booking} />}
 
         <div className="field-label">Resolution</div>
         <div className="dispute-outcomes">
@@ -3180,9 +3304,18 @@ function DisputeResolutionSheet({ booking, busy, onClose, onResolve }) {
           })}
         </div>
 
+        {needsReason && (
+          <label className="field-label" style={{ display: "grid", gap: 6 }}>
+            Cancellation reason · logged and sent to both parties
+            <textarea className="field-note" rows={3} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Neither party can confirm the visit took place." />
+          </label>
+        )}
+
         <div className="modal-actions">
           <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" disabled={!picked || busy} onClick={() => onResolve(picked)}>
+          <button className="btn btn-primary" disabled={!picked || busy || (needsReason && !reason.trim())}
+            onClick={() => onResolve(picked, needsReason ? reason.trim() : undefined)}>
             <Check size={15} /> {busy ? "Resolving…" : "Confirm resolution"}
           </button>
         </div>
@@ -3317,9 +3450,10 @@ function Reviews() {
       {!loading && !error && rows.length === 0 && (
         <StateBlock
           variant="empty"
-          icon={isReported ? BadgeCheck : Star}
-          title={isReported ? "Nothing reported" : "No reviews"}
-          body={isReported ? "There are no reported reviews waiting for a decision." : "Nothing matches this search."}
+          icon={isReported && !query ? ShieldCheck : Star}
+          tone={isReported && !query ? "gold" : undefined}
+          title={isReported && !query ? "Queue is clear" : query ? "No matches" : "No reviews"}
+          body={isReported && !query ? "Every reported review has been handled. New reports appear here automatically." : "Nothing matches this search."}
         />
       )}
 
@@ -3657,6 +3791,24 @@ function money(value) {
   return n === 0 ? "—" : `EGP ${n.toFixed(2)}`;
 }
 
+/** Kit ConfirmSheet "Suspend {provider}?" (Settlements row + settlement detail). */
+function confirmSuspendProvider(providerId, name, onDone) {
+  setConfirm({
+    tone: "danger",
+    icon: Ban,
+    eyebrow: "Provider account",
+    title: `Suspend ${name}?`,
+    body: "They're immediately hidden from search and can't accept new bookings. Existing accepted jobs can still be completed. This can be reversed from Users & providers.",
+    confirmLabel: "Suspend account",
+    onConfirm: async () => {
+      try {
+        await runAction(() => api.suspendProvider(providerId), { success: `${name} suspended` });
+        onDone && onDone();
+      } catch { /* toast shown */ }
+    }
+  });
+}
+
 function Settlements() {
   const [overview, setOverview] = useState(null);
   const [rows, setRows] = useState([]);
@@ -3761,7 +3913,15 @@ function Settlements() {
                   {row.paymentReportedAt && <span className="chip-mini gold" style={{ marginLeft: 6 }} title={`Reported ${formatWhen(row.paymentReportedAt)}`}>Payment reported</span>}
                 </span>
                 <span className="dim">{row.dueDate ? formatWhen(row.dueDate) : "—"}</span>
-                <span className="cell-end" onClick={(e) => e.stopPropagation()}>
+                <span className="cell-end" onClick={(e) => e.stopPropagation()} style={{ gap: 6 }}>
+                  {row.accountSuspended
+                    ? <Tag tone="danger">Suspended</Tag>
+                    : can("SUPPORT") && (
+                      <button className="circle-button sm" aria-label={`Suspend ${row.providerName}`} title="Suspend provider"
+                        onClick={() => confirmSuspendProvider(row.providerId, row.providerName, () => setReloadKey((k) => k + 1))}>
+                        <Ban size={14} />
+                      </button>
+                    )}
                   {row.status === "OVERDUE" && can("FINANCE")
                     ? <button className="btn btn-danger sm" disabled={busyId === row.providerId} onClick={() => remind(row)}>
                         {busyId === row.providerId ? "Sending…" : "Send reminder"}
@@ -3951,7 +4111,12 @@ function CommissionRateCard({ onSaved }) {
 
   async function save() {
     const num = Number(value);
-    if (Number.isNaN(num) || num < 0 || num > 100) { toast("Enter a rate between 0 and 100.", "error"); return; }
+    // Kit rule 0 < n ≤ 50; anything else reverts to the saved rate.
+    if (value === "" || Number.isNaN(num) || num <= 0 || num > 50) {
+      toast("Enter a rate above 0 and up to 50%.", "error");
+      setValue(String(percent ?? ""));
+      return;
+    }
     setSaving(true);
     try {
       const r = await api.setCommission(num);
@@ -3967,12 +4132,14 @@ function CommissionRateCard({ onSaved }) {
     <article className="panel settle-rate">
       <div className="settle-rate-head">
         <p className="eyebrow">Commission rate</p>
-        {!editing && can("FINANCE") && <button className="circle-button sm" aria-label="Edit commission rate" onClick={() => setEditing(true)}><Settings size={14} /></button>}
+        {!editing && can("FINANCE") && <button className="circle-button sm" aria-label="Edit commission rate" onClick={() => setEditing(true)}><Pencil size={14} /></button>}
       </div>
       {editing ? (
         <div className="settle-rate-edit">
           <div className="pct-field">
-            <input type="number" min="0" max="100" step="0.5" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Commission percent" />
+            <input type="number" min="0.5" max="50" step="0.5" value={value} autoFocus onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { setEditing(false); setValue(String(percent ?? "")); } }}
+              aria-label="Commission percent" />
             <span>%</span>
           </div>
           <button className="btn btn-primary sm" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
@@ -4006,6 +4173,7 @@ function SettlementDetail({ providerId, onBack, onChanged }) {
   }, [providerId, reloadKey]);
 
   const refresh = () => { setReloadKey((k) => k + 1); onChanged && onChanged(); };
+  const [paidOut, setPaidOut] = useState(false);
 
   function confirmPayout() {
     setConfirm({
@@ -4017,20 +4185,32 @@ function SettlementDetail({ providerId, onBack, onChanged }) {
         setBusy(true);
         try {
           await runAction(() => api.confirmPayout(providerId), { success: "Payout confirmed" });
+          setPaidOut(true);
           refresh();
         } catch { /* toast */ } finally { setBusy(false); }
       }
     });
   }
 
-  async function toggleBookingPause() {
+  function toggleBookingPause() {
     const paused = detail?.settlementPaused;
-    setBusy(true);
-    try {
-      await runAction(() => api.setSettlementPause(providerId, !paused),
-        { success: paused ? "New bookings resumed" : "New bookings paused" });
-      refresh();
-    } catch { /* toast */ } finally { setBusy(false); }
+    setConfirm({
+      tone: paused ? "plum" : "danger",
+      eyebrow: "New bookings",
+      title: paused ? `Resume bookings for ${detail?.providerName}?` : `Pause new bookings for ${detail?.providerName}?`,
+      body: paused
+        ? "They can receive new bookings again straight away."
+        : "They stay listed but can't take new bookings until the balance is settled. Existing jobs continue.",
+      confirmLabel: paused ? "Resume bookings" : "Pause bookings",
+      onConfirm: async () => {
+        setBusy(true);
+        try {
+          await runAction(() => api.setSettlementPause(providerId, !paused),
+            { success: paused ? "New bookings resumed" : "New bookings paused" });
+          refresh();
+        } catch { /* toast */ } finally { setBusy(false); }
+      }
+    });
   }
 
   async function remind() {
@@ -4040,7 +4220,8 @@ function SettlementDetail({ providerId, onBack, onChanged }) {
     } catch { /* toast */ } finally { setBusy(false); }
   }
 
-  const info = SETTLEMENT_STATUS[detail?.status] || SETTLEMENT_STATUS.WITHIN_LIMIT;
+  const settled = paidOut || (detail && Number(detail.totalOwed) <= 0 && detail.status === "SETTLED");
+  const info = SETTLEMENT_STATUS[settled ? "SETTLED" : detail?.status] || SETTLEMENT_STATUS.WITHIN_LIMIT;
 
   return (
     <section className="page-content">
@@ -4098,9 +4279,13 @@ function SettlementDetail({ providerId, onBack, onChanged }) {
               <strong className="detail-figure" style={{ marginBottom: 14 }}>{money(detail.totalOwed)}</strong>
               {can("FINANCE") ? (
                 <>
-                  <button className="btn btn-primary full" disabled={busy || Number(detail.totalOwed) <= 0} onClick={confirmPayout}>
-                    <Banknote size={15} /> Confirm payout received
-                  </button>
+                  {settled ? (
+                    <p className="settle-confirmed"><CheckCircle2 size={16} /> Settlement confirmed</p>
+                  ) : (
+                    <button className="btn btn-primary full" disabled={busy || Number(detail.totalOwed) <= 0} onClick={confirmPayout}>
+                      <Banknote size={15} /> Confirm payout received
+                    </button>
+                  )}
                   <button className="btn btn-ghost full" disabled={busy} onClick={remind} style={{ marginTop: 8 }}>Send reminder</button>
                   <div className="hr" />
                   <p className="eyebrow">New bookings</p>
@@ -4109,12 +4294,26 @@ function SettlementDetail({ providerId, onBack, onChanged }) {
                       ? "This provider is not receiving new bookings until their balance is settled."
                       : "Pause new bookings until the balance is settled. The account itself stays active — deactivate it from the provider's profile."}
                   </p>
-                  <button className={`btn full ${detail.settlementPaused ? "btn-primary" : "btn-danger"}`} disabled={busy} onClick={toggleBookingPause}>
-                    <Ban size={15} /> {detail.settlementPaused ? "Resume new bookings" : "Pause new bookings"}
+                  <button className={`btn full ${detail.settlementPaused ? "btn-primary" : "btn-secondary"}`} disabled={busy} onClick={toggleBookingPause}>
+                    {detail.settlementPaused ? "Resume new bookings" : "Pause new bookings"}
                   </button>
                 </>
               ) : (
                 <ReadOnlyNote need="FINANCE" />
+              )}
+              {can("SUPPORT") && (
+                <>
+                  <div className="hr" />
+                  <p className="eyebrow">Provider account</p>
+                  {detail.accountSuspended ? (
+                    <InlineBanner tone="danger" title="Account suspended" body="Hidden from search, can't accept new bookings." />
+                  ) : (
+                    <button className="btn btn-danger full" disabled={busy}
+                      onClick={() => confirmSuspendProvider(detail.providerId, detail.providerName, refresh)}>
+                      <Ban size={15} /> Suspend account
+                    </button>
+                  )}
+                </>
               )}
             </article>
             </div>
@@ -4181,8 +4380,10 @@ function AuditLog() {
           {loading && <SkeletonRows cols={5} />}
           {error && !loading && <StateBlock variant="error" body={error} />}
           {!loading && !error && items.length === 0 && (
-            <StateBlock variant="empty" icon={FileSearch} title="No audit entries yet"
-              body="Privileged admin actions — approvals, suspensions, settlements, moderation, review hides — are recorded here as they happen." />
+            query
+              ? <StateBlock variant="empty" icon={FileSearch} title="No entries match" body="Try a different search term." />
+              : <StateBlock variant="empty" icon={FileSearch} title="No audit entries yet"
+                  body="Privileged admin actions — approvals, suspensions, settlements, moderation, review hides — are recorded here as they happen." />
           )}
           {!loading && !error && items.map((entry) => (
             <div className="table row audit" key={entry.id}>
@@ -4307,11 +4508,12 @@ export function TermsEditorPanel() {
       title: `Publish ${who} terms v${nextVersion}?`,
       body: `It becomes the live ${who} version and every ${who} is asked to re-accept the next time they open the app.`
         + (draftAr.trim() ? "" : " There is no Arabic text, so Arabic users will see the English version."),
+      input: { label: "What changed · shown in the version history", placeholder: "e.g. Provider cancel penalties, home-service safety" },
       confirmLabel: "Publish & notify",
       tone: "plum",
-      onConfirm: async () => {
+      onConfirm: async (changeNote) => {
         try {
-          await runAction(() => api.publishTerms(nextVersion, draft, type, draftAr), { success: `${who} terms v${nextVersion} published` });
+          await runAction(() => api.publishTerms(nextVersion, draft, type, draftAr, changeNote), { success: `${who} terms v${nextVersion} published` });
           writeDraft(type, null);
           load(type);
         } catch { /* toast */ }
@@ -4373,9 +4575,10 @@ export function TermsEditorPanel() {
               <span className="mono">v{v.version}</span>
               {v.active && <Tag tone="success">Live</Tag>}
             </div>
-            <p className="version-note">{v.contentEn}</p>
-            {v.contentAr && <p className="version-note" dir="rtl" lang="ar">{v.contentAr}</p>}
-            <span className="dim">{v.createdAt ? formatWhen(v.createdAt) : ""}{v.contentAr ? "" : " · English only"}</span>
+            <p className="version-note">{v.changeNote || "No change note"}</p>
+            <span className="dim">
+              {[v.createdAt ? formatWhen(v.createdAt) : "", v.publishedBy, v.contentAr ? "" : "English only"].filter(Boolean).join(" · ")}
+            </span>
           </div>
         ))}
       </article>

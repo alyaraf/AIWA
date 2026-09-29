@@ -101,7 +101,7 @@ describe("api.js — normalizeBooking", () => {
       }
     }));
 
-    const bookings = await api.bookings();
+    const { items: bookings } = await api.bookings();
     expect(bookings[0].travelFee).toBe(150.0);
     expect(bookings[0].amount).toBe(330.0);
     expect(bookings[0].homeService).toBe(true);
@@ -120,7 +120,7 @@ describe("api.js — normalizeBooking", () => {
       }
     }));
 
-    const bookings = await api.bookings();
+    const { items: bookings } = await api.bookings();
     expect(bookings[0].travelFee).toBeNull();
     expect(bookings[0].homeService).toBe(false);
   });
@@ -137,7 +137,7 @@ describe("api.js — normalizeBooking", () => {
       }
     }));
 
-    const [b] = await api.bookings();
+    const { items: [b] } = await api.bookings();
     expect(b.dispute).toBe(true);
   });
 
@@ -153,7 +153,7 @@ describe("api.js — normalizeBooking", () => {
       }
     }));
 
-    const [b] = await api.bookings();
+    const { items: [b] } = await api.bookings();
     expect(b.ref).toBe("BK-555");
   });
 });

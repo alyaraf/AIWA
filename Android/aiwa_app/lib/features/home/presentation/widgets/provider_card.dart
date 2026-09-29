@@ -270,6 +270,8 @@ class CoverImage extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: ApiConstants.mediaUrl(url!),
       fit: BoxFit.cover,
+      // Decode at screen size, not the 12 MP original (FE-34).
+      memCacheWidth: (MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context)).round(),
       placeholder: (_, __) => placeholder,
       errorWidget: (_, __, ___) => placeholder,
     );

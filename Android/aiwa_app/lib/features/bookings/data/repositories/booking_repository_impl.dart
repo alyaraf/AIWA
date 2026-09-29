@@ -23,6 +23,7 @@ class BookingRepositoryImpl implements BookingRepository {
     bool homeService = false,
     String? savedAddressId,
     String? customerNote,
+    String? idempotencyKey,
   }) async {
     try {
       final result = await _remote.createBooking(
@@ -35,6 +36,7 @@ class BookingRepositoryImpl implements BookingRepository {
         homeService: homeService,
         savedAddressId: savedAddressId,
         customerNote: customerNote,
+        idempotencyKey: idempotencyKey,
       );
       return Right(result);
     } on ServerException catch (e) {

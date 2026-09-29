@@ -17,6 +17,7 @@ class CreateBookingUseCase {
     bool homeService = false,
     String? savedAddressId,
     String? customerNote,
+    String? idempotencyKey,
   }) => _repository.createBooking(
     providerId: providerId,
     serviceId: serviceId,
@@ -27,5 +28,6 @@ class CreateBookingUseCase {
     homeService: homeService,
     savedAddressId: savedAddressId,
     customerNote: customerNote,
+    idempotencyKey: idempotencyKey,
   );
 }

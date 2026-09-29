@@ -140,7 +140,10 @@ public class PlatformSettingsServiceImpl {
 
     @Transactional
     public PlatformSettings updateCommissionPercent(BigDecimal percent) {
-        validateCommissionPercent(percent);
+        // Platform rate: 0 < n ≤ 50 (kit rule). Per-provider overrides keep 0–100.
+        if (percent == null || percent.signum() <= 0 || percent.compareTo(BigDecimal.valueOf(50)) > 0) {
+            throw new BusinessException("Commission percent must be above 0 and at most 50");
+        }
         PlatformSettings settings = getOrCreate();
         settings.setCommissionPercent(percent);
         return repo.save(settings);

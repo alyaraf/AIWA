@@ -1946,18 +1946,6 @@ abstract class AppLocalizations {
   /// **'The provider'**
   String get outcomeTheProvider;
 
-  /// No description provided for @outcomeThreeNearbyTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Three providers nearby are free at the same time'**
-  String get outcomeThreeNearbyTitle;
-
-  /// No description provided for @outcomeThreeNearbyBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Same category, similar rating, all within your radius.'**
-  String get outcomeThreeNearbyBody;
-
   /// No description provided for @outcomeSeeAlternatives.
   ///
   /// In en, this message translates to:
@@ -2207,8 +2195,8 @@ abstract class AppLocalizations {
   /// No description provided for @paidCommission.
   ///
   /// In en, this message translates to:
-  /// **'AIWA commission (15%) · added to ledger'**
-  String get paidCommission;
+  /// **'AIWA commission ({percent}%) · added to ledger'**
+  String paidCommission(String percent);
 
   /// No description provided for @paidBookingStatus.
   ///
@@ -2573,13 +2561,13 @@ abstract class AppLocalizations {
   /// No description provided for @trackSafetyTitle.
   ///
   /// In en, this message translates to:
-  /// **'Live location + ID shared'**
+  /// **'SOS is one tap away'**
   String get trackSafetyTitle;
 
   /// No description provided for @trackSafetySub.
   ///
   /// In en, this message translates to:
-  /// **'Identity confirmed both ways. A trusted contact can follow along too.'**
+  /// **'SOS alerts AIWA support and texts your trusted contacts.'**
   String get trackSafetySub;
 
   /// No description provided for @trackSos.
@@ -5624,54 +5612,6 @@ abstract class AppLocalizations {
   /// **'Upload from files instead'**
   String get permCamDeny;
 
-  /// No description provided for @permContEyebrow.
-  ///
-  /// In en, this message translates to:
-  /// **'Safety feature'**
-  String get permContEyebrow;
-
-  /// No description provided for @permContTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Add a trusted contact.'**
-  String get permContTitle;
-
-  /// No description provided for @permContBody.
-  ///
-  /// In en, this message translates to:
-  /// **'If you ever press SOS during a home service, we alert this person instantly with your live location.'**
-  String get permContBody;
-
-  /// No description provided for @permContP1.
-  ///
-  /// In en, this message translates to:
-  /// **'Only contacted if you trigger SOS'**
-  String get permContP1;
-
-  /// No description provided for @permContP2.
-  ///
-  /// In en, this message translates to:
-  /// **'You choose exactly who'**
-  String get permContP2;
-
-  /// No description provided for @permContP3.
-  ///
-  /// In en, this message translates to:
-  /// **'Change or remove them any time'**
-  String get permContP3;
-
-  /// No description provided for @permContAllow.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose a contact'**
-  String get permContAllow;
-
-  /// No description provided for @permContDeny.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter manually'**
-  String get permContDeny;
-
   /// No description provided for @permDeniedCamTitle.
   ///
   /// In en, this message translates to:
@@ -5965,6 +5905,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'It may have been cancelled, removed, or the link is out of date.'**
   String get sysNotFoundBody;
+
+  /// No description provided for @trackReschedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Reschedule'**
+  String get trackReschedule;
+
+  /// No description provided for @rescheduleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a new time.'**
+  String get rescheduleTitle;
+
+  /// No description provided for @rescheduleBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is free at these times on {date}.'**
+  String rescheduleBody(String name, String date);
+
+  /// No description provided for @rescheduleNoSlots.
+  ///
+  /// In en, this message translates to:
+  /// **'No free times that day. Try another date.'**
+  String get rescheduleNoSlots;
+
+  /// No description provided for @rescheduledToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved to {time}'**
+  String rescheduledToast(String time);
+
+  /// No description provided for @reportsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My reports'**
+  String get reportsTitle;
+
+  /// No description provided for @reportsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'You haven\'t reported anything.'**
+  String get reportsEmpty;
+
+  /// No description provided for @reportsResolution.
+  ///
+  /// In en, this message translates to:
+  /// **'AIWA: {note}'**
+  String reportsResolution(String note);
+
+  /// No description provided for @reportStatusOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get reportStatusOpen;
+
+  /// No description provided for @reportStatusReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Under review'**
+  String get reportStatusReview;
+
+  /// No description provided for @reportStatusResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get reportStatusResolved;
+
+  /// No description provided for @staffEditDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit details'**
+  String get staffEditDetails;
+
+  /// No description provided for @staffServicesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Does these services (none picked = all)'**
+  String get staffServicesHint;
+
+  /// No description provided for @staffSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff member updated.'**
+  String get staffSaved;
+
+  /// No description provided for @staffDeactivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from bookings'**
+  String get staffDeactivate;
+
+  /// No description provided for @staffDeactivated.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff member deactivated.'**
+  String get staffDeactivated;
 }
 
 class _AppLocalizationsDelegate

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/telemetry.dart';
@@ -15,6 +17,12 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
   int _page = 0;
   String? _filterStatus;
 
+  /// One Idempotency-Key per booking attempt: a retry of the same request
+  /// (e.g. after a timeout) reuses it, so the backend returns the first
+  /// booking instead of creating a second one.
+  BookingCreateEvent? _attempt;
+  String _attemptKey = '';
+
   BookingBloc({
     required this.createBooking,
     required this.getMyBookings,
@@ -24,7 +32,6 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     on<BookingLoadMyEvent>(_onLoadMy);
     on<BookingLoadMoreEvent>(_onLoadMore);
     on<BookingCancelEvent>(_onCancel);
-    on<BookingRescheduleEvent>(_onReschedule);
   }
 
   Future<void> _onCreate(
@@ -32,6 +39,13 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     Emitter<BookingState> emit,
   ) async {
     emit(BookingLoading());
+    if (event != _attempt) {
+      _attempt = event;
+      _attemptKey = List.generate(
+        16,
+        (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+      ).join();
+    }
     final result = await createBooking(
       providerId: event.providerId,
       serviceId: event.serviceId,
@@ -42,10 +56,12 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
       homeService: event.homeService,
       savedAddressId: event.savedAddressId,
       customerNote: event.customerNote,
+      idempotencyKey: _attemptKey,
     );
     result.fold(
       (f) => emit(BookingError(f.message, slotTaken: isSlotTaken(f))),
       (booking) {
+        _attempt = null;
         trackFunnel('book', bookingId: booking.id);
         emit(BookingCreated(booking));
       },
@@ -101,15 +117,6 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
       (f) => emit(BookingError(f.message)),
       (booking) => emit(BookingCancelled(booking)),
     );
-  }
-
-  Future<void> _onReschedule(
-    BookingRescheduleEvent event,
-    Emitter<BookingState> emit,
-  ) async {
-    // Reschedule via repository directly when needed
-    emit(BookingLoading());
-    emit(const BookingError('Rescheduling isn’t supported yet.'));
   }
 }
 

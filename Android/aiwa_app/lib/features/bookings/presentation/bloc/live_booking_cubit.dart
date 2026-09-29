@@ -107,6 +107,14 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
   Future<bool> cancel(String reason) =>
       _act(() => _repo.cancelBooking(bookingId, reason: reason));
 
+  Future<bool> reschedule(String date, String time) => _act(
+    () => _repo.rescheduleBooking(
+      bookingId: bookingId,
+      newDate: date,
+      newTime: time,
+    ),
+  );
+
   Future<bool> checkIn() => _act(() => _repo.checkIn(bookingId));
 
   Future<bool> respondToProposal(bool accept) =>

@@ -120,6 +120,16 @@ public class VerificationController {
         return ResponseEntity.ok(ApiResponse.Success.of("Information requested from provider", null));
     }
 
+    @PatchMapping("/admin/verification/{providerId}/note")
+    @PreAuthorize(Perms.SUPPORT)
+    @Operation(summary = "Save the admin-only internal note on a verification case (ADMIN · Support)")
+    public ResponseEntity<ApiResponse.Success<Void>> saveNote(
+            @PathVariable Long providerId,
+            @RequestBody java.util.Map<String, String> body) {
+        verificationService.saveNote(providerId, body.get("note"));
+        return ResponseEntity.ok(ApiResponse.Success.of("Note saved", null));
+    }
+
     @PostMapping("/admin/verification/{providerId}/suspend")
     @PreAuthorize(Perms.SUPPORT)
     @Operation(summary = "Suspend a provider (ADMIN · Support)")

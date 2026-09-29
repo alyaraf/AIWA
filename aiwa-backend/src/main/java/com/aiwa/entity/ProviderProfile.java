@@ -102,6 +102,10 @@ public class ProviderProfile extends BaseEntity {
     /** Admin rejection reason if verificationStatus = REJECTED */
     private String rejectionReason;
 
+    /** Admin-only note on the verification case; never shown to the provider. */
+    @Column(length = 2000)
+    private String verificationNote;
+
     /** When an admin last approved this provider (the "Verified since" badge). */
     private java.time.LocalDateTime verifiedAt;
 

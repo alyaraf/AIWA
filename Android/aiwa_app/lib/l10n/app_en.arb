@@ -591,8 +591,6 @@
     }
   },
   "outcomeTheProvider": "The provider",
-  "outcomeThreeNearbyTitle": "Three providers nearby are free at the same time",
-  "outcomeThreeNearbyBody": "Same category, similar rating, all within your radius.",
   "outcomeSeeAlternatives": "See alternative providers",
   "outcomeBackToBookings": "Back to bookings",
   "rejectedEyebrow": "Booking rejected",
@@ -697,7 +695,7 @@
   "paidTitle": "Payment confirmed",
   "paidSub": "Receipt sent to your email",
   "paidCashCollected": "Cash collected",
-  "paidCommission": "AIWA commission (15%) · added to ledger",
+  "paidCommission": "AIWA commission ({percent}%) · added to ledger",
   "paidBookingStatus": "Booking status",
   "statusCompleted": "Completed",
   "complaintBehavior": "Provider behavior",
@@ -779,8 +777,8 @@
   "trackCancelBooking": "Cancel booking",
   "trackReportProblem": "Report a problem",
   "trackTracking": "Tracking",
-  "trackSafetyTitle": "Live location + ID shared",
-  "trackSafetySub": "Identity confirmed both ways. A trusted contact can follow along too.",
+  "trackSafetyTitle": "SOS is one tap away",
+  "trackSafetySub": "SOS alerts AIWA support and texts your trusted contacts.",
   "trackSos": "SOS — alert a trusted contact & AIWA",
   "trackSosAlerting": "Alerting your trusted contact and AIWA support…",
   "trackSosNotified": "{bold} A trusted contact was alerted with your live location. Stay safe — a specialist may call shortly.",
@@ -1663,14 +1661,6 @@
   "permCamP3": "Never shown on your public profile",
   "permCamAllow": "Open camera",
   "permCamDeny": "Upload from files instead",
-  "permContEyebrow": "Safety feature",
-  "permContTitle": "Add a trusted contact.",
-  "permContBody": "If you ever press SOS during a home service, we alert this person instantly with your live location.",
-  "permContP1": "Only contacted if you trigger SOS",
-  "permContP2": "You choose exactly who",
-  "permContP3": "Change or remove them any time",
-  "permContAllow": "Choose a contact",
-  "permContDeny": "Enter manually",
   "permDeniedCamTitle": "Camera access is off.",
   "permDeniedCamBody": "Verification needs a live selfie. Enable the camera in Settings, or upload photos from your files.",
   "permDeniedCamFallback": "Upload from files",
@@ -1740,5 +1730,52 @@
   "sysGoBack": "Go back",
   "sysNotFound": "Not found",
   "sysNotFoundTitle": "This page isn't available.",
-  "sysNotFoundBody": "It may have been cancelled, removed, or the link is out of date."
+  "sysNotFoundBody": "It may have been cancelled, removed, or the link is out of date.",
+  "trackReschedule": "Reschedule",
+  "rescheduleTitle": "Pick a new time.",
+  "rescheduleBody": "{name} is free at these times on {date}.",
+  "@rescheduleBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "rescheduleNoSlots": "No free times that day. Try another date.",
+  "rescheduledToast": "Moved to {time}",
+  "@rescheduledToast": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "@paidCommission": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "reportsTitle": "My reports",
+  "reportsEmpty": "You haven't reported anything.",
+  "reportsResolution": "AIWA: {note}",
+  "@reportsResolution": {
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "reportStatusOpen": "Received",
+  "reportStatusReview": "Under review",
+  "reportStatusResolved": "Resolved",
+  "staffEditDetails": "Edit details",
+  "staffServicesHint": "Does these services (none picked = all)",
+  "staffSaved": "Staff member updated.",
+  "staffDeactivate": "Remove from bookings",
+  "staffDeactivated": "Staff member deactivated."
 }

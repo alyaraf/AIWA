@@ -313,6 +313,7 @@ public class ProviderServiceImpl implements ProviderService {
                         .toList())
                 .startingPrice(summary.getStartingPrice())
                 .openNow(summary.getOpenNow())
+                .busyNow(summary.getBusyNow())
                 .distanceKm(summary.getDistanceKm())
                 .build();
     }

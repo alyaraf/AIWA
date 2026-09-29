@@ -18,9 +18,29 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Page<Booking> findByCustomerIdOrderByCreatedAtDesc(Long customerId, Pageable pageable);
 
-    Page<Booking> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
-    Page<Booking> findByStatusOrderByCreatedAtDesc(BookingStatus status, Pageable pageable);
+    /** Admin bookings monitor: status / dispute filter + free-text search, server-side paged.
+     *  [pattern] is a lower-case LIKE pattern ("%" = no search). */
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE (:status IS NULL OR b.status = :status)
+              AND (:disputed = false OR b.paymentStatus = com.aiwa.enums.PaymentStatus.DISPUTED)
+              AND (:pattern = '%'
+                   OR LOWER(b.customer.fullName) LIKE :pattern
+                   OR LOWER(b.provider.businessName) LIKE :pattern
+                   OR LOWER(b.service.name) LIKE :pattern
+                   OR CAST(b.id AS String) LIKE :pattern)
+            ORDER BY b.createdAt DESC
+            """)
+    Page<Booking> adminSearch(@Param("status") BookingStatus status,
+                              @Param("disputed") boolean disputed,
+                              @Param("pattern") String pattern,
+                              Pageable pageable);
+
+    long countByStatusIn(java.util.Collection<BookingStatus> statuses);
+
+    long countByStatusInAndCreatedAtBetween(java.util.Collection<BookingStatus> statuses,
+                                            java.time.LocalDateTime from, java.time.LocalDateTime to);
 
     Page<Booking> findByProviderIdOrderByBookingDateAscStartTimeAsc(Long providerId, Pageable pageable);
 
@@ -152,6 +172,13 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     @Query("SELECT COALESCE(SUM(b.totalPrice), 0) FROM Booking b WHERE b.status = :status")
     java.math.BigDecimal sumRevenueByStatus(@Param("status") BookingStatus status);
+
+    /** GMV of bookings in a status created in [from, to) — dashboard 30-day tile. */
+    @Query("SELECT COALESCE(SUM(b.totalPrice), 0) FROM Booking b WHERE b.status = :status "
+            + "AND b.createdAt >= :from AND b.createdAt < :to")
+    java.math.BigDecimal sumRevenueByStatusBetween(@Param("status") BookingStatus status,
+                                                   @Param("from") java.time.LocalDateTime from,
+                                                   @Param("to") java.time.LocalDateTime to);
 
     /** Daily booking counts by status, for the dashboard chart. Returns [bookingDate, status, count]. */
     @Query("""

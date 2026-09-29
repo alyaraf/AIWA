@@ -88,6 +88,12 @@ public class AdminController {
         dto.setNewCustomersLast30Days(userRepo.countByRoleAndCreatedAtBetween(UserRole.CUSTOMER, now.minusDays(30), now));
         dto.setNewCustomersPrevious30Days(userRepo.countByRoleAndCreatedAtBetween(
                 UserRole.CUSTOMER, now.minusDays(60), now.minusDays(30)));
+        dto.setHighPriorityComplaints(complaintRepo.countHighPriorityByStatus(ComplaintStatus.OPEN));
+        dto.setProvidersVerifiedLast30Days(providerRepo.countByVerificationStatusAndVerifiedAtAfter(
+                VerificationStatus.APPROVED, now.minusDays(30)));
+        dto.setRevenueLast30Days(bookingRepo.sumRevenueByStatusBetween(BookingStatus.COMPLETED, now.minusDays(30), now));
+        dto.setRevenuePrevious30Days(bookingRepo.sumRevenueByStatusBetween(
+                BookingStatus.COMPLETED, now.minusDays(60), now.minusDays(30)));
 
         return ResponseEntity.ok(ApiResponse.Success.of(dto));
     }
@@ -97,15 +103,63 @@ public class AdminController {
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.BookingDto>>> bookings(
             @RequestParam(required = false) BookingStatus status,
+            @RequestParam(defaultValue = "false") boolean disputed,
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Booking> bookings = status != null
-                ? bookingRepo.findByStatusOrderByCreatedAtDesc(status, pageable)
-                : bookingRepo.findAllByOrderByCreatedAtDesc(pageable);
+        Pageable pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
+        Page<Booking> bookings = bookingRepo.adminSearch(status, disputed, searchPattern(query), pageable);
         // Materialise DTOs inside the transaction — open-in-view is off.
         List<ApiResponse.BookingDto> dtos = bookings.getContent().stream().map(this::toBookingDto).toList();
         return ResponseEntity.ok(ApiResponse.Success.of(new PageImpl<>(dtos, pageable, bookings.getTotalElements())));
+    }
+
+    @GetMapping(value = "/bookings/export", produces = "text/csv")
+    @Operation(summary = "Export the filtered bookings list as CSV (ADMIN)")
+    @Transactional(readOnly = true)
+    public ResponseEntity<String> exportBookings(
+            @RequestParam(required = false) BookingStatus status,
+            @RequestParam(defaultValue = "false") boolean disputed,
+            @RequestParam(required = false) String query) {
+        StringBuilder csv = new StringBuilder("ref,customer,provider,service,date,start,amount,status,payment\n");
+        // ponytail: capped at 10k rows; stream with a cursor if exports ever outgrow that.
+        bookingRepo.adminSearch(status, disputed, searchPattern(query), PageRequest.of(0, 10_000))
+                .forEach(b -> csv.append("BK-").append(b.getId()).append(',')
+                        .append(AuditController.cell(b.getCustomer() != null ? b.getCustomer().getFullName() : "")).append(',')
+                        .append(AuditController.cell(b.getProvider() != null ? b.getProvider().getBusinessName() : "")).append(',')
+                        .append(AuditController.cell(b.getService() != null ? b.getService().getName() : "")).append(',')
+                        .append(b.getBookingDate()).append(',')
+                        .append(b.getStartTime()).append(',')
+                        .append(b.getTotalPrice()).append(',')
+                        .append(b.getStatus()).append(',')
+                        .append(b.getPaymentStatus()).append('\n'));
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=aiwa-bookings.csv")
+                .body(csv.toString());
+    }
+
+    /** Monitor tiles: today, in progress now, open disputes, 7-day cancel + no-show rate. */
+    @GetMapping("/bookings/stats")
+    @Operation(summary = "Bookings monitor stat tiles (ADMIN)")
+    public ResponseEntity<ApiResponse.Success<java.util.Map<String, Object>>> bookingStats() {
+        java.time.LocalDateTime now = com.aiwa.util.AiwaTime.now();
+        long week = bookingRepo.countByCreatedAtBetween(now.minusDays(7), now);
+        long lost = bookingRepo.countByStatusInAndCreatedAtBetween(
+                List.of(BookingStatus.CANCELLED, BookingStatus.NO_SHOW), now.minusDays(7), now);
+        return ResponseEntity.ok(ApiResponse.Success.of(java.util.Map.<String, Object>of(
+                "today", bookingRepo.countByCreatedAtBetween(com.aiwa.util.AiwaTime.today().atStartOfDay(), now),
+                "inProgress", bookingRepo.countByStatusIn(List.of(
+                        BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED, BookingStatus.IN_PROGRESS)),
+                "openDisputes", bookingRepo.countByPaymentStatus(com.aiwa.enums.PaymentStatus.DISPUTED),
+                "cancelRate7d", week == 0 ? 0.0 : Math.round(lost * 1000.0 / week) / 10.0)));
+    }
+
+    /** "BK-123" / "maadi" → lower-case LIKE pattern; "%" when there is no search. */
+    static String searchPattern(String query) {
+        if (query == null || query.isBlank()) return "%";
+        // Drop LIKE wildcards the admin typed rather than escaping them.
+        String q = query.strip().toLowerCase().replaceFirst("^bk-?", "").replace("%", "").replace("_", "");
+        return q.isEmpty() ? "%" : "%" + q + "%";
     }
 
     @GetMapping("/reviews")

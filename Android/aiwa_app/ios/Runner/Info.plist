@@ -16,6 +16,17 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>aiwa_app</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>app.aiwa.share</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>aiwa</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -72,7 +83,5 @@
 	<string>To verify providers we capture your national ID and a live selfie.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a profile photo or upload your verification documents.</string>
-	<key>NSContactsUsageDescription</key>
-	<string>Pick a trusted contact we alert if you press SOS during a home service.</string>
 </dict>
 </plist>

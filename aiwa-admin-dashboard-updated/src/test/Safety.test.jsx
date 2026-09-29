@@ -76,9 +76,16 @@ describe("api.js helpers for the 2026-09-29 backend fields", () => {
     expect(apiModule.mediaUrl(null)).toBeNull();
   });
 
-  it("deltaText compares with the previous window", () => {
-    expect(apiModule.deltaText(12, 10)).toBe("(+20%)");
-    expect(apiModule.deltaText(5, 10)).toBe("(-50%)");
-    expect(apiModule.deltaText(5, 0)).toBe("");
+  it("pctDelta compares with the previous window", () => {
+    expect(apiModule.pctDelta(12, 10)).toBe("+20.0%");
+    expect(apiModule.pctDelta(5, 10)).toBe("-50.0%");
+    expect(apiModule.pctDelta(5, 0)).toBe("");
+  });
+
+  it("pageWindow keeps first, last and a 3-page window", async () => {
+    const { pageWindow } = await import("../App.jsx");
+    expect(pageWindow(1, 1)).toEqual([1]);
+    expect(pageWindow(5, 12)).toEqual([1, "…", 4, 5, 6, "…", 12]);
+    expect(pageWindow(2, 4)).toEqual([1, 2, 3, 4]);
   });
 });

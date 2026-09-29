@@ -93,11 +93,24 @@ void main() {
     // out at the next refresh.
     expect(await storage.getRefreshToken(), 'r2');
   });
+
+  test('a 5xx on refresh keeps the tokens (FE-32)', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      AppConstants.accessTokenKey: 'old',
+      AppConstants.refreshTokenKey: 'r',
+    });
+    final storage = SecureStorage(const FlutterSecureStorage());
+    final c = ApiClient(storage, adapter: _RefreshAdapter(refreshStatus: 503));
+    await expectLater(c.get('/me'), throwsA(isA<UnauthorizedException>()));
+    expect(await storage.getRefreshToken(), 'r');
+  });
 }
 
 /// 401 unless the request carries the refreshed token; refresh is slow so
 /// all three requests fail while it is in flight.
 class _RefreshAdapter implements HttpClientAdapter {
+  _RefreshAdapter({this.refreshStatus = 200});
+  final int refreshStatus;
   int refreshes = 0;
   static final _json = {
     Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -112,6 +125,9 @@ class _RefreshAdapter implements HttpClientAdapter {
     if (o.path == ApiConstants.refresh) {
       refreshes++;
       await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (refreshStatus != 200) {
+        return ResponseBody.fromString('{}', refreshStatus, headers: _json);
+      }
       return ResponseBody.fromString(
         '{"data":{"accessToken":"new","refreshToken":"r2"}}',
         200,

@@ -54,6 +54,10 @@ class PlatformSettingsServiceTest {
                 .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.updateCommissionPercent(new BigDecimal("101")))
                 .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.updateCommissionPercent(new BigDecimal("50.5")))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.updateCommissionPercent(BigDecimal.ZERO))
+                .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.updateCommissionPercent(null))
                 .isInstanceOf(BusinessException.class);
     }

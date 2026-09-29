@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'system_screen.dart' show PopIn;
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
@@ -61,14 +62,8 @@ class EmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             // aiwa-pop 320ms (states.jsx:88).
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: .86, end: 1),
-              duration: AppTheme.dur3,
+            PopIn(
               curve: AppTheme.easeSoft,
-              builder: (_, v, c) => Opacity(
-                opacity: ((v - .86) / .14).clamp(0.0, 1.0),
-                child: Transform.scale(scale: v, child: c),
-              ),
               child: Container(
                 width: circle,
                 height: circle,

@@ -116,6 +116,7 @@ Future<void> initDependencies() async {
       getCurrentUserUseCase: sl<GetCurrentUserUseCase>(),
       updateProfileUseCase: sl<UpdateProfileUseCase>(),
       secureStorage: sl<SecureStorage>(),
+      apiClient: sl<ApiClient>(),
     ),
   );
 

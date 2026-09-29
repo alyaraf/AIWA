@@ -521,8 +521,8 @@ class PaidCard extends StatelessWidget {
   final String? title;
   final String? sub;
 
-  /// Provider only: 'AIWA commission (15%) · added to ledger' value.
-  final String? commission;
+  /// Provider only: 'AIWA commission ({percent}%) · added to ledger' row.
+  final ({String amount, String percent})? commission;
 
   const PaidCard({
     super.key,
@@ -598,8 +598,13 @@ class PaidCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: Text(l.paidCommission, style: k)),
-                Text(commission!, style: v.copyWith(color: AppColors.gold700)),
+                Expanded(
+                  child: Text(l.paidCommission(commission!.percent), style: k),
+                ),
+                Text(
+                  commission!.amount,
+                  style: v.copyWith(color: AppColors.gold700),
+                ),
               ],
             ),
           ],

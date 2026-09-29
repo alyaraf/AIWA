@@ -197,6 +197,28 @@ public class VerificationServiceImpl {
                 .selfiePath(p.getSelfiePath())
                 .rejectionReason(p.getRejectionReason())
                 .submittedAt(p.getCreatedAt())
+                .latitude(p.getLatitude())
+                .longitude(p.getLongitude())
+                .serviceCount((int) p.getServices().stream().filter(com.aiwa.entity.Service::isActive).count())
+                .minServicePrice(p.getServices().stream().filter(com.aiwa.entity.Service::isActive)
+                        .map(com.aiwa.entity.Service::getPrice).filter(java.util.Objects::nonNull)
+                        .min(java.math.BigDecimal::compareTo).orElse(null))
+                .maxServicePrice(p.getServices().stream().filter(com.aiwa.entity.Service::isActive)
+                        .map(com.aiwa.entity.Service::getPrice).filter(java.util.Objects::nonNull)
+                        .max(java.math.BigDecimal::compareTo).orElse(null))
+                .galleryCount(p.getGallery().size())
+                .acceptedTermsVersion(p.getUser().getAcceptedTermsVersion())
+                .termsAcceptedAt(p.getUser().getTermsAcceptedAt())
+                .verificationNote(p.getVerificationNote())
                 .build();
+    }
+
+    /** Admin: save the internal note on a verification case (admins only). */
+    @Transactional
+    public void saveNote(Long providerId, String note) {
+        ProviderProfile profile = providerRepo.findById(providerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
+        profile.setVerificationNote(note == null || note.isBlank() ? null : note.strip());
+        providerRepo.save(profile);
     }
 }

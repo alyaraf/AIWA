@@ -12,7 +12,9 @@ import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/app_theme.dart';
 
-enum PermissionKind { location, notifications, camera, contacts }
+// Contacts was dropped (FE-27): trusted contacts are typed in, so asking for
+// READ_CONTACTS would be an unused sensitive permission at store review.
+enum PermissionKind { location, notifications, camera }
 
 /// `PERMISSIONS` in system-screens.jsx.
 _Copy _copy(AppLocalizations l, PermissionKind kind) => switch (kind) {
@@ -42,15 +44,6 @@ _Copy _copy(AppLocalizations l, PermissionKind kind) => switch (kind) {
     points: [l.permCamP1, l.permCamP2, l.permCamP3],
     allow: l.permCamAllow,
     deny: l.permCamDeny,
-  ),
-  PermissionKind.contacts => (
-    icon: LucideIcons.userPlus,
-    eyebrow: l.permContEyebrow,
-    title: l.permContTitle,
-    body: l.permContBody,
-    points: [l.permContP1, l.permContP2, l.permContP3],
-    allow: l.permContAllow,
-    deny: l.permContDeny,
   ),
 };
 
@@ -85,8 +78,6 @@ class PermissionPrimingPage extends StatelessWidget {
         PermissionKind.notifications =>
           (await Permission.notification.request()).isGranted,
         PermissionKind.camera => (await Permission.camera.request()).isGranted,
-        PermissionKind.contacts =>
-          (await Permission.contacts.request()).isGranted,
       };
     } catch (_) {
       return false;
@@ -99,7 +90,7 @@ class PermissionPrimingPage extends StatelessWidget {
     final granted = await request(kind);
     if (!context.mounted) return;
     var toInbox = false;
-    if (!granted && kind != PermissionKind.contacts) {
+    if (!granted) {
       toInbox =
           await context.push<bool>(PermissionDeniedPage.path(kind)) == true &&
           kind == PermissionKind.notifications;

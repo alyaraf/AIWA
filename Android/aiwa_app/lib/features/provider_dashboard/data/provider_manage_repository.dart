@@ -244,4 +244,9 @@ class ProviderManageRepository {
       data: {'fullName': fullName, 'title': title, 'skills': skills},
     ),
   );
+
+  /// PUT /provider/staff/{id}. Send title and phone every time: the backend
+  /// overwrites them. serviceIds [] = performs every service.
+  Future<Either<Failure, void>> updateStaff(String id, Json body) =>
+      _run(() => _api.put(ApiConstants.providerStaffById(id), data: body));
 }

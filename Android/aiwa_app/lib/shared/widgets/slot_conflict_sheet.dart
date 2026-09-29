@@ -8,12 +8,16 @@ import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// SlotConflictSheet (system-screens.jsx:150-186). Pops the picked entry of
-/// [alternatives], or null for 'Pick another day' / dismiss.
+/// [alternatives], or null for 'Pick another day' / dismiss. Reschedule
+/// reuses it with its own [eyebrow] / [title] / [body].
 Future<String?> showSlotConflictSheet(
   BuildContext context, {
   required String providerName,
   required List<String> alternatives,
   String Function(String)? labelOf,
+  String? eyebrow,
+  String? title,
+  String? body,
 }) => showAiwaSheet<String>(
   context,
   builder: (ctx) {
@@ -25,9 +29,9 @@ Future<String?> showSlotConflictSheet(
         children: [
           SheetWarnHead(
             icon: LucideIcons.calendarX,
-            eyebrow: AppLocalizations.of(ctx).slotJustTaken,
-            title: AppLocalizations.of(ctx).slotTitle,
-            body: AppLocalizations.of(ctx).slotBody(providerName),
+            eyebrow: eyebrow ?? AppLocalizations.of(ctx).slotJustTaken,
+            title: title ?? AppLocalizations.of(ctx).slotTitle,
+            body: body ?? AppLocalizations.of(ctx).slotBody(providerName),
           ),
           const SizedBox(height: 16),
           Wrap(

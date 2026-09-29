@@ -55,6 +55,7 @@ class AiwaAvatar extends StatelessWidget {
     if (imageUrl != null && imageUrl!.isNotEmpty) {
       avatar = CachedNetworkImage(
         imageUrl: ApiConstants.mediaUrl(imageUrl!),
+        memCacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         imageBuilder: (_, imageProvider) => Container(
           width: size,
           height: size,

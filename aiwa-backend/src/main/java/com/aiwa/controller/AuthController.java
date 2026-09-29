@@ -214,6 +214,7 @@ public class AuthController {
         if (request.getNotifyPush()  != null) user.setNotifyPush(request.getNotifyPush());
         if (request.getNotifyEmail() != null) user.setNotifyEmail(request.getNotifyEmail());
         if (request.getNotifySms()   != null) user.setNotifySms(request.getNotifySms());
+        if (request.getNotifyWhatsapp() != null) user.setNotifyWhatsapp(request.getNotifyWhatsapp());
         if (request.getMuteAll()     != null) user.setMuteAll(request.getMuteAll());
         if (Boolean.TRUE.equals(request.getClearQuietHours())) {
             user.setQuietHoursStart(null);
@@ -231,6 +232,7 @@ public class AuthController {
                 .notifyPush(u.isNotifyPush())
                 .notifyEmail(u.isNotifyEmail())
                 .notifySms(u.isNotifySms())
+                .notifyWhatsapp(u.isNotifyWhatsapp())
                 .muteAll(u.isMuteAll())
                 .quietHoursStart(u.getQuietHoursStart())
                 .quietHoursEnd(u.getQuietHoursEnd())

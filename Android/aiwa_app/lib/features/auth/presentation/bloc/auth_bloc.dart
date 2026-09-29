@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../domain/usecases/get_current_user_usecase.dart';
 import '../../domain/usecases/login_usecase.dart';
@@ -19,6 +20,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final UpdateProfileUseCase updateProfileUseCase;
   final SecureStorage secureStorage;
 
+  /// Revokes the session server-side on sign-out; null in unit tests.
+  final ApiClient? apiClient;
+
   AuthBloc({
     required this.loginUseCase,
     required this.registerUseCase,
@@ -27,6 +31,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.getCurrentUserUseCase,
     required this.updateProfileUseCase,
     required this.secureStorage,
+    this.apiClient,
   }) : super(AuthInitial()) {
     on<AuthCheckSessionEvent>(_safe(_onCheckSession, AuthUnauthenticated()));
     on<AuthLoginEvent>(_safe(_onLogin));
@@ -157,6 +162,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onLogout(AuthLogoutEvent event, Emitter<AuthState> emit) async {
+    await apiClient?.logout();
     await secureStorage.clearAll();
     emit(AuthUnauthenticated());
   }

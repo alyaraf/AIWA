@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -15,6 +17,8 @@ import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/reason_sheet.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
+import '../../../../shared/widgets/slot_conflict_sheet.dart';
+import '../../../providers/domain/usecases/get_provider_slots_usecase.dart';
 import '../../domain/entities/booking_entity.dart';
 import '../bloc/live_booking_cubit.dart';
 import 'booking_outcome_pages.dart' show OutcomeScreen;
@@ -143,6 +147,52 @@ class _TrackingViewState extends State<_TrackingView> {
         AppLocalizations.of(context).trackCancelledToast(r.reason),
       );
       _back();
+    }
+  }
+
+  /// Date picker, then the free times that day (FE-37).
+  Future<void> _reschedule(BookingEntity b) async {
+    final l = AppLocalizations.of(context);
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 60)),
+    );
+    if (date == null || !mounted) return;
+    final day = DateFormat('yyyy-MM-dd').format(date);
+    final r = await sl<GetProviderSlotsUseCase>()(b.providerId, b.serviceId, day);
+    if (!mounted) return;
+    final times = r.fold(
+      (_) => const <String>[],
+      (slots) => [
+        for (final s in slots)
+          if (DateFormat('yyyy-MM-dd').format(s.date) == day) ...s.times,
+      ],
+    );
+    if (times.isEmpty) {
+      showAiwaToast(context, l.rescheduleNoSlots);
+      return;
+    }
+    final locale = Localizations.localeOf(context).toString();
+    String label(String t) => DateFormat('h:mm a', locale)
+        .format(DateFormat('HH:mm').parse(t.substring(0, 5)));
+    final time = await showSlotConflictSheet(
+      context,
+      providerName: b.displayProviderName,
+      alternatives: times,
+      labelOf: label,
+      eyebrow: l.trackReschedule,
+      title: l.rescheduleTitle,
+      body: l.rescheduleBody(
+        b.displayProviderName,
+        DateFormat.MMMEd(locale).format(date),
+      ),
+    );
+    if (time == null || !mounted) return;
+    if (await _cubit.reschedule(day, time) && mounted) {
+      showAiwaToast(context, l.rescheduledToast(label(time)));
     }
   }
 
@@ -287,6 +337,15 @@ class _TrackingViewState extends State<_TrackingView> {
               fullWidth: true,
               loading: s.busy,
               onPressed: _cancel,
+            ),
+            const SizedBox(height: 10),
+            AiwaButton(
+              label: l.trackReschedule,
+              icon: LucideIcons.calendarClock,
+              variant: AiwaButtonVariant.secondary,
+              fullWidth: true,
+              loading: s.busy,
+              onPressed: () => _reschedule(b),
             ),
             const SizedBox(height: 10),
           ],
@@ -633,9 +692,8 @@ class _SafetyCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ponytail: static copy; live location streaming and ID
-          // confirmation are not in the backend yet (SafetyEventType has
-          // LOCATION_SHARED / ID_CONFIRMED but nothing records them).
+          // Describes what SOS really does (SafetyService); no live location
+          // or ID check exists, so the kit's claim is not shown (FE-29).
           _TileHead(
             icon: LucideIcons.shieldCheck,
             bg: AppColors.success100,

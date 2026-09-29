@@ -58,8 +58,10 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
   String? _error;
   bool _busy = false;
 
-  /// Travel-fee quote sent and awaiting the customer.
-  double? _quote;
+  /// Travel-fee quote sent and awaiting the customer (BookingDto
+  /// travelFeeQuoteStatus), so it survives leaving and reopening the booking.
+  double? get _quote =>
+      _b?.hasPendingTravelQuote == true ? _b!.travelFeeQuote : null;
 
   DashboardRepository get _repo => sl<DashboardRepository>();
 
@@ -156,9 +158,7 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
       builder: (_) => _QuoteSheet(booking: b),
     );
     if (amount == null || !mounted) return;
-    if (await _act(() => _repo.quoteTravelFee(_id, amount))) {
-      setState(() => _quote = amount);
-    }
+    await _act(() => _repo.quoteTravelFee(_id, amount));
   }
 
   Future<void> _cancel() async {

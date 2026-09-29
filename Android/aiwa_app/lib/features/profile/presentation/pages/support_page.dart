@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/di/injection_container.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -242,6 +243,17 @@ class _SupportPageState extends State<SupportPage> {
                     ),
                   ),
               ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.gutter),
+            child: AiwaButton(
+              label: l.reportsTitle,
+              icon: LucideIcons.flag,
+              variant: AiwaButtonVariant.secondary,
+              fullWidth: true,
+              onPressed: () => context.push(AppRoutes.myReports),
             ),
           ),
           const SizedBox(height: 22),

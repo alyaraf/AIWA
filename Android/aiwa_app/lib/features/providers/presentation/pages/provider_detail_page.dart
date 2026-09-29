@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/constants/api_constants.dart';
 import 'package:flutter/material.dart';
+import '../../../home/presentation/pages/home_page.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
@@ -72,13 +74,20 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
     }
   }
 
-  // ponytail: text only; append the https app link to /provider/{id} once a
-  // public deep-link host exists.
+  /// Link base for shared profiles. The aiwa:// scheme opens the installed app
+  /// (AndroidManifest / Info.plist). Pass --dart-define=APP_LINK_BASE=https://…
+  /// once a verified App Links / Universal Links host exists.
+  static const _linkBase = String.fromEnvironment(
+    'APP_LINK_BASE',
+    defaultValue: 'aiwa://app',
+  );
+
   Future<void> _share(ProviderDetailEntity p) => SharePlus.instance.share(
     ShareParams(
       text: [
         AppLocalizations.of(context).providerShareText(p.displayName),
         if (p.address != null && p.address!.isNotEmpty) p.address!,
+        '$_linkBase/provider/${p.id}',
       ].join(' · '),
     ),
   );
@@ -272,6 +281,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
             CachedNetworkImage(
               imageUrl: ApiConstants.mediaUrl(p.profileImageUrl!),
               fit: BoxFit.cover,
+              memCacheWidth: (MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context)).round(),
               errorWidget: (_, __, ___) =>
                   CoverImage(initial: p.displayName, hero: true),
             )
@@ -354,7 +364,14 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                     ),
                     if (p.address != null && p.address!.isNotEmpty) ...[
                       MetaDot(color: AppColors.rose300, gap: 0),
-                      _CoverMeta(icon: LucideIcons.mapPin, text: p.address!),
+                      _CoverMeta(
+                        icon: LucideIcons.mapPin,
+                        // DISC-08-F5: 'distance · area' once we know where
+                        // the user is; the address alone otherwise.
+                        text: HomePage.hasFix && p.latitude != null && p.longitude != null
+                            ? '${l.distanceKm((Geolocator.distanceBetween(HomePage.position.lat, HomePage.position.lng, p.latitude!, p.longitude!) / 1000).toStringAsFixed(1))} · ${p.address}'
+                            : p.address!,
+                      ),
                     ],
                     if (p.isVerified) ...[
                       MetaDot(color: AppColors.rose300, gap: 0),
@@ -575,6 +592,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                     child: CachedNetworkImage(
                       imageUrl: ApiConstants.mediaUrl(url),
                       fit: BoxFit.cover,
+                      memCacheWidth: (MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context) / 3).round(),
                       placeholder: (_, __) => const ShimmerBox(height: 120),
                       errorWidget: (_, __, ___) =>
                           Container(color: AppColors.cream),

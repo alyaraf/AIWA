@@ -92,7 +92,8 @@ public class TermsController {
             @RequestParam(defaultValue = "CUSTOMER_TERMS") String type,
             @RequestParam String contentEn,
             @RequestParam(required = false) String contentAr,
-            @RequestParam(required = false) String pdfUrl) {
+            @RequestParam(required = false) String pdfUrl,
+            @RequestParam(required = false) String changeNote) {
         String docType = validType(type);
         if (version == null || version.isBlank() || version.length() > 32) {
             throw new BusinessException("Version must be 1–32 characters");
@@ -113,6 +114,9 @@ public class TermsController {
                 .version(version.trim()).type(docType)
                 .contentEn(contentEn).contentAr(contentAr == null || contentAr.isBlank() ? null : contentAr)
                 .pdfUrl(pdfUrl == null || pdfUrl.isBlank() ? null : pdfUrl.trim())
+                .changeNote(changeNote == null || changeNote.isBlank() ? null
+                        : changeNote.strip().substring(0, Math.min(changeNote.strip().length(), 500)))
+                .publishedBy(publisherName())
                 .active(true).build());
         auditService.record("POLICY_PUBLISHED", docType + " " + saved.getVersion());
 
@@ -146,7 +150,18 @@ public class TermsController {
                 .id(p.getId()).version(p.getVersion()).type(p.getType())
                 .contentEn(p.getContentEn()).contentAr(p.getContentAr())
                 .pdfUrl(p.getPdfUrl())
+                .changeNote(p.getChangeNote()).publishedBy(p.getPublishedBy())
                 .active(p.isActive()).createdAt(p.getCreatedAt()).build();
+    }
+
+    /** The publishing admin's name (falls back to their login). */
+    private String publisherName() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) return null;
+        return userRepo.findByEmail(auth.getName())
+                .or(() -> userRepo.findByPhone(auth.getName()))
+                .map(User::getFullName)
+                .orElse(auth.getName());
     }
 
     private User resolveUser(UserDetails ud) {

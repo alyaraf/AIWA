@@ -54,6 +54,7 @@ class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
             ? ImageSource.camera
             : ImageSource.gallery,
         preferredCameraDevice: selfie ? CameraDevice.front : CameraDevice.rear,
+        maxWidth: 1600,
         imageQuality: 80,
       );
       return file?.path;

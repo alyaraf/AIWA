@@ -93,7 +93,7 @@ class AuthStepScaffold extends StatelessWidget {
     required this.children,
     required this.bottom,
     this.stickyBar = false,
-    this.topGap = 18,
+    this.topGap = 8, // ONB-12-V1: 8px below the status bar
   });
 
   @override

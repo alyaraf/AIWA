@@ -166,6 +166,8 @@ public class ApiResponse {
         private Double distanceKm;
         private BigDecimal startingPrice;
         private Boolean openNow;
+        /** An individual provider is mid-booking right now (Book Now "busy"). */
+        private Boolean busyNow;
         private LocalDateTime verifiedAt;
         /** How far the provider travels for home service (km); null = not stated. */
         private Double serviceRadiusKm;
@@ -188,6 +190,17 @@ public class ApiResponse {
         private String selfiePath;
         private String rejectionReason;
         private LocalDateTime submittedAt;
+        // Business profile rows on the admin verification detail (ADMIN-04).
+        private Double latitude;
+        private Double longitude;
+        private int serviceCount;
+        private BigDecimal minServicePrice;
+        private BigDecimal maxServicePrice;
+        private int galleryCount;
+        private String acceptedTermsVersion;
+        private LocalDateTime termsAcceptedAt;
+        /** Admin-only internal note (never sent to the provider). */
+        private String verificationNote;
     }
 
     /** A reported review awaiting moderation. */
@@ -453,6 +466,8 @@ public class ApiResponse {
         private BigDecimal owedAmount;
         /** Owed balance at which new bookings pause until settled. */
         private BigDecimal balanceLimit;
+        /** This provider's effective commission rate (override or platform). */
+        private BigDecimal commissionPercent;
         /** When the oldest outstanding entry falls due. */
         private LocalDateTime dueDate;
         /** SETTLED | WITHIN_LIMIT | OVERDUE */
@@ -486,6 +501,8 @@ public class ApiResponse {
         private BigDecimal balanceOwed;
         private String status;          // WITHIN_LIMIT | OVERDUE | SETTLED
         private boolean settlementPaused;
+        /** Provider account suspended (verificationStatus SUSPENDED). */
+        private boolean accountSuspended;
         private LocalDateTime dueDate;
         /** The provider tapped "I've paid" at this time; finance hasn't confirmed yet. */
         private LocalDateTime paymentReportedAt;
@@ -497,6 +514,8 @@ public class ApiResponse {
         private Long providerId;
         private String providerName;
         private boolean settlementPaused;
+        /** Provider account suspended (verificationStatus SUSPENDED). */
+        private boolean accountSuspended;
         /** Set while a provider-reported payment waits for finance. */
         private LocalDateTime paymentReportedAt;
         private String status;
@@ -646,6 +665,7 @@ public class ApiResponse {
         private boolean notifyPush;
         private boolean notifyEmail;
         private boolean notifySms;
+        private boolean notifyWhatsapp;
         private boolean muteAll;
         private LocalTime quietHoursStart;
         private LocalTime quietHoursEnd;
@@ -671,6 +691,8 @@ public class ApiResponse {
         private ComplaintStatus status;
         private String adminNotes;
         private boolean flagged;
+        /** HIGH / MEDIUM / LOW — derived from flagged + category. */
+        private String priority;
         private LocalDateTime createdAt;
     }
 
@@ -748,6 +770,8 @@ public class ApiResponse {
         private String contentEn;
         private String contentAr;
         private String pdfUrl;
+        private String changeNote;
+        private String publishedBy;
         private boolean active;
         private LocalDateTime createdAt;
     }
@@ -795,6 +819,11 @@ public class ApiResponse {
         private long bookingsPrevious30Days;
         private long newCustomersLast30Days;
         private long newCustomersPrevious30Days;
+        private long providersVerifiedLast30Days;
+        /** Open complaints that are flagged or about safety/payment. */
+        private long highPriorityComplaints;
+        private BigDecimal revenueLast30Days;
+        private BigDecimal revenuePrevious30Days;
     }
 }
 

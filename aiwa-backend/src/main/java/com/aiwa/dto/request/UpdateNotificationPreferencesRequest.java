@@ -11,6 +11,7 @@ public class UpdateNotificationPreferencesRequest {
     private Boolean notifyPush;
     private Boolean notifyEmail;
     private Boolean notifySms;
+    private Boolean notifyWhatsapp;
     private Boolean muteAll;
 
     @DateTimeFormat(pattern = "HH:mm")

@@ -39,6 +39,7 @@ class BookingCreateEvent extends BookingEvent {
     bookNow,
     homeService,
     savedAddressId,
+    customerNote,
   ];
 }
 
@@ -56,19 +57,4 @@ class BookingCancelEvent extends BookingEvent {
   const BookingCancelEvent(this.bookingId);
   @override
   List<Object?> get props => [bookingId];
-}
-
-class BookingRescheduleEvent extends BookingEvent {
-  final String bookingId;
-  final String newDate;
-  final String newTime;
-
-  const BookingRescheduleEvent({
-    required this.bookingId,
-    required this.newDate,
-    required this.newTime,
-  });
-
-  @override
-  List<Object?> get props => [bookingId, newDate, newTime];
 }

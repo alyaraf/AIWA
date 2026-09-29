@@ -62,10 +62,11 @@ class _ProviderStaffPageState extends State<ProviderStaffPage> {
     });
   }
 
-  Future<void> _add() async {
+  Future<void> _add([Json? s]) async {
     final ok = await showAiwaSheet<bool>(
       context,
-      builder: (_) => const _AddStaff(),
+      builder: (_) =>
+          _StaffForm(s: s, services: _d?['services'] as List? ?? const []),
     );
     if (ok == true) _load();
   }
@@ -155,6 +156,7 @@ class _ProviderStaffPageState extends State<ProviderStaffPage> {
                             () => _openId = _openId == s['id'] ? null : s['id'],
                           ),
                           onEdit: () => _editSchedule(s),
+                          onEditDetails: () => _add(s),
                         ),
                     ],
                   ),
@@ -174,7 +176,7 @@ class _StaffCard extends StatelessWidget {
   /// (empty = performs every service).
   final List services;
   final bool open;
-  final VoidCallback onToggle, onEdit;
+  final VoidCallback onToggle, onEdit, onEditDetails;
 
   const _StaffCard({
     required this.s,
@@ -184,6 +186,7 @@ class _StaffCard extends StatelessWidget {
     required this.open,
     required this.onToggle,
     required this.onEdit,
+    required this.onEditDetails,
   });
 
   @override
@@ -352,6 +355,15 @@ class _StaffCard extends StatelessWidget {
                           fullWidth: true,
                           onPressed: onEdit,
                         ),
+                        const SizedBox(height: 8),
+                        AiwaButton(
+                          label: l.staffEditDetails,
+                          icon: LucideIcons.userPen,
+                          variant: AiwaButtonVariant.ghost,
+                          size: AiwaButtonSize.sm,
+                          fullWidth: true,
+                          onPressed: onEditDetails,
+                        ),
                       ],
                     ),
                   ),
@@ -362,19 +374,29 @@ class _StaffCard extends StatelessWidget {
   }
 }
 
-/// POST /provider/staff — the prototype's 'Add' has no form, so this is
-/// StaffMemberRequest's minimum.
-class _AddStaff extends StatefulWidget {
-  const _AddStaff();
+/// Add (POST /provider/staff, [s] null) or edit (PUT /provider/staff/{id}):
+/// name, role, skills, the services they do and deactivate (FE-23).
+class _StaffForm extends StatefulWidget {
+  final Json? s;
+
+  /// ProviderDetailDto.services, for the "does these services" chips.
+  final List services;
+
+  const _StaffForm({this.s, required this.services});
 
   @override
-  State<_AddStaff> createState() => _AddStaffState();
+  State<_StaffForm> createState() => _StaffFormState();
 }
 
-class _AddStaffState extends State<_AddStaff> {
-  final _name = TextEditingController();
-  final _title = TextEditingController();
-  final _skills = TextEditingController();
+class _StaffFormState extends State<_StaffForm> {
+  late final _name = TextEditingController(text: widget.s?['fullName']);
+  late final _title = TextEditingController(text: widget.s?['title']);
+  late final _skills = TextEditingController(text: widget.s?['skills']);
+
+  /// Empty = performs every service (StaffMemberDto.serviceIds).
+  late final Set<String> _serviceIds = {
+    for (final id in widget.s?['serviceIds'] as List? ?? const []) '$id',
+  };
   bool _busy = false;
   String? _error;
 
@@ -386,21 +408,43 @@ class _AddStaffState extends State<_AddStaff> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  String? _text(TextEditingController c) =>
+      c.text.trim().isEmpty ? null : c.text.trim();
+
+  Future<void> _save({bool active = true}) async {
     setState(() => _busy = true);
-    final r = await sl<ProviderManageRepository>().addStaff(
-      fullName: _name.text.trim(),
-      title: _title.text.trim().isEmpty ? null : _title.text.trim(),
-      skills: _skills.text.trim().isEmpty ? null : _skills.text.trim(),
-    );
+    final repo = sl<ProviderManageRepository>();
+    final s = widget.s;
+    final r = s == null
+        ? await repo.addStaff(
+            fullName: _name.text.trim(),
+            title: _text(_title),
+            skills: _text(_skills),
+          )
+        : await repo.updateStaff('${s['id']}', {
+            'fullName': _name.text.trim(),
+            'title': _text(_title),
+            'phone': s['phone'],
+            'skills': _text(_skills) ?? '',
+            'active': active,
+            'serviceIds': [for (final id in _serviceIds) int.parse(id)],
+          });
     if (!mounted) return;
+    final l = AppLocalizations.of(context);
     r.fold(
       (f) => setState(() {
         _busy = false;
-        _error = AppLocalizations.of(context).error(f.message);
+        _error = l.error(f.message);
       }),
       (_) {
-        showAiwaToast(context, AppLocalizations.of(context).staffAdded);
+        showAiwaToast(
+          context,
+          s == null
+              ? l.staffAdded
+              : active
+              ? l.staffSaved
+              : l.staffDeactivated,
+        );
         Navigator.pop(context, true);
       },
     );
@@ -409,54 +453,90 @@ class _AddStaffState extends State<_AddStaff> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final editing = widget.s != null;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 14,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    EyebrowLabel(l.staffShopPlan),
-                    const SizedBox(height: 2),
-                    Text(l.provBizAddStaff, style: AppTextStyles.h3),
-                  ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 14,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      EyebrowLabel(l.staffShopPlan),
+                      const SizedBox(height: 2),
+                      Text(
+                        editing ? l.staffEditDetails : l.provBizAddStaff,
+                        style: AppTextStyles.h3,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              AiwaIconButton(
-                icon: LucideIcons.x,
-                size: 34,
-                onTap: () => Navigator.pop(context),
+                AiwaIconButton(
+                  icon: LucideIcons.x,
+                  size: 34,
+                  onTap: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            AiwaTextField(
+              label: l.svcName,
+              controller: _name,
+              onChanged: (_) => setState(() {}),
+            ),
+            AiwaTextField(
+              label: l.staffRole,
+              controller: _title,
+              optional: true,
+            ),
+            AiwaTextField(
+              label: l.staffSkills,
+              controller: _skills,
+              optional: true,
+              hint: l.staffSkillsHint,
+            ),
+            if (editing && widget.services.isNotEmpty) ...[
+              EyebrowLabel(l.staffServicesHint),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final v in widget.services)
+                    AiwaChip(
+                      label: '${(v as Json)['name']}',
+                      active: _serviceIds.contains('${v['id']}'),
+                      onTap: () => setState(() {
+                        final id = '${v['id']}';
+                        if (!_serviceIds.remove(id)) _serviceIds.add(id);
+                      }),
+                    ),
+                ],
               ),
             ],
-          ),
-          AiwaTextField(
-            label: l.svcName,
-            controller: _name,
-            onChanged: (_) => setState(() {}),
-          ),
-          AiwaTextField(label: l.staffRole, controller: _title, optional: true),
-          AiwaTextField(
-            label: l.staffSkills,
-            controller: _skills,
-            optional: true,
-            hint: l.staffSkillsHint,
-          ),
-          if (_error != null)
-            InlineBanner(tone: BannerTone.danger, body: _error),
-          AiwaButton(
-            label: l.commonAdd,
-            size: AiwaButtonSize.lg,
-            fullWidth: true,
-            loading: _busy,
-            onPressed: _name.text.trim().isNotEmpty && !_busy ? _save : null,
-          ),
-        ],
+            if (_error != null)
+              InlineBanner(tone: BannerTone.danger, body: _error),
+            AiwaButton(
+              label: editing ? l.commonSave : l.commonAdd,
+              size: AiwaButtonSize.lg,
+              fullWidth: true,
+              loading: _busy,
+              onPressed: _name.text.trim().isNotEmpty && !_busy ? _save : null,
+            ),
+            if (editing)
+              AiwaButton(
+                label: l.staffDeactivate,
+                icon: LucideIcons.userRoundMinus,
+                variant: AiwaButtonVariant.ghost,
+                fullWidth: true,
+                onPressed: _busy ? null : () => _save(active: false),
+              ),
+          ],
+        ),
       ),
     );
   }

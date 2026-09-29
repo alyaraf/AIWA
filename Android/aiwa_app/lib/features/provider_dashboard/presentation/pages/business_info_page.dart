@@ -45,8 +45,9 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
   Json? _d;
   String? _loadError, _saveError;
   String? _cat;
-  // ponytail: not stored by the backend; starts at the prototype's 8 km.
+  /// Prototype default until the stored serviceRadiusKm loads.
   int _radius = 8;
+  int? _savedRadius;
   bool _dirty = false, _saving = false;
 
   @override
@@ -81,6 +82,8 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
         setState(() {
           _d = d;
           _cat = d['primaryCategory'] as String?;
+          _savedRadius = (d['serviceRadiusKm'] as num?)?.round();
+          _radius = (_savedRadius ?? _radius).clamp(1, 25); // slider range
         });
       },
     );
@@ -114,7 +117,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
         'primaryCategory': _cat,
       }),
       if (fee != d['homeServiceTravelFee']) await _repo.setTravelFee(fee),
-      if (_radius != 8) await _repo.setServiceRadius(_radius),
+      if (_radius != _savedRadius) await _repo.setServiceRadius(_radius),
     ];
     if (!mounted) return;
     final failure = results

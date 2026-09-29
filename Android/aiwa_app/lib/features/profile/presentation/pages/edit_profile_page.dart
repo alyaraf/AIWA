@@ -77,7 +77,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<void> _changePhoto() async {
     final file = await ImagePicker().pickImage(
       source: ImageSource.gallery,
-      maxWidth: 1024,
+      maxWidth: 512,
       imageQuality: 85,
     );
     if (file == null || !mounted) return;

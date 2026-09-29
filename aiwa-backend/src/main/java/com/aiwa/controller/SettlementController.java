@@ -136,6 +136,7 @@ public class SettlementController {
                 .providerId(providerId)
                 .providerName(provider.getBusinessName())
                 .settlementPaused(provider.isSettlementPaused())
+                .accountSuspended(provider.getVerificationStatus() == com.aiwa.enums.VerificationStatus.SUSPENDED)
                 .status(statusOf(all))
                 .paymentReportedAt(provider.getSettlementReportedAt())
                 .commissionPercent(platformSettings.getCommissionPercentFor(provider))
@@ -251,6 +252,7 @@ public class SettlementController {
         BigDecimal overdue = sum(all, LedgerEntryStatus.OVERDUE);
         return ApiResponse.SettlementSummaryDto.builder()
                 .providerId(provider.getId())
+                .commissionPercent(platformSettings.getCommissionPercentFor(provider))
                 // dueAmount is what the app shows as "owed": everything still
                 // outstanding. It used to leave out OVERDUE entries, so a provider
                 // who fell behind saw a smaller balance than they actually owed.
@@ -300,6 +302,7 @@ public class SettlementController {
                     .balanceOwed(owed)
                     .status(statusOf(entries))
                     .settlementPaused(p.isSettlementPaused())
+                    .accountSuspended(p.getVerificationStatus() == com.aiwa.enums.VerificationStatus.SUSPENDED)
                     .dueDate(dueDateOf(entries))
                     .paymentReportedAt(p.getSettlementReportedAt())
                     .build());

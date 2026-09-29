@@ -62,6 +62,7 @@ class _GalleryManagerPageState extends State<GalleryManagerPage> {
   Future<void> _upload() async {
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
+      maxWidth: 1600,
       imageQuality: 85,
     );
     if (picked == null || !mounted) return;
@@ -321,7 +322,11 @@ class _Tile extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CachedNetworkImage(imageUrl: ApiConstants.mediaUrl(url), fit: BoxFit.cover),
+          CachedNetworkImage(
+            imageUrl: ApiConstants.mediaUrl(url),
+            fit: BoxFit.cover,
+            memCacheWidth: (120 * MediaQuery.devicePixelRatioOf(context)).round(), // grid tile max
+          ),
           if (hidden)
             Container(
               color: AppColors.scrim.withValues(alpha: .72),

@@ -173,9 +173,10 @@ export const api = {
   setSettlementPause: (providerId, paused) => request(`/admin/providers/${providerId}/settlement-pause?paused=${paused}`, { method: "PATCH" }),
   latestTerms: (type = "CUSTOMER_TERMS") => request(`/terms/latest?type=${type}`),
   termsVersions: (type = "CUSTOMER_TERMS") => request(`/terms?type=${type}`).then(normalizeList),
-  publishTerms: (version, contentEn, type = "CUSTOMER_TERMS", contentAr = "") => {
+  publishTerms: (version, contentEn, type = "CUSTOMER_TERMS", contentAr = "", changeNote = "") => {
     const qs = new URLSearchParams({ version, type, contentEn });
     if (contentAr && contentAr.trim()) qs.set("contentAr", contentAr);
+    if (changeNote && changeNote.trim()) qs.set("changeNote", changeNote.trim());
     return request(`/terms?${qs.toString()}`, { method: "POST" });
   },
   /** SOS queue (GET /admin/safety) — status OPEN (default) | RESOLVED | ALL. */
@@ -219,7 +220,7 @@ export const api = {
   analyticsBookings: (days = 14) => request(`/admin/analytics/bookings?days=${days}`).then(normalizeList).then((rows) => rows.map(normalizeAnalyticsPoint)),
   verificationCounts: () => request("/admin/verification/counts"),
   forceCancelBooking: (id, reason) => request(`/admin/bookings/${id}/force-cancel${reason ? `?reason=${encodeURIComponent(reason)}` : ""}`, { method: "POST" }),
-  resolveDispute: (id, outcome) => request(`/admin/bookings/${id}/resolve-dispute?outcome=${encodeURIComponent(outcome)}`, { method: "POST" }),
+  resolveDispute: (id, outcome, reason) => request(`/admin/bookings/${id}/resolve-dispute?outcome=${encodeURIComponent(outcome)}${reason ? `&reason=${encodeURIComponent(reason)}` : ""}`, { method: "POST" }),
   bookingChat: (id) => request(`/admin/bookings/${id}/chat`).then(normalizeList),
   getBookingRules: () => request("/admin/settings/booking-rules"),
   setBookingRules: (rules) => {
@@ -229,6 +230,7 @@ export const api = {
     if (rules.responseWindowMinutes != null) qs.set("responseWindowMinutes", String(rules.responseWindowMinutes));
     return request(`/admin/settings/booking-rules?${qs.toString()}`, { method: "PATCH" });
   },
+  saveVerificationNote: (providerId, note) => request(`/admin/verification/${providerId}/note`, { method: "PATCH", body: JSON.stringify({ note }) }),
   requestProviderInfo: (providerId, message) => request(`/admin/verification/${providerId}/request-info?message=${encodeURIComponent(message)}`, { method: "POST" }),
   suspendProvider: (providerId) => request(`/admin/verification/${providerId}/suspend`, { method: "POST" }),
   warnUser: (id, reason) => request(`/admin/users/${id}/warn?reason=${encodeURIComponent(reason)}`, { method: "POST" }),
@@ -254,7 +256,17 @@ export const api = {
       totalPages: result?.totalPages ?? 1
     }));
   },
-  bookings: () => request("/admin/bookings?size=500").then(normalizeList).then((items) => items.map(normalizeBooking)),
+  /** Server-side search / filter / paging (GET /admin/bookings). filter is a monitor chip. */
+  bookings: ({ query = "", filter = "All", page = 0, size = 6 } = {}) =>
+    request(`/admin/bookings?${bookingParams(query, filter, { page: String(page), size: String(size) })}`)
+      .then((result) => ({
+        items: normalizeList(result).map(normalizeBooking),
+        totalPages: Math.max(1, result?.totalPages ?? result?.data?.totalPages ?? 1),
+        total: result?.totalElements ?? result?.data?.totalElements ?? normalizeList(result).length
+      })),
+  bookingStats: () => request("/admin/bookings/stats"),
+  exportBookingList: (query = "", filter = "All") =>
+    downloadFile(`/admin/bookings/export?${bookingParams(query, filter)}`, "aiwa-bookings.csv", "text/csv"),
   reviews: () => request("/admin/reviews?size=500").then(normalizeList).then((items) => items.map(normalizeReview)),
   flags: () => request("/admin/flags?size=500").then(normalizeList).then((items) => items.map(normalizeFlag))
 };
@@ -340,6 +352,16 @@ function saveBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+/** Monitor chip → GET /admin/bookings params (status / disputed / query). */
+const BOOKING_FILTER_STATUS = { Cancelled: "CANCELLED", "No-show": "NO_SHOW", Completed: "COMPLETED" };
+function bookingParams(query, filter, extra = {}) {
+  const qs = new URLSearchParams(extra);
+  if (query.trim()) qs.set("query", query.trim());
+  if (filter === "Disputes") qs.set("disputed", "true");
+  if (BOOKING_FILTER_STATUS[filter]) qs.set("status", BOOKING_FILTER_STATUS[filter]);
+  return qs.toString();
+}
+
 function normalizeList(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.content)) return payload.content;
@@ -362,12 +384,12 @@ function formatWhen(value) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-/** "(+12%)" against the previous window; empty when there is nothing to compare. */
-export function deltaText(current, previous) {
+/** "+18.4%" / "-3.1%" against the previous window; "" when there is nothing to compare. */
+export function pctDelta(current, previous) {
   const prev = Number(previous || 0);
   if (!prev) return "";
-  const pct = Math.round(((Number(current || 0) - prev) / prev) * 100);
-  return `(${pct >= 0 ? "+" : ""}${pct}%)`;
+  const pct = ((Number(current || 0) - prev) / prev) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
 }
 
 function normalizeDashboard(data) {
@@ -380,17 +402,24 @@ function normalizeDashboard(data) {
   const today = Number(data?.bookingsToday || 0);
   const week = Number(data?.bookingsLast7Days || 0);
   const newCustomers = Number(data?.newCustomersLast30Days || 0);
+  const bookings30 = Number(data?.bookingsLast30Days || 0);
+  const revenue30 = Number(data?.revenueLast30Days ?? 0);
+  const verified30 = Number(data?.providersVerifiedLast30Days || 0);
+  const customers = Number(data?.totalCustomers || 0);
   return {
     pendingVerification: Number(data?.pendingVerification || 0),
     openComplaints: Number(data?.openComplaints || 0),
     openDisputes: Number(data?.openDisputes || 0),
     overdueSettlements: Number(data?.overdueSettlements || 0),
     openSos: Number(data?.openSos || 0),
+    highPriorityComplaints: Number(data?.highPriorityComplaints || 0),
+    totalAccounts: customers + totalProviders,
+    // Kit tiles: headline value + green delta (vs the previous 30 days).
     stats: [
-      { label: "Customers", value: Number(data?.totalCustomers || 0).toLocaleString(), sub: `${totalProviders.toLocaleString()} providers · +${newCustomers.toLocaleString()} in 30 days ${deltaText(newCustomers, data?.newCustomersPrevious30Days)}`.trim(), icon: "Users" },
-      { label: "Verified providers", value: Number(data?.approvedProviders || 0).toLocaleString(), sub: `${data?.pendingVerification || 0} pending review`, icon: "BadgeCheck" },
-      { label: "Bookings", value: Number(data?.totalBookings || 0).toLocaleString(), sub: `${today.toLocaleString()} today · ${week.toLocaleString()} in 7 days ${deltaText(week, data?.bookingsPrevious7Days)}`.trim(), icon: "CalendarCheck" },
-      { label: "GMV (EGP)", value: formatMoney(totalRevenue), sub: completed > 0 ? `avg EGP ${Math.round(avg).toLocaleString()} per booking` : "from completed bookings", icon: "Banknote" }
+      { label: "Customers", value: customers.toLocaleString(), delta: pctDelta(customers, customers - newCustomers), sub: `+${newCustomers.toLocaleString()} in 30 days · ${totalProviders.toLocaleString()} providers`, icon: "Users" },
+      { label: "Verified providers", value: Number(data?.approvedProviders || 0).toLocaleString(), delta: verified30 > 0 ? `+${verified30.toLocaleString()}` : "", sub: `${data?.pendingVerification || 0} pending review`, icon: "BadgeCheck" },
+      { label: "Bookings · 30d", value: bookings30.toLocaleString(), delta: pctDelta(bookings30, data?.bookingsPrevious30Days), sub: `${today.toLocaleString()} today · ${week.toLocaleString()} in 7 days`, icon: "CalendarCheck" },
+      { label: "GMV · 30d (EGP)", value: formatMoney(revenue30), delta: pctDelta(revenue30, data?.revenuePrevious30Days), sub: completed > 0 ? `avg EGP ${Math.round(avg).toLocaleString()} per booking · ${formatMoney(totalRevenue)} all time` : "from completed bookings", icon: "Banknote" }
     ]
   };
 }
@@ -411,6 +440,18 @@ function normalizeVerification(item) {
     status: String(item.verificationStatus || "PENDING").replace("PENDING_VERIFICATION", "PENDING"),
     palette: "plum",
     risk: item.rejectionReason || "Low",
+    verificationNote: item.verificationNote || "",
+    // Business profile rows (ADMIN-04).
+    business: {
+      coordinates: item.latitude != null && item.longitude != null
+        ? `${Number(item.latitude).toFixed(4)}, ${Number(item.longitude).toFixed(4)}` : "",
+      services: item.serviceCount
+        ? `${item.serviceCount} service${item.serviceCount === 1 ? "" : "s"}${item.minServicePrice != null
+          ? ` · EGP ${Number(item.minServicePrice).toLocaleString()}${Number(item.maxServicePrice) !== Number(item.minServicePrice) ? `–${Number(item.maxServicePrice).toLocaleString()}` : ""}` : ""}`
+        : "",
+      gallery: `${item.galleryCount || 0} uploaded`,
+      terms: item.acceptedTermsVersion ? `v${item.acceptedTermsVersion}${item.termsAcceptedAt ? ` · ${formatWhen(item.termsAcceptedAt)}` : ""}` : ""
+    },
     documentPaths: {
       nationalIdFrontPath: item.nationalIdFrontPath,
       nationalIdBackPath: item.nationalIdBackPath,
@@ -428,7 +469,12 @@ function normalizeComplaint(item) {
     when: formatWhen(item.createdAt),
     status: item.status || "OPEN",
     flagged: item.flagged === true,
-    priority: item.flagged ? "High" : "Medium"
+    // ComplaintDto.priority (HIGH / MEDIUM / LOW); older servers only send flagged.
+    priority: { HIGH: "High", MEDIUM: "Medium", LOW: "Low" }[item.priority] || (item.flagged ? "High" : "Medium"),
+    category: item.category || "",
+    description: item.description || "",
+    adminNotes: item.adminNotes || "",
+    bookingId: item.bookingId ?? null
   };
 }
 
@@ -1038,7 +1084,8 @@ async function mockRequest(path, options = {}) {
     return JSON.parse(JSON.stringify(mock.supportSettings));
   }
   if (path === "/admin/settlements") return mock.settlements;
-  if (path === "/admin/bookings") return mock.bookings;
+  if (path.split("?")[0] === "/admin/bookings") return mock.bookings;
+  if (path === "/admin/bookings/stats") return { today: 38, inProgress: 6, openDisputes: 1, cancelRate7d: 4.2 };
   if (path === "/admin/reviews") return mock.reviews;
   if (path === "/admin/flags") return mock.complaints.filter((item) => item.priority === "High").map((item, index) => ({
     id: item.id,

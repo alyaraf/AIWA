@@ -31,7 +31,11 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
             "/auth/login", 10L,
             "/auth/send-otp", 5L,
             "/auth/verify-otp", 10L,
-            "/auth/refresh", 20L,
+            // Refresh tokens are random and single-use, so there is nothing to
+            // brute force; the budget only caps floods. Mobile users share carrier
+            // NAT IPs, so a low per-IP cap fails real refreshes (FE-32).
+            // ponytail: per-IP key, key on the refresh token if one NAT IP still hits this
+            "/auth/refresh", 300L,
             "/auth/register", 5L,
             "/auth/reset-password", 5L,
             "/auth/2fa/verify", 10L);

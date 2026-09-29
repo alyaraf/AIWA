@@ -78,6 +78,8 @@ public class User extends BaseEntity {
     @Builder.Default
     private boolean notifySms = true;
     @Builder.Default
+    private boolean notifyWhatsapp = false;
+    @Builder.Default
     private boolean muteAll = false;
     private java.time.LocalTime quietHoursStart;
     private java.time.LocalTime quietHoursEnd;

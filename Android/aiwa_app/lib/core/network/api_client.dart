@@ -103,6 +103,23 @@ class ApiClient {
     _dio.delete<T>(path, queryParameters: queryParameters, options: options),
   );
 
+  /// Best effort: revokes the access and refresh tokens server-side. Never
+  /// throws, so sign-out still works offline.
+  Future<void> logout() async {
+    try {
+      final refreshToken = await _storage.getRefreshToken();
+      if (refreshToken == null) return;
+      await _dio
+          .post(
+            ApiConstants.logout,
+            data: {'refreshToken': refreshToken},
+            // An expired access token must not trigger a refresh here.
+            options: Options(extra: {'retried': true}),
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
+  }
+
   Future<Response<T>> postForm<T>(
     String path, {
     required FormData formData,
@@ -162,14 +179,23 @@ class _AuthInterceptor extends Interceptor {
     // No refresh token = never signed in (guest / sign-in form): a plain
     // 401, not an expired session.
     if (refreshToken == null) return handler.next(err);
+    // Another request already refreshed after this one was sent: just retry
+    // with the stored token instead of spending the new refresh token.
+    final current = await _storage.getAccessToken();
     final String? newToken;
-    try {
-      newToken = await (_refreshing ??= _refresh(
-        refreshToken,
-      ).whenComplete(() => _refreshing = null));
-    } on NetworkException {
-      // Offline is not an expired session: keep the tokens.
-      return handler.next(err);
+    if (current != null &&
+        _refreshing == null &&
+        opts.headers['Authorization'] != 'Bearer $current') {
+      newToken = current;
+    } else {
+      try {
+        newToken = await (_refreshing ??= _refresh(
+          refreshToken,
+        ).whenComplete(() => _refreshing = null));
+      } on NetworkException {
+        // Offline is not an expired session: keep the tokens.
+        return handler.next(err);
+      }
     }
     if (newToken == null) return handler.next(err);
     opts.headers['Authorization'] = 'Bearer $newToken';
@@ -181,8 +207,10 @@ class _AuthInterceptor extends Interceptor {
     }
   }
 
-  /// New access token, or null after signing out because the refresh token
-  /// was rejected. Throws [NetworkException] when offline.
+  /// New access token, or null when the refresh failed. Only a 401/403 from
+  /// /auth/refresh (token rejected) signs the user out; 429 / 5xx / a bad
+  /// body keep the tokens so the next request can try again. Throws
+  /// [NetworkException] when offline.
   Future<String?> _refresh(String refreshToken) async {
     String? token;
     String? rotated;
@@ -196,12 +224,14 @@ class _AuthInterceptor extends Interceptor {
       rotated = response.data['data']['refreshToken'] as String?;
     } on DioException catch (e) {
       if (e.error is NetworkException) throw e.error!;
-    } catch (_) {}
-    if (token == null) {
-      await _storage.clearAll();
-      ApiClient.authEvents.add(401);
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        await _storage.clearAll();
+        ApiClient.authEvents.add(401);
+      }
       return null;
-    }
+    } catch (_) {}
+    if (token == null) return null;
     await _storage.saveAccessToken(token);
     // Refresh tokens are single-use: the backend revokes the one just sent,
     // so the next refresh must use the new one or the user is signed out.

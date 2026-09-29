@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/di/injection_container.dart';
-import '../../../../core/errors/failures.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -16,11 +15,10 @@ import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// `NOTIF_CHANNELS` in flow-additions-v3.jsx → NotificationPreferencesDto key.
-/// WhatsApp has no backend field (null key).
-List<(String?, String, IconData)> _channels(AppLocalizations l) => [
+List<(String, String, IconData)> _channels(AppLocalizations l) => [
   ('notifyPush', l.npPush, LucideIcons.bell),
   ('notifySms', l.npSms, LucideIcons.messageSquare),
-  (null, l.providerWhatsApp, LucideIcons.messageCircle),
+  ('notifyWhatsapp', l.providerWhatsApp, LucideIcons.messageCircle),
   ('notifyEmail', l.authModeEmail, LucideIcons.mail),
 ];
 
@@ -88,15 +86,7 @@ class _NotificationPreferencesPageState
     );
   }
 
-  void _toggleChannel(String? key) {
-    if (key == null) {
-      setState(
-        () => _error = AppLocalizations.of(
-          context,
-        ).error(const NotSupportedFailure('WhatsApp alerts').message),
-      );
-      return;
-    }
+  void _toggleChannel(String key) {
     final v = !(_prefs![key] as bool? ?? false);
     _patch({key: v}, {key: v});
   }
@@ -208,7 +198,7 @@ class _NotificationPreferencesPageState
                           ),
                           _rowLabel(label),
                           AiwaToggle(
-                            value: key != null && p[key] == true,
+                            value: p[key] == true,
                             onChanged: (_) => _toggleChannel(key),
                           ),
                         ],

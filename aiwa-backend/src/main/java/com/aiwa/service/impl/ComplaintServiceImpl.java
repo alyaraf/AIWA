@@ -139,7 +139,16 @@ public class ComplaintServiceImpl {
                 .status(c.getStatus())
                 .adminNotes(c.getAdminNotes())
                 .flagged(c.isFlagged())
+                .priority(priorityOf(c))
                 .createdAt(c.getCreatedAt())
                 .build();
+    }
+
+    /** Admin triage order: escalated, safety and money issues first; "other" last. */
+    static String priorityOf(Complaint c) {
+        String cat = c.getCategory() == null ? "" : c.getCategory().toUpperCase();
+        if (c.isFlagged() || cat.equals("SAFETY") || cat.equals("PAYMENT")) return "HIGH";
+        if (cat.equals("OTHER")) return "LOW";
+        return "MEDIUM";
     }
 }

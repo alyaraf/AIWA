@@ -28,6 +28,7 @@ class ProviderDetailModel extends ProviderDetailEntity {
     super.offlineMode,
     super.vacationMode,
     super.settlementPaused,
+    super.busyNow,
   });
 
   /// Backend ProviderDetailDto is flat; the account sits under `owner`.
@@ -73,6 +74,7 @@ class ProviderDetailModel extends ProviderDetailEntity {
       offlineMode: json['offlineMode'] as bool? ?? false,
       vacationMode: json['vacationMode'] as bool? ?? false,
       settlementPaused: json['settlementPaused'] as bool? ?? false,
+      busyNow: json['busyNow'] as bool? ?? false,
       staff: [
         for (final m in json['staffMembers'] as List<dynamic>? ?? const [])
           if ((m as Map<String, dynamic>)['active'] != false)
