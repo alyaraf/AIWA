@@ -36,6 +36,9 @@ abstract class DashboardRemoteDataSource {
   Future<BookingModel> arrived(String bookingId);
 
   Future<BookingModel> inProgress(String bookingId);
+
+  /// PATCH /bookings/{id}/no-show — only once the start time has passed.
+  Future<BookingModel> noShow(String bookingId);
 }
 
 class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
@@ -153,6 +156,12 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
     final response = await _api.patch(
       ApiConstants.bookingInProgress(bookingId),
     );
+    return BookingModel.fromJson(response.data['data'] ?? response.data);
+  }
+
+  @override
+  Future<BookingModel> noShow(String bookingId) async {
+    final response = await _api.patch(ApiConstants.bookingNoShow(bookingId));
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 }

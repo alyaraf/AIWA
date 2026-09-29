@@ -79,6 +79,20 @@ void main() {
     expect(codes, [200, 200, 200]);
     expect(adapter.refreshes, 1);
   });
+
+  test('the rotated refresh token replaces the spent one', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      AppConstants.accessTokenKey: 'old',
+      AppConstants.refreshTokenKey: 'r',
+    });
+    final storage = SecureStorage(const FlutterSecureStorage());
+    final c = ApiClient(storage, adapter: _RefreshAdapter());
+    expect((await c.get('/me')).statusCode, 200);
+    expect(await storage.getAccessToken(), 'new');
+    // The backend blacklists 'r' on use; keeping it would sign the user
+    // out at the next refresh.
+    expect(await storage.getRefreshToken(), 'r2');
+  });
 }
 
 /// 401 unless the request carries the refreshed token; refresh is slow so
@@ -99,7 +113,7 @@ class _RefreshAdapter implements HttpClientAdapter {
       refreshes++;
       await Future<void>.delayed(const Duration(milliseconds: 50));
       return ResponseBody.fromString(
-        '{"data":{"accessToken":"new"}}',
+        '{"data":{"accessToken":"new","refreshToken":"r2"}}',
         200,
         headers: _json,
       );

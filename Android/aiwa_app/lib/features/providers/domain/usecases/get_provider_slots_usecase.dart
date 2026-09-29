@@ -7,10 +7,16 @@ class GetProviderSlotsUseCase {
   final ProviderRepository _repository;
   GetProviderSlotsUseCase(this._repository);
 
-  /// [date] is `yyyy-MM-dd`.
+  /// [date] is `yyyy-MM-dd`; [staffId] scopes slots to a picked stylist.
   Future<Either<Failure, List<AvailabilitySlot>>> call(
     String providerId,
     String serviceId,
-    String date,
-  ) => _repository.getAvailableSlots(providerId, serviceId, date);
+    String date, {
+    String? staffId,
+  }) => _repository.getAvailableSlots(
+    providerId,
+    serviceId,
+    date,
+    staffId: staffId,
+  );
 }

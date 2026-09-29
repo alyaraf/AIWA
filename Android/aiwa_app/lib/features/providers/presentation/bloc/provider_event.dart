@@ -24,7 +24,15 @@ class ProviderLoadSlotsEvent extends ProviderEvent {
   final String providerId;
   final String serviceId;
   final String date;
-  const ProviderLoadSlotsEvent(this.providerId, this.serviceId, this.date);
+
+  /// The picked stylist at a shop; null = any staff / an individual provider.
+  final String? staffId;
+  const ProviderLoadSlotsEvent(
+    this.providerId,
+    this.serviceId,
+    this.date, {
+    this.staffId,
+  });
   @override
-  List<Object?> get props => [providerId, serviceId, date];
+  List<Object?> get props => [providerId, serviceId, date, staffId];
 }

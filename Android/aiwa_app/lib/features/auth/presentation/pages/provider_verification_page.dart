@@ -9,6 +9,13 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/dashed_button.dart';
+import '../../../../shared/widgets/aiwa_toast.dart';
+import '../../../../shared/widgets/screen_chrome.dart' show InlineBanner, BannerTone;
+import '../../../../core/di/injection_container.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../domain/repositories/auth_repository.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -55,17 +62,52 @@ class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
     }
   }
 
+  /// Sent back here from the pending screen after a rejection or a "more
+  /// info" request: upload straight away instead of continuing sign-up.
+  bool get _resubmit => widget.registrationData['resubmit'] == true;
+  bool _sending = false;
+  String? _error;
+
   /// Registration, the business profile and these uploads all happen at the
   /// end of Preferences, after Terms (prototype.jsx:649-650).
-  void _submit() => context.push(
-    AppRoutes.terms,
-    extra: {
-      ...widget.registrationData,
-      'idFront': _idFront,
-      'idBack': _idBack,
-      'selfie': _selfie,
-    },
-  );
+  void _submit() => _resubmit
+      ? _sendAgain()
+      : context.push(
+          AppRoutes.terms,
+          extra: {
+            ...widget.registrationData,
+            'idFront': _idFront,
+            'idBack': _idBack,
+            'selfie': _selfie,
+          },
+        );
+
+  /// POST /provider/verification/documents — the backend puts the provider
+  /// back in the review queue and clears the admin's note.
+  Future<void> _sendAgain() async {
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    final r = await sl<AuthRepository>().uploadVerificationDocuments(
+      idFront: _idFront!,
+      idBack: _idBack!,
+      selfie: _selfie!,
+    );
+    if (!mounted) return;
+    final l = AppLocalizations.of(context);
+    r.fold(
+      (f) => setState(() {
+        _sending = false;
+        _error = l.error(f.message);
+      }),
+      (_) {
+        context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
+        showAiwaToast(context, l.provDocsResent);
+        context.go(AppRoutes.providerPending);
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,12 +115,17 @@ class _ProviderVerificationPageState extends State<ProviderVerificationPage> {
     return AuthStepScaffold(
       stickyBar: true,
       bottom: AiwaButton(
-        label: l.provVerifySubmit,
+        label: _resubmit ? l.provResubmit : l.provVerifySubmit,
         fullWidth: true,
         size: AiwaButtonSize.lg,
-        onPressed: _ready ? _submit : null,
+        loading: _sending,
+        onPressed: _ready && !_sending ? _submit : null,
       ),
       children: [
+        if (_error != null) ...[
+          InlineBanner(tone: BannerTone.danger, body: _error),
+          const SizedBox(height: 12),
+        ],
         StepHeader(
           step: 6,
           total: 6,

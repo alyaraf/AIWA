@@ -124,6 +124,7 @@ class _BookingPageState extends State<BookingPage> {
         widget.providerId,
         service.id,
         _dayFmt.format(_selectedDate),
+        staffId: widget.staffId,
       ),
     );
   }

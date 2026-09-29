@@ -13,12 +13,16 @@ abstract class ProviderRemoteDataSource {
   Future<List<Map<String, dynamic>>> getAvailableSlots(
     String providerId,
     String serviceId,
-    String date,
-  );
+    String date, {
+    String? staffId,
+  });
   Future<void> saveProvider(String providerId);
   Future<void> unsaveProvider(String providerId);
   Future<bool> isProviderSaved(String providerId);
   Future<void> flagProvider(String providerId, String reason, String note);
+
+  /// POST /providers/{id}/gallery/{imageId}/report — opens a moderation case.
+  Future<void> reportPhoto(String providerId, String imageId, String reason);
 }
 
 class ProviderRemoteDataSourceImpl implements ProviderRemoteDataSource {
@@ -70,8 +74,9 @@ class ProviderRemoteDataSourceImpl implements ProviderRemoteDataSource {
   Future<List<Map<String, dynamic>>> getAvailableSlots(
     String providerId,
     String serviceId,
-    String date,
-  ) async {
+    String date, {
+    String? staffId,
+  }) async {
     // List<TimeSlotDto {startTime, endTime, booked}>.
     final response = await _api.get(
       ApiConstants.availableSlots,
@@ -79,6 +84,8 @@ class ProviderRemoteDataSourceImpl implements ProviderRemoteDataSource {
         'providerId': providerId,
         'serviceId': serviceId,
         'date': date,
+        // A picked stylist's own hours and bookings, not the whole shop's.
+        'staffMemberId': ?staffId,
       },
     );
     return (response.data['data'] as List).cast<Map<String, dynamic>>();
@@ -98,6 +105,18 @@ class ProviderRemoteDataSourceImpl implements ProviderRemoteDataSource {
   Future<bool> isProviderSaved(String providerId) async {
     final response = await _api.get(ApiConstants.checkSaved(providerId));
     return response.data['data'] as bool? ?? false;
+  }
+
+  @override
+  Future<void> reportPhoto(
+    String providerId,
+    String imageId,
+    String reason,
+  ) async {
+    await _api.post(
+      ApiConstants.providerGalleryReport(providerId, imageId),
+      queryParameters: {'reason': reason},
+    );
   }
 
   /// POST /complaints takes query params, not a body (ComplaintController).

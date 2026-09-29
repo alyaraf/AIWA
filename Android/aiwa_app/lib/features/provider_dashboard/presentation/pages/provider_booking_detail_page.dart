@@ -14,6 +14,7 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/aiwa_sheet.dart';
 import '../../../../shared/widgets/aiwa_toast.dart';
+import '../../../../shared/widgets/confirm_sheet.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
@@ -182,6 +183,31 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
     await _act(
       () => sl<BookingRepository>().cancelBooking(_id, reason: r.reason),
       toast: l.pbdCancelledToast,
+      pop: true,
+    );
+  }
+
+  /// The customer never came (venue) or wasn't there (home visit), and the
+  /// start time has passed — the backend refuses earlier. Closes the booking
+  /// without the provider cancel strike.
+  bool _canMarkNoShow(BookingEntity b) =>
+      ((b.status == 'ACCEPTED' && !b.homeService) || b.status == 'ARRIVED') &&
+      !DateTime.now().isBefore(b.scheduledDateTime);
+
+  Future<void> _noShow() async {
+    final l = AppLocalizations.of(context);
+    final ok = await showConfirmSheet(
+      context,
+      eyebrow: l.pbdCancelEyebrow,
+      title: l.pbdNoShowTitle,
+      body: l.pbdNoShowBody,
+      confirmLabel: l.pbdNoShow,
+      icon: LucideIcons.userX,
+    );
+    if (!ok || !mounted) return;
+    await _act(
+      () => _repo.bookingNoShow(_id),
+      toast: l.pbdNoShowToast,
       pop: true,
     );
   }
@@ -526,6 +552,14 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
             textAlign: TextAlign.center,
             style: AppTextStyles.micro.copyWith(fontSize: 12),
           ),
+          if (_canMarkNoShow(b))
+            AiwaButton(
+              label: l.pbdNoShow,
+              icon: LucideIcons.userX,
+              variant: AiwaButtonVariant.ghost,
+              size: AiwaButtonSize.sm,
+              onPressed: _busy ? null : _noShow,
+            ),
           const SizedBox(height: 8),
           Row(
             children: [

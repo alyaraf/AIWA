@@ -18,12 +18,15 @@ import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/press_scale.dart';
+import '../../../../shared/widgets/reason_sheet.dart';
+import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../../shared/widgets/star_rating.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../home/presentation/widgets/provider_card.dart';
 import '../../domain/entities/provider_detail_entity.dart';
+import '../../domain/repositories/provider_repository.dart';
 import '../bloc/provider_bloc.dart';
 import '../bloc/provider_event.dart';
 import '../bloc/provider_state.dart';
@@ -79,6 +82,41 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
       ].join(' · '),
     ),
   );
+
+  /// POST /providers/{id}/gallery/{imageId}/report → admin photo moderation.
+  Future<void> _reportPhoto(ProviderDetailEntity p, String imageId) async {
+    if (!_isSignedIn) {
+      context.push(AppRoutes.authGate);
+      return;
+    }
+    final l = AppLocalizations.of(context);
+    final r = await showReasonSheet(
+      context,
+      eyebrow: l.providerReportPhoto,
+      title: l.flagTitle,
+      reasons: [
+        l.flagReasonMisleading,
+        l.flagReasonSpam,
+        l.flagReasonBehavior,
+        l.flagReasonOther,
+      ],
+      otherLabel: l.flagReasonOther,
+      cancelLabel: l.commonCancel,
+      confirmLabel: l.flagSubmit,
+    );
+    if (r == null || !mounted) return;
+    final reason = r.note.trim().isEmpty ? r.reason : '${r.reason}: ${r.note}';
+    final res = await sl<ProviderRepository>().reportPhoto(
+      p.id,
+      imageId,
+      reason,
+    );
+    if (!mounted) return;
+    showAiwaToast(
+      context,
+      res.fold((f) => l.error(f.message), (_) => l.flagThanks),
+    );
+  }
 
   void _toggleSave() {
     if (!_isSignedIn) {
@@ -506,6 +544,16 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
           ];
         }
         return [
+          if (p.galleryIds.isNotEmpty)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(pad.left, 0, pad.right, 8),
+              sliver: SliverToBoxAdapter(
+                child: Text(
+                  l.providerReportPhotoHint,
+                  style: AppTextStyles.micro.copyWith(color: AppColors.ink4),
+                ),
+              ),
+            ),
           SliverPadding(
             padding: pad,
             sliver: SliverGrid(
@@ -514,19 +562,26 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                 mainAxisSpacing: 6,
                 crossAxisSpacing: 6,
               ),
-              delegate: SliverChildBuilderDelegate(
-                (_, i) => ClipRRect(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  child: CachedNetworkImage(
-                    imageUrl: ApiConstants.mediaUrl(p.galleryImages[i]),
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => const ShimmerBox(height: 120),
-                    errorWidget: (_, __, ___) =>
-                        Container(color: AppColors.cream),
+              delegate: SliverChildBuilderDelegate((_, i) {
+                final url = p.galleryImages[i];
+                final imageId = p.galleryIds[url];
+                return GestureDetector(
+                  // Press and hold to report (feeds admin photo moderation).
+                  onLongPress: imageId == null
+                      ? null
+                      : () => _reportPhoto(p, imageId),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    child: CachedNetworkImage(
+                      imageUrl: ApiConstants.mediaUrl(url),
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => const ShimmerBox(height: 120),
+                      errorWidget: (_, __, ___) =>
+                          Container(color: AppColors.cream),
+                    ),
                   ),
-                ),
-                childCount: p.galleryImages.length,
-              ),
+                );
+              }, childCount: p.galleryImages.length),
             ),
           ),
         ];

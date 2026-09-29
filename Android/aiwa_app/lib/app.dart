@@ -32,6 +32,17 @@ class AiwaApp extends StatelessWidget {
           if (s is AuthAuthenticated && s.user.gender != null) {
             ThemeController.applyGender(s.user.gender);
           }
+          // A newer policy went live since this user last accepted
+          // (GET /auth/me termsUpToDate): ask once, from anywhere. Users who
+          // never accepted are still in sign-up, which accepts on its own.
+          if (s is AuthAuthenticated &&
+              s.user.termsUpToDate == false &&
+              s.user.acceptedTermsVersion != null) {
+            final path = router.routerDelegate.currentConfiguration.uri.path;
+            if (path != AppRoutes.termsReaccept) {
+              router.push(AppRoutes.termsReaccept);
+            }
+          }
         },
         child: const _ThemedApp(),
       ),

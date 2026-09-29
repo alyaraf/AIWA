@@ -75,6 +75,7 @@ class ProviderBloc extends Bloc<ProviderEvent, ProviderState> {
       event.providerId,
       event.serviceId,
       event.date,
+      staffId: event.staffId,
     );
     final fetched = result.fold((_) => <AvailabilitySlot>[], (s) => s);
     final fmt = DateFormat('yyyy-MM-dd');

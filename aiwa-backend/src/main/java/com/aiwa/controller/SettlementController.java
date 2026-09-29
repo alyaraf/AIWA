@@ -137,6 +137,7 @@ public class SettlementController {
                 .providerName(provider.getBusinessName())
                 .settlementPaused(provider.isSettlementPaused())
                 .status(statusOf(all))
+                .paymentReportedAt(provider.getSettlementReportedAt())
                 .commissionPercent(platformSettings.getCommissionPercentFor(provider))
                 .commissionOverridePercent(provider.getCommissionOverridePercent())
                 .platformCommissionPercent(platformSettings.getCommissionPercent())
@@ -300,6 +301,7 @@ public class SettlementController {
                     .status(statusOf(entries))
                     .settlementPaused(p.isSettlementPaused())
                     .dueDate(dueDateOf(entries))
+                    .paymentReportedAt(p.getSettlementReportedAt())
                     .build());
         });
         return rows;

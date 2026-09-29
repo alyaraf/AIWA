@@ -84,6 +84,10 @@ class DashboardRepositoryImpl implements DashboardRepository {
       _guard(() => _remote.inProgress(bookingId));
 
   @override
+  Future<Either<Failure, BookingEntity>> bookingNoShow(String bookingId) =>
+      _guard(() => _remote.noShow(bookingId));
+
+  @override
   Future<Either<Failure, BookingEntity>> proposeTime(
     String bookingId,
     String date,

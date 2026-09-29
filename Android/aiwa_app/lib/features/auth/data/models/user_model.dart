@@ -14,6 +14,7 @@ class UserModel extends UserEntity {
     required super.termsAccepted,
     super.acceptedTermsVersion,
     super.termsAcceptedAt,
+    super.termsUpToDate,
     super.searchRadiusMinKm,
     super.searchRadiusMaxKm,
     super.providerProfile,
@@ -35,6 +36,7 @@ class UserModel extends UserEntity {
       termsAcceptedAt: DateTime.tryParse(
         json['termsAcceptedAt'] as String? ?? '',
       ),
+      termsUpToDate: json['termsUpToDate'] as bool?,
       searchRadiusMinKm: (json['searchRadiusMinKm'] as num?)?.toDouble(),
       searchRadiusMaxKm: (json['searchRadiusMaxKm'] as num?)?.toDouble(),
       // UserDto sends the flat providerProfileId / providerStatus.
@@ -47,6 +49,7 @@ class UserModel extends UserEntity {
               id: (json['providerProfileId'] as num?)?.toInt() ?? 0,
               businessName: '',
               verificationStatus: json['providerStatus'] as String,
+              note: json['providerNote'] as String?,
             )
           : null,
     );
@@ -73,6 +76,7 @@ class ProviderProfileSummaryModel extends ProviderProfileSummary {
     required super.id,
     required super.businessName,
     required super.verificationStatus,
+    super.note,
   });
 
   factory ProviderProfileSummaryModel.fromJson(Map<String, dynamic> json) {
@@ -81,6 +85,7 @@ class ProviderProfileSummaryModel extends ProviderProfileSummary {
       businessName: json['businessName'] as String,
       verificationStatus:
           json['verificationStatus'] as String? ?? 'PENDING_VERIFICATION',
+      note: json['rejectionReason'] as String?,
     );
   }
 }

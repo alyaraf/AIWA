@@ -185,6 +185,7 @@ class _AuthInterceptor extends Interceptor {
   /// was rejected. Throws [NetworkException] when offline.
   Future<String?> _refresh(String refreshToken) async {
     String? token;
+    String? rotated;
     try {
       final response = await _dio.post(
         ApiConstants.refresh,
@@ -192,6 +193,7 @@ class _AuthInterceptor extends Interceptor {
         options: Options(headers: {}),
       );
       token = response.data['data']['accessToken'] as String?;
+      rotated = response.data['data']['refreshToken'] as String?;
     } on DioException catch (e) {
       if (e.error is NetworkException) throw e.error!;
     } catch (_) {}
@@ -201,6 +203,11 @@ class _AuthInterceptor extends Interceptor {
       return null;
     }
     await _storage.saveAccessToken(token);
+    // Refresh tokens are single-use: the backend revokes the one just sent,
+    // so the next refresh must use the new one or the user is signed out.
+    if (rotated != null && rotated.isNotEmpty) {
+      await _storage.saveRefreshToken(rotated);
+    }
     return token;
   }
 }

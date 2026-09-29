@@ -427,6 +427,12 @@ public class BookingServiceImpl implements BookingService {
         }
 
         if (newStatus == BookingStatus.NO_SHOW) {
+            // Only once the appointment has started: before that the customer
+            // can't be absent yet, and a no-show counts against them.
+            if (booking.getBookingDate() != null && booking.getStartTime() != null
+                    && AiwaTime.now().isBefore(LocalDateTime.of(booking.getBookingDate(), booking.getStartTime()))) {
+                throw new BusinessException("booking.error.no_show_too_early");
+            }
             booking.setPenaltyApplied(true);
         }
 

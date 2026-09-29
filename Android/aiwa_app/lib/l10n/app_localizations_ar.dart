@@ -588,6 +588,33 @@ class AppLocalizationsAr extends AppLocalizations {
       'يمكنك التصفّح، لكن الحجوزات تُفتح بعد التحقق.';
 
   @override
+  String get provStatusCheck => 'تحقق من الحالة';
+
+  @override
+  String get provInfoTitle => 'تحتاج AIWA إلى المزيد منك';
+
+  @override
+  String get provRejectedTitle => 'لم تتم الموافقة بعد';
+
+  @override
+  String get provRejectedBody => 'لم يتمكن فريقنا من اعتماد مستنداتك. أصلح المشكلة الموضحة أدناه وأرسلها مرة أخرى.';
+
+  @override
+  String get provSuspendedTitle => 'حساب مقدم الخدمة موقوف';
+
+  @override
+  String get provSuspendedBody => 'لا يمكنك استقبال الحجوزات حاليًا. تواصل مع الدعم لمعرفة السبب والخطوة التالية.';
+
+  @override
+  String get provResubmit => 'أعد إرسال المستندات';
+
+  @override
+  String get provAdminNote => 'ملاحظة من AIWA';
+
+  @override
+  String get provDocsResent => 'تم إرسال المستندات. سنراجعها قريبًا.';
+
+  @override
   String get provVerifySubmit => 'إرسال للمراجعة';
 
   @override
@@ -1663,6 +1690,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get flagSubmit => 'إرسال البلاغ';
 
   @override
+  String get providerReportPhoto => 'الإبلاغ عن الصورة';
+
+  @override
+  String get providerReportPhotoHint => 'اضغط مطولًا على صورة للإبلاغ عنها.';
+
+  @override
   String get homeOpen => 'مفتوح';
 
   @override
@@ -2057,6 +2090,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pbdCancelledToast => 'تم إلغاء الحجز وتطبيق الغرامة على سجلك.';
+
+  @override
+  String get pbdNoShow => 'لم يحضر العميل';
+
+  @override
+  String get pbdNoShowTitle => 'تسجيل هذا الحجز كعدم حضور؟';
+
+  @override
+  String get pbdNoShowBody => 'استخدم هذا فقط إذا لم يحضر العميل ولم تتمكن من الوصول إليه. يُغلق الحجز دون مخالفة عليك ويُسجَّل على العميل.';
+
+  @override
+  String get pbdNoShowToast => 'تم تسجيل عدم الحضور.';
 
   @override
   String get pbdEyebrow => 'طلب حجز';

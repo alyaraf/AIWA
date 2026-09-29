@@ -65,6 +65,9 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
 
     // ── Verification (req 1, 2) ───────────────────────────────────────────────
     Page<ProviderProfile> findByVerificationStatus(VerificationStatus status, Pageable pageable);
+
+    /** Providers who reported paying commission that finance hasn't confirmed yet. */
+    List<ProviderProfile> findBySettlementReportedAtIsNotNullOrderBySettlementReportedAtAsc(Pageable pageable);
     long countByVerificationStatus(VerificationStatus status);
 
     /** True when this exact storage path was submitted by some provider as an ID / selfie document. */

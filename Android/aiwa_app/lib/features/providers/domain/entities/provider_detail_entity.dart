@@ -7,6 +7,9 @@ class ProviderDetailEntity extends Equatable {
   final String? bio;
   final String? profileImageUrl;
   final List<String> galleryImages;
+
+  /// Photo url → gallery image id (ProviderDetailDto.gallery), for reports.
+  final Map<String, String> galleryIds;
   final String email;
   final String phone;
   final List<String> categories;
@@ -38,6 +41,7 @@ class ProviderDetailEntity extends Equatable {
     this.bio,
     this.profileImageUrl,
     this.galleryImages = const [],
+    this.galleryIds = const {},
     required this.email,
     required this.phone,
     required this.categories,

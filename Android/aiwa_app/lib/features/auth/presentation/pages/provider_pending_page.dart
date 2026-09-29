@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -9,16 +10,61 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/screen_chrome.dart' show AiwaGlow;
+import '../../domain/entities/user_entity.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../bloc/auth_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class ProviderPendingPage extends StatelessWidget {
+/// Provider onboarding status. Reloads the user on open and on "Check
+/// status": approval opens the provider app; a rejection or a "more info"
+/// request shows the admin's note (UserDto.providerNote) with a way to send
+/// documents again; a suspension points to support.
+class ProviderPendingPage extends StatefulWidget {
   const ProviderPendingPage({super.key});
 
   @override
+  State<ProviderPendingPage> createState() => _ProviderPendingPageState();
+}
+
+class _ProviderPendingPageState extends State<ProviderPendingPage> {
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  void _refresh() => context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
+
+  @override
   Widget build(BuildContext context) {
+    return BlocConsumer<AuthBloc, AuthState>(
+      listenWhen: (_, s) =>
+          s is AuthAuthenticated &&
+          (s.user.providerProfile?.isApproved ?? false),
+      listener: (context, _) => context.go(AppRoutes.providerDashboard),
+      builder: (context, s) {
+        final p = s is AuthAuthenticated ? s.user.providerProfile : null;
+        return _body(context, p);
+      },
+    );
+  }
+
+  Widget _body(BuildContext context, ProviderProfileSummary? p) {
     final l = AppLocalizations.of(context);
     final insets = MediaQuery.paddingOf(context);
+    final rejected = p?.isRejected ?? false;
+    final suspended = p?.isSuspended ?? false;
+    final note = p?.note?.trim();
+    final hasNote = note != null && note.isNotEmpty;
+    // Pending with a note = the admin asked for more info.
+    final needsDocs = rejected || (!suspended && hasNote);
+    final icon = suspended
+        ? LucideIcons.ban
+        : needsDocs
+        ? LucideIcons.triangleAlert
+        : LucideIcons.hourglass;
     return Scaffold(
       backgroundColor: AppColors.plum900,
       body: Container(
@@ -77,7 +123,7 @@ class ProviderPendingPage extends StatelessWidget {
                                 ),
                               ),
                               child: Icon(
-                                LucideIcons.hourglass,
+                                icon,
                                 size: 34,
                                 color: AppColors.bone,
                               ),
@@ -91,7 +137,13 @@ class ProviderPendingPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          l.provPendingTitle,
+                          suspended
+                              ? l.provSuspendedTitle
+                              : rejected
+                              ? l.provRejectedTitle
+                              : hasNote
+                              ? l.provInfoTitle
+                              : l.provPendingTitle,
                           style: AppTextStyles.h1.copyWith(
                             color: AppColors.bone,
                             fontSize: 34,
@@ -99,6 +151,20 @@ class ProviderPendingPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 14),
+                        if (suspended || rejected)
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 320),
+                            child: Text(
+                              suspended
+                                  ? l.provSuspendedBody
+                                  : l.provRejectedBody,
+                              style: AppTextStyles.bodySm.copyWith(
+                                color: AppColors.rose300,
+                                height: 1.6,
+                              ),
+                            ),
+                          )
+                        else
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 320),
                           child: Text.rich(
@@ -121,30 +187,77 @@ class ProviderPendingPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 26),
-                        _StatusRow(
-                          icon: LucideIcons.circleCheck,
-                          text: l.provPendingIdReceived,
-                          color: AppColors.rose300,
-                        ),
-                        const SizedBox(height: 10),
-                        _StatusRow(
-                          icon: LucideIcons.circleCheck,
-                          text: l.provPendingSelfieReceived,
-                          color: AppColors.rose300,
-                        ),
-                        const SizedBox(height: 10),
-                        _StatusRow(
-                          icon: LucideIcons.hourglass,
-                          text: l.provPendingAdminReview,
-                          color: AppColors.gold300,
-                        ),
+                        if (hasNote && !suspended) ...[
+                          _StatusRow(
+                            icon: LucideIcons.info,
+                            text: '${l.provAdminNote}: $note',
+                            color: AppColors.gold300,
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        if (!needsDocs && !suspended) ...[
+                          _StatusRow(
+                            icon: LucideIcons.circleCheck,
+                            text: l.provPendingIdReceived,
+                            color: AppColors.rose300,
+                          ),
+                          const SizedBox(height: 10),
+                          _StatusRow(
+                            icon: LucideIcons.circleCheck,
+                            text: l.provPendingSelfieReceived,
+                            color: AppColors.rose300,
+                          ),
+                          const SizedBox(height: 10),
+                          _StatusRow(
+                            icon: LucideIcons.hourglass,
+                            text: l.provPendingAdminReview,
+                            color: AppColors.gold300,
+                          ),
+                        ],
                         const Spacer(),
+                        if (needsDocs) ...[
+                          AiwaButton(
+                            label: l.provResubmit,
+                            icon: LucideIcons.upload,
+                            variant: AiwaButtonVariant.accent,
+                            fullWidth: true,
+                            size: AiwaButtonSize.lg,
+                            onPressed: () => context.push(
+                              AppRoutes.providerVerification,
+                              extra: const {'resubmit': true},
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        if (suspended) ...[
+                          AiwaButton(
+                            label: l.sysContactSupport,
+                            variant: AiwaButtonVariant.accent,
+                            fullWidth: true,
+                            size: AiwaButtonSize.lg,
+                            onPressed: () => context.push(AppRoutes.support),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         AiwaButton(
                           label: l.provPendingExplore,
-                          variant: AiwaButtonVariant.accent,
+                          variant: needsDocs || suspended
+                              ? AiwaButtonVariant.ghost
+                              : AiwaButtonVariant.accent,
                           fullWidth: true,
                           size: AiwaButtonSize.lg,
                           onPressed: () => context.go(AppRoutes.home),
+                        ),
+                        Center(
+                          child: TextButton(
+                            onPressed: _refresh,
+                            child: Text(
+                              l.provStatusCheck,
+                              style: AppTextStyles.label.copyWith(
+                                color: AppColors.bone,
+                              ),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 14),
                         Center(

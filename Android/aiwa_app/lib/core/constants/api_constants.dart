@@ -43,6 +43,8 @@ class ApiConstants {
   static String providerReviews(String id) => '/providers/$id/reviews';
   static String providerGallery(String id) => '/provider/gallery/$id';
   static String providerStaffList(String id) => '/providers/$id/staff';
+  static String providerGalleryReport(String id, String imageId) =>
+      '/providers/$id/gallery/$imageId/report';
 
   // Provider self-management (PROVIDER role)
   static const String myProviderProfile = '/provider/profile';

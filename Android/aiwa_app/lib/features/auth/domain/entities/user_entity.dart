@@ -13,6 +13,9 @@ class UserEntity extends Equatable {
   final bool termsAccepted;
   final String? acceptedTermsVersion;
   final DateTime? termsAcceptedAt;
+
+  /// GET /auth/me: false when a newer policy for this role is live.
+  final bool? termsUpToDate;
   final double? searchRadiusMinKm;
   final double? searchRadiusMaxKm;
   final ProviderProfileSummary? providerProfile;
@@ -30,6 +33,7 @@ class UserEntity extends Equatable {
     required this.termsAccepted,
     this.acceptedTermsVersion,
     this.termsAcceptedAt,
+    this.termsUpToDate,
     this.searchRadiusMinKm,
     this.searchRadiusMaxKm,
     this.providerProfile,
@@ -53,6 +57,7 @@ class UserEntity extends Equatable {
     termsAccepted,
     acceptedTermsVersion,
     termsAcceptedAt,
+    termsUpToDate,
   ];
 }
 
@@ -61,14 +66,20 @@ class ProviderProfileSummary extends Equatable {
   final String businessName;
   final String verificationStatus;
 
+  /// Admin's rejection reason or "more info" request (UserDto.providerNote).
+  final String? note;
+
   const ProviderProfileSummary({
     required this.id,
     required this.businessName,
     required this.verificationStatus,
+    this.note,
   });
 
   bool get isApproved => verificationStatus == 'APPROVED';
+  bool get isRejected => verificationStatus == 'REJECTED';
+  bool get isSuspended => verificationStatus == 'SUSPENDED';
 
   @override
-  List<Object?> get props => [id, businessName, verificationStatus];
+  List<Object?> get props => [id, businessName, verificationStatus, note];
 }

@@ -132,6 +132,43 @@ class BookingLifecycleServiceTest {
                 .hasMessageContaining("only_provider_complete");
     }
 
+    // ── No-show ──────────────────────────────────────────────────────────────────
+
+    @Test
+    void providerCannotMarkANoShowBeforeTheStartTime() {
+        Booking b = booking(BookingStatus.ACCEPTED); // tomorrow 10:00
+        when(bookingRepo.findById(55L)).thenReturn(Optional.of(b));
+
+        assertThatThrownBy(() -> service.updateStatus(PROVIDER_USER_ID, 55L, BookingStatus.NO_SHOW))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no_show_too_early");
+        assertThat(b.getStatus()).isEqualTo(BookingStatus.ACCEPTED);
+        assertThat(b.isPenaltyApplied()).isFalse();
+    }
+
+    @Test
+    void providerMarksANoShowOnceTheBookingHasStarted() {
+        Booking b = booking(BookingStatus.ACCEPTED);
+        b.setBookingDate(com.aiwa.util.AiwaTime.today().minusDays(1));
+        when(bookingRepo.findById(55L)).thenReturn(Optional.of(b));
+
+        ApiResponse.BookingDto dto = service.updateStatus(PROVIDER_USER_ID, 55L, BookingStatus.NO_SHOW);
+
+        assertThat(dto.getStatus()).isEqualTo(BookingStatus.NO_SHOW);
+        assertThat(b.isPenaltyApplied()).isTrue();
+    }
+
+    @Test
+    void customerCannotMarkThemselvesANoShow() {
+        Booking b = booking(BookingStatus.ACCEPTED);
+        b.setBookingDate(com.aiwa.util.AiwaTime.today().minusDays(1));
+        when(bookingRepo.findById(55L)).thenReturn(Optional.of(b));
+
+        assertThatThrownBy(() -> service.updateStatus(CUSTOMER_ID, 55L, BookingStatus.NO_SHOW))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("only_provider_update_status");
+    }
+
     // ── Provider proposes alternative time ───────────────────────────────────────
 
     @Test

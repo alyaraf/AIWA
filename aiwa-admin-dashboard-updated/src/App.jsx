@@ -696,6 +696,7 @@ function NotificationBell({ onRoute }) {
 function kindDotClass(kind) {
   switch (kind) {
     case "SOS":             return "danger";
+    case "SETTLEMENT_REPORTED": return "gold";
     case "COMPLAINT":       return "rose";
     case "VERIFICATION":    return "gold";
     case "REPORTED_REVIEW": return "plum";
@@ -3755,7 +3756,10 @@ function Settlements() {
                   <span className="dim block">EGP {Number(row.grossAmount || 0).toLocaleString()} gross</span>
                 </span>
                 <span className="mono" style={{ color: owed > 0 ? "var(--danger-700)" : "var(--success-700)" }}>{money(owed)}</span>
-                <span><span className={`status ${info.cls}`}>{info.label}</span></span>
+                <span>
+                  <span className={`status ${info.cls}`}>{info.label}</span>
+                  {row.paymentReportedAt && <span className="chip-mini gold" style={{ marginLeft: 6 }} title={`Reported ${formatWhen(row.paymentReportedAt)}`}>Payment reported</span>}
+                </span>
                 <span className="dim">{row.dueDate ? formatWhen(row.dueDate) : "—"}</span>
                 <span className="cell-end" onClick={(e) => e.stopPropagation()}>
                   {row.status === "OVERDUE" && can("FINANCE")
@@ -4055,8 +4059,16 @@ function SettlementDetail({ providerId, onBack, onChanged }) {
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span className={`status ${info.cls}`}>{info.label}</span>
               {detail.settlementPaused && <Tag tone="warn">Bookings paused</Tag>}
+              {detail.paymentReportedAt && <Tag tone="gold">Payment reported {formatWhen(detail.paymentReportedAt)}</Tag>}
             </div>
           </div>
+          {detail.paymentReportedAt && can("FINANCE") && (
+            <InlineBanner
+              tone="info"
+              title="The provider says they paid"
+              body="Check that the money arrived, then confirm the payout. Until then their balance stays owed."
+            />
+          )}
 
           <div className="detail-cols">
             <article className="table-card">

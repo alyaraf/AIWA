@@ -34,6 +34,7 @@ public class AuthController {
     private final com.aiwa.repository.ProviderProfileRepository providerProfileRepo;
     private final com.aiwa.service.impl.FileStorageServiceImpl fileStorageService;
     private final JwtUtils jwtUtils;
+    private final com.aiwa.repository.TermsPolicyRepository termsRepo;
 
     /** Secure flag on the access-token cookie — on in prod (served over HTTPS). */
     @org.springframework.beans.factory.annotation.Value("${aiwa.auth.cookie-secure:false}")
@@ -93,8 +94,9 @@ public class AuthController {
     @Operation(summary = "Get current authenticated user profile")
     public ResponseEntity<ApiResponse.Success<ApiResponse.UserDto>> me(
             @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(
-                ApiResponse.Success.of(authService.getCurrentUser(userDetails.getUsername())));
+        ApiResponse.UserDto me = authService.getCurrentUser(userDetails.getUsername());
+        me.setTermsUpToDate(termsUpToDate(me.getRole(), me.getAcceptedTermsVersion()));
+        return ResponseEntity.ok(ApiResponse.Success.of(me));
     }
 
     @PatchMapping("/me")
@@ -396,6 +398,15 @@ public class AuthController {
                 .orElseThrow(() -> new BusinessException("user.not_found"));
     }
 
+    /** Accepted version vs. the live policy for the user's role (admins: always current). */
+    private boolean termsUpToDate(com.aiwa.enums.UserRole role, String acceptedVersion) {
+        if (role == com.aiwa.enums.UserRole.ADMIN) return true;
+        String type = role == com.aiwa.enums.UserRole.PROVIDER ? "PROVIDER_TERMS" : "CUSTOMER_TERMS";
+        return termsRepo.findFirstByTypeAndActiveTrueOrderByCreatedAtDescIdDesc(type)
+                .map(live -> live.getVersion().equals(acceptedVersion))
+                .orElse(true);
+    }
+
     private ApiResponse.UserDto toUserDto(User u) {
         // Lets the app gate unapproved providers on the pending screen.
         var provider = u.getRole() == com.aiwa.enums.UserRole.PROVIDER
@@ -403,6 +414,7 @@ public class AuthController {
         return ApiResponse.UserDto.builder()
                 .providerProfileId(provider == null ? null : provider.getId())
                 .providerStatus(provider == null ? null : provider.getVerificationStatus())
+                .providerNote(provider == null ? null : provider.getRejectionReason())
                 .id(u.getId())
                 .fullName(u.getFullName())
                 .email(u.getEmail())
@@ -414,6 +426,7 @@ public class AuthController {
                 .termsAccepted(u.isTermsAccepted())
                 .acceptedTermsVersion(u.getAcceptedTermsVersion())
                 .termsAcceptedAt(u.getTermsAcceptedAt())
+                .termsUpToDate(termsUpToDate(u.getRole(), u.getAcceptedTermsVersion()))
                 .searchAreaLabel(u.getSearchAreaLabel())
                 .searchAreaLatitude(u.getSearchAreaLatitude())
                 .searchAreaLongitude(u.getSearchAreaLongitude())

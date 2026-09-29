@@ -138,6 +138,18 @@ public class AdminInboxController {
                         .targetRoute("bookings")
                         .build()));
 
+        // Commission payments providers reported — finance confirms them on
+        // Settlements (PATCH /provider/settlement/pay only records the report).
+        providerRepo.findBySettlementReportedAtIsNotNullOrderBySettlementReportedAtAsc(PageRequest.of(0, perSource))
+                .forEach(p -> items.add(ApiResponse.InboxItemDto.builder()
+                        .id("settlement-" + p.getId())
+                        .kind("SETTLEMENT_REPORTED")
+                        .title("Commission payment to confirm")
+                        .body(p.getBusinessName() + " says they paid")
+                        .createdAt(p.getSettlementReportedAt())
+                        .targetRoute("settlements")
+                        .build()));
+
         // Merge — newest first across all sources, capped at the requested limit.
         items.sort(Comparator.comparing(
                 (ApiResponse.InboxItemDto it) -> it.getCreatedAt() == null ? LocalDateTime.MIN : it.getCreatedAt()

@@ -318,6 +318,7 @@ public class AuthServiceImpl implements AuthService {
         return ApiResponse.UserDto.builder()
                 .providerProfileId(provider == null ? null : provider.getId())
                 .providerStatus(provider == null ? null : provider.getVerificationStatus())
+                .providerNote(provider == null ? null : provider.getRejectionReason())
                 .id(u.getId())
                 .fullName(u.getFullName())
                 .email(u.getEmail())

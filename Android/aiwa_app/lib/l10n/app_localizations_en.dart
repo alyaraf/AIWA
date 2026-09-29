@@ -584,6 +584,33 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can browse, but bookings open after verification.';
 
   @override
+  String get provStatusCheck => 'Check status';
+
+  @override
+  String get provInfoTitle => 'AIWA needs a bit more from you';
+
+  @override
+  String get provRejectedTitle => 'Not approved yet';
+
+  @override
+  String get provRejectedBody => 'Our team couldn\'t approve your documents. Fix the issue below and send them again.';
+
+  @override
+  String get provSuspendedTitle => 'Your provider account is suspended';
+
+  @override
+  String get provSuspendedBody => 'You can\'t take bookings right now. Contact support to find out why and what to do next.';
+
+  @override
+  String get provResubmit => 'Send documents again';
+
+  @override
+  String get provAdminNote => 'Note from AIWA';
+
+  @override
+  String get provDocsResent => 'Documents sent. We\'ll review them shortly.';
+
+  @override
   String get provVerifySubmit => 'Submit for review';
 
   @override
@@ -1640,6 +1667,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get flagSubmit => 'Submit flag';
 
   @override
+  String get providerReportPhoto => 'Report photo';
+
+  @override
+  String get providerReportPhotoHint => 'Press and hold a photo to report it.';
+
+  @override
   String get homeOpen => 'Open';
 
   @override
@@ -2016,6 +2049,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get pbdCancelledToast =>
       'Booking cancelled. Penalty applied to your ledger.';
+
+  @override
+  String get pbdNoShow => 'Customer didn\'t show';
+
+  @override
+  String get pbdNoShowTitle => 'Mark this booking as a no-show?';
+
+  @override
+  String get pbdNoShowBody => 'Use this only if the customer never came and you couldn\'t reach them. It closes the booking without a strike for you and is recorded against the customer.';
+
+  @override
+  String get pbdNoShowToast => 'Marked as a no-show.';
 
   @override
   String get pbdEyebrow => 'Booking request';

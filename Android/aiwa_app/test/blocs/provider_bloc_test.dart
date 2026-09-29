@@ -32,6 +32,7 @@ class _FakeProviderRepository implements ProviderRepository {
   Completer<void> detailGate = Completer<void>()..complete();
   final Map<String, List<AvailabilitySlot>> slotsByDate = {};
   bool slotsFail = false;
+  String? lastStaffId;
   bool saved = false;
   bool saveFails = false;
   final List<String> saveCalls = [];
@@ -48,8 +49,10 @@ class _FakeProviderRepository implements ProviderRepository {
   Future<Either<Failure, List<AvailabilitySlot>>> getAvailableSlots(
     String providerId,
     String serviceId,
-    String date,
-  ) async {
+    String date, {
+    String? staffId,
+  }) async {
+    lastStaffId = staffId;
     if (slotsFail) return const Left(ServerFailure('boom'));
     return Right(slotsByDate[date] ?? const []);
   }
@@ -72,6 +75,13 @@ class _FakeProviderRepository implements ProviderRepository {
     saved = false;
     return const Right(null);
   }
+
+  @override
+  Future<Either<Failure, void>> reportPhoto(
+    String providerId,
+    String imageId,
+    String reason,
+  ) async => const Right(null);
 
   @override
   Future<Either<Failure, void>> flagProvider(
@@ -147,6 +157,20 @@ void main() {
     final loaded = await _nextLoaded(bloc, (s) => s.slots.isNotEmpty);
 
     expect(loaded.slots.single.times, ['10:00', '10:30']);
+    expect(repo.lastStaffId, isNull);
+  });
+
+  test('a picked stylist is passed to the slot lookup', () async {
+    repo.slotsByDate['2026-10-01'] = [
+      _slot('2026-10-01', ['10:00']),
+    ];
+    bloc.add(const ProviderLoadEvent('1'));
+    await _nextLoaded(bloc, (_) => true);
+
+    bloc.add(const ProviderLoadSlotsEvent('1', '7', '2026-10-01', staffId: '3'));
+    await _nextLoaded(bloc, (s) => s.slots.isNotEmpty);
+    // Without it the backend uses the whole shop's calendar and hours.
+    expect(repo.lastStaffId, '3');
   });
 
   test('slots that arrive before the detail are not lost', () async {

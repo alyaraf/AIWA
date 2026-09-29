@@ -1154,6 +1154,60 @@ abstract class AppLocalizations {
   /// **'You can browse, but bookings open after verification.'**
   String get provPendingBrowseNote;
 
+  /// No description provided for @provStatusCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check status'**
+  String get provStatusCheck;
+
+  /// No description provided for @provInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'AIWA needs a bit more from you'**
+  String get provInfoTitle;
+
+  /// No description provided for @provRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not approved yet'**
+  String get provRejectedTitle;
+
+  /// No description provided for @provRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Our team couldn\'t approve your documents. Fix the issue below and send them again.'**
+  String get provRejectedBody;
+
+  /// No description provided for @provSuspendedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your provider account is suspended'**
+  String get provSuspendedTitle;
+
+  /// No description provided for @provSuspendedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t take bookings right now. Contact support to find out why and what to do next.'**
+  String get provSuspendedBody;
+
+  /// No description provided for @provResubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Send documents again'**
+  String get provResubmit;
+
+  /// No description provided for @provAdminNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note from AIWA'**
+  String get provAdminNote;
+
+  /// No description provided for @provDocsResent.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents sent. We\'ll review them shortly.'**
+  String get provDocsResent;
+
   /// No description provided for @provVerifySubmit.
   ///
   /// In en, this message translates to:
@@ -2918,6 +2972,18 @@ abstract class AppLocalizations {
   /// **'Submit flag'**
   String get flagSubmit;
 
+  /// No description provided for @providerReportPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Report photo'**
+  String get providerReportPhoto;
+
+  /// No description provided for @providerReportPhotoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Press and hold a photo to report it.'**
+  String get providerReportPhotoHint;
+
   /// No description provided for @homeOpen.
   ///
   /// In en, this message translates to:
@@ -3541,6 +3607,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Booking cancelled. Penalty applied to your ledger.'**
   String get pbdCancelledToast;
+
+  /// No description provided for @pbdNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer didn\'t show'**
+  String get pbdNoShow;
+
+  /// No description provided for @pbdNoShowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark this booking as a no-show?'**
+  String get pbdNoShowTitle;
+
+  /// No description provided for @pbdNoShowBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this only if the customer never came and you couldn\'t reach them. It closes the booking without a strike for you and is recorded against the customer.'**
+  String get pbdNoShowBody;
+
+  /// No description provided for @pbdNoShowToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked as a no-show.'**
+  String get pbdNoShowToast;
 
   /// No description provided for @pbdEyebrow.
   ///

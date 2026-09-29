@@ -74,6 +74,8 @@ class ApiFlowIntegrationTest {
     @Autowired AvailabilityRepository availabilityRepo;
     @Autowired TrustedContactRepository trustedContactRepo;
     @Autowired NotificationRepository notificationRepo;
+    @Autowired CommissionLedgerRepository ledgerRepo;
+    @Autowired GalleryImageRepository galleryRepo;
     @Autowired PasswordEncoder encoder;
     @Autowired RedisRuntimeService redis;
     @MockBean SmsService smsService;
@@ -459,6 +461,77 @@ class ApiFlowIntegrationTest {
                         .param("filePath", "uploads/private/../../pom.xml")
                         .header("Authorization", bearer(admin)))
                 .andExpect(status().isForbidden());
+    }
+
+    // ── cross-app handoffs (provider app → admin panel) ──────────────────────
+
+    @Test
+    void publishingNewTermsMakesUsersReaccept() throws Exception {
+        String superAdmin = login(user(UserRole.ADMIN, AdminPermission.SUPER_ADMIN));
+        String version = "it-" + SEQ.incrementAndGet();
+        mvc.perform(post("/terms").header("Authorization", bearer(superAdmin))
+                        .param("version", version).param("type", "CUSTOMER_TERMS")
+                        .param("contentEn", "New customer terms").param("contentAr", "شروط جديدة"))
+                .andExpect(status().isCreated());
+
+        String customer = login(user(UserRole.CUSTOMER));
+        mvc.perform(get("/auth/me").header("Authorization", bearer(customer)))
+                .andExpect(jsonPath("$.data.termsUpToDate").value(false));
+        mvc.perform(post("/terms/accept").param("version", version).header("Authorization", bearer(customer)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/auth/me").header("Authorization", bearer(customer)))
+                .andExpect(jsonPath("$.data.termsUpToDate").value(true));
+    }
+
+    @Test
+    void aReportedCommissionPaymentReachesFinanceAndClearsOnConfirm() throws Exception {
+        Provider p = approvedProvider();
+        ledgerRepo.save(CommissionLedgerEntry.builder().provider(p.profile())
+                .bookingAmount(new BigDecimal("300")).commissionPercent(new BigDecimal("10"))
+                .commissionAmount(new BigDecimal("30")).status(LedgerEntryStatus.DUE).build());
+
+        mvc.perform(patch("/provider/settlement/pay").header("Authorization", bearer(login(p.user()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentReportedAt").isNotEmpty());
+
+        String finance = login(user(UserRole.ADMIN, AdminPermission.FINANCE));
+        String inboxId = "settlement-" + p.profile().getId();
+        JsonNode inbox = data(mvc.perform(get("/admin/inbox").param("limit", "50")
+                .header("Authorization", bearer(finance))));
+        assertThat(inbox.findValuesAsText("id")).contains(inboxId);
+        JsonNode rows = data(mvc.perform(get("/admin/settlements/providers").header("Authorization", bearer(finance))));
+        JsonNode row = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .filter(r -> r.get("providerId").asLong() == p.profile().getId()).findFirst().orElseThrow();
+        assertThat(row.get("paymentReportedAt").isNull()).isFalse();
+
+        mvc.perform(post("/admin/settlements/provider/{id}/confirm-payout", p.profile().getId())
+                        .header("Authorization", bearer(finance)))
+                .andExpect(status().isOk());
+        inbox = data(mvc.perform(get("/admin/inbox").param("limit", "50").header("Authorization", bearer(finance))));
+        assertThat(inbox.findValuesAsText("id")).doesNotContain(inboxId);
+    }
+
+    @Test
+    void aCustomerCanReportAGalleryPhotoIntoPhotoModeration() throws Exception {
+        Provider p = approvedProvider();
+        GalleryImage img = galleryRepo.save(GalleryImage.builder().provider(p.profile())
+                .url("/files/public/gallery/it-photo.jpg").build());
+
+        // Public detail exposes the id the app needs to report a photo.
+        JsonNode detail = data(mvc.perform(get("/providers/{id}", p.profile().getId())));
+        assertThat(detail.get("gallery").get(0).get("id").asLong()).isEqualTo(img.getId());
+
+        mvc.perform(post("/providers/{pid}/gallery/{iid}/report", p.profile().getId(), img.getId())
+                        .param("reason", "Spam or fake account"))
+                .andExpect(status().isUnauthorized()); // signed-in users only
+        String customer = login(user(UserRole.CUSTOMER));
+        mvc.perform(post("/providers/{pid}/gallery/{iid}/report", p.profile().getId(), img.getId())
+                        .param("reason", "Spam or fake account").header("Authorization", bearer(customer)))
+                .andExpect(status().isOk());
+
+        String support = login(user(UserRole.ADMIN, AdminPermission.SUPPORT));
+        JsonNode queue = data(mvc.perform(get("/admin/moderation").header("Authorization", bearer(support))));
+        assertThat(queue.findValuesAsText("imageUrl")).contains("/files/public/gallery/it-photo.jpg");
     }
 
     @Test

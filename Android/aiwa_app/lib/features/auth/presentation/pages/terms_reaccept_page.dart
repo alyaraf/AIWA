@@ -11,6 +11,8 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../../../../core/router/app_router.dart';
 import '../bloc/auth_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -64,7 +66,19 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
       ),
       (_) {
         showAiwaToast(context, AppLocalizations.of(context).authTermsAccepted);
-        context.pop();
+        // Refresh so termsUpToDate flips and the app stops asking.
+        final bloc = context.read<AuthBloc>();
+        bloc.add(AuthGetCurrentUserEvent());
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          final auth = bloc.state;
+          context.go(
+            auth is AuthAuthenticated && auth.user.isProvider
+                ? AppRoutes.providerDashboard
+                : AppRoutes.home,
+          );
+        }
       },
     );
   }

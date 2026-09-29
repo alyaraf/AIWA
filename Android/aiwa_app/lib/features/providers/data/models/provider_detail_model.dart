@@ -8,6 +8,7 @@ class ProviderDetailModel extends ProviderDetailEntity {
     super.bio,
     super.profileImageUrl,
     super.galleryImages,
+    super.galleryIds,
     required super.email,
     required super.phone,
     required super.categories,
@@ -45,6 +46,11 @@ class ProviderDetailModel extends ProviderDetailEntity {
       galleryImages: (json['galleryImages'] as List<dynamic>? ?? const [])
           .map((e) => e.toString())
           .toList(),
+      galleryIds: {
+        for (final g in json['gallery'] as List<dynamic>? ?? const [])
+          if (g is Map && g['url'] != null && g['id'] != null)
+            '${g['url']}': '${g['id']}',
+      },
       email: owner['email'] as String? ?? '',
       phone: owner['phone'] as String? ?? '',
       categories: [

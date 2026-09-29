@@ -83,10 +83,18 @@ public class ApiResponse {
         /** Version the user last accepted — the app compares it to /terms/latest. */
         private String acceptedTermsVersion;
         private LocalDateTime termsAcceptedAt;
+        /**
+         * False when a newer policy for the user's role is live than the one they
+         * accepted — the app then routes to re-accept. Null where not computed
+         * (only GET /auth/me fills it).
+         */
+        private Boolean termsUpToDate;
         private boolean active;
         private java.util.List<String> permissions;
         private Long providerProfileId;
         private VerificationStatus providerStatus;
+        /** Admin's rejection reason or "more info" request while not approved. */
+        private String providerNote;
         private Long bookingCount;
         /** Reviews this user has written (customer profile stats tile). */
         private Long reviewCount;
@@ -153,6 +161,8 @@ public class ApiResponse {
         private List<AvailabilityDto> availabilities;
         private List<StaffMemberDto> staffMembers;
         private List<String> galleryImages;
+        /** Visible photos with their ids, so a customer can report one. */
+        private List<GalleryImageDto> gallery;
         private Double distanceKm;
         private BigDecimal startingPrice;
         private Boolean openNow;
@@ -477,6 +487,8 @@ public class ApiResponse {
         private String status;          // WITHIN_LIMIT | OVERDUE | SETTLED
         private boolean settlementPaused;
         private LocalDateTime dueDate;
+        /** The provider tapped "I've paid" at this time; finance hasn't confirmed yet. */
+        private LocalDateTime paymentReportedAt;
     }
 
     /** Per-provider settlement detail: ledger entries + totals. */
@@ -485,6 +497,8 @@ public class ApiResponse {
         private Long providerId;
         private String providerName;
         private boolean settlementPaused;
+        /** Set while a provider-reported payment waits for finance. */
+        private LocalDateTime paymentReportedAt;
         private String status;
         private BigDecimal commissionPercent;
         private BigDecimal commissionOverridePercent;

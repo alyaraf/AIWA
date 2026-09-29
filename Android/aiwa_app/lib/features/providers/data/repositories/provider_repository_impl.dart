@@ -57,10 +57,16 @@ class ProviderRepositoryImpl implements ProviderRepository {
   Future<Either<Failure, List<AvailabilitySlot>>> getAvailableSlots(
     String providerId,
     String serviceId,
-    String date,
-  ) async {
+    String date, {
+    String? staffId,
+  }) async {
     try {
-      final raw = await _remote.getAvailableSlots(providerId, serviceId, date);
+      final raw = await _remote.getAvailableSlots(
+        providerId,
+        serviceId,
+        date,
+        staffId: staffId,
+      );
       return Right([
         AvailabilitySlot(
           date: DateTime.parse(date),
@@ -106,6 +112,22 @@ class ProviderRepositoryImpl implements ProviderRepository {
       return Right(saved);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> reportPhoto(
+    String providerId,
+    String imageId,
+    String reason,
+  ) async {
+    try {
+      await _remote.reportPhoto(providerId, imageId, reason);
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
     }
   }
 

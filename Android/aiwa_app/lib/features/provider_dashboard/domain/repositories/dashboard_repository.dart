@@ -85,6 +85,9 @@ abstract class DashboardRepository {
 
   Future<Either<Failure, BookingEntity>> bookingInProgress(String bookingId);
 
+  /// The customer never came; the backend refuses before the start time.
+  Future<Either<Failure, BookingEntity>> bookingNoShow(String bookingId);
+
   /// PATCH /bookings/{id}/propose-time; [date] `yyyy-MM-dd`, [time] `HH:mm`.
   Future<Either<Failure, BookingEntity>> proposeTime(
     String bookingId,
