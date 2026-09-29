@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../../core/constants/api_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -231,7 +232,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
         children: [
           if (p.profileImageUrl != null && p.profileImageUrl!.isNotEmpty)
             CachedNetworkImage(
-              imageUrl: p.profileImageUrl!,
+              imageUrl: ApiConstants.mediaUrl(p.profileImageUrl!),
               fit: BoxFit.cover,
               errorWidget: (_, __, ___) =>
                   CoverImage(initial: p.displayName, hero: true),
@@ -517,7 +518,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                 (_, i) => ClipRRect(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   child: CachedNetworkImage(
-                    imageUrl: p.galleryImages[i],
+                    imageUrl: ApiConstants.mediaUrl(p.galleryImages[i]),
                     fit: BoxFit.cover,
                     placeholder: (_, __) => const ShimmerBox(height: 120),
                     errorWidget: (_, __, ___) =>

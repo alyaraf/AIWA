@@ -40,6 +40,12 @@ public class Review extends BaseEntity {
     @Builder.Default
     private boolean hidden = false;
 
+    /** The provider's public reply to a customer review (one reply, editable). */
+    @Column(length = 1000)
+    private String reply;
+
+    private java.time.LocalDateTime repliedAt;
+
     /** Quick-tags selected by the customer (e.g. "Punctual", "Skilled") */
     @ElementCollection
     @CollectionTable(name = "review_tags", joinColumns = @JoinColumn(name = "review_id"))

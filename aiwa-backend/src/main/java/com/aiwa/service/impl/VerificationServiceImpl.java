@@ -19,6 +19,7 @@ public class VerificationServiceImpl {
 
     private final ProviderProfileRepository providerRepo;
     private final NotificationServiceImpl notificationService;
+    private final WaitlistService waitlistService;
 
     /** Provider submits identity documents (req 1) */
     @Transactional
@@ -64,9 +65,16 @@ public class VerificationServiceImpl {
         ProviderProfile profile = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
 
+        boolean firstApproval = profile.getVerifiedAt() == null;
         profile.setVerificationStatus(VerificationStatus.APPROVED);
         profile.setRejectionReason(null);
+        profile.setVerifiedAt(java.time.LocalDateTime.now());
         providerRepo.save(profile);
+
+        // A newly listed provider is what "Notify me when someone joins" waits for.
+        if (firstApproval) {
+            waitlistService.notifyProviderJoined(profile);
+        }
 
         notificationService.send(
                 profile.getUser().getId(),

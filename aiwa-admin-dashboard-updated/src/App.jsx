@@ -33,6 +33,7 @@ import {
   Search,
   Settings,
   ShieldAlert,
+  Siren,
   Star,
   Trash2,
   TrendingUp,
@@ -79,6 +80,7 @@ function Icon({ name, size = 18 }) {
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "safety", label: "Safety (SOS)", icon: Siren },
   { id: "verifications", label: "Verifications", icon: BadgeCheck },
   { id: "complaints", label: "Complaints", icon: Flag },
   { id: "flags", label: "Flags", icon: ShieldAlert },
@@ -394,6 +396,7 @@ export default function App() {
         <MobileBar onMenu={() => setSidebarOpen(true)} />
         <TopBar />
         {route === "dashboard" && <Dashboard onRoute={setRoute} />}
+        {route === "safety" && <Safety />}
         {route === "verifications" && <Verifications />}
         {route === "complaints" && <Complaints />}
         {route === "flags" && <Flags />}
@@ -421,8 +424,10 @@ export default function App() {
 
 /* ─────────────────────────── Login ─────────────────────────── */
 export function LoginScreen({ onLogin }) {
-  const [email, setEmail] = useState("admin@aiwa.com");
-  const [password, setPassword] = useState("AdminPassword123!");
+  // Seed credentials only in mock mode (any login works there); never ship
+  // a prefilled real account (OPS-8).
+  const [email, setEmail] = useState(USE_MOCKS ? "admin@aiwa.com" : "");
+  const [password, setPassword] = useState(USE_MOCKS ? "AdminPassword123!" : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [mfaToken, setMfaToken] = useState(null);
@@ -690,6 +695,7 @@ function NotificationBell({ onRoute }) {
 // Colour dot per inbox kind — quick visual scan of what's what.
 function kindDotClass(kind) {
   switch (kind) {
+    case "SOS":             return "danger";
     case "COMPLAINT":       return "rose";
     case "VERIFICATION":    return "gold";
     case "REPORTED_REVIEW": return "plum";
@@ -862,7 +868,9 @@ function Dashboard({ onRoute }) {
   const oc = data.openComplaints ?? 0;
   const od = data.openDisputes ?? 0;
   const os = data.overdueSettlements ?? 0;
+  const sos = data.openSos ?? 0;
   const attention = [
+    { key: "sos", tone: "danger", icon: Siren, count: sos, label: `open SOS alert${sos === 1 ? "" : "s"} — act now`, route: "safety" },
     { key: "verifications", tone: "gold", icon: BadgeCheck, count: pv, label: `provider${pv === 1 ? "" : "s"} awaiting verification`, route: "verifications" },
     { key: "complaints", tone: "danger", icon: Flag, count: oc, label: `open complaint${oc === 1 ? "" : "s"}`, route: "complaints" },
     { key: "disputes", tone: "danger", icon: AlertTriangle, count: od, label: `payment dispute${od === 1 ? "" : "s"} to resolve`, route: "bookings" },
@@ -1283,7 +1291,7 @@ function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestIn
     { label: "Live selfie", icon: ScanFace, path: dp.selfiePath }
   ];
   const rows = [
-    ["Owner full name", provider.name],
+    ["Owner full name", provider.ownerName || "—"],
     ["Business name", provider.name],
     ["Category", provider.category],
     ["City / district", provider.city],
@@ -1530,7 +1538,7 @@ function Complaints() {
       <PageHeader
         eyebrow="Customer reports"
         title="Complaints"
-        right={<>{chip("ALL", `All (${data.length})`)}{chip("OPEN", "Open")}{chip("IN_REVIEW", "In review")}{chip("RESOLVED", "Resolved")}</>}
+        right={<>{chip("ALL", `All (${data.length})`)}{chip("OPEN", "Open")}{chip("UNDER_REVIEW", "In review")}{chip("RESOLVED", "Resolved")}</>}
       />
       <ReadOnlyNote need="SUPPORT" />
       <SearchBar value={query} onChange={setQuery} placeholder="Search customer, provider, subject, priority, status…" />
@@ -3366,14 +3374,111 @@ function Reviews() {
 }
 
 /* ─────────────────────────── Moderation ─────────────────────────── */
+/* ─────────────────────────── Safety (SOS queue) ─────────────────────────── */
+/* GET /admin/safety + POST /admin/safety/{id}/resolve. The other party is never
+ * told about an SOS, so this queue (and the on-call SMS) is how support hears. */
+export function Safety() {
+  const [status, setStatus] = useState("OPEN");
+  // Keyed so each filter mounts a fresh loader (useLoad only refetches on reload).
+  return <SafetyQueue key={status} status={status} setStatus={setStatus} />;
+}
+
+function SafetyQueue({ status, setStatus }) {
+  const { data, setData, error, loading, reload } = useLoad(() => api.safetyQueue(status), mock.safety);
+  const [notes, setNotes] = useState({});
+  const [busyId, setBusyId] = useState(null);
+
+  async function resolve(ev) {
+    const text = (notes[ev.id] || "").trim();
+    if (!text) { toast("Write what was done before closing the alert.", "error"); return; }
+    setBusyId(ev.id);
+    try {
+      await runAction(() => api.resolveSafety(ev.id, text), { success: "SOS closed" });
+      setData((current) => status === "OPEN" ? current.filter((e) => e.id !== ev.id) : current);
+    } catch { /* toast shown */ } finally { setBusyId(null); }
+  }
+
+  const chip = (value, label) => (
+    <button key={value} className={`chip ${status === value ? "active" : ""}`} onClick={() => setStatus(value)}>{label}</button>
+  );
+
+  return (
+    <section className="page-content">
+      <PageHeader
+        eyebrow="Trust & safety"
+        title="Safety (SOS)"
+        right={<Tag tone={status === "OPEN" && data.length ? "danger" : "plum"}>{status === "OPEN" ? `${data.length} open` : `${data.length} shown`}</Tag>}
+      />
+      <ReadOnlyNote need="SUPPORT" />
+      <div className="policy-tabs">{chip("OPEN", "Open")}{chip("RESOLVED", "Resolved")}{chip("ALL", "All")}</div>
+
+      {loading && <div className="review-list"><SkeletonRows cols={2} rows={2} /></div>}
+      {error && !loading && <StateBlock variant="error" body={`Could not load SOS alerts: ${error}`} onAction={reload} />}
+      {!loading && !error && data.length === 0 && (
+        <StateBlock variant="empty" icon={Siren}
+          title={status === "OPEN" ? "No open SOS alerts" : "Nothing here"}
+          body={status === "OPEN" ? "New alerts appear here and in the bell, and on-call staff get an SMS." : "No SOS alerts match this filter."} />
+      )}
+
+      <div className="review-list">
+        {!loading && !error && data.map((ev) => (
+          <article className={`review-card ${ev.resolved ? "" : "reported"}`} key={ev.id}>
+            <Avatar name={ev.actorName} size={44} palette={ev.actorRole === "PROVIDER" ? "plum" : "rose"} />
+            <div className="review-body">
+              <div className="review-meta">
+                <span className="strong-cell">{ev.actorName}</span>
+                {ev.actorRole && <Tag tone="plum">{prettyStatus(ev.actorRole)}</Tag>}
+                <span className="dim">Booking #{ev.bookingId}{ev.bookingStatus ? ` · ${prettyStatus(ev.bookingStatus)}` : ""}</span>
+                <span className="dim">{formatRelative(ev.createdAt) || ev.when}</span>
+                {ev.resolved ? <Tag tone="success">Closed</Tag> : <Tag tone="danger">Open</Tag>}
+              </div>
+              {ev.notes && <p className="review-text">{"“" + ev.notes + "”"}</p>}
+              <div className="kv-list" style={{ marginTop: 8 }}>
+                <div className="kv-row"><span className="k">Customer</span><span className="v">{ev.customerName || "—"} {ev.customerPhone && <a href={`tel:${ev.customerPhone}`} className="mono">{ev.customerPhone}</a>}</span></div>
+                <div className="kv-row"><span className="k">Provider</span><span className="v">{ev.providerName || "—"} {ev.providerPhone && <a href={`tel:${ev.providerPhone}`} className="mono">{ev.providerPhone}</a>}</span></div>
+                {(ev.homeService || ev.address) && <div className="kv-row"><span className="k">{ev.homeService ? "Home visit" : "Address"}</span><span className="v">{ev.address || "—"}</span></div>}
+                {ev.latitude != null && ev.longitude != null && (
+                  <div className="kv-row"><span className="k">Location</span>
+                    <a className="v" href={`https://www.google.com/maps?q=${ev.latitude},${ev.longitude}`} target="_blank" rel="noreferrer">
+                      Open map <ExternalLink size={12} />
+                    </a>
+                  </div>
+                )}
+              </div>
+              {ev.resolved ? (
+                <InlineBanner tone="success" title={`Closed by ${ev.resolvedByName || "an admin"}`} body={ev.resolutionNotes || "No note."} />
+              ) : can("SUPPORT") && (
+                <textarea
+                  className="field-note"
+                  placeholder="What was done? (called the customer, contacted the provider, police informed…)"
+                  value={notes[ev.id] || ""}
+                  onChange={(e) => setNotes((n) => ({ ...n, [ev.id]: e.target.value }))}
+                />
+              )}
+            </div>
+            {!ev.resolved && can("SUPPORT") && (
+              <div className="review-actions">
+                <button className="btn btn-primary sm" disabled={busyId === ev.id} onClick={() => resolve(ev)}>
+                  <Check size={14} /> Close alert
+                </button>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Moderation() {
   const { data: raw, setData, error, loading, reload } = useLoad(api.moderation, mock.moderation);
   const [busyId, setBusyId] = useState(null);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   useEffect(() => { setPage(1); }, [query]);
-  // Reported reviews are handled on the Reviews screen; this queue covers reported images.
-  const data = useMemo(() => raw.filter((item) => item.type !== "REVIEW"), [raw]);
+  // Reported reviews live on the Reviews screen and chat messages on Chat
+  // reports; this queue covers reported images only.
+  const data = useMemo(() => raw.filter((item) => item.type === "IMAGE"), [raw]);
   const filtered = data.filter((item) => matchesQuery(item, query, ["provider", "reason", "text", "when", "type"]));
   const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -3424,7 +3529,13 @@ function Moderation() {
         {pageRows.map((item) => (
           <article className="moderation-card" key={item.id}>
             <div className={`moderation-thumb ${item.type.toLowerCase()}`}>
-              {item.type === "REVIEW" ? <MessageSquareWarning size={28} /> : <ImageOff size={28} />}
+              {item.type === "REVIEW"
+                ? <MessageSquareWarning size={28} />
+                : item.imageUrl
+                  ? <a href={item.imageUrl} target="_blank" rel="noreferrer" title="Open the reported photo">
+                      <img src={item.imageUrl} alt="Reported photo" style={{ width: 88, height: 88, objectFit: "cover", borderRadius: "inherit", display: "block" }} />
+                    </a>
+                  : <ImageOff size={28} />}
             </div>
             <div>
               <h3>{item.provider}</h3>
@@ -4009,6 +4120,14 @@ function AuditLog() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      await runAction(() => api.exportAudit(query), { success: "Audit log exported", failure: "Could not export the audit log" });
+    } catch { /* toast shown */ } finally { setExporting(false); }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -4019,7 +4138,9 @@ function AuditLog() {
         .then((result) => { if (alive) { setItems(result.items); setTotalPages(result.totalPages || 1); } })
         .catch((err) => {
           if (!alive) return;
-          if (err?.status === 401 || err?.status === 403) { setError("Session expired. Please sign in again."); onAuthExpired(); }
+          // 401 = the session is gone; 403 = this admin lacks the permission.
+          if (err?.status === 401) { setError("Session expired. Please sign in again."); onAuthExpired(); }
+          else if (err?.status === 403) setError("You don't have permission to view the audit log.");
           else setError(err.message || "Could not load the audit log.");
           setItems([]);
         })
@@ -4030,7 +4151,15 @@ function AuditLog() {
 
   return (
     <section className="page-content">
-      <PageHeader eyebrow="Accountability" title="Audit log" />
+      <PageHeader
+        eyebrow="Accountability"
+        title="Audit log"
+        right={
+          <button className="btn btn-primary sm" onClick={exportCsv} disabled={exporting}>
+            <Download size={15} /> {exporting ? "Exporting…" : query ? "Export matches (CSV)" : "Export CSV"}
+          </button>
+        }
+      />
       <Toolbar query={query} onQuery={(value) => { setQuery(value); setPage(1); }} placeholder="Search actor, action, target…" />
       <article className="table-card">
         <div className="table-scroll">
@@ -4099,29 +4228,57 @@ function TermsPublishButton() {
   );
 }
 
-/* Terms & policies — editable draft + version history (GET/POST /terms) */
-function TermsEditorPanel() {
+/* Terms & policies — per-type EN/AR draft + version history (GET/POST /terms).
+ * Drafts persist per type in this browser until published. */
+const TERMS_TYPES = [
+  { id: "CUSTOMER_TERMS", label: "Customer terms" },
+  { id: "PROVIDER_TERMS", label: "Provider terms" }
+];
+const draftKey = (type) => `aiwa_admin_terms_draft_${type}`;
+function readDraft(type) {
+  try { return JSON.parse(window.localStorage.getItem(draftKey(type)) || "null"); } catch { return null; }
+}
+function writeDraft(type, value) {
+  try {
+    if (value) window.localStorage.setItem(draftKey(type), JSON.stringify(value));
+    else window.localStorage.removeItem(draftKey(type));
+    return true;
+  } catch { return false; }
+}
+
+export function TermsEditorPanel() {
+  const [type, setType] = useState("CUSTOMER_TERMS");
   const [versions, setVersions] = useState([]);
   const [draft, setDraft] = useState("");
+  const [draftAr, setDraftAr] = useState("");
   const [nextVersion, setNextVersion] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [savedDraft, setSavedDraft] = useState(false);
+  const [preview, setPreview] = useState(false);
 
-  function load() {
+  function load(forType = type) {
     setLoading(true);
     setError("");
-    api.termsVersions()
+    api.termsVersions(forType)
       .then((list) => {
         setVersions(list);
         const live = list.find((v) => v.active) || list[0];
-        setDraft(live?.contentEn || "");
+        const saved = readDraft(forType);
+        setDraft(saved?.en ?? live?.contentEn ?? "");
+        setDraftAr(saved?.ar ?? live?.contentAr ?? "");
+        setSavedDraft(!!saved);
         setNextVersion(bumpVersion(live?.version));
       })
       .catch((err) => setError(err.message || "Could not load terms."))
       .finally(() => setLoading(false));
   }
-  useEffect(load, []);
+  useEffect(() => { load(type); }, [type]);
+
+  function saveDraft() {
+    if (writeDraft(type, { en: draft, ar: draftAr })) { setSavedDraft(true); toast("Draft saved in this browser", "ok"); }
+    else toast("This browser blocks local storage; the draft could not be saved.", "error");
+  }
 
   function bumpVersion(v) {
     const parts = String(v || "1.0.0").split(".").map((n) => parseInt(n, 10) || 0);
@@ -4130,42 +4287,65 @@ function TermsEditorPanel() {
     return parts.join(".");
   }
 
+  const who = type === "PROVIDER_TERMS" ? "provider" : "customer";
+
   function publish() {
-    if (!draft.trim()) { toast("The draft is empty.", "error"); return; }
+    if (!draft.trim()) { toast("The English text is empty.", "error"); return; }
     setConfirm({
-      title: `Publish v${nextVersion}?`,
-      body: "It becomes the live version and every customer and provider is asked to re-accept the next time they open the app.",
+      title: `Publish ${who} terms v${nextVersion}?`,
+      body: `It becomes the live ${who} version and every ${who} is asked to re-accept the next time they open the app.`
+        + (draftAr.trim() ? "" : " There is no Arabic text, so Arabic users will see the English version."),
       confirmLabel: "Publish & notify",
       tone: "plum",
       onConfirm: async () => {
         try {
-          await runAction(() => api.publishTerms(nextVersion, draft), { success: `v${nextVersion} published` });
-          load();
+          await runAction(() => api.publishTerms(nextVersion, draft, type, draftAr), { success: `${who} terms v${nextVersion} published` });
+          writeDraft(type, null);
+          load(type);
         } catch { /* toast */ }
       }
     });
   }
   useEffect(() => { __termsPublish = publish; return () => { __termsPublish = null; }; });
 
-  if (loading) return <SkeletonRows cols={2} rows={4} />;
-  if (error) return <StateBlock variant="error" body={error} onAction={load} />;
+  const typeChips = (
+    <div className="policy-tabs" style={{ marginBottom: 12 }}>
+      {TERMS_TYPES.map((t) => (
+        <button key={t.id} className={`chip ${type === t.id ? "active" : ""}`} onClick={() => { setPreview(false); setType(t.id); }}>{t.label}</button>
+      ))}
+    </div>
+  );
+
+  if (loading) return <>{typeChips}<SkeletonRows cols={2} rows={4} /></>;
+  if (error) return <>{typeChips}<StateBlock variant="error" body={error} onAction={() => load(type)} /></>;
+
+  const edit = (setter) => (e) => { setter(e.target.value); setSavedDraft(false); };
 
   return (
+    <>
+    {typeChips}
     <div className="policy-cols">
       <article className="panel">
-        <p className="eyebrow">Current draft · v{nextVersion}</p>
-        <textarea
-          className="terms-draft"
-          value={draft}
-          onChange={(e) => { setDraft(e.target.value); setSavedDraft(false); }}
-          placeholder="Write the customer terms & policies…"
-        />
+        <p className="eyebrow">Draft · {who} terms · v{nextVersion}</p>
+        {preview ? (
+          <>
+            <p className="version-note" style={{ whiteSpace: "pre-wrap" }}>{draft || "—"}</p>
+            <p className="version-note" dir="rtl" lang="ar" style={{ whiteSpace: "pre-wrap" }}>{draftAr || "لا يوجد نص عربي بعد."}</p>
+          </>
+        ) : (
+          <>
+            <textarea className="terms-draft" value={draft} onChange={edit(setDraft)}
+              placeholder={`Write the ${who} terms & policies (English)…`} aria-label="English text" />
+            <textarea className="terms-draft" value={draftAr} onChange={edit(setDraftAr)} dir="rtl" lang="ar"
+              placeholder="النص العربي للشروط والسياسات…" aria-label="Arabic text" style={{ height: 220 }} />
+          </>
+        )}
         <div style={{ display: "flex", gap: 9, marginTop: 12, flexWrap: "wrap" }}>
-          <button className="btn btn-secondary sm" onClick={() => { setSavedDraft(true); toast("Draft saved locally", "ok"); }}>
+          <button className="btn btn-secondary sm" onClick={saveDraft}>
             <Check size={15} /> {savedDraft ? "Draft saved" : "Save draft"}
           </button>
-          <button className="btn btn-ghost sm" onClick={() => toast("Preview shows the draft as customers will see it", "ok")}>
-            <Eye size={15} /> Preview
+          <button className="btn btn-ghost sm" onClick={() => setPreview((p) => !p)}>
+            <Eye size={15} /> {preview ? "Back to editing" : "Preview"}
           </button>
         </div>
       </article>
@@ -4182,11 +4362,13 @@ function TermsEditorPanel() {
               {v.active && <Tag tone="success">Live</Tag>}
             </div>
             <p className="version-note">{v.contentEn}</p>
-            <span className="dim">{v.createdAt ? formatWhen(v.createdAt) : ""}</span>
+            {v.contentAr && <p className="version-note" dir="rtl" lang="ar">{v.contentAr}</p>}
+            <span className="dim">{v.createdAt ? formatWhen(v.createdAt) : ""}{v.contentAr ? "" : " · English only"}</span>
           </div>
         ))}
       </article>
     </div>
+    </>
   );
 }
 
@@ -4494,6 +4676,7 @@ function ProfileCell({ name, subtitle, palette, flag }) {
 const STATUS_LABELS = {
   OK: "Within limit",
   IN_REVIEW: "In review",
+  UNDER_REVIEW: "In review",
   ON_THE_WAY: "On the way",
   NEEDS_RESUBMIT: "Needs resubmit",
   NO_SHOW: "No-show"
@@ -4559,9 +4742,13 @@ function useLoad(loader, fallback) {
       })
       .catch((err) => {
         if (alive) {
-          if (err?.status === 401 || err?.status === 403) {
+          // 401 = the session is gone; 403 = signed in but not allowed here,
+          // which must not sign the admin out (OPS-9).
+          if (err?.status === 401) {
             setError("Session expired. Please sign in again.");
             onAuthExpired();
+          } else if (err?.status === 403) {
+            setError("You don't have permission to view this.");
           } else {
             setError(err.message || "Request failed");
           }

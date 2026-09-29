@@ -14,4 +14,9 @@ public class DevLogSmsService implements SmsService {
     public void sendOtp(String phone, String code, int expiresInMinutes) {
         log.info("[DEV SMS] OTP for {} is {} and expires in {} minutes", phone, code, expiresInMinutes);
     }
+
+    @Override
+    public void send(String phone, String message) {
+        log.info("[DEV SMS] -> {} : {}", phone, message);
+    }
 }

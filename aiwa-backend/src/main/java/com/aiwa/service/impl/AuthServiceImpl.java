@@ -17,6 +17,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -33,26 +36,33 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public ApiResponse.AuthResponse register(AuthRequest.Register req) {
-        if (req.getEmail() != null && userRepository.existsByEmail(req.getEmail())) {
+        String email = blankToNull(req.getEmail());
+        String phone = blankToNull(req.getPhone());
+        if (email != null && userRepository.existsByEmail(email)) {
             throw new BusinessException("auth.error.email_taken");
         }
-        if (req.getPhone() != null && userRepository.existsByPhone(req.getPhone())) {
+        if (phone != null && userRepository.existsByPhone(phone)) {
             throw new BusinessException("auth.error.phone_taken");
         }
-        if (req.getEmail() == null && req.getPhone() == null) {
+        if (email == null && phone == null) {
             throw new BusinessException("auth.error.email_or_phone_required");
         }
         if (req.getRole() == UserRole.ADMIN) {
             throw new BusinessException("auth.error.admin_registration_blocked");
         }
-        if (req.getPhone() != null && !otpService.isPhoneVerified(req.getPhone())) {
+        if (phone != null && !otpService.isPhoneVerified(phone)) {
             throw new BusinessException("auth.error.phone_not_verified");
+        }
+        // An email-only account must prove it owns the address (email OTP, BE-10);
+        // before, any unverified address could be registered.
+        if (phone == null && !otpService.isEmailVerified(email)) {
+            throw new BusinessException("auth.error.email_not_verified");
         }
 
         User user = User.builder()
-                .fullName(req.getFullName())
-                .email(req.getEmail())
-                .phone(req.getPhone())
+                .fullName(req.getFullName().trim())
+                .email(email)
+                .phone(phone)
                 .password(passwordEncoder.encode(req.getPassword()))
                 .role(req.getRole())
                 .gender(req.getGender())
@@ -63,9 +73,10 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         userRepository.save(user);
-        otpService.consumePhoneVerification(req.getPhone());
+        otpService.consumePhoneVerification(phone);
+        if (phone == null) otpService.consumeEmailVerification(email);
 
-        String identifier = req.getEmail() != null ? req.getEmail() : req.getPhone();
+        String identifier = email != null ? email : phone;
         return buildAuthResponse(user, identifier);
     }
 
@@ -95,26 +106,30 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public ApiResponse.AuthResponse verifyMfa(String mfaToken, String code) {
-        if (mfaToken == null || !jwtUtils.isMfaChallengeToken(mfaToken) || !jwtUtils.validateToken(mfaToken)) {
+        if (mfaToken == null || tokenBlacklistService.isBlacklisted(mfaToken)
+                || !jwtUtils.isMfaChallengeToken(mfaToken) || !jwtUtils.validateToken(mfaToken)) {
             throw new InvalidTokenException("auth.error.token_invalid");
         }
         String identifier = jwtUtils.getSubjectFromToken(mfaToken);
         User user = userRepository.findByEmail(identifier)
                 .or(() -> userRepository.findByPhone(identifier))
                 .orElseThrow(() -> new InvalidTokenException("auth.error.token_invalid"));
+        if (!user.isActive()) {
+            throw new InvalidTokenException("auth.error.account_disabled");
+        }
 
         if (!user.isTotpEnabled() || !totpService.verifyCode(user.getTotpSecret(), code)) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
 
+        // The challenge token is single-use: once exchanged it can't mint a second session.
+        tokenBlacklistService.blacklist(mfaToken);
         return buildAuthResponse(user, identifier);
     }
 
     @Override
     public ApiResponse.TwoFactorSetupDto beginTotpSetup(String identifier) {
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new BusinessException("user.not_found"));
+        User user = findUser(identifier);
 
         // A fresh secret every time setup is (re)started — it only becomes
         // trusted for login once enableTotp() confirms the user can actually
@@ -134,9 +149,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void enableTotp(String identifier, String code) {
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new BusinessException("user.not_found"));
+        User user = findUser(identifier);
 
         if (user.getTotpSecret() == null) {
             throw new BusinessException("auth.error.totp_setup_not_started");
@@ -151,9 +164,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void disableTotp(String identifier) {
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new BusinessException("user.not_found"));
+        User user = findUser(identifier);
         user.setTotpEnabled(false);
         user.setTotpSecret(null);
         userRepository.save(user);
@@ -161,18 +172,22 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public boolean isTotpEnabled(String identifier) {
-        return userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new BusinessException("user.not_found"))
-                .isTotpEnabled();
+        return findUser(identifier).isTotpEnabled();
     }
 
+    /**
+     * Exchange a refresh token for a new pair. Only a real refresh token is
+     * accepted (not an access or MFA token), tokens issued before the account's
+     * session cut-off are refused, and the used refresh token is revoked
+     * (rotation) so a stolen copy can't keep minting sessions in parallel.
+     */
     @Override
     public ApiResponse.AuthResponse refreshToken(String refreshToken) {
         // Every failure here means the same thing to a client: drop the stored
         // tokens and show the login screen. InvalidTokenException maps to 401 so
         // that's a status-code check, not a fragile string match on the message.
-        if (tokenBlacklistService.isBlacklisted(refreshToken) || !jwtUtils.validateToken(refreshToken)) {
+        if (tokenBlacklistService.isBlacklisted(refreshToken) || !jwtUtils.validateToken(refreshToken)
+                || !jwtUtils.isRefreshToken(refreshToken)) {
             throw new InvalidTokenException("auth.error.token_invalid");
         }
         String identifier = jwtUtils.getSubjectFromToken(refreshToken);
@@ -185,8 +200,16 @@ public class AuthServiceImpl implements AuthService {
         if (!user.isActive()) {
             throw new InvalidTokenException("auth.error.account_disabled");
         }
+        if (user.getTokensValidAfter() != null) {
+            Instant issued = jwtUtils.getIssuedAt(refreshToken);
+            if (issued == null || issued.isBefore(user.getTokensValidAfter().truncatedTo(ChronoUnit.SECONDS))) {
+                throw new InvalidTokenException("auth.error.token_invalid");
+            }
+        }
 
-        return buildAuthResponse(user, identifier);
+        ApiResponse.AuthResponse response = buildAuthResponse(user, identifier);
+        tokenBlacklistService.blacklist(refreshToken);
+        return response;
     }
 
     @Override
@@ -197,40 +220,84 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public ApiResponse.UserDto getCurrentUser(String identifier) {
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new BusinessException("user.not_found"));
-        return toUserDto(user);
+        return toUserDto(findUser(identifier));
     }
 
+    /**
+     * Forgot password, by phone or email. Every session issued before the reset
+     * is revoked — someone who reset because their password leaked must not stay
+     * signed in on the attacker's device.
+     */
     @Override
     @Transactional
     public void resetPassword(AuthRequest.ResetPassword req) {
-        // Verifies the OTP (throws if invalid/expired) then sets the new password.
-        otpService.verifyOtp(req.getPhone(), req.getCode());
-
-        User user = userRepository.findByPhone(req.getPhone())
-                .orElseThrow(() -> new BusinessException("auth.error.phone_not_found"));
+        User user;
+        String phone = blankToNull(req.getPhone());
+        if (phone != null) {
+            // Verifies the OTP (throws if invalid/expired) then sets the new password.
+            otpService.verifyOtp(phone, req.getCode());
+            user = userRepository.findByPhone(phone)
+                    .orElseThrow(() -> new BusinessException("auth.error.phone_not_found"));
+        } else {
+            String email = blankToNull(req.getEmail());
+            if (email == null) throw new BusinessException("auth.error.email_or_phone_required");
+            otpService.verifyEmailOtp(email, req.getCode());
+            user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new BusinessException("auth.error.email_not_found"));
+        }
 
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
+        user.setTokensValidAfter(Instant.now());
         userRepository.save(user);
-        otpService.consumePhoneVerification(req.getPhone());
+        if (phone != null) otpService.consumePhoneVerification(phone);
+        else otpService.consumeEmailVerification(req.getEmail());
+    }
 
-        // Invalidate any outstanding sessions issued before the reset is out of scope
-        // for stateless JWTs; the short access-token TTL bounds exposure.
+    /**
+     * Change the account phone (BE-19). The new number must pass OTP first. Old
+     * sessions are revoked — a phone-based login's token subject is the old
+     * number — and a fresh token pair for the new identity is returned.
+     */
+    @Override
+    @Transactional
+    public ApiResponse.AuthResponse changePhone(String identifier, AuthRequest.ChangePhone req) {
+        User user = findUser(identifier);
+        String phone = req.getPhone().trim();
+        if (phone.equals(user.getPhone())) {
+            throw new BusinessException("auth.error.phone_unchanged");
+        }
+        if (userRepository.existsByPhone(phone)) {
+            throw new BusinessException("auth.error.phone_taken");
+        }
+        otpService.verifyOtp(phone, req.getCode());
+        otpService.consumePhoneVerification(phone);
+
+        user.setPhone(phone);
+        user.setTokensValidAfter(Instant.now());
+        userRepository.save(user);
+        String newIdentifier = user.getEmail() != null ? user.getEmail() : phone;
+        return buildAuthResponse(user, newIdentifier);
     }
 
     @Override
     @Transactional
     public void updateLanguage(String identifier, com.aiwa.enums.Language language) {
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new BusinessException("user.not_found"));
+        User user = findUser(identifier);
         user.setPreferredLanguage(language);
         userRepository.save(user);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    private User findUser(String identifier) {
+        return userRepository.findByEmail(identifier)
+                .or(() -> userRepository.findByPhone(identifier))
+                .orElseThrow(() -> new BusinessException("user.not_found"));
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
 
     private ApiResponse.AuthResponse buildAuthResponse(User user, String identifier) {
         String access  = jwtUtils.generateAccessToken(identifier, user.getId(), user.getRole().name());
@@ -260,6 +327,11 @@ public class AuthServiceImpl implements AuthService {
                 .profileImageUrl(u.getProfileImageUrl())
                 .preferredLanguage(u.getPreferredLanguage())
                 .termsAccepted(u.isTermsAccepted())
+                .acceptedTermsVersion(u.getAcceptedTermsVersion())
+                .termsAcceptedAt(u.getTermsAcceptedAt())
+                .searchAreaLabel(u.getSearchAreaLabel())
+                .searchAreaLatitude(u.getSearchAreaLatitude())
+                .searchAreaLongitude(u.getSearchAreaLongitude())
                 .active(u.isActive())
                 .permissions(u.getAdminPermissions() == null ? java.util.List.of()
                         : u.getAdminPermissions().stream().map(Enum::name).sorted().toList())

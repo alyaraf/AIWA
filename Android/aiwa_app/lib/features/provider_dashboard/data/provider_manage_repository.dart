@@ -82,9 +82,13 @@ class ProviderManageRepository {
     ),
   );
 
-  /// Backend gap: ProviderProfileRequest has no service-radius field.
-  Future<Either<Failure, void>> setServiceRadius(int km) async =>
-      const Left(NotSupportedFailure('Saving a service radius'));
+  /// PATCH /provider/mode/service-radius?km= — how far you travel for home service.
+  Future<Either<Failure, void>> setServiceRadius(int km) => _run(
+    () => _api.patch(
+      ApiConstants.providerServiceRadius,
+      queryParameters: {'km': km},
+    ),
+  );
 
   /// PATCH /provider/mode?vacationMode=
   Future<Either<Failure, void>> setVacation(bool on) => _run(
@@ -167,6 +171,23 @@ class ProviderManageRepository {
     ],
   );
 
+  /// GET /provider/gallery-images — your own photos, including the ones
+  /// moderation hid from the public gallery (GalleryImageDto: id, url, hidden).
+  Future<Either<Failure, ({List<String> urls, Set<String> hidden})>>
+  ownGallery() => _run(() async {
+    final urls = <String>[];
+    final hidden = <String>{};
+    for (final e
+        in _data(await _api.get(ApiConstants.providerGalleryImages)) as List? ??
+            const []) {
+      final m = e as Json;
+      final url = '${m['url']}';
+      urls.add(url);
+      if (m['hidden'] == true) hidden.add(url);
+    }
+    return (urls: urls, hidden: hidden);
+  });
+
   Future<Either<Failure, List<String>>> uploadPhoto(
     String path, {
     required ProgressCallback onProgress,
@@ -206,9 +227,10 @@ class ProviderManageRepository {
         ];
       });
 
-  /// Backend gap: ReviewDto has no reply and there is no reply endpoint.
-  Future<Either<Failure, void>> replyToReview(String id, String text) async =>
-      const Left(NotSupportedFailure('Replying to reviews'));
+  /// POST /provider/reviews/{id}/reply — public reply; sending again edits it.
+  Future<Either<Failure, void>> replyToReview(String id, String text) => _run(
+    () => _api.post(ApiConstants.providerReviewReply(id), data: {'reply': text}),
+  );
 
   // ── Staff (StaffMemberRequest) ─────────────────────────────────────
 

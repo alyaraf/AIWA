@@ -2,6 +2,24 @@ import 'package:dartz/dartz.dart';
 import '../../../../core/errors/failures.dart';
 import '../entities/user_entity.dart';
 
+/// An active policy: version, EN/AR text and an optional PDF (TermsPolicyDto).
+typedef TermsDoc = ({
+  String version,
+  String content,
+  String contentAr,
+  String? pdfUrl,
+});
+
+extension TermsDocText on TermsDoc {
+  /// Arabic text for an Arabic UI when the policy has it, else English.
+  String textFor(String localeName) =>
+      localeName == 'ar' && contentAr.isNotEmpty ? contentAr : content;
+}
+
+/// The policy a role accepts (TermsController infers the same from the role).
+String termsTypeFor({required bool provider}) =>
+    provider ? 'PROVIDER_TERMS' : 'CUSTOMER_TERMS';
+
 abstract class AuthRepository {
   Future<Either<Failure, Map<String, String>>> login({
     required String identifier,
@@ -22,6 +40,12 @@ abstract class AuthRepository {
   Future<Either<Failure, void>> sendOtp({required String phone});
 
   Future<Either<Failure, void>> verifyOtp({
+    required String phone,
+    required String code,
+  });
+
+  /// Verify [code] (sent to the new [phone]) and switch the account to it.
+  Future<Either<Failure, void>> changePhone({
     required String phone,
     required String code,
   });
@@ -58,8 +82,8 @@ abstract class AuthRepository {
   });
 
   /// Latest active policy of [type] (CUSTOMER_TERMS / PROVIDER_TERMS):
-  /// `version` + `contentEn`.
-  Future<Either<Failure, ({String version, String content})>> latestTerms(
+  /// version, contentEn / contentAr and pdfUrl.
+  Future<Either<Failure, TermsDoc>> latestTerms(
     String type,
   );
 

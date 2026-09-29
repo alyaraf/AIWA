@@ -8,6 +8,7 @@ public interface AuthService {
     ApiResponse.AuthResponse register(AuthRequest.Register request);
     ApiResponse.AuthResponse login(AuthRequest.Login request);
     ApiResponse.AuthResponse refreshToken(String refreshToken);
+    ApiResponse.AuthResponse changePhone(String identifier, AuthRequest.ChangePhone request);
     void logout(String accessToken, String refreshToken);
     ApiResponse.UserDto getCurrentUser(String identifier);
     void updateLanguage(String identifier, com.aiwa.enums.Language language);

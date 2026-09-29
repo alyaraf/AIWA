@@ -75,6 +75,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/providers/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/services/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/provider/gallery/**").permitAll()
+                        // Uploaded gallery photos and avatars: image loaders send no token.
+                        // (Private ID documents are never under this prefix.)
+                        .requestMatchers(HttpMethod.GET, "/files/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/bookings/slots").permitAll()
                         .requestMatchers(HttpMethod.GET, "/terms/latest").permitAll()
                         .requestMatchers(HttpMethod.GET, "/support/contact").permitAll()

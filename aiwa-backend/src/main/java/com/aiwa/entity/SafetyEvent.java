@@ -30,4 +30,18 @@ public class SafetyEvent extends BaseEntity {
 
     @Column(length = 1000)
     private String notes;
+
+    // ── SOS incident handling (only meaningful for type == SOS) ───────────────
+    /** Closed either by the person who raised it ("I'm safe") or by support. */
+    @Builder.Default
+    private boolean resolved = false;
+
+    private java.time.LocalDateTime resolvedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resolved_by_id")
+    private User resolvedBy;
+
+    @Column(length = 1000)
+    private String resolutionNotes;
 }

@@ -5,7 +5,7 @@ import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.enums.ServiceCategory;
 import com.aiwa.repository.UserRepository;
-import com.aiwa.service.ProviderService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,7 +21,8 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Providers", description = "Provider discovery and profile management")
 public class ProviderController {
 
-    private final ProviderService providerService;
+    private final com.aiwa.service.impl.ProviderServiceImpl providerService;
+    private final com.aiwa.service.impl.WaitlistService waitlistService;
     private final UserRepository userRepo;
 
     // ── Public endpoints ──────────────────────────────────────────────────────
@@ -34,12 +35,12 @@ public class ProviderController {
             @RequestParam(defaultValue = "10") double radiusKm,
             @RequestParam(required = false) ServiceCategory category,
             @RequestParam(defaultValue = "distance") String sort,
+            @RequestParam(required = false) java.math.BigDecimal maxPrice,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(ApiResponse.Success.of(
-                providerService.getNearby(lat, lng, radiusKm, category, sort, pageable)));
+                providerService.getNearby(lat, lng, radiusKm, category, sort, maxPrice, pageOf(page, size))));
     }
 
     @GetMapping("/providers/search")
@@ -50,17 +51,39 @@ public class ProviderController {
             @RequestParam(defaultValue = "20") int size) {
 
         return ResponseEntity.ok(ApiResponse.Success.of(
-                providerService.search(q, PageRequest.of(page, size))));
+                providerService.search(q, pageOf(page, size))));
     }
 
     @GetMapping("/providers/{id}")
-    @Operation(summary = "Get full provider profile with services and reviews")
+    @Operation(summary = "Get full provider profile with services and reviews "
+            + "(the owner's phone is included only for signed-in callers)")
     public ResponseEntity<ApiResponse.Success<ApiResponse.ProviderDetailDto>> getById(
             @PathVariable Long id,
             @RequestParam(required = false) Double lat,
-            @RequestParam(required = false) Double lng) {
+            @RequestParam(required = false) Double lng,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
-        return ResponseEntity.ok(ApiResponse.Success.of(providerService.getById(id, lat, lng)));
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                providerService.getById(id, lat, lng, userDetails != null)));
+    }
+
+    @PostMapping("/providers/waitlist")
+    @Operation(summary = "\"Notify me when someone joins\" — alert me once when a provider in this "
+            + "category (optionally near lat/lng) is approved")
+    public ResponseEntity<ApiResponse.Success<Void>> joinWaitlist(
+            @RequestParam(required = false) ServiceCategory category,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        com.aiwa.entity.User user = userRepo.findByEmail(userDetails.getUsername())
+                .or(() -> userRepo.findByPhone(userDetails.getUsername()))
+                .orElseThrow();
+        waitlistService.join(user, category, lat, lng);
+        return ResponseEntity.ok(ApiResponse.Success.of("We'll let you know when someone joins", null));
+    }
+
+    private static Pageable pageOf(int page, int size) {
+        return PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 50)));
     }
 
     // ── Provider-only endpoints ───────────────────────────────────────────────

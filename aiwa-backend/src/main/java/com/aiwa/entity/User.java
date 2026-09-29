@@ -58,6 +58,18 @@ public class User extends BaseEntity {
     private Double searchRadiusMinKm;
     private Double searchRadiusMaxKm;
 
+    /** Where discovery starts when the customer doesn't want to use GPS ("Your area"). */
+    private String searchAreaLabel;
+    private Double searchAreaLatitude;
+    private Double searchAreaLongitude;
+
+    /**
+     * Session cut-off: access/refresh tokens issued before this instant are
+     * rejected. Set on password reset, phone change and admin deactivation so
+     * stolen or stale sessions die immediately instead of at token expiry.
+     */
+    private java.time.Instant tokensValidAfter;
+
     // ── Notification preferences (channels + quiet hours) ─────────────────────
     @Builder.Default
     private boolean notifyPush = true;

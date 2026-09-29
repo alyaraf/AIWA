@@ -24,6 +24,7 @@ class DashboardStats {
   final int completedBookings;
   final double totalRevenue;
   final double averageRating;
+  final int totalReviews;
   final int totalClients;
   final List<BookingEntity> todayBookings;
 
@@ -34,6 +35,7 @@ class DashboardStats {
     required this.completedBookings,
     required this.totalRevenue,
     required this.averageRating,
+    this.totalReviews = 0,
     required this.totalClients,
     this.todayBookings = const [],
   });
@@ -45,6 +47,7 @@ class DashboardStats {
     completedBookings: (d['completedBookings'] as num?)?.toInt() ?? 0,
     totalRevenue: (d['totalRevenue'] as num?)?.toDouble() ?? 0.0,
     averageRating: (d['averageRating'] as num?)?.toDouble() ?? 0.0,
+    totalReviews: (d['totalReviews'] as num?)?.toInt() ?? 0,
     totalClients: (d['totalClients'] as num?)?.toInt() ?? 0,
     todayBookings: (d['todayBookings'] as List<dynamic>? ?? const [])
         .map((e) => BookingModel.fromJson(e as Map<String, dynamic>))
@@ -59,6 +62,7 @@ abstract class DashboardRepository {
     String? status,
     int page = 0,
     int size = 20,
+    bool newestFirst = false,
   });
 
   Future<Either<Failure, BookingEntity>> acceptBooking(String bookingId);
@@ -72,6 +76,7 @@ abstract class DashboardRepository {
   Future<Either<Failure, BookingEntity>> completeBooking(
     String bookingId, {
     bool cashCollected = true,
+    String? note,
   });
 
   Future<Either<Failure, BookingEntity>> bookingOnTheWay(String bookingId);

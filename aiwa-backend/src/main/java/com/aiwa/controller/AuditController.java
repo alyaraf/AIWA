@@ -33,6 +33,42 @@ public class AuditController {
         return ResponseEntity.ok(ApiResponse.Success.of(result.map(this::toDto)));
     }
 
+    @GetMapping(value = "/export", produces = "text/csv")
+    @Operation(summary = "Export the audit log (optionally filtered by ?query=) as CSV, newest first, max 10 000 rows (ADMIN)")
+    public ResponseEntity<String> export(@RequestParam(required = false) String query) {
+        Pageable pageable = PageRequest.of(0, 10_000);
+        Page<AuditLogEntry> result = (query != null && !query.isBlank())
+                ? auditRepo.search(query.trim(), pageable)
+                : auditRepo.findAllByOrderByCreatedAtDesc(pageable);
+        StringBuilder csv = new StringBuilder("id,createdAt,actor,action,target,ipAddress\n");
+        for (AuditLogEntry e : result) {
+            csv.append(e.getId()).append(',')
+                    .append(e.getCreatedAt() != null ? e.getCreatedAt() : "").append(',')
+                    .append(cell(e.getActor())).append(',')
+                    .append(cell(e.getAction())).append(',')
+                    .append(cell(e.getTarget())).append(',')
+                    .append(cell(e.getIpAddress())).append('\n');
+        }
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"audit-log.csv\"")
+                .body(csv.toString());
+    }
+
+    /**
+     * CSV-escape a cell and neutralise spreadsheet formulas: a value starting with
+     * = + - @ would otherwise execute when an admin opens the file in Excel
+     * (targets and names are user-controlled text).
+     */
+    static String cell(String v) {
+        if (v == null) return "";
+        String s = v;
+        if (!s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0) s = "'" + s;
+        if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
+            s = "\"" + s.replace("\"", "\"\"") + "\"";
+        }
+        return s;
+    }
+
     private ApiResponse.AuditLogDto toDto(AuditLogEntry entry) {
         return ApiResponse.AuditLogDto.builder()
                 .id(entry.getId())

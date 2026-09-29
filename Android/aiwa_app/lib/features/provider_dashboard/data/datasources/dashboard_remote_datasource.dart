@@ -11,16 +11,21 @@ abstract class DashboardRemoteDataSource {
     String? status,
     int page = 0,
     int size = 20,
+    bool newestFirst = false,
   });
+
+  /// PATCH /bookings/{id}/travel-fee-quote?amount= — the customer must accept.
+  Future<BookingModel> quoteTravelFee(String bookingId, double amount);
 
   Future<BookingModel> acceptBooking(String bookingId);
 
   Future<BookingModel> rejectBooking(String bookingId, String reason);
 
-  /// cashCollected=false marks the booking DISPUTED.
+  /// cashCollected=false marks the booking DISPUTED; [note] says why.
   Future<BookingModel> completeBooking(
     String bookingId, {
     bool cashCollected = true,
+    String? note,
   });
 
   /// RescheduleRequest: bookingDate `yyyy-MM-dd`, startTime `HH:mm`.
@@ -50,23 +55,35 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
     String? status,
     int page = 0,
     int size = 20,
+    bool newestFirst = false,
   }) async {
+    // The backend filters by status (comma-separated) and pages the result,
+    // so a tab is never an empty slice of someone else's first page.
     final response = await _api.get(
       ApiConstants.providerBookings,
       queryParameters: {
         'page': page,
         'size': size,
         if (status != null) 'status': status,
+        if (newestFirst) 'order': 'desc',
       },
     );
     final data = response.data['data'] ?? response.data;
-    final paged = PagedData.fromJson(
+    return PagedData.fromJson(
       data,
       (e) => BookingModel.fromJson(e as Map<String, dynamic>),
     );
-    if (status == null) return paged;
-    final wanted = status.split(',');
-    return paged.where((b) => wanted.contains(b.status));
+  }
+
+  @override
+  Future<BookingModel> quoteTravelFee(String bookingId, double amount) async {
+    final response = await _api.patch(
+      ApiConstants.bookingTravelFeeQuote(bookingId),
+      queryParameters: {'amount': amount},
+    );
+    return BookingModel.fromJson(
+      (response.data['data'] ?? response.data) as Map<String, dynamic>,
+    );
   }
 
   @override
@@ -94,10 +111,14 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
   Future<BookingModel> completeBooking(
     String bookingId, {
     bool cashCollected = true,
+    String? note,
   }) async {
     final response = await _api.patch(
       ApiConstants.bookingComplete(bookingId),
-      queryParameters: {'cashCollected': cashCollected},
+      queryParameters: {
+        'cashCollected': cashCollected,
+        if (note != null && note.isNotEmpty) 'note': note,
+      },
     );
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }

@@ -6,12 +6,6 @@ import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
 
-/// /auth/send-otp and /auth/reset-password take a phone only.
-// ponytail: remove once the backend can send codes by email.
-const emailOtpUnsupported = ServerFailure(
-  "Email codes aren't supported yet. Use your phone number instead.",
-);
-
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource _remote;
   final SecureStorage _storage;
@@ -83,7 +77,6 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<Either<Failure, void>> sendOtp({required String phone}) async {
-    if (phone.contains('@')) return const Left(emailOtpUnsupported);
     try {
       await _remote.sendOtp(phone: phone);
       return const Right(null);
@@ -104,6 +97,24 @@ class AuthRepositoryImpl implements AuthRepository {
       return const Right(null);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> changePhone({
+    required String phone,
+    required String code,
+  }) async {
+    try {
+      final tokens = await _remote.changePhone(phone: phone, code: code);
+      // The backend revoked every token issued before the change.
+      await _storage.saveAccessToken(tokens['accessToken']!);
+      await _storage.saveRefreshToken(tokens['refreshToken']!);
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
     } on NetworkException catch (e) {
       return Left(NetworkFailure(e.message));
     }
@@ -163,7 +174,6 @@ class AuthRepositoryImpl implements AuthRepository {
     required String code,
     required String newPassword,
   }) async {
-    if (identifier.contains('@')) return const Left(emailOtpUnsupported);
     try {
       await _remote.resetPassword(
         phone: identifier,
@@ -229,13 +239,15 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Either<Failure, ({String version, String content})>> latestTerms(
+  Future<Either<Failure, TermsDoc>> latestTerms(
     String type,
   ) => _guard(() async {
     final t = await _remote.latestTerms(type);
     return (
       version: t['version'] as String,
       content: t['contentEn'] as String? ?? '',
+      contentAr: t['contentAr'] as String? ?? '',
+      pdfUrl: t['pdfUrl'] as String?,
     );
   });
 

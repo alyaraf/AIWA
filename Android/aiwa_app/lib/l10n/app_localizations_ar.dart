@@ -2298,14 +2298,19 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String walletSettleTitle(String amount) {
-    return 'تسوية $amount الآن؟';
+    return 'الإبلاغ عن سداد $amount؟';
   }
 
   @override
-  String get walletSettleBalance => 'تسوية الرصيد';
+  String get walletSettleBalance => 'لقد سدّدت';
 
   @override
-  String get walletSettled => 'تمت تسوية الرصيد.';
+  String get walletSettled =>
+      'تم الإبلاغ عن السداد. سيؤكده فريق المالية في AIWA قريبًا.';
+
+  @override
+  String get walletPaymentReported =>
+      'تم الإبلاغ عن السداد — بانتظار تأكيد فريق المالية في AIWA.';
 
   @override
   String get walletTitle => 'المحفظة';
@@ -2323,7 +2328,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get walletBlockedBody =>
-      'لا يزال بإمكانك إنهاء أي مهمة قبلتها — إتمامها وتسوية هذا الرصيد يرفع الإيقاف تلقائيًا.';
+      'لا يزال بإمكانك إنهاء أي مهمة قبلتها — إتمامها وتسوية هذا الرصيد يرفع الإيقاف بعد تأكيد فريق المالية للسداد.';
 
   @override
   String get walletNextSettlement => 'التسوية القادمة';
@@ -2341,7 +2346,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get walletNoCommissionBody => 'تظهر الحجوزات المكتملة هنا.';
 
   @override
-  String get walletSettleNow => 'سدّد الرصيد الآن';
+  String get walletSettleNow => 'لقد سدّدت هذا الرصيد';
 
   @override
   String get walletCommission => 'عمولة';
@@ -2501,6 +2506,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get ppApproved => 'معتمد من AIWA.';
+
+  @override
+  String ppApprovedOn(String date) {
+    return 'اعتمدته AIWA في $date.';
+  }
 
   @override
   String get ppBusinessInfo => 'معلومات النشاط';

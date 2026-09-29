@@ -28,6 +28,7 @@ public class SettlementController {
     private final NotificationServiceImpl notificationService;
     private final com.aiwa.service.impl.AuditService auditService;
     private final com.aiwa.service.impl.PlatformSettingsServiceImpl platformSettings;
+    private final com.aiwa.service.impl.SettlementService settlementService;
 
     private static final java.util.Set<LedgerEntryStatus> OUTSTANDING =
             java.util.Set.of(LedgerEntryStatus.DUE, LedgerEntryStatus.OVERDUE);
@@ -41,8 +42,17 @@ public class SettlementController {
         return ResponseEntity.ok(ApiResponse.Success.of(toSummary(provider)));
     }
 
+    /**
+     * The provider reports that they paid their outstanding commission (cash
+     * hand-over or transfer). This used to mark every entry SETTLED and lift the
+     * booking pause on the provider's own word — any provider could wipe their
+     * debt with one call. Now it only records the claim and alerts finance; the
+     * entries stay outstanding until an admin with FINANCE confirms the payout
+     * (POST /admin/settlements/provider/{id}/confirm-payout).
+     */
     @PatchMapping("/provider/settlement/pay")
     @PreAuthorize("hasRole('PROVIDER')")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<ApiResponse.SettlementSummaryDto>> payDues(
             @AuthenticationPrincipal UserDetails userDetails) {
         ProviderProfile provider = providerRepo.findByUserId(resolveUserId(userDetails))
@@ -53,24 +63,28 @@ public class SettlementController {
         if (outstanding.isEmpty()) {
             throw new com.aiwa.exception.BusinessException("No outstanding balance to settle");
         }
-        LocalDateTime now = LocalDateTime.now();
-        outstanding.forEach(e -> {
-            e.setStatus(LedgerEntryStatus.SETTLED);
-            e.setSettledAt(now);
-        });
-        ledgerRepo.saveAll(outstanding);
+        BigDecimal owed = outstanding.stream().map(CommissionLedgerEntry::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        provider.setSettlementPaused(false);
+        provider.setSettlementReportedAt(LocalDateTime.now());
         providerRepo.save(provider);
+        auditService.record("SETTLEMENT_REPORTED_BY_PROVIDER", provider.getBusinessName() + " · EGP " + owed);
 
-        notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_CONFIRMED,
-                "Balance settled", "تم تسوية الرصيد",
-                "You settled " + outstanding.size() + " outstanding commission entr"
-                        + (outstanding.size() == 1 ? "y" : "ies") + ". Your account is in good standing.",
-                "قمت بتسوية " + outstanding.size() + " معاملة عمولة مستحقة. حسابك في وضع جيد.",
+        userRepo.findByRoleAndActive(UserRole.ADMIN, true).stream()
+                .filter(a -> a.hasPermission(AdminPermission.FINANCE) || a.hasPermission(AdminPermission.SUPER_ADMIN))
+                .forEach(a -> notificationService.send(a.getId(), NotificationType.SETTLEMENT_REPORTED,
+                        "Commission payment reported", "تم الإبلاغ عن سداد عمولة",
+                        provider.getBusinessName() + " reports paying EGP " + owed + ". Confirm the payout once received.",
+                        provider.getBusinessName() + " يبلغ عن سداد " + owed + " جنيه. أكد الاستلام عند وصوله.",
+                        null, provider.getId()));
+        notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_REPORTED,
+                "Payment reported", "تم الإبلاغ عن السداد",
+                "Thanks — AIWA finance will confirm your EGP " + owed + " payment shortly.",
+                "شكراً — سيؤكد فريق المالية في AIWA سداد " + owed + " جنيه قريباً.",
                 null, provider.getId());
 
-        return ResponseEntity.ok(ApiResponse.Success.of("Balance settled", toSummary(provider)));
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                "Payment reported — finance will confirm it", toSummary(provider)));
     }
 
     @GetMapping("/admin/settlements")
@@ -146,6 +160,7 @@ public class SettlementController {
         outstanding.forEach(e -> { e.setStatus(LedgerEntryStatus.SETTLED); e.setSettledAt(now); });
         ledgerRepo.saveAll(outstanding);
         provider.setSettlementPaused(false);
+        provider.setSettlementReportedAt(null);
         providerRepo.save(provider);
         auditService.record("SETTLEMENT_CONFIRMED", provider.getBusinessName() + " · " + outstanding.size() + " entries");
         notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_CONFIRMED,
@@ -200,7 +215,12 @@ public class SettlementController {
         entry.setSettledAt(LocalDateTime.now());
         CommissionLedgerEntry saved = ledgerRepo.save(entry);
         ProviderProfile provider = entry.getProvider();
-        provider.setSettlementPaused(false);
+        // Settling one entry lifts the pause only when nothing overdue remains and
+        // the balance is back under the limit (before, any single entry un-paused).
+        if (settlementService.mayResumeBookings(provider)) {
+            provider.setSettlementPaused(false);
+            provider.setSettlementReportedAt(null);
+        }
         providerRepo.save(provider);
         auditService.record("SETTLEMENT_CONFIRMED", "ledger #" + entry.getId());
         notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_CONFIRMED,
@@ -220,19 +240,35 @@ public class SettlementController {
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
         provider.setSettlementPaused(paused);
         providerRepo.save(provider);
+        auditService.record(paused ? "SETTLEMENT_PAUSED" : "SETTLEMENT_RESUMED", provider.getBusinessName());
         return ResponseEntity.ok(ApiResponse.Success.of("Settlement pause updated", null));
     }
 
     private ApiResponse.SettlementSummaryDto toSummary(ProviderProfile provider) {
-        List<ApiResponse.CommissionLedgerDto> entries = ledgerRepo.findByProviderIdOrderByCreatedAtDesc(provider.getId())
-                .stream().map(this::toDto).toList();
-        BigDecimal due = ledgerRepo.sumByProviderAndStatus(provider.getId(), LedgerEntryStatus.DUE);
+        List<CommissionLedgerEntry> all = ledgerRepo.findByProviderIdOrderByCreatedAtDesc(provider.getId());
+        BigDecimal due = sum(all, LedgerEntryStatus.DUE);
+        BigDecimal overdue = sum(all, LedgerEntryStatus.OVERDUE);
         return ApiResponse.SettlementSummaryDto.builder()
                 .providerId(provider.getId())
-                .dueAmount(due)
+                // dueAmount is what the app shows as "owed": everything still
+                // outstanding. It used to leave out OVERDUE entries, so a provider
+                // who fell behind saw a smaller balance than they actually owed.
+                .dueAmount(due.add(overdue))
+                .overdueAmount(overdue)
+                .owedAmount(due.add(overdue))
+                .balanceLimit(settlementService.balanceLimit())
+                .dueDate(dueDateOf(all))
+                .status(statusOf(all))
+                .paymentReportedAt(provider.getSettlementReportedAt())
                 .settlementPaused(provider.isSettlementPaused())
-                .entries(entries)
+                .entries(all.stream().map(this::toDto).toList())
                 .build();
+    }
+
+    private static BigDecimal sum(List<CommissionLedgerEntry> entries, LedgerEntryStatus status) {
+        return entries.stream().filter(e -> e.getStatus() == status)
+                .map(CommissionLedgerEntry::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     // ── helpers for the admin Settlements screen ────────────────────────────
@@ -283,7 +319,7 @@ public class SettlementController {
                 .map(CommissionLedgerEntry::getCreatedAt)
                 .filter(java.util.Objects::nonNull)
                 .min(LocalDateTime::compareTo)
-                .map(d -> d.plusDays(7))
+                .map(d -> d.plusDays(settlementService.dueDays()))
                 .orElse(null);
     }
 

@@ -90,6 +90,21 @@ public class Booking extends BaseEntity {
     // ── Provider-proposed alternative slot (awaiting customer accept/decline) ──
     private LocalDate proposedDate;
     private LocalTime proposedStartTime;
+    /** When the alternative slot was proposed; it lapses after the response window. */
+    private LocalDateTime proposedAt;
+
+    // ── Per-booking travel-fee quote (home service) ───────────────────────────
+    /** Amount the provider quoted for travel on this booking; replaces the flat fee once accepted. */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal travelFeeQuote;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private com.aiwa.enums.TravelFeeQuoteStatus travelFeeQuoteStatus;
+
+    /** Provider's explanation when completing without collecting cash (feeds the dispute). */
+    @Column(length = 500)
+    private String completionNote;
 
     /** True when a penalty applies (provider cancel after accept, or no-show). */
     @Builder.Default

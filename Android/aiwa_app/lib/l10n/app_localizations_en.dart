@@ -2255,14 +2255,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String walletSettleTitle(String amount) {
-    return 'Settle $amount now?';
+    return 'Report paying $amount?';
   }
 
   @override
-  String get walletSettleBalance => 'Settle balance';
+  String get walletSettleBalance => 'I\'ve paid';
 
   @override
-  String get walletSettled => 'Balance settled.';
+  String get walletSettled =>
+      'Payment reported. AIWA finance will confirm it shortly.';
+
+  @override
+  String get walletPaymentReported =>
+      'Payment reported — waiting for AIWA finance to confirm.';
 
   @override
   String get walletTitle => 'Wallet';
@@ -2280,7 +2285,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get walletBlockedBody =>
-      'You can still finish any job you\'ve already accepted — completing those and settling this balance lifts the block automatically.';
+      'You can still finish any job you\'ve already accepted — completing those and settling this balance lifts the block once finance confirms your payment.';
 
   @override
   String get walletNextSettlement => 'Next settlement';
@@ -2298,7 +2303,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get walletNoCommissionBody => 'Completed bookings show up here.';
 
   @override
-  String get walletSettleNow => 'Settle balance now';
+  String get walletSettleNow => 'I\'ve paid this balance';
 
   @override
   String get walletCommission => 'Commission';
@@ -2450,6 +2455,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ppApproved => 'Approved by AIWA.';
+
+  @override
+  String ppApprovedOn(String date) {
+    return 'Approved by AIWA on $date.';
+  }
 
   @override
   String get ppBusinessInfo => 'Business info';

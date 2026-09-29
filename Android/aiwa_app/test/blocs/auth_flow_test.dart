@@ -55,7 +55,7 @@ void main() {
     );
   });
 
-  test('reset sends phone + code once; email is not supported yet', () async {
+  test('reset sends the phone or email identifier with the code', () async {
     await repo.resetPassword(
       identifier: '+20100',
       code: '123456',
@@ -68,8 +68,8 @@ void main() {
       code: '1',
       newPassword: 'secret',
     );
-    expect(r.fold((f) => f, (_) => null), emailOtpUnsupported);
-    expect(remote.resets, hasLength(1));
+    expect(r.isRight(), isTrue);
+    expect(remote.resets, ['+20100/123456', 'a@b.co/1']);
   });
 
   test(

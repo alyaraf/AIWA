@@ -1,7 +1,6 @@
 package com.aiwa.dto.request;
 
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.*;
 import lombok.Data;
 
 @Data
@@ -12,4 +11,17 @@ public class UpdatePreferencesRequest {
 
     @Max(value = 100, message = "Maximum radius cannot exceed 100 km")
     private Double searchRadiusMaxKm;
+
+    /** "Your area": where discovery starts when GPS isn't used. */
+    @Size(max = 120, message = "Area name must be at most 120 characters")
+    private String searchAreaLabel;
+
+    @DecimalMin(value = "-90.0") @DecimalMax(value = "90.0")
+    private Double searchAreaLatitude;
+
+    @DecimalMin(value = "-180.0") @DecimalMax(value = "180.0")
+    private Double searchAreaLongitude;
+
+    /** true removes the saved area. */
+    private Boolean clearSearchArea;
 }

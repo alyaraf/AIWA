@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/constants/api_constants.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -53,7 +54,7 @@ class AiwaAvatar extends StatelessWidget {
     Widget avatar;
     if (imageUrl != null && imageUrl!.isNotEmpty) {
       avatar = CachedNetworkImage(
-        imageUrl: imageUrl!,
+        imageUrl: ApiConstants.mediaUrl(imageUrl!),
         imageBuilder: (_, imageProvider) => Container(
           width: size,
           height: size,

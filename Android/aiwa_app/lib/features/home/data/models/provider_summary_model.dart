@@ -62,12 +62,14 @@ class ProviderSummaryModel extends ProviderSummaryEntity {
               .toList() ??
           [],
       saved: json['saved'] as bool? ?? false,
-      // ponytail: availability-blind; ProviderSummaryDto has no real openNow
-      // (today's hours) yet, so this only reflects the provider's mode flags.
+      // ProviderSummaryDto.openNow = accepting bookings AND inside today's
+      // working hours (Cairo time). Older payloads without it fall back to the
+      // mode flags alone.
       openNow:
-          json['vacationMode'] != true &&
-          json['offlineMode'] != true &&
-          json['settlementPaused'] != true,
+          json['openNow'] as bool? ??
+          (json['vacationMode'] != true &&
+              json['offlineMode'] != true &&
+              json['settlementPaused'] != true),
     );
   }
 }

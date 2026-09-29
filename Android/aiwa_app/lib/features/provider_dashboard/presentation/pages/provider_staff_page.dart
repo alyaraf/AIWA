@@ -149,6 +149,7 @@ class _ProviderStaffPageState extends State<ProviderStaffPage> {
                           palette: _palettes[i % _palettes.length],
                           availabilities:
                               _d!['availabilities'] as List? ?? const [],
+                          services: _d!['services'] as List? ?? const [],
                           open: _openId == s['id'],
                           onToggle: () => setState(
                             () => _openId = _openId == s['id'] ? null : s['id'],
@@ -168,6 +169,10 @@ class _StaffCard extends StatelessWidget {
   final Json s;
   final AvatarPalette palette;
   final List availabilities;
+
+  /// ProviderDetailDto.services; this member's are StaffMemberDto.serviceIds
+  /// (empty = performs every service).
+  final List services;
   final bool open;
   final VoidCallback onToggle, onEdit;
 
@@ -175,6 +180,7 @@ class _StaffCard extends StatelessWidget {
     required this.s,
     required this.palette,
     required this.availabilities,
+    required this.services,
     required this.open,
     required this.onToggle,
     required this.onEdit,
@@ -192,6 +198,11 @@ class _StaffCard extends StatelessWidget {
       for (final a in availabilities)
         if ((a as Json)['staffMemberId'] == s['id']) '${a['dayOfWeek']}': a,
     };
+    final ids = {for (final id in s['serviceIds'] as List? ?? const []) '$id'};
+    final performs = [
+      for (final v in services)
+        if (ids.isEmpty || ids.contains('${(v as Json)['id']}')) v as Json,
+    ];
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -269,8 +280,35 @@ class _StaffCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 14),
                         ],
-                        // BACKEND GAP: no staff↔service link, so the
-                        // prototype's 'Services & pricing' list is omitted.
+                        if (performs.isNotEmpty) ...[
+                          EyebrowLabel(l.providerTabServices),
+                          const SizedBox(height: 6),
+                          for (final v in performs)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${v['name']}',
+                                      style: AppTextStyles.label.copyWith(
+                                        fontSize: AppTextStyles.fsMetaPlus,
+                                        color: AppColors.ink,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    l.egp((v['price'] as num? ?? 0).toDouble()),
+                                    style: AppTextStyles.label.copyWith(
+                                      fontSize: AppTextStyles.fsMetaPlus,
+                                      color: AppColors.plum700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 14),
+                        ],
                         EyebrowLabel(l.schedEyebrow),
                         const SizedBox(height: 6),
                         for (final (i, day) in weekDays.indexed)

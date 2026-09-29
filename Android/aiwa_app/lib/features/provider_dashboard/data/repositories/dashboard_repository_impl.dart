@@ -30,8 +30,14 @@ class DashboardRepositoryImpl implements DashboardRepository {
     String? status,
     int page = 0,
     int size = 20,
+    bool newestFirst = false,
   }) => _guard(
-    () => _remote.getProviderBookings(status: status, page: page, size: size),
+    () => _remote.getProviderBookings(
+      status: status,
+      page: page,
+      size: size,
+      newestFirst: newestFirst,
+    ),
   );
 
   @override
@@ -54,10 +60,12 @@ class DashboardRepositoryImpl implements DashboardRepository {
   Future<Either<Failure, BookingEntity>> completeBooking(
     String bookingId, {
     bool cashCollected = true,
+    String? note,
   }) => _guard(() async {
     final b = await _remote.completeBooking(
       bookingId,
       cashCollected: cashCollected,
+      note: note,
     );
     trackFunnel('complete', bookingId: bookingId);
     return b;
@@ -82,11 +90,10 @@ class DashboardRepositoryImpl implements DashboardRepository {
     String time,
   ) => _guard(() => _remote.proposeTime(bookingId, date, time));
 
-  // BACKEND GAP: no per-booking travel-fee quote endpoint (only the flat
-  // PATCH /provider/mode/travel-fee).
+  /// PATCH /bookings/{id}/travel-fee-quote — applies once the customer accepts.
   @override
   Future<Either<Failure, BookingEntity>> quoteTravelFee(
     String bookingId,
     double amount,
-  ) async => const Left(NotSupportedFailure('Quoting a travel fee'));
+  ) => _guard(() => _remote.quoteTravelFee(bookingId, amount));
 }

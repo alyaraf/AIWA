@@ -102,17 +102,34 @@ public class ProviderProfile extends BaseEntity {
     /** Admin rejection reason if verificationStatus = REJECTED */
     private String rejectionReason;
 
+    /** When an admin last approved this provider (the "Verified since" badge). */
+    private java.time.LocalDateTime verifiedAt;
+
+    /** How far the provider travels for home-service bookings (km). Null = no stated limit. */
+    private Double serviceRadiusKm;
+
+    /**
+     * Set when the provider reports that they paid their outstanding commission
+     * (cash hand-over / transfer). Finance still has to confirm the payout before
+     * any ledger entry is marked SETTLED; cleared on confirmation.
+     */
+    private java.time.LocalDateTime settlementReportedAt;
+
     /** Legacy boolean — derived from verificationStatus */
     public boolean isVerified() {
         return VerificationStatus.APPROVED.equals(this.verificationStatus);
     }
 
     // ── Gallery (req 3) ────────────────────────────────────────────────────────
-    @ElementCollection
-    @CollectionTable(name = "provider_images", joinColumns = @JoinColumn(name = "provider_id"))
-    @Column(name = "image_url")
+    @OneToMany(mappedBy = "provider", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("id ASC")
     @Builder.Default
-    private List<String> galleryImages = new ArrayList<>();
+    private List<GalleryImage> gallery = new ArrayList<>();
+
+    /** Public gallery: URLs of the images that moderation has not hidden. */
+    public List<String> getVisibleGalleryUrls() {
+        return gallery.stream().filter(g -> !g.isHidden()).map(GalleryImage::getUrl).toList();
+    }
 
     // ── Relations ─────────────────────────────────────────────────────────────
     @OneToMany(mappedBy = "provider", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

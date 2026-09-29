@@ -2,15 +2,17 @@ package com.aiwa.controller;
 
 import com.aiwa.dto.request.SafetyEventRequest;
 import com.aiwa.dto.response.ApiResponse;
-import com.aiwa.entity.*;
-import com.aiwa.enums.NotificationType;
-import com.aiwa.enums.SafetyEventType;
-import com.aiwa.exception.*;
-import com.aiwa.repository.*;
-import com.aiwa.service.impl.NotificationServiceImpl;
+import com.aiwa.entity.User;
+import com.aiwa.repository.UserRepository;
+import com.aiwa.service.impl.SafetyService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -18,86 +20,72 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/bookings/{bookingId}/safety")
 @RequiredArgsConstructor
+@Tag(name = "Safety", description = "In-booking safety events, SOS and the admin SOS queue")
 public class SafetyController {
 
-    private final BookingRepository bookingRepo;
-    private final SafetyEventRepository safetyRepo;
+    private final SafetyService safetyService;
     private final UserRepository userRepo;
-    private final NotificationServiceImpl notificationService;
 
-    @GetMapping
+    @GetMapping("/bookings/{bookingId}/safety")
+    @Operation(summary = "Safety timeline of a booking (the other party's SOS events are not shown)")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.SafetyEventDto>>> events(
             @PathVariable Long bookingId,
             @AuthenticationPrincipal UserDetails userDetails) {
-        Booking booking = loadAuthorizedBooking(bookingId, resolveUserId(userDetails));
-        return ResponseEntity.ok(ApiResponse.Success.of(safetyRepo.findByBookingIdOrderByCreatedAtAsc(booking.getId())
-                .stream().map(this::toDto).toList()));
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                safetyService.events(bookingId, resolveUserId(userDetails))));
     }
 
-    @PostMapping
+    @PostMapping("/bookings/{bookingId}/safety")
+    @Operation(summary = "Record a safety event. type=SOS alerts support (push + SMS) and your trusted contacts; "
+            + "the other party is not notified")
     public ResponseEntity<ApiResponse.Success<ApiResponse.SafetyEventDto>> record(
             @PathVariable Long bookingId,
             @Valid @RequestBody SafetyEventRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
-        User actor = resolveUser(userDetails);
-        Booking booking = loadAuthorizedBooking(bookingId, actor.getId());
-        SafetyEvent event = safetyRepo.save(SafetyEvent.builder()
-                .booking(booking)
-                .actor(actor)
-                .type(request.getType())
-                .latitude(request.getLatitude())
-                .longitude(request.getLongitude())
-                .notes(request.getNotes())
-                .build());
-
-        if (request.getType() == SafetyEventType.SOS) {
-            notificationService.send(booking.getCustomer().getId(), NotificationType.SAFETY_ALERT,
-                    "Safety alert", "تنبيه أمان",
-                    "SOS triggered for booking #" + booking.getId(),
-                    "تم إرسال تنبيه أمان للحجز رقم " + booking.getId(),
-                    booking.getId(), booking.getProvider().getId());
-            notificationService.send(booking.getProvider().getUser().getId(), NotificationType.SAFETY_ALERT,
-                    "Safety alert", "تنبيه أمان",
-                    "SOS triggered for booking #" + booking.getId(),
-                    "تم إرسال تنبيه أمان للحجز رقم " + booking.getId(),
-                    booking.getId(), booking.getProvider().getId());
-        }
-
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.Success.of("Safety event recorded", toDto(event)));
+                .body(ApiResponse.Success.of("Safety event recorded",
+                        safetyService.record(bookingId, resolveUserId(userDetails), request)));
     }
 
-    private Booking loadAuthorizedBooking(Long bookingId, Long userId) {
-        Booking booking = bookingRepo.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
-        boolean allowed = booking.getCustomer().getId().equals(userId)
-                || booking.getProvider().getUser().getId().equals(userId);
-        if (!allowed) throw new BusinessException("error.access_denied");
-        return booking;
+    @PostMapping("/bookings/{bookingId}/safety/{eventId}/resolve")
+    @Operation(summary = "\"I'm safe\" — close your own SOS")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.SafetyEventDto>> resolveOwn(
+            @PathVariable Long bookingId,
+            @PathVariable Long eventId,
+            @RequestParam(required = false) String notes,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of("Marked safe",
+                safetyService.resolveOwn(bookingId, eventId, resolveUserId(userDetails), notes)));
     }
 
-    private User resolveUser(UserDetails ud) {
-        return userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
-                .orElseThrow();
+    // ── Admin SOS queue ───────────────────────────────────────────────────────
+
+    @GetMapping("/admin/safety")
+    @PreAuthorize(com.aiwa.security.Perms.ANY_ADMIN)
+    @Operation(summary = "SOS queue — status OPEN (default) | RESOLVED | ALL (ADMIN)")
+    public ResponseEntity<ApiResponse.Success<Page<ApiResponse.AdminSafetyEventDto>>> queue(
+            @RequestParam(defaultValue = "OPEN") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.Success.of(safetyService.adminQueue(status,
+                PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 100))))));
+    }
+
+    @PostMapping("/admin/safety/{eventId}/resolve")
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT)
+    @Operation(summary = "Close an SOS with a note of what was done (ADMIN · Support)")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.AdminSafetyEventDto>> adminResolve(
+            @PathVariable Long eventId,
+            @RequestParam String notes,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of("SOS closed",
+                safetyService.adminResolve(eventId, resolveUserId(userDetails), notes)));
     }
 
     private Long resolveUserId(UserDetails ud) {
-        return resolveUser(ud).getId();
-    }
-
-    private ApiResponse.SafetyEventDto toDto(SafetyEvent e) {
-        return ApiResponse.SafetyEventDto.builder()
-                .id(e.getId())
-                .bookingId(e.getBooking().getId())
-                .actor(ApiResponse.UserDto.builder().id(e.getActor().getId()).fullName(e.getActor().getFullName()).build())
-                .type(e.getType())
-                .latitude(e.getLatitude())
-                .longitude(e.getLongitude())
-                .notes(e.getNotes())
-                .createdAt(e.getCreatedAt())
-                .build();
+        return userRepo.findByEmail(ud.getUsername())
+                .or(() -> userRepo.findByPhone(ud.getUsername()))
+                .map(User::getId).orElseThrow();
     }
 }

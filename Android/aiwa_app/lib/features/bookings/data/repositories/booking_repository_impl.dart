@@ -119,13 +119,13 @@ class BookingRepositoryImpl implements BookingRepository {
     bool accept,
   ) => _guard(() => _remote.respondToProposal(bookingId, accept));
 
-  // BACKEND GAP: travel fees are a fixed provider setting applied at
-  // booking time; there is no quote the customer can accept or decline.
+  /// PATCH /bookings/{id}/travel-fee-response — accepting applies the quote to
+  /// the total; declining cancels the booking without a penalty.
   @override
   Future<Either<Failure, BookingEntity>> respondToTravelFee(
     String bookingId,
     bool accept,
-  ) async => const Left(NotSupportedFailure('Answering a travel-fee quote'));
+  ) => _guard(() => _remote.respondToTravelFee(bookingId, accept));
 
   @override
   Future<Either<Failure, BookingEntity>> checkIn(String bookingId) =>
@@ -154,16 +154,16 @@ class BookingRepositoryImpl implements BookingRepository {
   Future<Either<Failure, void>> sendSos(String bookingId) =>
       _guard(() => _remote.sendSos(bookingId));
 
-  // BACKEND GAP: SafetyController has GET/POST events only; nothing closes
-  // an SOS incident.
+  /// "I'm safe" — POST /bookings/{id}/safety/{eventId}/resolve.
   @override
-  Future<Either<Failure, void>> resolveSos(String bookingId) async =>
-      const Left(NotSupportedFailure('Closing an SOS'));
+  Future<Either<Failure, void>> resolveSos(String bookingId) =>
+      _guard(() => _remote.resolveSos(bookingId));
 
-  // BACKEND GAP: no masked-number proxy; BookingDto carries no phone.
+  /// GET /bookings/{id}/contact — the other party's real number, released only
+  /// while the booking is live. (A masked-number proxy is a later upgrade.)
   @override
-  Future<Either<Failure, String>> maskedPhone(String bookingId) async =>
-      const Left(NotSupportedFailure('Calling through a masked number'));
+  Future<Either<Failure, String>> maskedPhone(String bookingId) =>
+      _guard(() => _remote.contactPhone(bookingId));
 
   @override
   Future<Either<Failure, void>> submitComplaint({

@@ -29,9 +29,11 @@ public class BookingRequest {
     @NotNull(message = "Booking type is required")
     private BookingType bookingType = BookingType.SCHEDULED;
 
+    /** Cash only for v1; any other value is ignored and stored as CASH. */
     private String paymentMethod = "CASH";
 
     private Boolean homeService = false;
 
+    @jakarta.validation.constraints.Size(max = 255, message = "Notes must be at most 255 characters")
     private String notes;
 }

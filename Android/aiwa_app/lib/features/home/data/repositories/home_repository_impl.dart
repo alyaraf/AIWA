@@ -78,9 +78,20 @@ class HomeRepositoryImpl implements HomeRepository {
     }
   }
 
-  // Backend gap: aiwa-backend has no waitlist / join-alert endpoint.
+  /// POST /providers/waitlist — one alert when a matching provider is approved.
   @override
   Future<Either<Failure, void>> notifyWhenProviderJoins({
     String? category,
-  }) async => const Left(ServerFailure('Join alerts are not supported yet.'));
+    double? lat,
+    double? lng,
+  }) async {
+    try {
+      await _remote.joinWaitlist(category: category, lat: lat, lng: lng);
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    }
+  }
 }

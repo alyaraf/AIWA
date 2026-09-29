@@ -353,10 +353,13 @@ class _ReviewCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 1),
-                    // BACKEND GAP: ReviewDto has no service name.
-                    if (at != null)
+                    // "Yesterday · Blowout" — ReviewDto.serviceName.
+                    if (at != null || r['serviceName'] != null)
                       Text(
-                        l.relativeDay(at),
+                        [
+                          if (at != null) l.relativeDay(at),
+                          if (r['serviceName'] != null) '${r['serviceName']}',
+                        ].join(' · '),
                         style: AppTextStyles.micro.copyWith(fontSize: 11),
                       ),
                   ],

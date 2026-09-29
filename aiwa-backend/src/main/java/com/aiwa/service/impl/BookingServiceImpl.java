@@ -6,16 +6,20 @@ import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.*;
 import com.aiwa.enums.*;
 import com.aiwa.exception.BusinessException;
+import com.aiwa.exception.ConflictException;
+import com.aiwa.exception.ForbiddenException;
 import com.aiwa.exception.ResourceNotFoundException;
 import com.aiwa.repository.*;
 import com.aiwa.service.BookingService;
+import com.aiwa.util.AiwaTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -40,6 +44,15 @@ public class BookingServiceImpl implements BookingService {
     private static final Duration IDEMPOTENCY_KEY_TTL = Duration.ofMinutes(5);
     private static final Duration AUTO_DEDUP_WINDOW = Duration.ofSeconds(10);
 
+    /** How far ahead a customer can book. */
+    static final int MAX_DAYS_AHEAD = 90;
+    /** Upper bound for a per-booking travel quote (EGP) — guards against typos like 15000. */
+    static final BigDecimal MAX_TRAVEL_QUOTE = new BigDecimal("5000");
+
+    /** States in which both parties may see each other's phone number. */
+    static final Set<BookingStatus> CONTACT_VISIBLE = EnumSet.of(
+            BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED, BookingStatus.IN_PROGRESS);
+
     // ── CREATE ─────────────────────────────────────────────────────────────────
 
     @Override
@@ -52,9 +65,8 @@ public class BookingServiceImpl implements BookingService {
      * @param idempotencyKey Optional client-supplied key (e.g. a UUID generated once
      *                       per tap of "Book"). When present, a retry with the same
      *                       key returns the original booking instead of creating a
-     *                       duplicate. When absent — most real double-taps, since the
-     *                       mobile client doesn't send one today — the same guard is
-     *                       applied automatically, keyed on the booking's own content
+     *                       duplicate. When absent, the same guard is applied
+     *                       automatically, keyed on the booking's own content
      *                       (customer + provider + service + staff + slot) for a short
      *                       window, so an accidental double submit is still caught.
      */
@@ -67,7 +79,7 @@ public class BookingServiceImpl implements BookingService {
         Duration ttl = explicitKey ? IDEMPOTENCY_KEY_TTL : AUTO_DEDUP_WINDOW;
 
         // The dedup guard is a convenience, not the primary correctness boundary
-        // (the real slot-conflict check below still applies) — if Redis is
+        // (the locked slot-conflict check below still applies) — if Redis is
         // unreachable, skip it rather than failing every booking attempt outright.
         boolean claimedHere;
         try {
@@ -86,8 +98,12 @@ public class BookingServiceImpl implements BookingService {
                 throw new BusinessException("booking.error.duplicate");
             }
             try {
-                return toDto(bookingRepo.findById(Long.valueOf(claimed))
-                        .orElseThrow(() -> new BusinessException("booking.error.duplicate")));
+                Booking original = bookingRepo.findById(Long.valueOf(claimed))
+                        .orElseThrow(() -> new BusinessException("booking.error.duplicate"));
+                if (!original.getCustomer().getId().equals(customerId)) {
+                    throw new BusinessException("booking.error.duplicate");
+                }
+                return toDto(original);
             } catch (NumberFormatException e) {
                 throw new BusinessException("booking.error.duplicate");
             }
@@ -100,7 +116,11 @@ public class BookingServiceImpl implements BookingService {
         } catch (RuntimeException e) {
             // The request was rejected outright (bad input, no slot, etc.) — release
             // the claim so a corrected retry isn't blocked by our own guard.
-            redis.delete(dedupKey);
+            try {
+                redis.delete(dedupKey);
+            } catch (RuntimeException ignored) {
+                // the claim expires on its own
+            }
             throw e;
         }
     }
@@ -119,7 +139,9 @@ public class BookingServiceImpl implements BookingService {
     private ApiResponse.BookingDto doCreate(Long customerId, BookingRequest req) {
         User customer = userRepo.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", customerId));
-        ProviderProfile provider = providerRepo.findById(req.getProviderId())
+        // Row lock on the provider serializes concurrent bookings of the same
+        // calendar, so the conflict check below cannot be passed twice for one slot.
+        ProviderProfile provider = providerRepo.findByIdForUpdate(req.getProviderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", req.getProviderId()));
         com.aiwa.entity.Service service = serviceRepo.findById(req.getServiceId())
                 .orElseThrow(() -> new ResourceNotFoundException("Service", req.getServiceId()));
@@ -132,12 +154,15 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("booking.error.provider_unavailable");
         if (provider.isVacationMode() || provider.isOfflineMode() || provider.isSettlementPaused())
             throw new BusinessException("booking.error.provider_not_accepting");
+        if (provider.getUser().getId().equals(customerId))
+            throw new BusinessException("booking.error.own_listing");
 
         StaffMember staffMember = null;
         if (req.getStaffMemberId() != null) {
             staffMember = staffRepo.findByIdAndProviderId(req.getStaffMemberId(), provider.getId())
                     .orElseThrow(() -> new BusinessException("booking.error.staff_wrong_provider"));
             if (!staffMember.isActive()) throw new BusinessException("booking.error.staff_unavailable");
+            if (!staffMember.performs(service)) throw new BusinessException("booking.error.staff_not_offering_service");
         }
 
         SavedAddress savedAddress = null;
@@ -149,41 +174,40 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        // ── Gap 3: BOOK_NOW — use today + next available slot ─────────────────
+        // ── BOOK_NOW — today + next available slot ────────────────────────────
         LocalDate bookingDate;
         LocalTime startTime;
 
         if (req.getBookingType() == BookingType.BOOK_NOW) {
-            bookingDate = LocalDate.now();
+            bookingDate = AiwaTime.today();
             startTime   = findNextAvailableSlot(provider.getId(), staffMember, service, bookingDate);
         } else {
             if (req.getBookingDate() == null || req.getStartTime() == null)
                 throw new BusinessException("booking.error.date_time_required");
             bookingDate = req.getBookingDate();
             startTime   = req.getStartTime();
+            requireBookableSlot(provider, staffMember, service, bookingDate, startTime);
         }
 
         LocalTime endTime = startTime.plusMinutes(service.getDurationMinutes());
-        LocalTime blockedEndTime = endTime.plusMinutes(provider.getTravelBufferMinutes() != null
-                ? provider.getTravelBufferMinutes() : 0);
+        LocalTime blockedEndTime = endTime.plusMinutes(bufferOf(provider));
 
         // Conflict is scoped to the chosen staff member's calendar when one is picked,
         // otherwise to the (individual) provider's calendar.
         boolean conflict = staffMember != null
                 ? bookingRepo.existsConflictForStaff(staffMember.getId(), bookingDate, startTime, blockedEndTime)
                 : bookingRepo.existsConflict(provider.getId(), bookingDate, startTime, blockedEndTime);
-        if (conflict) throw new BusinessException("booking.error.conflict");
+        if (conflict) throw new ConflictException("booking.error.conflict");
 
-        // ── Gap 3: calculate ETA for BOOK_NOW ─────────────────────────────────
         Integer eta = (req.getBookingType() == BookingType.BOOK_NOW)
-                ? estimateArrivalMinutes(provider) : null;
+                ? estimateArrivalMinutes(provider, savedAddress) : null;
 
         // Home-service travel fee: snapshot the provider's current fee onto the
         // booking so later profile edits don't retroactively rewrite this receipt.
         // Null / zero on the provider means "no travel charge" — treat as absent.
         boolean isHomeService = Boolean.TRUE.equals(req.getHomeService());
-        java.math.BigDecimal travelFee = null;
-        java.math.BigDecimal total = service.getPrice();
+        BigDecimal travelFee = null;
+        BigDecimal total = service.getPrice();
         if (isHomeService
                 && provider.getHomeServiceTravelFee() != null
                 && provider.getHomeServiceTravelFee().signum() > 0) {
@@ -208,12 +232,11 @@ public class BookingServiceImpl implements BookingService {
                 .travelFee(travelFee)
                 .notes(req.getNotes())
                 .paymentStatus(PaymentStatus.CASH_PENDING)
-                .paymentMethod(req.getPaymentMethod() != null ? req.getPaymentMethod() : "CASH")
+                .paymentMethod("CASH")
                 .build();
 
         Booking saved = bookingRepo.save(booking);
 
-        // Notify provider (req 6)
         notificationService.send(
                 provider.getUser().getId(),
                 NotificationType.BOOKING_CREATED,
@@ -227,6 +250,35 @@ public class BookingServiceImpl implements BookingService {
         return toDto(saved);
     }
 
+    /**
+     * A scheduled slot must be in the future, within the booking horizon, and
+     * inside the provider's (or chosen staff member's) working hours for that day.
+     * Before, any date/time was accepted — including the past and 3 a.m.
+     */
+    private void requireBookableSlot(ProviderProfile provider, StaffMember staff,
+                                     com.aiwa.entity.Service service, LocalDate date, LocalTime start) {
+        LocalDateTime startsAt = LocalDateTime.of(date, start);
+        if (!startsAt.isAfter(AiwaTime.now())) {
+            throw new BusinessException("booking.error.slot_in_past");
+        }
+        if (date.isAfter(AiwaTime.today().plusDays(MAX_DAYS_AHEAD))) {
+            throw new BusinessException("booking.error.too_far_ahead");
+        }
+        Availability avail = resolveAvailability(provider.getId(), staff != null ? staff.getId() : null,
+                date.getDayOfWeek());
+        if (avail == null || !avail.isAvailable()) {
+            throw new BusinessException("booking.error.provider_not_working");
+        }
+        LocalTime end = start.plusMinutes(service.getDurationMinutes());
+        if (start.isBefore(avail.getStartTime()) || end.isAfter(avail.getEndTime()) || end.isBefore(start)) {
+            throw new BusinessException("booking.error.outside_working_hours");
+        }
+    }
+
+    private static int bufferOf(ProviderProfile provider) {
+        return provider.getTravelBufferMinutes() != null ? provider.getTravelBufferMinutes() : 0;
+    }
+
     // ── READ ───────────────────────────────────────────────────────────────────
 
     @Override
@@ -236,23 +288,89 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
         boolean isOwner = booking.getCustomer().getId().equals(requesterId)
                 || booking.getProvider().getUser().getId().equals(requesterId);
-        if (!isOwner) throw new BusinessException("error.access_denied");
-        return toDto(booking);
+        if (!isOwner) throw new ForbiddenException("error.access_denied");
+        ApiResponse.BookingDto dto = toDto(booking);
+        // The provider's booking detail shows "N bookings" for the customer.
+        if (dto.getCustomer() != null) {
+            dto.getCustomer().setBookingCount(bookingRepo.countByCustomerId(booking.getCustomer().getId()));
+        }
+        return dto;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ApiResponse.BookingDto> getMyBookings(Long customerId, Pageable pageable) {
-        return bookingRepo.findByCustomerIdOrderByCreatedAtDesc(customerId, pageable).map(this::toDto);
+        return getMyBookings(customerId, null, pageable);
+    }
+
+    /** @param statuses optional filter (BE-9) — null/empty means every status. */
+    @Transactional(readOnly = true)
+    public Page<ApiResponse.BookingDto> getMyBookings(Long customerId, Collection<BookingStatus> statuses,
+                                                      Pageable pageable) {
+        Page<Booking> page = statuses == null || statuses.isEmpty()
+                ? bookingRepo.findByCustomerIdOrderByCreatedAtDesc(customerId, pageable)
+                : bookingRepo.findByCustomerIdAndStatusInOrderByCreatedAtDesc(customerId, statuses, pageable);
+        return page.map(this::toDto);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ApiResponse.BookingDto> getProviderBookings(Long userId, Pageable pageable) {
+        return getProviderBookings(userId, null, false, pageable);
+    }
+
+    /**
+     * @param statuses optional filter (BE-9) — null/empty means every status
+     * @param newestFirst "Past" lists want the most recent visit first; upcoming lists the soonest
+     */
+    @Transactional(readOnly = true)
+    public Page<ApiResponse.BookingDto> getProviderBookings(Long userId, Collection<BookingStatus> statuses,
+                                                            boolean newestFirst, Pageable pageable) {
         ProviderProfile profile = providerRepo.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider profile not found"));
-        return bookingRepo.findByProviderIdOrderByBookingDateAscStartTimeAsc(profile.getId(), pageable)
-                .map(this::toDto);
+        Long pid = profile.getId();
+        boolean filtered = statuses != null && !statuses.isEmpty();
+        Page<Booking> page;
+        if (newestFirst) {
+            page = filtered
+                    ? bookingRepo.findByProviderIdAndStatusInOrderByBookingDateDescStartTimeDesc(pid, statuses, pageable)
+                    : bookingRepo.findByProviderIdOrderByBookingDateDescStartTimeDesc(pid, pageable);
+        } else {
+            page = filtered
+                    ? bookingRepo.findByProviderIdAndStatusInOrderByBookingDateAscStartTimeAsc(pid, statuses, pageable)
+                    : bookingRepo.findByProviderIdOrderByBookingDateAscStartTimeAsc(pid, pageable);
+        }
+        return page.map(this::toDto);
+    }
+
+    /**
+     * BE-16 (MVP call button): the other party's phone, only while the booking
+     * is live (accepted → in progress). Before and after that window there is
+     * no reason for either side to hold the other's number.
+     */
+    @Transactional(readOnly = true)
+    public ApiResponse.BookingContactDto getContact(Long bookingId, Long requesterId) {
+        Booking booking = bookingRepo.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
+        boolean isCustomer = booking.getCustomer().getId().equals(requesterId);
+        boolean isProvider = booking.getProvider().getUser().getId().equals(requesterId);
+        if (!isCustomer && !isProvider) throw new ForbiddenException("error.access_denied");
+        if (!CONTACT_VISIBLE.contains(booking.getStatus())) {
+            throw new BusinessException("booking.error.contact_not_available");
+        }
+        User other = isCustomer ? booking.getProvider().getUser() : booking.getCustomer();
+        String phone = isCustomer && booking.getStaffMember() != null && booking.getStaffMember().getPhone() != null
+                ? booking.getStaffMember().getPhone()   // a shop booking: call the assigned staff member
+                : other.getPhone();
+        if (phone == null || phone.isBlank()) {
+            throw new BusinessException("booking.error.contact_no_phone");
+        }
+        return ApiResponse.BookingContactDto.builder()
+                .bookingId(bookingId)
+                .name(isCustomer ? booking.getProvider().getBusinessName() : other.getFullName())
+                .phone(phone)
+                .role(isCustomer ? "PROVIDER" : "CUSTOMER")
+                .build();
     }
 
     // ── STATUS UPDATE ──────────────────────────────────────────────────────────
@@ -260,6 +378,12 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public ApiResponse.BookingDto updateStatus(Long userId, Long bookingId, BookingStatus newStatus) {
+        return updateStatus(userId, bookingId, newStatus, null);
+    }
+
+    /** @param reason cancellation reason (stored on the booking; ignored for other transitions) */
+    @Transactional
+    public ApiResponse.BookingDto updateStatus(Long userId, Long bookingId, BookingStatus newStatus, String reason) {
         // Completion carries a payment outcome — route it through the dedicated
         // method so cash-confirmed vs disputed and commission stay consistent.
         if (newStatus == BookingStatus.COMPLETED) {
@@ -275,24 +399,30 @@ public class BookingServiceImpl implements BookingService {
 
         boolean isProvider = booking.getProvider().getUser().getId().equals(userId);
         boolean isCustomer = booking.getCustomer().getId().equals(userId);
+        if (!isProvider && !isCustomer) throw new ForbiddenException("error.not_authorized");
 
-        // Gap 8: transition guard
         if (!booking.getStatus().canTransitionTo(newStatus)) {
             throw new BusinessException("Cannot change status from "
                     + booking.getStatus() + " to " + newStatus);
         }
 
-        // Role-based permission
+        if (newStatus != BookingStatus.CANCELLED && !isProvider) {
+            throw new BusinessException("booking.error.only_provider_update_status");
+        }
+
+        BookingStatus previous = booking.getStatus();
         if (newStatus == BookingStatus.CANCELLED) {
-            if (!isCustomer && !isProvider) throw new BusinessException("error.not_authorized");
             if (isCustomer) enforceCustomerCancellationCutoff(booking);
             booking.setCancelledBy(isCustomer ? "CUSTOMER" : "PROVIDER");
             booking.setCancelledAt(LocalDateTime.now());
-            if (isProvider) {
+            booking.setCancellationReason(trimReason(reason));
+            // A provider walking away from a commitment they accepted costs a strike
+            // and a penalty; declining a request they never accepted does not.
+            if (isProvider && previous != BookingStatus.PENDING) {
                 ProviderProfile provider = booking.getProvider();
                 provider.setCancellationStrikes(provider.getCancellationStrikes() + 1);
                 providerRepo.save(provider);
-                booking.setPenaltyApplied(true); // provider cancel after accept incurs a penalty
+                booking.setPenaltyApplied(true);
             }
         }
 
@@ -300,33 +430,35 @@ public class BookingServiceImpl implements BookingService {
             booking.setPenaltyApplied(true);
         }
 
-        if ((newStatus == BookingStatus.ACCEPTED
-                || newStatus == BookingStatus.ON_THE_WAY
-                || newStatus == BookingStatus.ARRIVED
-                || newStatus == BookingStatus.IN_PROGRESS
-                || newStatus == BookingStatus.COMPLETED
-                || newStatus == BookingStatus.NO_SHOW) && !isProvider) {
-            throw new BusinessException("booking.error.only_provider_update_status");
-        }
-
         booking.setStatus(newStatus);
         bookingRepo.save(booking);
 
-        // Notify customer (req 6)
-        sendStatusNotification(booking, newStatus);
-
+        sendStatusNotification(booking, newStatus, isCustomer);
         return toDto(booking);
+    }
+
+    private static String trimReason(String reason) {
+        if (reason == null || reason.isBlank()) return null;
+        String r = reason.trim();
+        return r.length() > 255 ? r.substring(0, 255) : r;
     }
 
     // ── COMPLETE + payment outcome (cash vs disputed) ──────────────────────────
 
+    @Override
+    @Transactional
+    public ApiResponse.BookingDto complete(Long userId, Long bookingId, boolean cashCollected) {
+        return complete(userId, bookingId, cashCollected, null);
+    }
+
     /**
      * Provider marks a booking COMPLETED. When cash was collected the booking is
      * CASH_CONFIRMED and platform commission is recorded; otherwise it is flagged
-     * DISPUTED, admins are notified, and no commission is charged.
+     * DISPUTED, admins are notified, and no commission is charged. The optional
+     * note explains a cash-not-collected completion to the admin reviewing it.
      */
     @Transactional
-    public ApiResponse.BookingDto complete(Long userId, Long bookingId, boolean cashCollected) {
+    public ApiResponse.BookingDto complete(Long userId, Long bookingId, boolean cashCollected, String note) {
         Booking booking = bookingRepo.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
 
@@ -336,6 +468,10 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("Cannot complete booking in status: " + booking.getStatus());
 
         booking.setStatus(BookingStatus.COMPLETED);
+        if (note != null && !note.isBlank()) {
+            String n = note.trim();
+            booking.setCompletionNote(n.length() > 500 ? n.substring(0, 500) : n);
+        }
 
         if (cashCollected) {
             booking.setPaymentStatus(PaymentStatus.CASH_CONFIRMED);
@@ -347,11 +483,12 @@ public class BookingServiceImpl implements BookingService {
             notifyAdminsOfDispute(booking);
         }
 
-        sendStatusNotification(booking, BookingStatus.COMPLETED);
+        sendStatusNotification(booking, BookingStatus.COMPLETED, false);
         return toDto(booking);
     }
 
     /** Admin override: force-cancel any non-terminal booking. */
+    @Override
     @Transactional
     public ApiResponse.BookingDto adminForceCancel(Long bookingId, String reason) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -365,11 +502,14 @@ public class BookingServiceImpl implements BookingService {
 
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setCancelledBy("ADMIN");
-        booking.setCancellationReason(reason != null && !reason.isBlank() ? reason : "Cancelled by admin");
+        booking.setCancellationReason(reason != null && !reason.isBlank() ? trimReason(reason) : "Cancelled by admin");
         booking.setCancelledAt(LocalDateTime.now());
         bookingRepo.save(booking);
 
-        sendStatusNotification(booking, BookingStatus.CANCELLED);
+        notifyCustomer(booking, NotificationType.BOOKING_CANCELLED,
+                "Booking cancelled by admin", "تم إلغاء الحجز من قبل الإدارة",
+                "Your booking for " + booking.getService().getName() + " was cancelled by AIWA support.",
+                "تم إلغاء حجزك لـ " + booking.getService().getName() + " من قبل دعم AIWA.");
         notificationService.send(
                 booking.getProvider().getUser().getId(),
                 NotificationType.BOOKING_CANCELLED,
@@ -383,6 +523,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     /** Admin resolves a DISPUTED payment: confirm cash (+commission) or write it off. */
+    @Override
     @Transactional
     public ApiResponse.BookingDto adminResolveDispute(Long bookingId, boolean paid) {
         return adminResolveDispute(bookingId, paid ? "PAID" : "UNPAID");
@@ -395,8 +536,14 @@ public class BookingServiceImpl implements BookingService {
      *  NO_SHOW — no-show recorded + penalty, no commission
      *  CANCEL  — booking voided entirely
      */
+    @Override
     @Transactional
     public ApiResponse.BookingDto adminResolveDispute(Long bookingId, String outcome) {
+        return adminResolveDispute(bookingId, outcome, null);
+    }
+
+    @Transactional
+    public ApiResponse.BookingDto adminResolveDispute(Long bookingId, String outcome, String reason) {
         Booking booking = bookingRepo.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
         if (booking.getPaymentStatus() != PaymentStatus.DISPUTED) {
@@ -428,7 +575,8 @@ public class BookingServiceImpl implements BookingService {
                 booking.setPaymentStatus(PaymentStatus.UNPAID);
                 booking.setStatus(BookingStatus.CANCELLED);
                 booking.setCancelledBy("ADMIN");
-                booking.setCancellationReason("Voided during dispute resolution");
+                booking.setCancellationReason(reason != null && !reason.isBlank()
+                        ? trimReason(reason) : "Voided during dispute resolution");
                 booking.setCancelledAt(LocalDateTime.now());
                 bookingRepo.save(booking);
                 summaryEn = "booking cancelled";
@@ -445,10 +593,16 @@ public class BookingServiceImpl implements BookingService {
                 "تم حل نزاع الحجز رقم " + booking.getId() + ".",
                 booking.getId(), booking.getProvider().getId()
         );
+        notifyCustomer(booking, NotificationType.PAYMENT_DISPUTED,
+                "Payment dispute resolved", "تم حل نزاع الدفع",
+                "AIWA support resolved the payment question on your " + booking.getService().getName()
+                        + " booking (" + summaryEn + ").",
+                "قام دعم AIWA بحل مسألة الدفع لحجزك لـ " + booking.getService().getName() + ".");
         return toDto(booking);
     }
 
     /** Customer checks in at an on-site/venue booking so the provider can begin. */
+    @Override
     @Transactional
     public ApiResponse.BookingDto checkIn(Long customerId, Long bookingId) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -482,6 +636,7 @@ public class BookingServiceImpl implements BookingService {
      * Customer confirms cash was paid, or reports it unpaid/disputed, after the
      * provider has completed the service.
      */
+    @Override
     @Transactional
     public ApiResponse.BookingDto confirmPayment(Long customerId, Long bookingId, boolean paid) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -531,7 +686,9 @@ public class BookingServiceImpl implements BookingService {
                         NotificationType.PAYMENT_DISPUTED,
                         "Payment disputed / unpaid",
                         "نزاع على الدفع / غير مدفوع",
-                        "Booking #" + booking.getId() + " was completed but cash was not confirmed.",
+                        "Booking #" + booking.getId() + " was completed but cash was not confirmed."
+                                + (booking.getCompletionNote() != null
+                                    ? " Provider note: " + booking.getCompletionNote() : ""),
                         "تم إكمال الحجز رقم " + booking.getId() + " لكن لم يتم تأكيد الدفع النقدي.",
                         booking.getId(), booking.getProvider().getId()
                 ));
@@ -539,16 +696,22 @@ public class BookingServiceImpl implements BookingService {
 
     // ── EXPIRY (system) ────────────────────────────────────────────────────────
 
-    /** Expire PENDING requests the provider never answered within the response window. */
+    /**
+     * Expire PENDING requests the provider never answered within the response
+     * window. When the provider proposed another time, the customer's clock runs
+     * from the proposal — before, a proposal made late in the window left the
+     * customer only minutes to answer before the whole request expired.
+     */
     @Transactional
     public int expireStalePendingBookings() {
-        // Each provider may set its own response window, so filter per booking
-        // rather than with a single cutoff.
         LocalDateTime now = LocalDateTime.now();
         List<Booking> stale = bookingRepo.findByStatus(BookingStatus.PENDING).stream()
                 .filter(b -> b.getCreatedAt() != null)
-                .filter(b -> b.getCreatedAt().isBefore(
-                        now.minusMinutes(platformSettings.getResponseWindowMinutes(b.getProvider()))))
+                .filter(b -> {
+                    LocalDateTime ref = b.getProposedAt() != null && b.getProposedAt().isAfter(b.getCreatedAt())
+                            ? b.getProposedAt() : b.getCreatedAt();
+                    return ref.isBefore(now.minusMinutes(platformSettings.getResponseWindowMinutes(b.getProvider())));
+                })
                 .toList();
 
         for (Booking booking : stale) {
@@ -583,7 +746,7 @@ public class BookingServiceImpl implements BookingService {
 
     // ── PROVIDER PROPOSES ALTERNATIVE TIME (customer accept/decline) ───────────
 
-    /** Provider proposes an alternative slot for a PENDING booking. */
+    @Override
     @Transactional
     public ApiResponse.BookingDto proposeReschedule(Long providerUserId, Long bookingId, RescheduleRequest req) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -594,13 +757,15 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() != BookingStatus.PENDING)
             throw new BusinessException("booking.error.propose_requires_pending");
 
-        LocalTime newEnd = req.getStartTime().plusMinutes(booking.getService().getDurationMinutes());
-        if (bookingRepo.existsConflict(booking.getProvider().getId(),
-                req.getBookingDate(), req.getStartTime(), newEnd))
-            throw new BusinessException("booking.error.conflict");
+        ProviderProfile provider = providerRepo.findByIdForUpdate(booking.getProvider().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", booking.getProvider().getId()));
+        requireBookableSlot(provider, booking.getStaffMember(), booking.getService(),
+                req.getBookingDate(), req.getStartTime());
+        requireFreeSlot(booking, req.getBookingDate(), req.getStartTime());
 
         booking.setProposedDate(req.getBookingDate());
         booking.setProposedStartTime(req.getStartTime());
+        booking.setProposedAt(LocalDateTime.now());
         bookingRepo.save(booking);
 
         notificationService.send(
@@ -617,7 +782,7 @@ public class BookingServiceImpl implements BookingService {
         return toDto(booking);
     }
 
-    /** Customer accepts or declines a provider-proposed alternative slot. */
+    @Override
     @Transactional
     public ApiResponse.BookingDto respondToProposal(Long customerId, Long bookingId, boolean accept) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -634,8 +799,10 @@ public class BookingServiceImpl implements BookingService {
             LocalDate d = booking.getProposedDate();
             LocalTime s = booking.getProposedStartTime();
             LocalTime e = s.plusMinutes(booking.getService().getDurationMinutes());
-            if (bookingRepo.existsConflict(booking.getProvider().getId(), d, s, e))
-                throw new BusinessException("booking.error.conflict");
+            if (!LocalDateTime.of(d, s).isAfter(AiwaTime.now()))
+                throw new BusinessException("booking.error.proposal_lapsed");
+            providerRepo.findByIdForUpdate(booking.getProvider().getId());
+            requireFreeSlot(booking, d, s);
 
             booking.setBookingDate(d);
             booking.setStartTime(s);
@@ -643,9 +810,10 @@ public class BookingServiceImpl implements BookingService {
             booking.setStatus(BookingStatus.ACCEPTED);
             booking.setProposedDate(null);
             booking.setProposedStartTime(null);
+            booking.setProposedAt(null);
             bookingRepo.save(booking);
 
-            sendStatusNotification(booking, BookingStatus.ACCEPTED);
+            sendStatusNotification(booking, BookingStatus.ACCEPTED, false);
             notificationService.send(
                     booking.getProvider().getUser().getId(),
                     NotificationType.BOOKING_CONFIRMED,
@@ -662,6 +830,7 @@ public class BookingServiceImpl implements BookingService {
             booking.setCancelledBy("CUSTOMER");
             booking.setProposedDate(null);
             booking.setProposedStartTime(null);
+            booking.setProposedAt(null);
             bookingRepo.save(booking);
 
             notificationService.send(
@@ -677,8 +846,97 @@ public class BookingServiceImpl implements BookingService {
         return toDto(booking);
     }
 
-    // ── Gap 4: REJECT with reason + return alternatives ────────────────────────
+    /** The slot (plus travel buffer) must be free on the booking's own calendar, ignoring the booking itself. */
+    private void requireFreeSlot(Booking booking, LocalDate date, LocalTime start) {
+        LocalTime blockedEnd = start.plusMinutes(booking.getService().getDurationMinutes())
+                .plusMinutes(bufferOf(booking.getProvider()));
+        boolean conflict = booking.getStaffMember() != null
+                ? bookingRepo.existsConflictForStaffExcluding(booking.getStaffMember().getId(), date, start,
+                        blockedEnd, booking.getId())
+                : bookingRepo.existsConflictExcluding(booking.getProvider().getId(), date, start,
+                        blockedEnd, booking.getId());
+        if (conflict) throw new ConflictException("booking.error.conflict");
+    }
 
+    // ── PER-BOOKING TRAVEL-FEE QUOTE (BE-17) ───────────────────────────────────
+
+    /**
+     * Provider quotes a travel fee for one home-service booking (e.g. a far-away
+     * address). The customer must accept before it applies; until then the
+     * booking keeps its original total.
+     */
+    @Transactional
+    public ApiResponse.BookingDto quoteTravelFee(Long providerUserId, Long bookingId, BigDecimal amount) {
+        Booking booking = bookingRepo.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
+        if (!booking.getProvider().getUser().getId().equals(providerUserId))
+            throw new ForbiddenException("error.not_authorized");
+        if (!booking.isHomeService())
+            throw new BusinessException("booking.error.quote_home_service_only");
+        if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.ACCEPTED)
+            throw new BusinessException("booking.error.quote_not_allowed_now");
+        if (amount == null || amount.signum() < 0 || amount.compareTo(MAX_TRAVEL_QUOTE) > 0)
+            throw new BusinessException("booking.error.quote_invalid_amount");
+
+        booking.setTravelFeeQuote(amount.setScale(2, RoundingMode.HALF_UP));
+        booking.setTravelFeeQuoteStatus(TravelFeeQuoteStatus.PENDING);
+        bookingRepo.save(booking);
+
+        notifyCustomer(booking, NotificationType.TRAVEL_FEE_QUOTED,
+                "Travel fee quoted", "تم تحديد رسوم الانتقال",
+                booking.getProvider().getBusinessName() + " quoted EGP " + booking.getTravelFeeQuote()
+                        + " travel for your " + booking.getService().getName() + " booking. Accept or decline.",
+                booking.getProvider().getBusinessName() + " حدد رسوم انتقال " + booking.getTravelFeeQuote()
+                        + " جنيه لحجزك. اقبل أو ارفض.");
+        return toDto(booking);
+    }
+
+    /**
+     * Customer answers a travel quote. Accepting replaces the travel portion of
+     * the total with the quote; declining cancels the booking without a
+     * cancellation penalty to either side (the price changed, nobody defaulted).
+     */
+    @Transactional
+    public ApiResponse.BookingDto respondToTravelFeeQuote(Long customerId, Long bookingId, boolean accept) {
+        Booking booking = bookingRepo.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
+        if (!booking.getCustomer().getId().equals(customerId))
+            throw new ForbiddenException("error.not_authorized");
+        if (booking.getTravelFeeQuoteStatus() != TravelFeeQuoteStatus.PENDING)
+            throw new BusinessException("booking.error.no_pending_quote");
+        if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.ACCEPTED)
+            throw new BusinessException("booking.error.quote_not_allowed_now");
+
+        if (accept) {
+            BigDecimal servicePortion = booking.getTotalPrice()
+                    .subtract(booking.getTravelFee() != null ? booking.getTravelFee() : BigDecimal.ZERO);
+            BigDecimal quote = booking.getTravelFeeQuote();
+            booking.setTravelFee(quote.signum() > 0 ? quote : null);
+            booking.setTotalPrice(servicePortion.add(quote));
+            booking.setTravelFeeQuoteStatus(TravelFeeQuoteStatus.ACCEPTED);
+        } else {
+            booking.setTravelFeeQuoteStatus(TravelFeeQuoteStatus.DECLINED);
+            booking.setStatus(BookingStatus.CANCELLED);
+            booking.setCancelledBy("CUSTOMER");
+            booking.setCancelledAt(LocalDateTime.now());
+            booking.setCancellationReason("Travel fee quote declined");
+        }
+        bookingRepo.save(booking);
+
+        notificationService.send(booking.getProvider().getUser().getId(), NotificationType.TRAVEL_FEE_RESPONSE,
+                accept ? "Travel fee accepted" : "Travel fee declined",
+                accept ? "تم قبول رسوم الانتقال" : "تم رفض رسوم الانتقال",
+                booking.getCustomer().getFullName() + (accept
+                        ? " accepted your travel quote." : " declined your travel quote; the booking was cancelled."),
+                booking.getCustomer().getFullName() + (accept
+                        ? " قبل رسوم الانتقال." : " رفض رسوم الانتقال وتم إلغاء الحجز."),
+                booking.getId(), booking.getProvider().getId());
+        return toDto(booking);
+    }
+
+    // ── REJECT with reason + return alternatives ───────────────────────────────
+
+    @Override
     @Transactional
     public ApiResponse.BookingWithAlternativesDto rejectWithAlternatives(
             Long userId, Long bookingId, String reason) {
@@ -687,12 +945,14 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
 
         if (!booking.getProvider().getUser().getId().equals(userId))
-            throw new BusinessException("error.not_authorized");
+            throw new ForbiddenException("error.not_authorized");
         if (!booking.getStatus().canTransitionTo(BookingStatus.REJECTED))
             throw new BusinessException("Cannot reject booking in status: " + booking.getStatus());
+        String why = trimReason(reason);
+        if (why == null) throw new BusinessException("booking.error.reason_required");
 
         booking.setStatus(BookingStatus.REJECTED);
-        booking.setRejectionReason(reason);
+        booking.setRejectionReason(why);
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelledBy("PROVIDER");
         bookingRepo.save(booking);
@@ -702,12 +962,11 @@ public class BookingServiceImpl implements BookingService {
                 NotificationType.BOOKING_REJECTED,
                 "Booking rejected",
                 "تم رفض الحجز",
-                "Your booking was rejected. Reason: " + reason,
-                "تم رفض حجزك. السبب: " + reason,
+                "Your booking was rejected. Reason: " + why,
+                "تم رفض حجزك. السبب: " + why,
                 booking.getId(), booking.getProvider().getId()
         );
 
-        // Gap 4: suggest alternatives
         List<ApiResponse.ProviderSummaryDto> alternatives =
                 findAlternativeProviders(booking.getProvider(), booking.getService());
 
@@ -725,9 +984,11 @@ public class BookingServiceImpl implements BookingService {
                                                            Long staffMemberId, LocalDate date) {
         com.aiwa.entity.Service service = serviceRepo.findById(serviceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Service", serviceId));
+        if (!service.getProvider().getId().equals(providerId))
+            throw new BusinessException("service.wrong_provider");
 
         DayOfWeek dow = date.getDayOfWeek();
-        com.aiwa.entity.Availability avail = resolveAvailability(providerId, staffMemberId, dow);
+        Availability avail = resolveAvailability(providerId, staffMemberId, dow);
 
         if (avail == null || !avail.isAvailable()) return Collections.emptyList();
 
@@ -738,21 +999,27 @@ public class BookingServiceImpl implements BookingService {
         List<ApiResponse.TimeSlotDto> slots = new ArrayList<>();
         LocalTime cursor = avail.getStartTime();
         int duration = service.getDurationMinutes();
+        int step = avail.getSlotDurationMinutes() != null && avail.getSlotDurationMinutes() > 0
+                ? avail.getSlotDurationMinutes() : 30;
+        int buffer = bufferOf(service.getProvider());
+        LocalDateTime now = AiwaTime.now();
 
         while (!cursor.plusMinutes(duration).isAfter(avail.getEndTime())) {
             final LocalTime slotStart = cursor;
             final LocalTime slotEnd   = cursor.plusMinutes(duration);
-            final LocalTime blockedSlotEnd = slotEnd.plusMinutes(
-                    service.getProvider().getTravelBufferMinutes() != null
-                            ? service.getProvider().getTravelBufferMinutes() : 0);
+            final LocalTime blockedSlotEnd = slotEnd.plusMinutes(buffer);
             boolean taken = existing.stream()
                     .filter(b -> !b.getStatus().isSlotReleasing())
                     .anyMatch(b -> b.getStartTime().isBefore(blockedSlotEnd)
                                && b.getEndTime().isAfter(slotStart));
+            // A slot that has already started can't be booked either.
+            boolean past = !LocalDateTime.of(date, slotStart).isAfter(now);
 
             slots.add(ApiResponse.TimeSlotDto.builder()
-                    .startTime(slotStart).endTime(slotEnd).booked(taken).build());
-            cursor = cursor.plusMinutes(avail.getSlotDurationMinutes());
+                    .startTime(slotStart).endTime(slotEnd).booked(taken || past).build());
+            LocalTime next = cursor.plusMinutes(step);
+            if (!next.isAfter(cursor)) break; // wrapped past midnight
+            cursor = next;
         }
         return slots;
     }
@@ -764,25 +1031,25 @@ public class BookingServiceImpl implements BookingService {
      * present, otherwise the provider-level row (fallback for shops without per-staff
      * hours, and the normal case for individuals).
      */
-    private com.aiwa.entity.Availability resolveAvailability(Long providerId, Long staffMemberId, DayOfWeek dow) {
+    private Availability resolveAvailability(Long providerId, Long staffMemberId, DayOfWeek dow) {
         if (staffMemberId != null) {
-            com.aiwa.entity.Availability staffAvail = availabilityRepo
+            Availability staffAvail = availabilityRepo
                     .findByProviderIdAndStaffMemberIdAndDayOfWeek(providerId, staffMemberId, dow)
                     .orElse(null);
             if (staffAvail != null) return staffAvail;
         }
         return availabilityRepo.findByProviderIdAndStaffMemberIsNullAndDayOfWeek(providerId, dow)
-                .orElseGet(() -> availabilityRepo.findByProviderIdAndDayOfWeek(providerId, dow).orElse(null));
+                .orElseGet(() -> availabilityRepo.findFirstByProviderIdAndDayOfWeekOrderByStartTimeAsc(providerId, dow).orElse(null));
     }
 
-    /** Gap 3: find the next free slot starting from now */
+    /** BOOK_NOW: the next free slot starting from now (Cairo time). */
     private LocalTime findNextAvailableSlot(Long providerId,
                                              StaffMember staff,
                                              com.aiwa.entity.Service service,
                                              LocalDate date) {
         DayOfWeek dow = date.getDayOfWeek();
         Long staffId = staff != null ? staff.getId() : null;
-        com.aiwa.entity.Availability avail = resolveAvailability(providerId, staffId, dow);
+        Availability avail = resolveAvailability(providerId, staffId, dow);
 
         if (avail == null || !avail.isAvailable())
             throw new BusinessException("booking.error.provider_unavailable_today");
@@ -790,53 +1057,72 @@ public class BookingServiceImpl implements BookingService {
         List<Booking> existing = staffId != null
                 ? bookingRepo.findByStaffMemberIdAndBookingDate(staffId, date)
                 : bookingRepo.findByProviderIdAndBookingDate(providerId, date);
-        LocalTime cursor = LocalTime.now().isAfter(avail.getStartTime())
-                ? LocalTime.now().plusMinutes(5)
+        LocalTime now = AiwaTime.timeNow();
+        LocalTime cursor = now.isAfter(avail.getStartTime())
+                ? now.plusMinutes(5)
                 : avail.getStartTime();
+        if (cursor.isBefore(now)) {
+            // now + 5 min wrapped past midnight — nothing bookable today
+            throw new BusinessException("booking.error.no_book_now_slots");
+        }
 
         // round up to next slot boundary
-        int slot = avail.getSlotDurationMinutes();
+        int slot = avail.getSlotDurationMinutes() != null && avail.getSlotDurationMinutes() > 0
+                ? avail.getSlotDurationMinutes() : 30;
         int mins = cursor.getHour() * 60 + cursor.getMinute();
         mins = ((mins + slot - 1) / slot) * slot;
+        if (mins >= 24 * 60) throw new BusinessException("booking.error.no_book_now_slots");
         cursor = LocalTime.of(mins / 60, mins % 60);
 
         int duration = service.getDurationMinutes();
+        int buffer = service.getProvider() != null ? bufferOf(service.getProvider()) : 0;
         while (!cursor.plusMinutes(duration).isAfter(avail.getEndTime())) {
             final LocalTime s = cursor;
-            final LocalTime e = cursor.plusMinutes(duration);
+            final LocalTime e = cursor.plusMinutes(duration).plusMinutes(buffer);
             boolean taken = existing.stream()
                     .filter(b -> !b.getStatus().isSlotReleasing())
                     .anyMatch(b -> b.getStartTime().isBefore(e) && b.getEndTime().isAfter(s));
             if (!taken) return s;
-            cursor = cursor.plusMinutes(slot);
+            LocalTime next = cursor.plusMinutes(slot);
+            if (!next.isAfter(cursor)) break;
+            cursor = next;
         }
         throw new BusinessException("booking.error.no_book_now_slots");
     }
 
-    /** Gap 3: simple ETA estimate (can be replaced with Google Maps Distance API later) */
-    private Integer estimateArrivalMinutes(ProviderProfile provider) {
-        // Placeholder: 20–40 min random estimate
-        // In production: use Google Maps Distance Matrix API with customer's location
-        return 20 + (int)(Math.random() * 20);
+    /**
+     * BOOK_NOW arrival estimate. Straight-line distance at an urban average of
+     * ~20 km/h plus 10 minutes to get going, clamped to 15–90 minutes. Without a
+     * customer location, falls back to a fixed 30 minutes. (Before this was a
+     * random number between 20 and 40.)
+     */
+    static Integer estimateArrivalMinutes(ProviderProfile provider, SavedAddress address) {
+        if (address == null || address.getLatitude() == null || address.getLongitude() == null
+                || provider.getLatitude() == null || provider.getLongitude() == null) {
+            return 30;
+        }
+        double km = GeoUtils.distanceKm(provider.getLatitude(), provider.getLongitude(),
+                address.getLatitude(), address.getLongitude());
+        long minutes = Math.round(10 + km / 20.0 * 60);
+        return (int) Math.max(15, Math.min(90, minutes));
     }
 
     private void recordCommissionIfNeeded(Booking booking) {
         if (commissionLedgerRepo.existsByBookingId(booking.getId())) return;
         // Rate is the admin-editable platform setting at completion time; snapshotted
         // onto the ledger entry so historical entries keep the rate they were charged.
-        java.math.BigDecimal pct = platformSettings.getCommissionPercentFor(booking.getProvider());
+        BigDecimal pct = platformSettings.getCommissionPercentFor(booking.getProvider());
         // Commission is charged on the *service* portion only. Any home-service
         // travel fee is pass-through — the provider is paying Uber out of it, the
         // platform doesn't skim it. Ledger's bookingAmount still records the true
-        // total the customer paid, so the reader can see the breakdown against
-        // the booking's own travelFee field.
-        java.math.BigDecimal commissionBase = booking.getTotalPrice();
+        // total the customer paid.
+        BigDecimal commissionBase = booking.getTotalPrice();
         if (booking.getTravelFee() != null) {
             commissionBase = commissionBase.subtract(booking.getTravelFee());
         }
-        java.math.BigDecimal commissionAmount = commissionBase
+        BigDecimal commissionAmount = commissionBase
                 .multiply(pct)
-                .divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         commissionLedgerRepo.save(CommissionLedgerEntry.builder()
                 .provider(booking.getProvider())
                 .booking(booking)
@@ -859,6 +1145,8 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void enforceCustomerCancellationCutoff(Booking booking) {
+        // A request the provider hasn't accepted yet can always be withdrawn.
+        if (booking.getStatus() == BookingStatus.PENDING) return;
         LocalDateTime appointment = LocalDateTime.of(booking.getBookingDate(), booking.getStartTime());
         int cutoffHours = platformSettings.getCancellationCutoffHours(booking.getProvider());
         if (LocalDateTime.now().isAfter(appointment.minusHours(cutoffHours))) {
@@ -868,17 +1156,15 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    /** Gap 4: find alternative approved providers for the same service category */
+    /** Alternative approved providers for the same service category, near the rejecting one. */
     private List<ApiResponse.ProviderSummaryDto> findAlternativeProviders(
             ProviderProfile rejected, com.aiwa.entity.Service service) {
-
-        return providerRepo.findNearby(
-                    rejected.getLatitude() != null ? rejected.getLatitude() : 0,
-                    rejected.getLongitude() != null ? rejected.getLongitude() : 0,
-                    15.0)
+        if (rejected.getLatitude() == null || rejected.getLongitude() == null) return List.of();
+        return providerRepo.findNearby(rejected.getLatitude(), rejected.getLongitude(), 15.0)
                 .stream()
                 .filter(p -> !p.getId().equals(rejected.getId()))
                 .filter(p -> p.getVerificationStatus() == VerificationStatus.APPROVED)
+                .filter(p -> !p.isVacationMode() && !p.isOfflineMode() && !p.isSettlementPaused())
                 .filter(p -> p.getPrimaryCategory() == service.getCategory()
                           || p.getServices().stream().anyMatch(
                                 s -> s.isActive() && s.getCategory() == service.getCategory()))
@@ -886,8 +1172,12 @@ public class BookingServiceImpl implements BookingService {
                 .map(p -> ApiResponse.ProviderSummaryDto.builder()
                         .id(p.getId())
                         .businessName(p.getBusinessName())
+                        .ownerName(p.getUser().getFullName())
                         .address(p.getAddress())
+                        .latitude(p.getLatitude())
+                        .longitude(p.getLongitude())
                         .averageRating(p.getAverageRating())
+                        .totalReviews(p.getTotalReviews())
                         .primaryCategory(p.getPrimaryCategory())
                         .verificationStatus(p.getVerificationStatus())
                         .build())
@@ -896,6 +1186,12 @@ public class BookingServiceImpl implements BookingService {
 
     // ── RESCHEDULE ─────────────────────────────────────────────────────────────
 
+    /**
+     * Customer moves a PENDING/ACCEPTED booking. The new slot must be bookable
+     * (future, within working hours) and free on the same calendar the booking
+     * uses — ignoring the booking itself, so shifting by 30 minutes within its own
+     * slot is no longer reported as a conflict.
+     */
     @Override
     @Transactional
     public ApiResponse.BookingDto reschedule(Long customerId, Long bookingId, RescheduleRequest req) {
@@ -907,19 +1203,27 @@ public class BookingServiceImpl implements BookingService {
 
         if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.ACCEPTED)
             throw new BusinessException("booking.error.reschedule_requires_pending_or_accepted");
+        if (booking.getStatus() == BookingStatus.ACCEPTED) {
+            // Moving an accepted appointment late is a late cancellation in disguise.
+            enforceCustomerCancellationCutoff(booking);
+        }
 
         LocalDate newDate  = req.getBookingDate();
         LocalTime newStart = req.getStartTime();
         LocalTime newEnd   = newStart.plusMinutes(booking.getService().getDurationMinutes());
 
-        boolean conflict = bookingRepo.existsConflict(
-                booking.getProvider().getId(), newDate, newStart, newEnd);
-        if (conflict) throw new BusinessException("booking.error.conflict");
+        ProviderProfile provider = providerRepo.findByIdForUpdate(booking.getProvider().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", booking.getProvider().getId()));
+        requireBookableSlot(provider, booking.getStaffMember(), booking.getService(), newDate, newStart);
+        requireFreeSlot(booking, newDate, newStart);
 
         booking.setBookingDate(newDate);
         booking.setStartTime(newStart);
         booking.setEndTime(newEnd);
-        // Reset to PENDING so provider can re-confirm the new time
+        booking.setProposedDate(null);
+        booking.setProposedStartTime(null);
+        booking.setProposedAt(null);
+        // Reset to PENDING so the provider can re-confirm the new time
         booking.setStatus(BookingStatus.PENDING);
         bookingRepo.save(booking);
 
@@ -936,33 +1240,80 @@ public class BookingServiceImpl implements BookingService {
         return toDto(booking);
     }
 
-    private void sendStatusNotification(Booking booking, BookingStatus newStatus) {
+    /**
+     * Tell the right person about a status change. Provider-driven transitions go
+     * to the customer; a customer cancellation goes to the provider (before, the
+     * customer was notified about their own cancellation and the provider never
+     * heard about it).
+     */
+    private void sendStatusNotification(Booking booking, BookingStatus newStatus, boolean byCustomer) {
+        String service = booking.getService().getName();
+        if (newStatus == BookingStatus.CANCELLED && byCustomer) {
+            notificationService.send(booking.getProvider().getUser().getId(), NotificationType.BOOKING_CANCELLED,
+                    "Booking cancelled by customer", "ألغى العميل الحجز",
+                    booking.getCustomer().getFullName() + " cancelled " + service + " on " + booking.getBookingDate()
+                            + (booking.getCancellationReason() != null ? " — " + booking.getCancellationReason() : ""),
+                    booking.getCustomer().getFullName() + " ألغى " + service + " في " + booking.getBookingDate(),
+                    booking.getId(), booking.getProvider().getId());
+            return;
+        }
         NotificationType type = switch (newStatus) {
             case ACCEPTED    -> NotificationType.BOOKING_CONFIRMED;
             case CANCELLED   -> NotificationType.BOOKING_CANCELLED;
             case COMPLETED   -> NotificationType.BOOKING_COMPLETED;
             case REJECTED    -> NotificationType.BOOKING_REJECTED;
+            case ON_THE_WAY  -> NotificationType.BOOKING_ON_THE_WAY;
+            case ARRIVED     -> NotificationType.BOOKING_ARRIVED;
+            case IN_PROGRESS -> NotificationType.BOOKING_STARTED;
+            case NO_SHOW     -> NotificationType.BOOKING_NO_SHOW;
             default          -> null;
         };
         if (type == null) return;
 
-        notificationService.send(
-                booking.getCustomer().getId(), type,
-                "Booking " + newStatus.name().toLowerCase(),
-                "تم تحديث الحجز",
-                "Your booking for " + booking.getService().getName()
-                        + " is now " + newStatus.name().toLowerCase(),
-                "تم تحديث حجزك لـ " + booking.getService().getName(),
-                booking.getId(), booking.getProvider().getId()
-        );
+        String titleEn = switch (newStatus) {
+            case ACCEPTED    -> "Booking confirmed";
+            case CANCELLED   -> "Booking cancelled by the provider";
+            case COMPLETED   -> "Booking completed";
+            case REJECTED    -> "Booking rejected";
+            case ON_THE_WAY  -> "Your provider is on the way";
+            case ARRIVED     -> "Your provider has arrived";
+            case IN_PROGRESS -> "Your service has started";
+            case NO_SHOW     -> "Marked as no-show";
+            default          -> "Booking updated";
+        };
+        String titleAr = switch (newStatus) {
+            case ACCEPTED    -> "تم تأكيد الحجز";
+            case CANCELLED   -> "ألغى المزود الحجز";
+            case COMPLETED   -> "اكتمل الحجز";
+            case REJECTED    -> "تم رفض الحجز";
+            case ON_THE_WAY  -> "مقدم الخدمة في الطريق";
+            case ARRIVED     -> "وصل مقدم الخدمة";
+            case IN_PROGRESS -> "بدأت خدمتك";
+            case NO_SHOW     -> "تم تسجيل عدم الحضور";
+            default          -> "تم تحديث الحجز";
+        };
+        notifyCustomer(booking, type, titleEn, titleAr,
+                "Your booking for " + service + " is now " + newStatus.name().toLowerCase().replace('_', ' ')
+                        + (newStatus == BookingStatus.CANCELLED && booking.getCancellationReason() != null
+                            ? " — " + booking.getCancellationReason() : ""),
+                "تم تحديث حجزك لـ " + service);
+    }
+
+    private void notifyCustomer(Booking booking, NotificationType type, String titleEn, String titleAr,
+                                String bodyEn, String bodyAr) {
+        notificationService.send(booking.getCustomer().getId(), type, titleEn, titleAr, bodyEn, bodyAr,
+                booking.getId(), booking.getProvider().getId());
     }
 
     // ── MAPPER ────────────────────────────────────────────────────────────────
 
     private ApiResponse.BookingDto toDto(Booking b) {
+        LocalDateTime proposalExpiresAt = b.getProposedAt() != null && b.getProposedDate() != null
+                ? b.getProposedAt().plusMinutes(platformSettings.getResponseWindowMinutes(b.getProvider()))
+                : null;
         return ApiResponse.BookingDto.builder()
                 .id(b.getId())
-                .customer(toUserDto(b.getCustomer()))
+                .customer(toCustomerDto(b))
                 .provider(toProviderSummary(b.getProvider()))
                 .service(toServiceDto(b.getService()))
                 .bookingDate(b.getBookingDate())
@@ -978,6 +1329,9 @@ public class BookingServiceImpl implements BookingService {
                 .paymentMethod(b.getPaymentMethod())
                 .totalPrice(b.getTotalPrice())
                 .travelFee(b.getTravelFee())
+                .travelFeeQuote(b.getTravelFeeQuote())
+                .travelFeeQuoteStatus(b.getTravelFeeQuoteStatus())
+                .completionNote(b.getCompletionNote())
                 .notes(b.getNotes())
                 .cancellationReason(b.getCancellationReason())
                 .cancelledBy(b.getCancelledBy())
@@ -985,6 +1339,7 @@ public class BookingServiceImpl implements BookingService {
                 .rejectionReason(b.getRejectionReason())
                 .proposedDate(b.getProposedDate())
                 .proposedStartTime(b.getProposedStartTime())
+                .proposalExpiresAt(proposalExpiresAt)
                 .penaltyApplied(b.isPenaltyApplied())
                 .commissionAmount(b.getCommissionAmount())
                 .checkedInAt(b.getCheckedInAt())
@@ -993,22 +1348,46 @@ public class BookingServiceImpl implements BookingService {
                 .build();
     }
 
-    private ApiResponse.UserDto toUserDto(User u) {
+    /**
+     * The customer block. Phone and email are only included while the booking is
+     * live — a provider shouldn't hold a customer's number for a request they
+     * never accepted (or long after the visit).
+     */
+    private ApiResponse.UserDto toCustomerDto(Booking b) {
+        User u = b.getCustomer();
+        boolean contact = CONTACT_VISIBLE.contains(b.getStatus());
         return ApiResponse.UserDto.builder().id(u.getId()).fullName(u.getFullName())
-                .email(u.getEmail()).phone(u.getPhone())
+                .email(contact ? u.getEmail() : null)
+                .phone(contact ? u.getPhone() : null)
+                .profileImageUrl(u.getProfileImageUrl())
                 .role(u.getRole()).gender(u.getGender()).active(u.isActive()).build();
     }
 
     private ApiResponse.ProviderSummaryDto toProviderSummary(ProviderProfile p) {
+        // The app reads ownerName, category, coordinates and the avatar from here
+        // (booking list rows, tracking map) — before, only id/name/address/rating
+        // were sent, so the provider name showed blank on booking rows.
+        User owner = p.getUser();
         return ApiResponse.ProviderSummaryDto.builder().id(p.getId())
-                .businessName(p.getBusinessName()).address(p.getAddress())
+                .businessName(p.getBusinessName())
+                .ownerName(owner != null ? owner.getFullName() : null)
+                .profileImageUrl(owner != null ? owner.getProfileImageUrl() : null)
+                .address(p.getAddress())
+                .latitude(p.getLatitude())
+                .longitude(p.getLongitude())
+                .primaryCategory(p.getPrimaryCategory())
+                .providerType(p.getProviderType())
                 .averageRating(p.getAverageRating())
-                .verificationStatus(p.getVerificationStatus()).build();
+                .totalReviews(p.getTotalReviews())
+                .verificationStatus(p.getVerificationStatus())
+                .verifiedAt(p.getVerifiedAt())
+                .build();
     }
 
     private ApiResponse.ServiceDto toServiceDto(com.aiwa.entity.Service s) {
         return ApiResponse.ServiceDto.builder().id(s.getId()).name(s.getName())
                 .price(s.getPrice()).durationMinutes(s.getDurationMinutes())
+                .category(s.getCategory())
                 .pricingType(s.getPricingType()).transportIncluded(s.isTransportIncluded()).build();
     }
 
@@ -1018,7 +1397,6 @@ public class BookingServiceImpl implements BookingService {
                 .providerId(s.getProvider().getId())
                 .fullName(s.getFullName())
                 .title(s.getTitle())
-                .phone(s.getPhone())
                 .active(s.isActive())
                 .build();
     }

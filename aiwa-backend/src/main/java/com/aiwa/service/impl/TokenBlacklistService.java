@@ -43,14 +43,29 @@ public class TokenBlacklistService {
     public boolean isBlacklisted(String token) {
         if (token == null) return false;
         try {
-            return redis.exists(key(token));
+            // Entries written before the SHA-256 key are still honoured until they expire.
+            return redis.exists(key(token)) || redis.exists(legacyKey(token));
         } catch (RuntimeException e) {
             log.warn("Blacklist check failed (Redis unavailable?) — treating token as not blacklisted: {}", e.getMessage());
             return false;
         }
     }
 
-    private String key(String token) {
+    /**
+     * SHA-256 of the token. The old key was the 32-bit String.hashCode(), so two
+     * different tokens could collide and logging one out could revoke the other.
+     */
+    static String key(String token) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return "jwt:blacklist:v2:" + java.util.HexFormat.of().formatHex(digest);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String legacyKey(String token) {
         return "jwt:blacklist:" + Integer.toHexString(token.hashCode());
     }
 }

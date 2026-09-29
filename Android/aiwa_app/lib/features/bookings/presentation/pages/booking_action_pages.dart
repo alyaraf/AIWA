@@ -126,8 +126,8 @@ class _ProposedTimeView extends StatefulWidget {
 }
 
 class _ProposedTimeViewState extends State<_ProposedTimeView> {
-  // BACKEND GAP: BookingDto has no proposal expiry, so the 30:00 window
-  // starts when the screen opens and resets on reopen.
+  // BookingDto.proposalExpiresAt drives the countdown; an older backend
+  // without it falls back to a 30:00 window from when the screen opened.
   int _left = 30 * 60;
   Timer? _t;
 
@@ -135,8 +135,10 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
   void initState() {
     super.initState();
     _t = Timer.periodic(const Duration(seconds: 1), (t) {
-      setState(() => _left--);
-      if (_left <= 0) t.cancel();
+      // Keeps ticking so a server expiry beyond 30:00 still counts down.
+      setState(() {
+        if (_left > 0) _left--;
+      });
     });
   }
 
@@ -168,8 +170,12 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
     return BlocBuilder<LiveBookingCubit, LiveBookingState>(
       builder: (context, s) => _withBooking(context, s, (b) {
         // Already answered or released server-side counts as expired too.
-        final expired = _left <= 0 || !(b.status == 'PENDING' && b.hasProposal);
-        final urgent = _left < 120;
+        final exp = b.proposalExpiresAt;
+        final left = exp == null
+            ? _left
+            : exp.difference(DateTime.now()).inSeconds.clamp(0, 1 << 30);
+        final expired = left <= 0 || !(b.status == 'PENDING' && b.hasProposal);
+        final urgent = left < 120;
         final l = AppLocalizations.of(context);
         final cd = AppTextStyles.micro.copyWith(
           fontSize: AppTextStyles.fsLabelSmPlus,
@@ -261,7 +267,7 @@ class _ProposedTimeViewState extends State<_ProposedTimeView> {
                         style: cd,
                         children: spansOf(l.proposedRespondWithin('{time}'), {
                           'time': TextSpan(
-                            text: mmss(_left),
+                            text: mmss(left),
                             style: AppTextStyles.mono.copyWith(
                               fontSize: AppTextStyles.fsLabelSmPlus,
                               fontWeight: FontWeight.w700,

@@ -35,6 +35,10 @@ public class AuthController {
     private final com.aiwa.service.impl.FileStorageServiceImpl fileStorageService;
     private final JwtUtils jwtUtils;
 
+    /** Secure flag on the access-token cookie — on in prod (served over HTTPS). */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.auth.cookie-secure:false}")
+    private boolean cookieSecure;
+
     // ── Register / Login ──────────────────────────────────────────────────────
 
     @PostMapping("/register")
@@ -109,7 +113,14 @@ public class AuthController {
             user.setEmail(request.getEmail());
         }
         if (request.getProfileImageUrl() != null) {
-            user.setProfileImageUrl(request.getProfileImageUrl());
+            String url = request.getProfileImageUrl().trim();
+            // Only an image this server stored (POST /auth/me/avatar) — or "" to
+            // clear it. An arbitrary URL would let anyone point their avatar at a
+            // tracking pixel or offensive content shown to other users.
+            if (!url.isEmpty() && !url.startsWith(com.aiwa.service.impl.FileStorageServiceImpl.PUBLIC_URL_PREFIX)) {
+                throw new BusinessException("auth.error.avatar_url_not_allowed");
+            }
+            user.setProfileImageUrl(url.isEmpty() ? null : url);
         }
         User saved = userRepo.save(user);
 
@@ -117,14 +128,31 @@ public class AuthController {
     }
 
     @PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Upload a profile avatar image")
+    @Operation(summary = "Upload a profile avatar image (JPEG/PNG/WebP, max 10 MB)")
     public ResponseEntity<ApiResponse.Success<ApiResponse.UserDto>> uploadAvatar(
             @RequestParam("image") org.springframework.web.multipart.MultipartFile image,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = resolveUser(userDetails);
-        String path = fileStorageService.storePublic(image);
-        user.setProfileImageUrl(path);
-        return ResponseEntity.ok(ApiResponse.Success.of("Avatar updated", toUserDto(userRepo.save(user))));
+        String previous = user.getProfileImageUrl();
+        String url = fileStorageService.storePublic(image, "avatars");
+        user.setProfileImageUrl(url);
+        User saved = userRepo.save(user);
+        if (previous != null && previous.contains("/avatars/")) {
+            fileStorageService.deletePublic(previous);
+        }
+        return ResponseEntity.ok(ApiResponse.Success.of("Avatar updated", toUserDto(saved)));
+    }
+
+    @PatchMapping("/me/phone")
+    @Operation(summary = "Change your phone number — send-otp to the NEW number first, then call this with the code. "
+            + "Returns a fresh token pair; other sessions are signed out.")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> changePhone(
+            @Valid @RequestBody AuthRequest.ChangePhone request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        ApiResponse.AuthResponse auth = authService.changePhone(userDetails.getUsername(), request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString())
+                .body(ApiResponse.Success.of("Phone number updated", auth));
     }
 
     @PatchMapping("/me/language")
@@ -137,7 +165,7 @@ public class AuthController {
     }
 
     @PatchMapping("/me/preferences")
-    @Operation(summary = "Update search radius preferences (GAP 4)")
+    @Operation(summary = "Update search preferences — radius and \"Your area\" (label + coordinates, or clearSearchArea=true)")
     public ResponseEntity<ApiResponse.Success<Void>> updatePreferences(
             @Valid @RequestBody UpdatePreferencesRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -147,6 +175,22 @@ public class AuthController {
             user.setSearchRadiusMinKm(request.getSearchRadiusMinKm());
         if (request.getSearchRadiusMaxKm() != null)
             user.setSearchRadiusMaxKm(request.getSearchRadiusMaxKm());
+        if (user.getSearchRadiusMinKm() != null && user.getSearchRadiusMaxKm() != null
+                && user.getSearchRadiusMinKm() > user.getSearchRadiusMaxKm()) {
+            throw new BusinessException("auth.error.radius_min_above_max");
+        }
+        if (Boolean.TRUE.equals(request.getClearSearchArea())) {
+            user.setSearchAreaLabel(null);
+            user.setSearchAreaLatitude(null);
+            user.setSearchAreaLongitude(null);
+        } else if (request.getSearchAreaLabel() != null || request.getSearchAreaLatitude() != null) {
+            if ((request.getSearchAreaLatitude() == null) != (request.getSearchAreaLongitude() == null)) {
+                throw new BusinessException("auth.error.search_area_coordinates");
+            }
+            user.setSearchAreaLabel(request.getSearchAreaLabel());
+            user.setSearchAreaLatitude(request.getSearchAreaLatitude());
+            user.setSearchAreaLongitude(request.getSearchAreaLongitude());
+        }
         userRepo.save(user);
 
         return ResponseEntity.ok(ApiResponse.Success.of("Preferences saved", null));
@@ -222,24 +266,35 @@ public class AuthController {
     // ── OTP endpoints (GAP 1) ────────────────────────────────────────────────
 
     @PostMapping("/send-otp")
-    @Operation(summary = "Send a 6-digit OTP to a phone number")
+    @Operation(summary = "Send a 6-digit OTP by SMS ({phone}) or by email ({email}). "
+            + "Limited per destination (3 per 10 min, 10 per day) — 429 when exceeded.")
     public ResponseEntity<ApiResponse.Success<Void>> sendOtp(
             @Valid @RequestBody OtpRequest.SendOtp request) {
-        otpService.sendOtp(request.getPhone());
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
+            otpService.sendOtp(request.getPhone().trim());
+            return ResponseEntity.ok(ApiResponse.Success.of(
+                    "Code sent to " + request.getPhone() + ". Valid for 10 minutes.", null));
+        }
+        otpService.sendEmailOtp(request.getEmail());
         return ResponseEntity.ok(ApiResponse.Success.of(
-                "Code sent to " + request.getPhone() + ". Valid for 10 minutes.", null));
+                "Code sent to " + request.getEmail() + ". Valid for 10 minutes.", null));
     }
 
     @PostMapping("/verify-otp")
-    @Operation(summary = "Verify OTP — call before /register to confirm phone ownership")
+    @Operation(summary = "Verify OTP ({phone} or {email} + code) — call before /register to confirm ownership")
     public ResponseEntity<ApiResponse.Success<Void>> verifyOtp(
             @Valid @RequestBody OtpRequest.VerifyOtp request) {
-        otpService.verifyOtp(request.getPhone(), request.getCode());
-        return ResponseEntity.ok(ApiResponse.Success.of("Phone verified successfully", null));
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
+            otpService.verifyOtp(request.getPhone().trim(), request.getCode());
+            return ResponseEntity.ok(ApiResponse.Success.of("Phone verified successfully", null));
+        }
+        otpService.verifyEmailOtp(request.getEmail(), request.getCode());
+        return ResponseEntity.ok(ApiResponse.Success.of("Email verified successfully", null));
     }
 
     @PostMapping("/reset-password")
-    @Operation(summary = "Forgot password — reset with phone + OTP code + new password")
+    @Operation(summary = "Forgot password — reset with phone or email + OTP code + new password "
+            + "(signs out every existing session)")
     public ResponseEntity<ApiResponse.Success<Void>> resetPassword(
             @Valid @RequestBody AuthRequest.ResetPassword request) {
         authService.resetPassword(request);
@@ -265,7 +320,7 @@ public class AuthController {
         long maxAgeSeconds = Math.max(1, jwtUtils.getRemainingValidityMillis(auth.getAccessToken()) / 1000);
         return ResponseCookie.from(ACCESS_TOKEN_COOKIE, auth.getAccessToken())
                 .httpOnly(true)
-                .secure(false)
+                .secure(cookieSecure)
                 .sameSite("Lax")
                 .path("/")
                 .maxAge(maxAgeSeconds)
@@ -275,7 +330,7 @@ public class AuthController {
     private ResponseCookie clearAccessTokenCookie() {
         return ResponseCookie.from(ACCESS_TOKEN_COOKIE, "")
                 .httpOnly(true)
-                .secure(false)
+                .secure(cookieSecure)
                 .sameSite("Lax")
                 .path("/")
                 .maxAge(0)
@@ -357,6 +412,11 @@ public class AuthController {
                 .profileImageUrl(u.getProfileImageUrl())
                 .preferredLanguage(u.getPreferredLanguage())
                 .termsAccepted(u.isTermsAccepted())
+                .acceptedTermsVersion(u.getAcceptedTermsVersion())
+                .termsAcceptedAt(u.getTermsAcceptedAt())
+                .searchAreaLabel(u.getSearchAreaLabel())
+                .searchAreaLatitude(u.getSearchAreaLatitude())
+                .searchAreaLongitude(u.getSearchAreaLongitude())
                 .active(u.isActive())
                 .permissions(u.getAdminPermissions() == null ? java.util.List.of()
                         : u.getAdminPermissions().stream().map(Enum::name).sorted().toList())

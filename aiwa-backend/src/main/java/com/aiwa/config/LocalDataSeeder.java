@@ -43,6 +43,10 @@ public class LocalDataSeeder implements ApplicationRunner {
     private final CommissionLedgerRepository ledgerRepo;
     private final SupportSettingsRepository supportRepo;
     private final TermsPolicyRepository termsRepo;
+    private final AvailabilityRepository availabilityRepo;
+    private final GalleryImageRepository galleryRepo;
+    private final TrustedContactRepository trustedContactRepo;
+    private final SafetyEventRepository safetyRepo;
     private final PasswordEncoder encoder;
 
     @Override
@@ -107,11 +111,34 @@ public class LocalDataSeeder implements ApplicationRunner {
         Service pedicure  = service(layalaP, "Classic Pedicure", ServiceCategory.NAILS, "220", 60);
         Service deepTissue = service(maadi, "Deep Tissue Massage", ServiceCategory.SPA, "450", 90);
 
+        // ── Working hours (scheduled bookings must fall inside them) ─────────
+        for (ProviderProfile p : java.util.List.of(nadia, layalaP, maadi)) {
+            for (java.time.DayOfWeek d : java.time.DayOfWeek.values()) {
+                availabilityRepo.save(Availability.builder()
+                        .provider(p).dayOfWeek(d)
+                        .startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(22, 0))
+                        .slotDurationMinutes(30)
+                        .available(d != java.time.DayOfWeek.FRIDAY)
+                        .build());
+            }
+        }
+
+        // ── Gallery photos (one reported below, for Photo moderation) ───────
+        GalleryImage nadiaPhoto = galleryRepo.save(GalleryImage.builder()
+                .provider(nadia).url("/files/public/gallery/demo-salon.jpg").build());
+        GalleryImage maadiPhoto = galleryRepo.save(GalleryImage.builder()
+                .provider(maadi).url("/files/public/gallery/demo-venue.jpg").build());
+
         // ── Bookings across the whole lifecycle ──────────────────────────────
         LocalDate today = LocalDate.now();
 
-        booking(hana, nadia, balayage, today, LocalTime.of(16, 0), BookingStatus.IN_PROGRESS,
+        Booking live = booking(hana, nadia, balayage, today, LocalTime.of(16, 0), BookingStatus.IN_PROGRESS,
                 PaymentStatus.CASH_PENDING, "1100", null, false, true);
+        safetyRepo.save(SafetyEvent.builder()
+                .booking(live).actor(hana).type(SafetyEventType.SOS)
+                .latitude(30.0300).longitude(31.4700)
+                .notes("Demo SOS — the provider asked me to go somewhere else")
+                .build());
 
         Booking b1 = booking(nour, nadia, haircut, today, LocalTime.of(18, 0), BookingStatus.COMPLETED,
                 PaymentStatus.CASH_CONFIRMED, "350", "35", false, false);
@@ -148,9 +175,13 @@ public class LocalDataSeeder implements ApplicationRunner {
         complaint(nour, layalaP, null, "No-show by provider", ComplaintStatus.RESOLVED, false);
 
         // ── Moderation queue ────────────────────────────────────────────────
-        moderation(ModerationTargetType.GALLERY_IMAGE, hala.getId(), "Reported: unrelated / low quality photo");
+        moderation(ModerationTargetType.GALLERY_IMAGE, nadiaPhoto.getId(), "Reported: unrelated / low quality photo");
         moderation(ModerationTargetType.REVIEW, 3L, "Reported: abusive language toward provider");
-        moderation(ModerationTargetType.GALLERY_IMAGE, maadi.getId(), "Reported: not the actual venue");
+        moderation(ModerationTargetType.GALLERY_IMAGE, maadiPhoto.getId(), "Reported: not the actual venue");
+
+        // ── Safety: a trusted contact and one open SOS for the admin queue ──
+        trustedContactRepo.save(TrustedContact.builder()
+                .user(hana).name("Mona Kamal").phone("+201000000099").relationship("Sister").build());
 
         // ── Chat thread on b1 (one normal message, one reported) ─────────────
         chatMessage(nour, b1, "Hi, are you still on for 6pm?");
@@ -201,6 +232,11 @@ public class LocalDataSeeder implements ApplicationRunner {
                             + "By using AIWA you agree to the booking, cancellation, home-service safety and cash-payment "
                             + "terms set out below, including provider cancel penalties and platform commission on cash bookings.")
                     .active(true).build());
+            termsRepo.save(TermsPolicy.builder().version("1.0").type("PROVIDER_TERMS")
+                    .contentEn("Providers agree to identity verification, to honour booked prices, to settle platform "
+                            + "commission by its due date (overdue balances pause new bookings) and to keep customer "
+                            + "details confidential.")
+                    .active(true).build());
         }
 
         log.info("[local] demo data seeded: {} customers, {} providers, {} bookings",
@@ -233,7 +269,10 @@ public class LocalDataSeeder implements ApplicationRunner {
             java.util.List<Doc> docs = java.util.List.of(
                     new Doc("uploads/private/national-id/demo-front.jpg", "NATIONAL ID · FRONT", new java.awt.Color(0x2A, 0x13, 0x20)),
                     new Doc("uploads/private/national-id/demo-back.jpg", "NATIONAL ID · BACK", new java.awt.Color(0x3A, 0x1E, 0x2E)),
-                    new Doc("uploads/private/selfie/demo-selfie.jpg", "LIVE SELFIE", new java.awt.Color(0x4A, 0x2A, 0x3A))
+                    new Doc("uploads/private/selfie/demo-selfie.jpg", "LIVE SELFIE", new java.awt.Color(0x4A, 0x2A, 0x3A)),
+                    // public gallery demo photos (served at /api/files/public/gallery/…)
+                    new Doc("uploads/public/gallery/demo-salon.jpg", "SALON · DEMO PHOTO", new java.awt.Color(0x6B, 0x3A, 0x3A)),
+                    new Doc("uploads/public/gallery/demo-venue.jpg", "VENUE · DEMO PHOTO", new java.awt.Color(0x2E, 0x2A, 0x26))
             );
             for (Doc d : docs) {
                 java.io.File f = new java.io.File(d.path());
@@ -275,6 +314,8 @@ public class LocalDataSeeder implements ApplicationRunner {
                 .averageRating(rating).totalReviews(reviews).travelBufferMinutes(30)
                 .cancellationStrikes(0).settlementPaused(settlementPaused)
                 .verificationStatus(vs)
+                .verifiedAt(vs == VerificationStatus.APPROVED || vs == VerificationStatus.SUSPENDED
+                        ? LocalDateTime.now().minusMonths(3) : null)
                 .rejectionReason(vs == VerificationStatus.REJECTED ? "ID photo was unreadable — please resubmit." : null)
                 .nationalIdFrontPath("uploads/private/national-id/demo-front.jpg")
                 .nationalIdBackPath("uploads/private/national-id/demo-back.jpg")

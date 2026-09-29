@@ -75,7 +75,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
                 .orElseThrow(() -> new ResourceNotFoundException("Availability", availabilityId));
 
         if (!avail.getProvider().getUser().getId().equals(userId)) {
-            throw new BusinessException("error.not_authorized");
+            throw new com.aiwa.exception.ForbiddenException("error.not_authorized");
         }
         availabilityRepo.delete(avail);
     }

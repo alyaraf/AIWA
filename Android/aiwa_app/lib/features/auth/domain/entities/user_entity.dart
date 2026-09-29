@@ -12,6 +12,7 @@ class UserEntity extends Equatable {
   final String preferredLanguage;
   final bool termsAccepted;
   final String? acceptedTermsVersion;
+  final DateTime? termsAcceptedAt;
   final double? searchRadiusMinKm;
   final double? searchRadiusMaxKm;
   final ProviderProfileSummary? providerProfile;
@@ -28,6 +29,7 @@ class UserEntity extends Equatable {
     required this.preferredLanguage,
     required this.termsAccepted,
     this.acceptedTermsVersion,
+    this.termsAcceptedAt,
     this.searchRadiusMinKm,
     this.searchRadiusMaxKm,
     this.providerProfile,
@@ -49,6 +51,8 @@ class UserEntity extends Equatable {
     active,
     preferredLanguage,
     termsAccepted,
+    acceptedTermsVersion,
+    termsAcceptedAt,
   ];
 }
 

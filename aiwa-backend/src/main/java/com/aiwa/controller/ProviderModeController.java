@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 public class ProviderModeController {
 
     private final ProviderProfileRepository providerRepo;
+    private final com.aiwa.service.impl.ProviderServiceImpl providerService;
     private final UserRepository userRepo;
 
     @PatchMapping
@@ -54,6 +55,19 @@ public class ProviderModeController {
         }
         providerRepo.save(provider);
         return ApiResponse.Success.of("Home-service travel fee updated", null);
+    }
+
+    /** How far the provider travels for home service (km, 0.5–200); clear=true removes it. */
+    @PatchMapping("/service-radius")
+    public ApiResponse.Success<ApiResponse.ProviderDetailDto> updateServiceRadius(
+            @RequestParam(required = false) Double km,
+            @RequestParam(required = false, defaultValue = "false") boolean clear,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        if (!clear && km == null) {
+            throw new com.aiwa.exception.BusinessException("provider.service_radius.invalid");
+        }
+        return ApiResponse.Success.of("Service radius updated",
+                providerService.updateServiceRadius(resolveUserId(userDetails), clear ? null : km));
     }
 
     private Long resolveUserId(UserDetails ud) {

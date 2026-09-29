@@ -36,9 +36,13 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
   var _tab = 0;
   late Future<Either<Failure, PagedData<BookingEntity>>> _load = _fetch();
 
+  // Each tab asks the backend for its own statuses (Past newest-first), so a
+  // busy provider's older bookings no longer fall off a shared first page.
   Future<Either<Failure, PagedData<BookingEntity>>> _fetch() =>
       sl<DashboardRepository>().getProviderBookings(
+        status: _tabs[_tab].join(','),
         size: providerBookingsPageSize,
+        newestFirst: _tab == 2,
       );
 
   void _reload() => setState(() => _load = _fetch());
@@ -149,7 +153,10 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
       children: [
         for (var i = 0; i < _tabs.length; i++)
           GestureDetector(
-            onTap: () => setState(() => _tab = i),
+            onTap: () => setState(() {
+              _tab = i;
+              _load = _fetch();
+            }),
             behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
               duration: AppTheme.dur2,

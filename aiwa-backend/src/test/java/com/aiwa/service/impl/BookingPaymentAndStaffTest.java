@@ -226,7 +226,8 @@ class BookingPaymentAndStaffTest {
         when(bookingRepo.findByStaffMemberIdAndBookingDate(eq(9L), any(LocalDate.class)))
                 .thenReturn(List.of());
 
-        List<ApiResponse.TimeSlotDto> slots = service.getAvailableSlots(7L, 3L, 9L, LocalDate.now());
+        // Tomorrow: slots that already started today are reported as taken.
+        List<ApiResponse.TimeSlotDto> slots = service.getAvailableSlots(7L, 3L, 9L, LocalDate.now().plusDays(1));
 
         assertThat(slots).hasSize(2);
         assertThat(slots).allSatisfy(s -> assertThat(s.isBooked()).isFalse());

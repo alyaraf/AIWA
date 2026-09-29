@@ -144,19 +144,52 @@ public class VerificationController {
      */
     @GetMapping("/admin/verification/document")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Download a private verification document (ADMIN only)")
+    @Operation(summary = "Download a private verification document by its stored path (ADMIN only). "
+            + "Only paths recorded on a provider profile are served; prefer /admin/verification/{providerId}/documents/{kind}.")
     public ResponseEntity<org.springframework.core.io.Resource> getDocument(
             @RequestParam String filePath) {
-        java.io.File file = new java.io.File(filePath);
-        String abs = file.getAbsolutePath().replace("\\", "/");
-        if (!abs.contains("uploads/private")) {
+        // The old check was a substring match on the absolute path, so
+        // "uploads/private/../../etc/passwd" passed. Now the path must be one a
+        // provider actually submitted, and it must resolve inside the private root.
+        if (!providerRepo.existsByNationalIdFrontPathOrNationalIdBackPathOrSelfiePath(filePath, filePath, filePath)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        if (!file.exists()) return ResponseEntity.notFound().build();
-        org.springframework.core.io.Resource res = new org.springframework.core.io.FileSystemResource(file);
+        auditService.record("VERIFICATION_DOCUMENT_VIEWED", filePath.replaceAll(".*/", ""));
+        return serveDocument(filePath);
+    }
+
+    @GetMapping("/admin/verification/{providerId}/documents/{kind}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Stream one verification document of a provider — kind: id-front | id-back | selfie (ADMIN only)")
+    public ResponseEntity<org.springframework.core.io.Resource> getDocumentByKind(
+            @PathVariable Long providerId,
+            @PathVariable String kind) {
+        com.aiwa.entity.ProviderProfile p = providerRepo.findById(providerId)
+                .orElseThrow(() -> new com.aiwa.exception.ResourceNotFoundException("Provider", providerId));
+        String stored = switch (kind) {
+            case "id-front" -> p.getNationalIdFrontPath();
+            case "id-back" -> p.getNationalIdBackPath();
+            case "selfie" -> p.getSelfiePath();
+            default -> throw new com.aiwa.exception.BusinessException("Unknown document kind: " + kind);
+        };
+        if (stored == null) return ResponseEntity.notFound().build();
+        auditService.record("VERIFICATION_DOCUMENT_VIEWED", "provider #" + providerId + " " + kind);
+        return serveDocument(stored);
+    }
+
+    private ResponseEntity<org.springframework.core.io.Resource> serveDocument(String storedPath) {
+        java.nio.file.Path path = fileStorageService.resolvePrivate(storedPath).orElse(null);
+        if (path == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        if (!java.nio.file.Files.isRegularFile(path)) return ResponseEntity.notFound().build();
+        String name = path.getFileName().toString();
+        MediaType type = name.endsWith(".png") ? MediaType.IMAGE_PNG
+                : name.endsWith(".webp") ? MediaType.parseMediaType("image/webp")
+                : MediaType.IMAGE_JPEG;
         return ResponseEntity.ok()
-                .header("Content-Disposition", "inline; filename=\"" + file.getName() + "\"")
-                .body(res);
+                .contentType(type)
+                .header("Content-Disposition", "inline; filename=\"" + name + "\"")
+                .header("Cache-Control", "no-store")
+                .body(new FileSystemResource(path));
     }
 
     private Long resolveUserId(UserDetails ud) {

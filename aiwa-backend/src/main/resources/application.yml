@@ -1,16 +1,25 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   servlet:
     context-path: /api
-    multipart:
-      max-file-size: 10MB
-      max-request-size: 30MB
+  # Behind a reverse proxy (nginx / a load balancer) the client IP arrives in
+  # X-Forwarded-For. Overridden to "native" in the prod profile; left off here so
+  # a directly-exposed dev server can't be fooled by a spoofed header.
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
 
 spring:
   application:
     name: aiwa-backend
   profiles:
     default: dev
+
+  # NOTE: these limits used to sit under server.servlet.multipart, which Spring
+  # ignores — the effective limit was the 1 MB default, so ordinary phone photos
+  # were rejected.
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 30MB
 
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aiwa_db}
@@ -34,7 +43,12 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-    open-in-view: false
+    # Several controllers map entities with lazy relations after the repository
+    # call returns. Every manual and automated run so far used open-in-view=true
+    # (the local profile); with it off, those endpoints throw
+    # LazyInitializationException in production only. Keep the tested behaviour
+    # until those mappings are moved into @Transactional services.
+    open-in-view: true
 
   flyway:
     enabled: ${FLYWAY_ENABLED:false}
@@ -77,23 +91,50 @@ aiwa:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}
   maps:
-    google-api-key: ${GOOGLE_MAPS_API_KEY:your-google-maps-key}
+    google-api-key: ${GOOGLE_MAPS_API_KEY:}
   default-radius-km: 10
   storage:
-    public-path: uploads/public
-    private-path: uploads/private
+    public-path: ${STORAGE_PUBLIC_PATH:uploads/public}
+    private-path: ${STORAGE_PRIVATE_PATH:uploads/private}
   cancellation:
     cutoff-hours: 2
   terms:
     current-version: "1.0"
+  auth:
+    # Secure flag on the accessToken cookie. Must be true anywhere the API is
+    # served over HTTPS (prod profile forces it on).
+    cookie-secure: ${AUTH_COOKIE_SECURE:false}
+  otp:
+    # Per-phone send limits (SMS pumping / cost guard) on top of the per-IP limit.
+    max-sends-per-10-minutes: ${OTP_MAX_SENDS_10M:3}
+    max-sends-per-day: ${OTP_MAX_SENDS_DAY:10}
+  settlement:
+    # Owed commission (EGP) at which a provider's new bookings pause until settled.
+    balance-limit: ${SETTLEMENT_BALANCE_LIMIT:1000}
+    # Days after a ledger entry is created before it becomes OVERDUE.
+    due-days: ${SETTLEMENT_DUE_DAYS:7}
+  safety:
+    # Comma-separated on-call support numbers texted on every SOS.
+    oncall-phones: ${SAFETY_ONCALL_PHONES:}
   sms:
     provider: ${SMS_PROVIDER:dev-log}
     api-url: ${SMS_API_URL:}
     api-key: ${SMS_API_KEY:}
     sender: ${SMS_SENDER:AIWA}
+  email:
+    # dev-log | http — "http" posts JSON {from,to,subject,text} with a Bearer key
+    # to EMAIL_API_URL (works with most transactional email gateways/relays).
+    provider: ${EMAIL_PROVIDER:dev-log}
+    api-url: ${EMAIL_API_URL:}
+    api-key: ${EMAIL_API_KEY:}
+    from: ${EMAIL_FROM:no-reply@aiwa.app}
   push:
+    # dev-log | fcm (Firebase Cloud Messaging HTTP v1)
     provider: ${PUSH_PROVIDER:dev-log}
-    fcm-server-key: ${FCM_SERVER_KEY:}
+    # Path to the Firebase service-account JSON (the standard Google variable).
+    fcm-credentials-file: ${GOOGLE_APPLICATION_CREDENTIALS:}
+    # Optional; defaults to project_id inside the service-account JSON.
+    fcm-project-id: ${FCM_PROJECT_ID:}
   admin:
     email: ${ADMIN_EMAIL:}
     phone: ${ADMIN_PHONE:}

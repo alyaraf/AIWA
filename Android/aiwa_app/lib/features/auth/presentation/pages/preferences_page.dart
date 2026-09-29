@@ -72,12 +72,9 @@ class _PreferencesPageState extends State<PreferencesPage> {
   }
 
   Future<Either<Failure, void>> _acceptTerms(AuthRepository repo) async {
-    var t = await repo.latestTerms(
-      _isProvider ? 'PROVIDER_TERMS' : 'CUSTOMER_TERMS',
-    );
-    // ponytail: the backend seeds no PROVIDER_TERMS yet; providers accept
-    // the customer policy until it exists.
-    if (_isProvider && t.isLeft()) t = await repo.latestTerms('CUSTOMER_TERMS');
+    // V13 seeds PROVIDER_TERMS, and /terms/accept checks the version against
+    // the caller's role, so a provider can't fall back to the customer policy.
+    final t = await repo.latestTerms(termsTypeFor(provider: _isProvider));
     return t.fold((f) async => Left(f), (p) => repo.acceptTerms(p.version));
   }
 

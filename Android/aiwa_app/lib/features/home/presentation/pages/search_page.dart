@@ -129,6 +129,8 @@ class _SearchPageState extends State<SearchPage> {
     setState(() => _notifyError = null);
     final result = await sl<HomeRepository>().notifyWhenProviderJoins(
       category: _activeCategory,
+      lat: HomePage.position.lat,
+      lng: HomePage.position.lng,
     );
     if (!mounted) return;
     result.fold(

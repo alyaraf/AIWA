@@ -40,6 +40,15 @@ abstract class BookingRemoteDataSource {
 
   Future<void> sendSos(String bookingId, {String? notes});
 
+  /// "I'm safe": closes the caller's latest open SOS on this booking.
+  Future<void> resolveSos(String bookingId);
+
+  /// The other party's phone (only while the booking is live).
+  Future<String> contactPhone(String bookingId);
+
+  /// Customer answer to a provider's travel-fee quote.
+  Future<BookingModel> respondToTravelFee(String bookingId, bool accept);
+
   Future<void> submitComplaint({
     required String bookingId,
     required String providerId,
@@ -117,14 +126,12 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
         if (status != null) 'status': status,
       },
     );
+    // The backend filters by status (comma-separated) before paging.
     final data = response.data['data'] ?? response.data;
-    final paged = PagedData.fromJson(
+    return PagedData.fromJson(
       data,
       (e) => BookingModel.fromJson(e as Map<String, dynamic>),
     );
-    if (status == null) return paged;
-    final wanted = status.split(',');
-    return paged.where((b) => wanted.contains(b.status));
   }
 
   @override
@@ -184,6 +191,35 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
     ApiConstants.bookingSafety(bookingId),
     data: {'type': 'SOS', 'notes': ?notes},
   );
+
+  @override
+  Future<void> resolveSos(String bookingId) async {
+    // The timeline only returns the caller's own SOS events; close the newest open one.
+    final response = await _api.get(ApiConstants.bookingSafety(bookingId));
+    final open = [
+      for (final e in response.data['data'] as List? ?? const [])
+        if ((e as Map<String, dynamic>)['type'] == 'SOS' && e['resolved'] != true) e,
+    ];
+    if (open.isEmpty) return;
+    await _api.post(
+      ApiConstants.bookingSafetyResolve(bookingId, '${open.last['id']}'),
+    );
+  }
+
+  @override
+  Future<String> contactPhone(String bookingId) async {
+    final response = await _api.get(ApiConstants.bookingContact(bookingId));
+    return (response.data['data'] as Map<String, dynamic>)['phone'] as String;
+  }
+
+  @override
+  Future<BookingModel> respondToTravelFee(String bookingId, bool accept) async =>
+      _booking(
+        await _api.patch(
+          ApiConstants.bookingTravelFeeResponse(bookingId),
+          queryParameters: {'accept': accept},
+        ),
+      );
 
   // POST /complaints takes request params, not a body.
   @override

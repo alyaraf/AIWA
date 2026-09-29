@@ -66,6 +66,8 @@ class _ProviderPaymentConfirmPageState
     final r = await sl<DashboardRepository>().completeBooking(
       _b.id,
       cashCollected: cash,
+      // The explanation goes with a dispute (BookingDto.completionNote).
+      note: cash ? null : _reason.text.trim(),
     );
     if (!mounted) return false;
     setState(() {
@@ -85,7 +87,6 @@ class _ProviderPaymentConfirmPageState
   }
 
   Future<void> _dispute() async {
-    // BACKEND GAP: /complete takes no explanation, so the text isn't sent.
     if (!await _complete(cash: false) || !mounted) return;
     showAiwaToast(context, AppLocalizations.of(context).closeDisputedToast);
     context.go(AppRoutes.providerBookings);

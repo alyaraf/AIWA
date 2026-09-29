@@ -13,6 +13,7 @@ class UserModel extends UserEntity {
     required super.preferredLanguage,
     required super.termsAccepted,
     super.acceptedTermsVersion,
+    super.termsAcceptedAt,
     super.searchRadiusMinKm,
     super.searchRadiusMaxKm,
     super.providerProfile,
@@ -31,6 +32,9 @@ class UserModel extends UserEntity {
       preferredLanguage: json['preferredLanguage'] as String? ?? 'EN',
       termsAccepted: json['termsAccepted'] as bool? ?? false,
       acceptedTermsVersion: json['acceptedTermsVersion'] as String?,
+      termsAcceptedAt: DateTime.tryParse(
+        json['termsAcceptedAt'] as String? ?? '',
+      ),
       searchRadiusMinKm: (json['searchRadiusMinKm'] as num?)?.toDouble(),
       searchRadiusMaxKm: (json['searchRadiusMaxKm'] as num?)?.toDouble(),
       // UserDto sends the flat providerProfileId / providerStatus.

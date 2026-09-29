@@ -6,6 +6,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 @Configuration
 @Profile("prod")
 @RequiredArgsConstructor
@@ -26,8 +29,14 @@ public class ProductionGuardConfig {
     @Value("${aiwa.push.provider:dev-log}")
     private String pushProvider;
 
-    @Value("${aiwa.push.fcm-server-key:}")
-    private String fcmServerKey;
+    @Value("${aiwa.push.fcm-credentials-file:}")
+    private String fcmCredentialsFile;
+
+    @Value("${aiwa.email.provider:dev-log}")
+    private String emailProvider;
+
+    @Value("${aiwa.email.api-url:}")
+    private String emailApiUrl;
 
     @PostConstruct
     public void validateProductionSettings() {
@@ -40,8 +49,17 @@ public class ProductionGuardConfig {
         if ("dev-log".equalsIgnoreCase(pushProvider)) {
             throw new IllegalStateException("PUSH_PROVIDER must not be dev-log in prod — devices will never be notified");
         }
-        if ("fcm".equalsIgnoreCase(pushProvider) && (fcmServerKey == null || fcmServerKey.isBlank())) {
-            throw new IllegalStateException("FCM_SERVER_KEY must be configured when PUSH_PROVIDER=fcm");
+        if ("fcm".equalsIgnoreCase(pushProvider)) {
+            if (fcmCredentialsFile == null || fcmCredentialsFile.isBlank()) {
+                throw new IllegalStateException(
+                        "GOOGLE_APPLICATION_CREDENTIALS must point to the Firebase service-account JSON when PUSH_PROVIDER=fcm");
+            }
+            if (!Files.isReadable(Path.of(fcmCredentialsFile))) {
+                throw new IllegalStateException("GOOGLE_APPLICATION_CREDENTIALS file is not readable: " + fcmCredentialsFile);
+            }
+        }
+        if ("http".equalsIgnoreCase(emailProvider) && (emailApiUrl == null || emailApiUrl.isBlank())) {
+            throw new IllegalStateException("EMAIL_API_URL must be configured when EMAIL_PROVIDER=http");
         }
     }
 }

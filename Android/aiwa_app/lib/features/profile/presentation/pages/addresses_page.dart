@@ -271,7 +271,14 @@ class _AddressFormPageState extends State<AddressFormPage> {
       _error = null;
     });
     final r = _editing
-        ? await _repo.updateAddress(widget.existing!.id)
+        ? await _repo.updateAddress(
+            widget.existing!.id,
+            label: _label,
+            addressLine: _addressLine,
+            latitude: _pin?.latitude,
+            longitude: _pin?.longitude,
+            isDefault: _isDefault,
+          )
         : await _repo.addAddress(
             label: _label,
             addressLine: _addressLine,

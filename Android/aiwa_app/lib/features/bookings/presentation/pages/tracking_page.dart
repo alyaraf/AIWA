@@ -190,7 +190,9 @@ class _TrackingViewState extends State<_TrackingView> {
                   ),
           );
         }
-        if (s.declinedFee) return _declinedFee(context, b.travelFee ?? 0);
+        if (s.declinedFee) {
+          return _declinedFee(context, b.travelFeeQuote ?? b.travelFee ?? 0);
+        }
         return Scaffold(
           backgroundColor: AppColors.bone,
           body: SingleChildScrollView(
@@ -214,7 +216,6 @@ class _TrackingViewState extends State<_TrackingView> {
 
   Widget _body(BookingEntity b, LiveBookingState s) {
     final st = b.status;
-    final pending = st == 'PENDING';
     final done = st == 'COMPLETED';
     final onSite = const {'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'}.contains(st);
     final l = AppLocalizations.of(context);
@@ -256,9 +257,8 @@ class _TrackingViewState extends State<_TrackingView> {
               onConfirm: () => _push('/booking/${b.id}/payment', b),
             ),
           ],
-          // ponytail: shows whenever a PENDING booking carries a travel fee;
-          // there is no "quoted, awaiting customer" state in the backend yet.
-          if (pending && (b.travelFee ?? 0) > 0) ...[
+          // The provider quoted a travel fee for this booking and waits for an answer.
+          if (b.hasPendingTravelQuote) ...[
             const SizedBox(height: 14),
             _TravelFeeQuote(
               booking: b,
@@ -267,7 +267,7 @@ class _TrackingViewState extends State<_TrackingView> {
               onAccept: () => _cubit.respondToTravelFee(true),
             ),
           ],
-          if (!pending && (b.travelFee ?? 0) > 0) ...[
+          if (!b.hasPendingTravelQuote && (b.travelFee ?? 0) > 0) ...[
             const SizedBox(height: 14),
             _TotalRow(booking: b),
           ],
@@ -984,7 +984,7 @@ class _TravelFeeQuote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fee = booking.travelFee!;
+    final fee = booking.travelFeeQuote ?? booking.travelFee ?? 0;
     final base = booking.basePrice;
     final sub = AppTextStyles.micro.copyWith(
       fontSize: AppTextStyles.fsLabelSmPlus,

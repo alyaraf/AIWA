@@ -245,9 +245,11 @@ class _Hero extends StatelessWidget {
                       value: stats.averageRating > 0
                           ? stats.averageRating.toStringAsFixed(1)
                           : '—',
-                      // BACKEND GAP: DashboardDto has no review count, so the
-                      // kit's '312 reviews' reads 'Rating'.
-                      label: l.dashStatRating,
+                      // The kit's '312 reviews' (DashboardDto.totalReviews);
+                      // 'Rating' until the first review lands.
+                      label: stats.totalReviews > 0
+                          ? l.revCount(stats.totalReviews)
+                          : l.dashStatRating,
                       star: true,
                     ),
                   ],

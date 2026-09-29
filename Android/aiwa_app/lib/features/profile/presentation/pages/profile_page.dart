@@ -28,7 +28,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final _repo = sl<AccountRepository>();
-  ({int bookings, int favorites})? _stats;
+  ({int bookings, int favorites, int reviews})? _stats;
   int? _trusted;
   String? _error;
 
@@ -184,7 +184,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
 class _Header extends StatelessWidget {
   final UserEntity user;
-  final ({int bookings, int favorites})? stats;
+  final ({int bookings, int favorites, int reviews})? stats;
   const _Header({required this.user, this.stats});
 
   @override
@@ -255,7 +255,6 @@ class _Header extends StatelessWidget {
                 Row(
                   spacing: 10,
                   children: [
-                    // Backend gap: no endpoint counts the customer's reviews.
                     for (final (n, label) in [
                       (
                         stats?.bookings,
@@ -265,7 +264,10 @@ class _Header extends StatelessWidget {
                         stats?.favorites,
                         AppLocalizations.of(context).profStatFavorites,
                       ),
-                      (null, AppLocalizations.of(context).profStatReviews),
+                      (
+                        stats?.reviews,
+                        AppLocalizations.of(context).profStatReviews,
+                      ),
                     ])
                       Expanded(
                         child: _Stat(value: n, label: label),

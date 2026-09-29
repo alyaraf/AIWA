@@ -42,14 +42,16 @@ public class AdminBookingController {
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> resolveDispute(
             @PathVariable Long id,
             @RequestParam(required = false) String outcome,
-            @RequestParam(required = false) Boolean paid) {
+            @RequestParam(required = false) Boolean paid,
+            @RequestParam(required = false) String reason) {
         String choice = outcome != null ? outcome : (Boolean.TRUE.equals(paid) ? "PAID" : "UNPAID");
-        ApiResponse.BookingDto dto = bookingService.adminResolveDispute(id, choice);
+        ApiResponse.BookingDto dto = bookingService.adminResolveDispute(id, choice, reason);
         auditService.record("DISPUTE_RESOLVED", "booking #" + id + " → " + choice.toLowerCase());
         return ResponseEntity.ok(ApiResponse.Success.of("Dispute resolved", dto));
     }
 
     @GetMapping("/{id}/chat")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     @Operation(summary = "Read the chat thread for a booking (ADMIN, read-only)")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.ChatMessageDto>>> chat(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.Success.of(

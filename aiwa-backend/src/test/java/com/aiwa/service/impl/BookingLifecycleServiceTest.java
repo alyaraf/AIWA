@@ -55,6 +55,12 @@ class BookingLifecycleServiceTest {
         when(platformSettings.getCommissionPercent()).thenReturn(new BigDecimal("10"));
         when(platformSettings.getCommissionPercentFor(any())).thenReturn(new BigDecimal("10"));
         when(bookingRepo.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        // Proposals and reschedules take the provider row lock and must fit working hours.
+        when(providerRepo.findByIdForUpdate(7L)).thenAnswer(inv -> Optional.of(ProviderProfile.builder().id(7L).build()));
+        when(availabilityRepo.findByProviderIdAndStaffMemberIsNullAndDayOfWeek(eq(7L), any()))
+                .thenReturn(Optional.of(com.aiwa.entity.Availability.builder()
+                        .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(22, 0))
+                        .slotDurationMinutes(30).available(true).build()));
     }
 
     private Booking booking(BookingStatus status) {

@@ -50,6 +50,11 @@ public class ChatController {
             @AuthenticationPrincipal UserDetails userDetails) {
         User sender = resolveUser(userDetails);
         Booking booking = loadAuthorizedBooking(bookingId, sender.getId());
+        // The thread closes 48 hours after the booking ends, so a finished (or
+        // cancelled) booking can't be used to keep messaging someone.
+        if (isClosedForChat(booking)) {
+            throw new BusinessException("chat.error.closed");
+        }
         ChatMessage message = chatRepo.save(ChatMessage.builder()
                 .booking(booking)
                 .sender(sender)
@@ -150,12 +155,25 @@ public class ChatController {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
+    static final java.time.Duration CHAT_GRACE = java.time.Duration.ofHours(48);
+
+    /** Closed once the booking has ended (any terminal state) for more than the grace period. */
+    static boolean isClosedForChat(Booking b) {
+        com.aiwa.enums.BookingStatus s = b.getStatus();
+        boolean ended = s == com.aiwa.enums.BookingStatus.COMPLETED || s == com.aiwa.enums.BookingStatus.NO_SHOW
+                || s.isSlotReleasing();
+        if (!ended) return false;
+        java.time.LocalDateTime endedAt = b.getUpdatedAt() != null ? b.getUpdatedAt()
+                : (b.getCancelledAt() != null ? b.getCancelledAt() : b.getCreatedAt());
+        return endedAt != null && endedAt.plus(CHAT_GRACE).isBefore(java.time.LocalDateTime.now());
+    }
+
     private Booking loadAuthorizedBooking(Long bookingId, Long userId) {
         Booking booking = bookingRepo.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
         boolean allowed = booking.getCustomer().getId().equals(userId)
                 || booking.getProvider().getUser().getId().equals(userId);
-        if (!allowed) throw new BusinessException("error.access_denied");
+        if (!allowed) throw new com.aiwa.exception.ForbiddenException("error.access_denied");
         return booking;
     }
 

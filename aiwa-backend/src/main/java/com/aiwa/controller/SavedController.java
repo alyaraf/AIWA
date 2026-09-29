@@ -29,6 +29,7 @@ public class SavedController {
     private final ProviderServiceImpl providerServiceImpl;
 
     @GetMapping
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     @Operation(summary = "List all saved providers for the current customer")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.ProviderSummaryDto>>> list(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -36,11 +37,12 @@ public class SavedController {
             @RequestParam(required = false) Double lng) {
 
         Long userId = resolveUserId(userDetails);
-        List<ApiResponse.ProviderSummaryDto> dtos = savedRepo
+        List<com.aiwa.entity.ProviderProfile> providers = savedRepo
                 .findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
-                .map(sp -> providerServiceImpl.toSummaryDto(sp.getProvider(), lat, lng))
+                .map(com.aiwa.entity.SavedProvider::getProvider)
                 .collect(Collectors.toList());
+        List<ApiResponse.ProviderSummaryDto> dtos = providerServiceImpl.toSummaryDtos(providers, lat, lng);
 
         return ResponseEntity.ok(ApiResponse.Success.of(dtos));
     }

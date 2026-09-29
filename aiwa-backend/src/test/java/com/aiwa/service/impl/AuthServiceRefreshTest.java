@@ -37,7 +37,44 @@ class AuthServiceRefreshTest {
     private void primeToken(String identifier) {
         when(blacklist.isBlacklisted("refresh")).thenReturn(false);
         when(jwtUtils.validateToken("refresh")).thenReturn(true);
+        when(jwtUtils.isRefreshToken("refresh")).thenReturn(true);
         when(jwtUtils.getSubjectFromToken("refresh")).thenReturn(identifier);
+    }
+
+    @Test
+    void anAccessOrMfaTokenCannotBeUsedToRefresh() {
+        primeToken("live@x.com");
+        when(jwtUtils.isRefreshToken("refresh")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.refreshToken("refresh"))
+                .isInstanceOf(InvalidTokenException.class);
+        verifyNoInteractions(userRepo);
+    }
+
+    @Test
+    void refreshRotatesTheUsedToken() {
+        primeToken("live@x.com");
+        User active = User.builder().id(1L).email("live@x.com").role(UserRole.CUSTOMER).active(true).build();
+        when(userRepo.findByEmail("live@x.com")).thenReturn(Optional.of(active));
+        when(jwtUtils.generateAccessToken("live@x.com", 1L, "CUSTOMER")).thenReturn("access");
+        when(jwtUtils.generateRefreshToken("live@x.com")).thenReturn("newRefresh");
+
+        service.refreshToken("refresh");
+
+        // The old refresh token is revoked, so a stolen copy can't mint sessions in parallel.
+        verify(blacklist).blacklist("refresh");
+    }
+
+    @Test
+    void refreshTokenIssuedBeforeAPasswordResetIsRejected() {
+        primeToken("live@x.com");
+        User active = User.builder().id(1L).email("live@x.com").role(UserRole.CUSTOMER).active(true)
+                .tokensValidAfter(java.time.Instant.parse("2026-09-29T10:00:00Z")).build();
+        when(userRepo.findByEmail("live@x.com")).thenReturn(Optional.of(active));
+        when(jwtUtils.getIssuedAt("refresh")).thenReturn(java.time.Instant.parse("2026-09-29T09:59:00Z"));
+
+        assertThatThrownBy(() -> service.refreshToken("refresh"))
+                .isInstanceOf(InvalidTokenException.class);
     }
 
     @Test

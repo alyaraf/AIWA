@@ -1,9 +1,22 @@
+server:
+  # Trust X-Forwarded-For / -Proto from the reverse proxy (Tomcat's RemoteIpValve
+  # only honours them from internal proxy addresses), so rate limiting keys on the
+  # real client IP instead of the proxy's.
+  forward-headers-strategy: native
+
 spring:
   jpa:
     hibernate:
       ddl-auto: validate
   flyway:
     enabled: true
+
+# API docs are a map of every endpoint — not public in production.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 logging:
   level:
@@ -14,3 +27,7 @@ management:
   endpoint:
     health:
       show-details: never
+
+aiwa:
+  auth:
+    cookie-secure: true

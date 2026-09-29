@@ -8,7 +8,10 @@ import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_state.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -24,7 +27,7 @@ class TermsReacceptPage extends StatefulWidget {
 
 class _TermsReacceptPageState extends State<TermsReacceptPage> {
   final _repo = sl<AuthRepository>();
-  ({String version, String content})? _terms;
+  TermsDoc? _terms;
 
   /// Load error (shown in the terms box) or, once loaded, accept error.
   String? _error;
@@ -33,7 +36,9 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
   @override
   void initState() {
     super.initState();
-    _repo.latestTerms('CUSTOMER_TERMS').then((r) {
+    final auth = context.read<AuthBloc>().state;
+    final provider = auth is AuthAuthenticated && auth.user.isProvider;
+    _repo.latestTerms(termsTypeFor(provider: provider)).then((r) {
       if (mounted) {
         setState(
           () => r.fold(
@@ -129,7 +134,10 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            TextSpan(text: ' — ${_terms!.content}'),
+                            TextSpan(
+                              text:
+                                  ' — ${_terms!.textFor(AppLocalizations.of(context).localeName)}',
+                            ),
                           ],
                         ),
                         maxLines: 6,

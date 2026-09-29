@@ -1,76 +1,220 @@
 package com.aiwa.service.impl;
 
 import com.aiwa.enums.DevicePlatform;
+import com.aiwa.repository.UserRepository;
 import com.aiwa.service.PushNotificationService;
-import lombok.RequiredArgsConstructor;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Real push delivery via Firebase Cloud Messaging's legacy HTTP API
- * ({@code fcm/send} + a server key). This is enough to actually reach a
- * device — which is the piece that was missing entirely — but Google has
- * deprecated this endpoint in favor of the HTTP v1 API (OAuth2 service
- * account credentials, one endpoint per Firebase project). Swap this class
- * for an HTTP v1 client before relying on it in production; APNs-native
- * devices also go through FCM here (FCM relays to APNs) as long as the iOS
- * app is registered with the same Firebase project.
+ * Push delivery through Firebase Cloud Messaging HTTP v1
+ * ({@code POST https://fcm.googleapis.com/v1/projects/{project}/messages:send}).
+ *
+ * <p>Google shut down the legacy {@code fcm/send} + server-key API in 2024, so
+ * the previous implementation could never deliver. v1 authenticates with a
+ * short-lived OAuth2 access token obtained from a Firebase service account
+ * (JWT-bearer grant, RS256) — built here with the jjwt library the project
+ * already ships, so no extra dependency is needed. The token is cached until a
+ * minute before it expires.</p>
+ *
+ * <p>Configuration: {@code PUSH_PROVIDER=fcm} and
+ * {@code GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json}
+ * (optionally {@code FCM_PROJECT_ID}; defaults to the JSON's project_id).
+ * iOS devices are reached through the same project (FCM relays to APNs).</p>
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @ConditionalOnProperty(name = "aiwa.push.provider", havingValue = "fcm")
 public class FcmPushService implements PushNotificationService {
 
-    private static final String FCM_LEGACY_SEND_URL = "https://fcm.googleapis.com/fcm/send";
+    static final String SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
+    static final String DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token";
 
-    private final RestTemplateBuilder restTemplateBuilder;
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final UserRepository userRepo;
 
-    @Value("${aiwa.push.fcm-server-key:}")
-    private String serverKey;
+    @Value("${aiwa.push.fcm-credentials-file:}")
+    private String credentialsFile;
+
+    @Value("${aiwa.push.fcm-project-id:}")
+    private String projectIdOverride;
+
+    private ServiceAccount account;
+    private String cachedToken;
+    private Instant cachedTokenExpiry = Instant.EPOCH;
+
+    public FcmPushService(RestTemplateBuilder builder, ObjectMapper objectMapper, UserRepository userRepo) {
+        this.restTemplate = builder
+                .setConnectTimeout(Duration.ofSeconds(5))
+                .setReadTimeout(Duration.ofSeconds(10))
+                .build();
+        this.objectMapper = objectMapper;
+        this.userRepo = userRepo;
+    }
+
+    record ServiceAccount(String projectId, String clientEmail, PrivateKey privateKey, String tokenUri) {}
 
     @Override
     public void send(String deviceToken, DevicePlatform platform, String title, String body, Map<String, String> data) {
         if (deviceToken == null || deviceToken.isBlank()) return;
-        if (serverKey == null || serverKey.isBlank()) {
-            log.warn("Push not sent — aiwa.push.fcm-server-key is not configured");
+        ServiceAccount sa;
+        String accessToken;
+        try {
+            sa = account();
+            accessToken = accessToken(sa);
+        } catch (RuntimeException | IOException e) {
+            log.error("Push not sent — FCM credentials unusable: {}", e.getMessage());
             return;
         }
 
-        RestTemplate restTemplate = restTemplateBuilder.build();
+        Map<String, Object> message = new HashMap<>();
+        message.put("token", deviceToken);
+        message.put("notification", Map.of("title", title != null ? title : "", "body", body != null ? body : ""));
+        // FCM v1 requires every data value to be a string.
+        Map<String, String> safeData = new HashMap<>();
+        if (data != null) data.forEach((k, v) -> safeData.put(k, v != null ? v : ""));
+        message.put("data", safeData);
+        message.put("android", Map.of("priority", "HIGH"));
+        message.put("apns", Map.of("headers", Map.of("apns-priority", "10")));
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", "key=" + serverKey);
-
-        Map<String, Object> notification = new HashMap<>();
-        notification.put("title", title);
-        notification.put("body", body);
-
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("to", deviceToken);
-        payload.put("notification", notification);
-        payload.put("data", data != null ? data : Map.of());
-        payload.put("priority", "high");
-
+        headers.setBearerAuth(accessToken);
+        String url = "https://fcm.googleapis.com/v1/projects/" + sa.projectId() + "/messages:send";
         try {
-            restTemplate.postForEntity(FCM_LEGACY_SEND_URL, new HttpEntity<>(payload, headers), String.class);
-        } catch (RestClientException ex) {
+            restTemplate.postForEntity(url, new HttpEntity<>(Map.of("message", message), headers), String.class);
+        } catch (HttpClientErrorException e) {
+            String err = e.getResponseBodyAsString();
+            int status = e.getStatusCode().value();
+            if (status == 404 || err.contains("UNREGISTERED")
+                    || (status == 400 && err.contains("registration token"))) {
+                // The app was uninstalled or the token rotated — stop pushing to it.
+                clearToken(deviceToken);
+            } else if (status == 401) {
+                invalidateAccessToken();
+            }
+            log.warn("FCM rejected push to token …{}: {}", tail(deviceToken), e.getStatusCode());
+        } catch (RestClientException e) {
             // A push failure must never break the caller — the in-app notification
             // was already recorded; this is only the best-effort real-time nudge.
-            log.warn("FCM push failed for token ending …{}: {}",
-                    deviceToken.length() > 6 ? deviceToken.substring(deviceToken.length() - 6) : deviceToken,
-                    ex.getMessage());
+            log.warn("FCM push failed for token …{}: {}", tail(deviceToken), e.getMessage());
         }
+    }
+
+    void clearToken(String deviceToken) {
+        try {
+            userRepo.findByPushToken(deviceToken).forEach(u -> {
+                u.setPushToken(null);
+                u.setPushPlatform(null);
+                userRepo.save(u);
+            });
+        } catch (RuntimeException e) {
+            log.warn("Could not clear a dead push token: {}", e.getMessage());
+        }
+    }
+
+    private synchronized void invalidateAccessToken() {
+        cachedToken = null;
+        cachedTokenExpiry = Instant.EPOCH;
+    }
+
+    private synchronized ServiceAccount account() throws IOException {
+        if (account == null) {
+            if (credentialsFile == null || credentialsFile.isBlank()) {
+                throw new IllegalStateException("GOOGLE_APPLICATION_CREDENTIALS is not set");
+            }
+            account = parseServiceAccount(Files.readString(Path.of(credentialsFile)), projectIdOverride, objectMapper);
+        }
+        return account;
+    }
+
+    static ServiceAccount parseServiceAccount(String json, String projectIdOverride, ObjectMapper mapper)
+            throws IOException {
+        JsonNode node = mapper.readTree(json);
+        String clientEmail = node.path("client_email").asText(null);
+        String pem = node.path("private_key").asText(null);
+        String projectId = projectIdOverride != null && !projectIdOverride.isBlank()
+                ? projectIdOverride : node.path("project_id").asText(null);
+        String tokenUri = node.path("token_uri").asText(DEFAULT_TOKEN_URI);
+        if (clientEmail == null || pem == null || projectId == null) {
+            throw new IllegalStateException("service-account JSON lacks client_email, private_key or project_id");
+        }
+        return new ServiceAccount(projectId, clientEmail, parsePkcs8(pem), tokenUri);
+    }
+
+    static PrivateKey parsePkcs8(String pem) {
+        try {
+            String base64 = pem.replace("-----BEGIN PRIVATE KEY-----", "")
+                    .replace("-----END PRIVATE KEY-----", "")
+                    .replaceAll("\\s", "");
+            byte[] der = Base64.getDecoder().decode(base64);
+            return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
+        } catch (Exception e) {
+            throw new IllegalStateException("private_key is not a PKCS#8 RSA key", e);
+        }
+    }
+
+    /** Signed JWT-bearer assertion for Google's OAuth2 token endpoint. */
+    static String buildAssertion(ServiceAccount sa, Instant now) {
+        return Jwts.builder()
+                .setIssuer(sa.clientEmail())
+                .setAudience(sa.tokenUri())
+                .claim("scope", SCOPE)
+                .setIssuedAt(Date.from(now))
+                .setExpiration(Date.from(now.plusSeconds(3600)))
+                .signWith(sa.privateKey(), SignatureAlgorithm.RS256)
+                .compact();
+    }
+
+    private synchronized String accessToken(ServiceAccount sa) {
+        Instant now = Instant.now();
+        if (cachedToken != null && now.isBefore(cachedTokenExpiry)) return cachedToken;
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer");
+        form.add("assertion", buildAssertion(sa, now));
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        ResponseEntity<JsonNode> res = restTemplate.postForEntity(sa.tokenUri(), new HttpEntity<>(form, headers),
+                JsonNode.class);
+        JsonNode body = res.getBody();
+        if (body == null || !body.hasNonNull("access_token")) {
+            throw new IllegalStateException("OAuth token response had no access_token");
+        }
+        cachedToken = body.get("access_token").asText();
+        long expiresIn = body.path("expires_in").asLong(3600);
+        cachedTokenExpiry = now.plusSeconds(Math.max(60, expiresIn - 60));
+        return cachedToken;
+    }
+
+    private static String tail(String token) {
+        return token.length() > 6 ? token.substring(token.length() - 6) : token;
     }
 }

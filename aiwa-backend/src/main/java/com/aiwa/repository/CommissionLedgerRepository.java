@@ -12,6 +12,7 @@ import java.util.List;
 public interface CommissionLedgerRepository extends JpaRepository<CommissionLedgerEntry, Long> {
     List<CommissionLedgerEntry> findByProviderIdOrderByCreatedAtDesc(Long providerId);
     List<CommissionLedgerEntry> findByStatusOrderByCreatedAtAsc(LedgerEntryStatus status);
+    List<CommissionLedgerEntry> findByStatusIn(java.util.Collection<LedgerEntryStatus> statuses);
     List<CommissionLedgerEntry> findByProviderIdAndStatusIn(Long providerId, java.util.Collection<LedgerEntryStatus> statuses);
     List<CommissionLedgerEntry> findAllByOrderByCreatedAtDesc();
     boolean existsByBookingId(Long bookingId);

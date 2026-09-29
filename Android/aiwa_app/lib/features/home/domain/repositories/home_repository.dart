@@ -21,5 +21,9 @@ abstract class HomeRepository {
   });
 
   /// 'Notify me when someone joins' on Discover's empty state.
-  Future<Either<Failure, void>> notifyWhenProviderJoins({String? category});
+  Future<Either<Failure, void>> notifyWhenProviderJoins({
+    String? category,
+    double? lat,
+    double? lng,
+  });
 }

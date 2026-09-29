@@ -50,6 +50,19 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.Success.of("All notifications marked as read", null));
     }
 
+    /**
+     * Mark one notification read. PATCH is the documented verb; PUT is accepted
+     * too because the shipped mobile builds call PUT /notifications/{id}/read.
+     */
+    @RequestMapping(value = "/{id}/read", method = {RequestMethod.PATCH, RequestMethod.PUT})
+    @Operation(summary = "Mark one of my notifications as read")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.NotificationDto>> markRead(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of("Notification marked as read",
+                notificationService.markRead(resolveUserId(userDetails), id)));
+    }
+
     private Long resolveUserId(UserDetails ud) {
         return userRepo.findByEmail(ud.getUsername())
                 .or(() -> userRepo.findByPhone(ud.getUsername()))

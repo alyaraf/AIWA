@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Reviews", description = "Submit and view provider reviews")
 public class ReviewController {
 
-    private final ReviewService reviewService;
+    private final com.aiwa.service.impl.ReviewServiceImpl reviewService;
     private final UserRepository userRepo;
     private final com.aiwa.service.impl.AuditService auditService;
     private final com.aiwa.repository.ModerationCaseRepository moderationRepo;
@@ -38,14 +38,39 @@ public class ReviewController {
     }
 
     @GetMapping("/providers/{providerId}/reviews")
-    @Operation(summary = "Get all reviews for a provider (public, paginated)")
+    @Operation(summary = "Customer reviews of a provider (public, paginated, with the provider's replies)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ReviewDto>>> getByProvider(
             @PathVariable Long providerId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         return ResponseEntity.ok(ApiResponse.Success.of(
-                reviewService.getByProvider(providerId, PageRequest.of(page, size))));
+                reviewService.getByProvider(providerId, pageOf(page, size))));
+    }
+
+    @GetMapping("/reviews/my")
+    @Operation(summary = "Reviews I have written (totalElements = my review count)")
+    public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ReviewDto>>> mine(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                reviewService.getMine(resolveUserId(userDetails), pageOf(page, size))));
+    }
+
+    @PostMapping("/provider/reviews/{id}/reply")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('PROVIDER')")
+    @Operation(summary = "Reply publicly to a customer review of your business (PROVIDER); sending again edits the reply")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.ReviewDto>> reply(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of("Reply saved",
+                reviewService.reply(resolveUserId(userDetails), id, body.get("reply"))));
+    }
+
+    private static Pageable pageOf(int page, int size) {
+        return PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 200)));
     }
 
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT)

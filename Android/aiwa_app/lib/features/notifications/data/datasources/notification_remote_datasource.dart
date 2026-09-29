@@ -44,9 +44,9 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
 
   @override
   Future<void> markAsRead(String notificationId) async {
-    // TODO(BE-11): backend has no per-row read endpoint yet, so this 404s and
-    // NotificationBloc rolls the row back to unread.
-    await _api.put('${ApiConstants.notifications}/$notificationId/read');
+    // PATCH/PUT /notifications/{id}/read (owner only; NotificationBloc rolls
+    // the row back to unread if this fails).
+    await _api.patch(ApiConstants.notificationRead(notificationId));
   }
 
   @override

@@ -12,11 +12,29 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Map;
 
+/**
+ * Per-IP limits on the unauthenticated auth endpoints (brute force, OTP abuse).
+ * The client IP is {@code request.getRemoteAddr()}, which behind a reverse proxy
+ * is only the real client when {@code server.forward-headers-strategy=native}
+ * (set in the prod profile) — otherwise every user would share the proxy's IP
+ * and its budget. Per-phone OTP limits live in OtpServiceImpl.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RedisRateLimitFilter extends OncePerRequestFilter {
+
+    /** Path suffix → max POSTs per IP per minute. */
+    static final Map<String, Long> LIMITS = Map.of(
+            "/auth/login", 10L,
+            "/auth/send-otp", 5L,
+            "/auth/verify-otp", 10L,
+            "/auth/refresh", 20L,
+            "/auth/register", 5L,
+            "/auth/reset-password", 5L,
+            "/auth/2fa/verify", 10L);
 
     private final RedisRuntimeService redis;
 
@@ -25,10 +43,10 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String path = request.getRequestURI();
-        if ("POST".equalsIgnoreCase(request.getMethod()) && isLimitedAuthPath(path)) {
+        Long max = "POST".equalsIgnoreCase(request.getMethod()) ? limitFor(path) : null;
+        if (max != null) {
             String ip = request.getRemoteAddr();
             String key = "rate:" + path + ":" + ip;
-            long max = path.endsWith("/send-otp") ? 5 : 10;
             // Fail OPEN: a Redis hiccup must not turn into every login attempt being
             // blocked. Rate limiting is a best-effort abuse guard, not the primary
             // auth boundary — losing it briefly is far cheaper than locking everyone
@@ -37,8 +55,10 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
                 long count = redis.increment(key, Duration.ofMinutes(1));
                 if (count > max) {
                     response.setStatus(429);
+                    response.setHeader("Retry-After", "60");
                     response.setContentType("application/json");
-                    response.getWriter().write("{\"success\":false,\"message\":\"Too many requests. Please try again later.\"}");
+                    response.getWriter().write("{\"success\":false,\"status\":429,\"code\":\"error.rate_limited\","
+                            + "\"message\":\"Too many requests. Please try again later.\"}");
                     return;
                 }
             } catch (RuntimeException e) {
@@ -48,10 +68,10 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean isLimitedAuthPath(String path) {
-        return path.endsWith("/auth/login")
-                || path.endsWith("/auth/send-otp")
-                || path.endsWith("/auth/verify-otp")
-                || path.endsWith("/auth/refresh");
+    static Long limitFor(String path) {
+        for (Map.Entry<String, Long> e : LIMITS.entrySet()) {
+            if (path.endsWith(e.getKey())) return e.getValue();
+        }
+        return null;
     }
 }

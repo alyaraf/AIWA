@@ -1,5 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
-const USE_MOCKS = String(import.meta.env.VITE_USE_MOCKS ?? "true") === "true";
+// Mock mode only when explicitly asked for (VITE_USE_MOCKS=true); a build that
+// forgets the flag talks to the real API instead of accepting any login (OPS-8).
+const USE_MOCKS = String(import.meta.env.VITE_USE_MOCKS ?? "false") === "true";
 
 const TOKEN_KEY = "aiwa_admin_access_token";
 const REFRESH_KEY = "aiwa_admin_refresh_token";
@@ -171,10 +173,17 @@ export const api = {
   setSettlementPause: (providerId, paused) => request(`/admin/providers/${providerId}/settlement-pause?paused=${paused}`, { method: "PATCH" }),
   latestTerms: (type = "CUSTOMER_TERMS") => request(`/terms/latest?type=${type}`),
   termsVersions: (type = "CUSTOMER_TERMS") => request(`/terms?type=${type}`).then(normalizeList),
-  publishTerms: (version, contentEn, type = "CUSTOMER_TERMS") => {
+  publishTerms: (version, contentEn, type = "CUSTOMER_TERMS", contentAr = "") => {
     const qs = new URLSearchParams({ version, type, contentEn });
+    if (contentAr && contentAr.trim()) qs.set("contentAr", contentAr);
     return request(`/terms?${qs.toString()}`, { method: "POST" });
   },
+  /** SOS queue (GET /admin/safety) — status OPEN (default) | RESOLVED | ALL. */
+  safetyQueue: (status = "OPEN") => request(`/admin/safety?status=${encodeURIComponent(status)}&size=100`)
+    .then(normalizeList).then((items) => items.map(normalizeSafety)),
+  resolveSafety: (eventId, notes) => request(`/admin/safety/${eventId}/resolve?notes=${encodeURIComponent(notes)}`, { method: "POST" })
+    .then(normalizeSafety),
+  exportAudit: (query = "") => downloadFile(`/admin/audit/export${query ? `?query=${encodeURIComponent(query)}` : ""}`, "aiwa-audit-log.csv", "text/csv"),
   supportContact: () => request("/support/contact"),
   getSupportSettings: () => request("/support/admin/settings"),
   updateSupportSettings: (payload) =>
@@ -254,11 +263,47 @@ function unwrap(payload) {
   return payload?.data ?? payload;
 }
 
+/** Public upload paths ("/files/public/…") are served under the API base. */
+export function mediaUrl(path) {
+  if (!path) return null;
+  if (/^https?:\/\//.test(path)) return path;
+  return `${API_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
+/** AdminSafetyEventDto → one SOS row. */
+export function normalizeSafety(item) {
+  return {
+    id: item.id,
+    bookingId: item.bookingId,
+    bookingStatus: item.bookingStatus || "",
+    homeService: !!item.homeService,
+    address: item.address || "",
+    actorName: item.actorName || "Unknown",
+    actorRole: item.actorRole || "",
+    actorPhone: item.actorPhone || "",
+    customerName: item.customerName || "",
+    customerPhone: item.customerPhone || "",
+    providerName: item.providerName || "",
+    providerPhone: item.providerPhone || "",
+    latitude: item.latitude ?? null,
+    longitude: item.longitude ?? null,
+    notes: item.notes || "",
+    resolved: !!item.resolved,
+    resolvedAt: item.resolvedAt || null,
+    resolvedByName: item.resolvedByName || "",
+    resolutionNotes: item.resolutionNotes || "",
+    createdAt: item.createdAt || null,
+    when: formatWhen(item.createdAt)
+  };
+}
+
 /** Fetches a non-JSON body (e.g. CSV) and triggers a browser download. */
 async function downloadFile(path, filename, mime) {
   if (USE_MOCKS) {
     const csv = path.includes("/analytics/")
       ? "date,completed,cancelled,total\n2026-08-18,50,11,61\n2026-08-19,58,12,70\n2026-08-20,66,14,80\n"
+      : path.includes("/audit/")
+      ? "id,createdAt,actor,action,targetType,targetId,details,ip\n1,2026-09-29T10:00:00,S. Mahmoud,PROVIDER_APPROVED,PROVIDER,11,,127.0.0.1\n"
       : "id,providerId,bookingId,bookingAmount,commissionPercent,commissionAmount,status,createdAt,settledAt\n"
         + "1,7,55,100.00,10.00,10.00,DUE,2026-05-20,\n"
         + "2,9,61,450.00,10.00,45.00,SETTLED,2026-05-18,2026-05-24\n";
@@ -317,21 +362,34 @@ function formatWhen(value) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+/** "(+12%)" against the previous window; empty when there is nothing to compare. */
+export function deltaText(current, previous) {
+  const prev = Number(previous || 0);
+  if (!prev) return "";
+  const pct = Math.round(((Number(current || 0) - prev) / prev) * 100);
+  return `(${pct >= 0 ? "+" : ""}${pct}%)`;
+}
+
 function normalizeDashboard(data) {
   if (data?.stats && Array.isArray(data.stats)) return data;
   const totalRevenue = Number(data?.totalRevenue ?? 0);
   const completed = Number(data?.completedBookings || 0);
   const totalProviders = Number(data?.totalProviders || 0);
   const avg = completed > 0 ? totalRevenue / completed : 0;
+  // Windowed counts (AdminDashboardDto, by creation time in Cairo).
+  const today = Number(data?.bookingsToday || 0);
+  const week = Number(data?.bookingsLast7Days || 0);
+  const newCustomers = Number(data?.newCustomersLast30Days || 0);
   return {
     pendingVerification: Number(data?.pendingVerification || 0),
     openComplaints: Number(data?.openComplaints || 0),
     openDisputes: Number(data?.openDisputes || 0),
     overdueSettlements: Number(data?.overdueSettlements || 0),
+    openSos: Number(data?.openSos || 0),
     stats: [
-      { label: "Customers", value: Number(data?.totalCustomers || 0).toLocaleString(), sub: `${totalProviders.toLocaleString()} providers`, icon: "Users" },
+      { label: "Customers", value: Number(data?.totalCustomers || 0).toLocaleString(), sub: `${totalProviders.toLocaleString()} providers · +${newCustomers.toLocaleString()} in 30 days ${deltaText(newCustomers, data?.newCustomersPrevious30Days)}`.trim(), icon: "Users" },
       { label: "Verified providers", value: Number(data?.approvedProviders || 0).toLocaleString(), sub: `${data?.pendingVerification || 0} pending review`, icon: "BadgeCheck" },
-      { label: "Bookings", value: Number(data?.totalBookings || 0).toLocaleString(), sub: `${completed.toLocaleString()} completed`, icon: "CalendarCheck" },
+      { label: "Bookings", value: Number(data?.totalBookings || 0).toLocaleString(), sub: `${today.toLocaleString()} today · ${week.toLocaleString()} in 7 days ${deltaText(week, data?.bookingsPrevious7Days)}`.trim(), icon: "CalendarCheck" },
       { label: "GMV (EGP)", value: formatMoney(totalRevenue), sub: completed > 0 ? `avg EGP ${Math.round(avg).toLocaleString()} per booking` : "from completed bookings", icon: "Banknote" }
     ]
   };
@@ -341,6 +399,7 @@ function normalizeVerification(item) {
   return {
     id: item.id,
     name: item.businessName || item.ownerName || "Provider",
+    ownerName: item.ownerName || "",
     category: item.primaryCategory || "Provider",
     city: item.city || "-",
     submitted: formatWhen(item.submittedAt),
@@ -407,10 +466,13 @@ function normalizeModeration(item) {
   return {
     id: item.id,
     type,
-    provider: item.provider || `${type === "REVIEW" ? "Reported review" : type === "IMAGE" ? "Reported photo" : "Case"} #${item.targetId || item.id}`,
+    provider: item.provider || item.providerName || `${type === "REVIEW" ? "Reported review" : type === "IMAGE" ? "Reported photo" : "Case"} #${item.targetId || item.id}`,
     reason: item.reason || item.adminNotes || "Moderation case",
     when: item.when || formatWhen(item.createdAt),
-    text: item.text || item.adminNotes
+    text: item.text || item.adminNotes,
+    // ModerationCaseDto.imageUrl: the reported photo itself.
+    imageUrl: mediaUrl(item.imageUrl),
+    imageHidden: !!item.imageHidden
   };
 }
 
@@ -554,8 +616,11 @@ const mock = {
     11: { commissionOverridePercent: 8, cancellationCutoffHoursOverride: null, providerCancelPenaltyPercentOverride: null, responseWindowMinutesOverride: null },
     12: { commissionOverridePercent: 12.5, cancellationCutoffHoursOverride: 4, providerCancelPenaltyPercentOverride: null, responseWindowMinutesOverride: 45 }
   },
+  safety: [
+    { id: 41, bookingId: 1182, bookingStatus: "IN_PROGRESS", homeService: true, address: "Street 9, Maadi, Cairo", actorId: 21, actorName: "Mariam Adel", actorRole: "CUSTOMER", actorPhone: "+201001234567", customerName: "Mariam Adel", customerPhone: "+201001234567", providerName: "Layla Beauty", providerPhone: "+201112223334", latitude: 29.9602, longitude: 31.2569, notes: "Provider is refusing to leave", resolved: false, createdAt: new Date(Date.now() - 6 * 60000).toISOString() }
+  ],
   dashboard: {
-    pendingVerification: 4, openComplaints: 2, openDisputes: 1, overdueSettlements: 2,
+    pendingVerification: 4, openComplaints: 2, openDisputes: 1, overdueSettlements: 2, openSos: 1,
     stats: [
       { label: "Customers", value: "12,840", delta: "+8.2%", icon: "Users" },
       { label: "Verified providers", value: "486", delta: "+12", icon: "BadgeCheck" },
@@ -579,7 +644,7 @@ const mock = {
   ],
   complaints: [
     { id: "c1", customer: "Layla Hassan", provider: "Nadia Studio", subject: "Service delivered late", when: "2 days ago", status: "OPEN", priority: "High" },
-    { id: "c2", customer: "Yara Aboud", provider: "Maadi Hammam", subject: "Booking double-charged", when: "3 days ago", status: "IN_REVIEW", priority: "High" },
+    { id: "c2", customer: "Yara Aboud", provider: "Maadi Hammam", subject: "Booking double-charged", when: "3 days ago", status: "UNDER_REVIEW", priority: "High" },
     { id: "c3", customer: "Karim Helmi", provider: "Omar Barber", subject: "Rude staff", when: "5 days ago", status: "OPEN", priority: "Medium" },
     { id: "c4", customer: "Aya Salem", provider: "Layla Beauty", subject: "No-show by provider", when: "1 week ago", status: "RESOLVED", priority: "Low" }
   ],
@@ -927,14 +992,26 @@ async function mockRequest(path, options = {}) {
   }
   if (path.match(/\/settlement-pause/) && options.method === "PATCH") return { success: true };
   if (path.startsWith("/terms?") || path === "/terms") {
+    const qs = new URLSearchParams(path.split("?")[1] || "");
+    const type = qs.get("type") || "CUSTOMER_TERMS";
     if (options.method === "POST") {
-      const qs = new URLSearchParams(path.split("?")[1] || "");
-      const v = { id: Date.now(), version: qs.get("version"), type: qs.get("type") || "CUSTOMER_TERMS", active: true, createdAt: new Date().toISOString(), contentEn: qs.get("contentEn") };
-      mock.termsVersions.forEach((t) => { t.active = false; });
+      const v = { id: Date.now(), version: qs.get("version"), type, active: true, createdAt: new Date().toISOString(), contentEn: qs.get("contentEn"), contentAr: qs.get("contentAr") || "" };
+      mock.termsVersions.forEach((t) => { if ((t.type || "CUSTOMER_TERMS") === type) t.active = false; });
       mock.termsVersions.unshift(v);
       return v;
     }
-    return mock.termsVersions;
+    return mock.termsVersions.filter((t) => (t.type || "CUSTOMER_TERMS") === type);
+  }
+  if (path.startsWith("/admin/safety")) {
+    const resolve = path.match(/^\/admin\/safety\/(\d+)\/resolve/);
+    if (resolve && options.method === "POST") {
+      const ev = mock.safety.find((s) => String(s.id) === resolve[1]);
+      const notes = new URLSearchParams(path.split("?")[1] || "").get("notes") || "";
+      if (ev) Object.assign(ev, { resolved: true, resolvedAt: new Date().toISOString(), resolvedByName: mock.user.fullName, resolutionNotes: notes });
+      return ev;
+    }
+    const status = new URLSearchParams(path.split("?")[1] || "").get("status") || "OPEN";
+    return mock.safety.filter((s) => status === "ALL" || (status === "RESOLVED" ? s.resolved : !s.resolved));
   }
   if (path === "/support/admin/settings") {
     if (options.method === "PATCH") {

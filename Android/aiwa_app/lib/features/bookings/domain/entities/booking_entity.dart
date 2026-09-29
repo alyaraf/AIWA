@@ -21,6 +21,11 @@ class BookingEntity extends Equatable {
   // Live-booking fields (BookingDto).
   final bool homeService;
   final double? travelFee;
+
+  /// Per-booking travel quote from the provider and its state
+  /// (PENDING = waiting for the customer, ACCEPTED, DECLINED).
+  final double? travelFeeQuote;
+  final String? travelFeeQuoteStatus;
   final String? paymentStatus;
   final String? cancelledBy;
   final DateTime? cancelledAt;
@@ -29,6 +34,12 @@ class BookingEntity extends Equatable {
   final bool penaltyApplied;
   final String? proposedDate;
   final String? proposedStartTime;
+
+  /// BookingDto.proposalExpiresAt — when an unanswered proposed slot lapses.
+  final DateTime? proposalExpiresAt;
+
+  /// Provider's note when completing without collecting cash.
+  final String? completionNote;
   final DateTime? checkedInAt;
   final bool reviewed;
   final String? providerCategory;
@@ -63,6 +74,8 @@ class BookingEntity extends Equatable {
     this.customerName,
     this.homeService = false,
     this.travelFee,
+    this.travelFeeQuote,
+    this.travelFeeQuoteStatus,
     this.paymentStatus,
     this.cancelledBy,
     this.cancelledAt,
@@ -71,6 +84,8 @@ class BookingEntity extends Equatable {
     this.penaltyApplied = false,
     this.proposedDate,
     this.proposedStartTime,
+    this.proposalExpiresAt,
+    this.completionNote,
     this.checkedInAt,
     this.reviewed = false,
     this.providerCategory,
@@ -99,6 +114,10 @@ class BookingEntity extends Equatable {
 
   bool get hasProposal => proposedDate != null && proposedStartTime != null;
 
+  /// The provider quoted a travel fee and is waiting for the customer.
+  bool get hasPendingTravelQuote =>
+      travelFeeQuoteStatus == 'PENDING' && travelFeeQuote != null;
+
   DateTime get scheduledDateTime {
     try {
       return DateTime.parse('$scheduledDate $scheduledTime');
@@ -119,7 +138,10 @@ class BookingEntity extends Equatable {
     checkedInAt,
     proposedDate,
     proposedStartTime,
+    proposalExpiresAt,
     reviewed,
     travelFee,
+    travelFeeQuote,
+    travelFeeQuoteStatus,
   ];
 }

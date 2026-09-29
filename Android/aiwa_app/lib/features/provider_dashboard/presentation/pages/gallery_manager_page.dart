@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../../core/constants/api_constants.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -32,8 +33,7 @@ class _GalleryManagerPageState extends State<GalleryManagerPage> {
   double? _progress;
   CancelToken? _cancel;
 
-  // BACKEND GAP: gallery GET returns bare URLs, no moderation flag, so no
-  // photo is ever marked hidden yet.
+  /// Photos moderation hid from the public gallery (GET /provider/gallery-images).
   final Set<String> _hidden = {};
 
   @override
@@ -43,14 +43,19 @@ class _GalleryManagerPageState extends State<GalleryManagerPage> {
   }
 
   Future<void> _load() async {
-    final r = await _repo.gallery(providerIdOf(context));
+    final r = await _repo.ownGallery();
     if (!mounted) return;
     setState(() {
       _error = r.fold(
         (f) => AppLocalizations.of(context).error(f.message),
         (_) => null,
       );
-      _items = r.fold((_) => _items, (g) => g);
+      r.fold((_) {}, (g) {
+        _items = g.urls;
+        _hidden
+          ..clear()
+          ..addAll(g.hidden);
+      });
     });
   }
 
@@ -316,7 +321,7 @@ class _Tile extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CachedNetworkImage(imageUrl: url, fit: BoxFit.cover),
+          CachedNetworkImage(imageUrl: ApiConstants.mediaUrl(url), fit: BoxFit.cover),
           if (hidden)
             Container(
               color: AppColors.scrim.withValues(alpha: .72),

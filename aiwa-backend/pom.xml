@@ -97,20 +97,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- MapStruct -->
-        <dependency>
-            <!-- ponytail: mapstruct + processor unused (no @Mapper anywhere), delete both, re-add when a real mapper is written -->
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>1.5.5.Final</version>
-        </dependency>
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct-processor</artifactId>
-            <version>1.5.5.Final</version>
-            <scope>provided</scope>
-        </dependency>
-
         <!-- Springdoc OpenAPI (Swagger UI) -->
         <dependency>
             <groupId>org.springdoc</groupId>

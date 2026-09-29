@@ -218,6 +218,8 @@ public class AdminUsersController {
         }
 
         u.setActive(false);
+        // End every session now, not when the access token expires.
+        u.setTokensValidAfter(java.time.Instant.now());
         userRepo.save(u);
         auditService.record("USER_DEACTIVATED", u.getFullName());
         return ResponseEntity.ok(ApiResponse.Success.of("User deactivated", null));
@@ -348,6 +350,8 @@ public class AdminUsersController {
         }
         String temp = generateTempPassword();
         target.setPassword(passwordEncoder.encode(temp));
+        // Sessions opened with the old password (possibly by whoever locked the user out) end now.
+        target.setTokensValidAfter(java.time.Instant.now());
         userRepo.save(target);
         auditService.record("PASSWORD_RESET", target.getFullName());
         notificationService.send(target.getId(), com.aiwa.enums.NotificationType.ACCOUNT_WARNING,

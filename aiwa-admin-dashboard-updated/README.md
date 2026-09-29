@@ -16,7 +16,7 @@ pnpm dev            # or: npm run dev
 ```
 Vite serves on http://127.0.0.1:5173.
 
-Mock mode is on by default (no backend needed). Any email/password signs you in.
+Mock mode is off by default. Set `VITE_USE_MOCKS=true` to run without a backend (any email/password then signs you in).
 To connect the Spring Boot backend, create a `.env`:
 ```
 VITE_USE_MOCKS=false

@@ -6,6 +6,13 @@ class ApiConstants {
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:8080/api',
   );
+  /// Backend media paths are relative to the API base ("/files/public/gallery/x.jpg");
+  /// image widgets need an absolute URL. Absolute URLs pass through unchanged.
+  static String mediaUrl(String path) =>
+      path.startsWith('http://') || path.startsWith('https://')
+      ? path
+      : '$baseUrl${path.startsWith('/') ? '' : '/'}$path';
+
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
   static const Duration sendTimeout = Duration(seconds: 60);
@@ -16,6 +23,8 @@ class ApiConstants {
   static const String refresh = '/auth/refresh';
   static const String me = '/auth/me';
   static const String meLanguage = '/auth/me/language';
+  // PATCH {phone, code} after send-otp to the NEW number; returns fresh tokens.
+  static const String mePhone = '/auth/me/phone';
   static const String mePreferences = '/auth/me/preferences';
   static const String sendOtp = '/auth/send-otp';
   static const String verifyOtp = '/auth/verify-otp';
@@ -51,7 +60,13 @@ class ApiConstants {
   static String providerAvailabilityDelete(String id) =>
       '/provider/availability/$id';
   static const String providerGalleryUpload = '/provider/gallery';
+  static const String providerGalleryImages = '/provider/gallery-images';
   static const String providerVerification = '/provider/verification/documents';
+  static const String providerServiceRadius = '/provider/mode/service-radius';
+  static String providerReviewReply(String id) => '/provider/reviews/$id/reply';
+
+  /// POST ?category=&lat=&lng= — "Notify me when someone joins".
+  static const String providerWaitlist = '/providers/waitlist';
 
   // Bookings
   static const String bookings = '/bookings';
@@ -78,16 +93,32 @@ class ApiConstants {
   static String bookingChatReport(String id, String messageId) =>
       '/bookings/$id/chat/$messageId/report';
   static String bookingSafety(String id) => '/bookings/$id/safety';
+  static String bookingSafetyResolve(String id, String eventId) =>
+      '/bookings/$id/safety/$eventId/resolve';
+
+  /// The other party's phone while the booking is live (Call button).
+  static String bookingContact(String id) => '/bookings/$id/contact';
+  static String bookingTravelFeeQuote(String id) =>
+      '/bookings/$id/travel-fee-quote';
+  static String bookingTravelFeeResponse(String id) =>
+      '/bookings/$id/travel-fee-response';
 
   // Saved addresses (AccountController)
   static const String savedAddresses = '/account/addresses';
   static String savedAddressById(String id) => '/account/addresses/$id';
+
+  // Trusted contacts (texted on SOS)
+  static const String trustedContacts = '/account/trusted-contacts';
+  static String trustedContactById(String id) => '/account/trusted-contacts/$id';
 
   /// DELETE: anonymize the account and cancel active bookings.
   static const String account = '/account';
 
   // Reviews
   static const String reviews = '/reviews';
+
+  /// Reviews the signed-in user wrote (totalElements = review count).
+  static const String myReviews = '/reviews/my';
 
   // Saved providers
   static const String savedProviders = '/users/me/saved';
@@ -98,6 +129,7 @@ class ApiConstants {
   static const String notifications = '/notifications';
   static const String notificationsUnread = '/notifications/unread-count';
   static const String notificationsReadAll = '/notifications/mark-all-read';
+  static String notificationRead(String id) => '/notifications/$id/read';
 
   // Complaints
   static const String complaints = '/complaints';

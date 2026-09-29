@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/constants/api_constants.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -34,12 +37,16 @@ class SafetyPoliciesPage extends StatefulWidget {
 
 class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
   String? _open;
-  ({String version, String content})? _terms;
+  TermsDoc? _terms;
 
   @override
   void initState() {
     super.initState();
-    sl<AuthRepository>().latestTerms('CUSTOMER_TERMS').then((r) {
+    final auth = context.read<AuthBloc>().state;
+    final provider = auth is AuthAuthenticated && auth.user.isProvider;
+    sl<AuthRepository>().latestTerms(termsTypeFor(provider: provider)).then((
+      r,
+    ) {
       if (mounted) r.fold((_) {}, (t) => setState(() => _terms = t));
     });
   }
@@ -49,6 +56,9 @@ class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
     final auth = context.watch<AuthBloc>().state;
     final accepted = auth is AuthAuthenticated
         ? auth.user.acceptedTermsVersion
+        : null;
+    final acceptedAt = auth is AuthAuthenticated
+        ? auth.user.termsAcceptedAt
         : null;
     final upToDate =
         accepted != null && (_terms == null || _terms!.version == accepted);
@@ -78,9 +88,13 @@ class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
                         tone: BannerTone.success,
                         icon: LucideIcons.circleCheck,
                         title: l.polUpToDate,
-                        // Backend gap: UserDto has no termsAcceptedAt, so the
-                        // date the prototype shows is replaced by the version.
-                        body: l.polUpToDateBody(accepted),
+                        // UserDto.termsAcceptedAt: the prototype shows the
+                        // acceptance date next to the version.
+                        body: l.polUpToDateBody(
+                          acceptedAt == null
+                              ? accepted
+                              : '$accepted, ${DateFormat.yMMMd(l.localeName).format(acceptedAt)}',
+                        ),
                       )
                     : InlineBanner(
                         tone: BannerTone.warn,
@@ -121,8 +135,11 @@ class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
                           child: _open == id
                               ? _PolicyPanel(
                                   text: id == 'terms' && _terms != null
-                                      ? _terms!.content
+                                      ? _terms!.textFor(l.localeName)
                                       : l.polPlaceholder(title),
+                                  pdfUrl: id == 'terms'
+                                      ? _terms?.pdfUrl
+                                      : null,
                                 )
                               : const SizedBox(width: double.infinity),
                         ),
@@ -165,7 +182,10 @@ class _SafetyPoliciesPageState extends State<SafetyPoliciesPage> {
 
 class _PolicyPanel extends StatelessWidget {
   final String text;
-  const _PolicyPanel({required this.text});
+
+  /// TermsPolicyDto.pdfUrl; the download button is disabled without one.
+  final String? pdfUrl;
+  const _PolicyPanel({required this.text, this.pdfUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -188,14 +208,17 @@ class _PolicyPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          // Backend gap: TermsPolicyDto carries no PDF link, so this stays
-          // disabled (the prototype wires no handler either).
           AiwaButton(
             label: AppLocalizations.of(context).polDownloadPdf,
             variant: AiwaButtonVariant.ghost,
             size: AiwaButtonSize.sm,
             icon: LucideIcons.download,
-            onPressed: null,
+            onPressed: pdfUrl == null || pdfUrl!.isEmpty
+                ? null
+                : () => launchUrl(
+                    Uri.parse(ApiConstants.mediaUrl(pdfUrl!)),
+                    mode: LaunchMode.externalApplication,
+                  ),
           ),
         ],
       ),

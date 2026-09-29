@@ -20,7 +20,7 @@ class VerificationRequestInfoTest {
 
     private final ProviderProfileRepository providerRepo = mock(ProviderProfileRepository.class);
     private final NotificationServiceImpl notificationService = mock(NotificationServiceImpl.class);
-    private final VerificationServiceImpl service = new VerificationServiceImpl(providerRepo, notificationService);
+    private final VerificationServiceImpl service = new VerificationServiceImpl(providerRepo, notificationService, mock(WaitlistService.class));
 
     private ProviderProfile provider() {
         User u = User.builder().id(50L).role(UserRole.PROVIDER).build();

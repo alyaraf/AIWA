@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../../core/constants/api_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -267,7 +268,7 @@ class CoverImage extends StatelessWidget {
     );
     if (url == null || url!.isEmpty) return placeholder;
     return CachedNetworkImage(
-      imageUrl: url!,
+      imageUrl: ApiConstants.mediaUrl(url!),
       fit: BoxFit.cover,
       placeholder: (_, __) => placeholder,
       errorWidget: (_, __, ___) => placeholder,

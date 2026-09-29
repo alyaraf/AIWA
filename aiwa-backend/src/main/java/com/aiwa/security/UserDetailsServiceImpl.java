@@ -25,7 +25,24 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         User user = userRepository.findByEmail(identifier)
                 .or(() -> userRepository.findByPhone(identifier))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + identifier));
+        return toDetails(user, identifier);
+    }
 
+    /**
+     * Load by the token's userId claim when its subject no longer matches — the
+     * user changed the email they signed in with. The principal name becomes the
+     * account's current email (or phone), which is what controllers look up by.
+     */
+    @Transactional(readOnly = true)
+    public UserDetails loadUserById(Long userId) throws UsernameNotFoundException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: #" + userId));
+        String current = user.getEmail() != null ? user.getEmail() : user.getPhone();
+        if (current == null) throw new UsernameNotFoundException("User has no identifier: #" + userId);
+        return toDetails(user, current);
+    }
+
+    private UserDetails toDetails(User user, String identifier) {
         List<GrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
 
@@ -41,12 +58,12 @@ public class UserDetailsServiceImpl implements UserDetailsService {
             }
         }
 
-        return new org.springframework.security.core.userdetails.User(
+        return new AiwaUserDetails(
                 identifier,
                 user.getPassword(),
                 user.isActive(),
-                true, true, true,
-                authorities
+                authorities,
+                user.getTokensValidAfter()
         );
     }
 }

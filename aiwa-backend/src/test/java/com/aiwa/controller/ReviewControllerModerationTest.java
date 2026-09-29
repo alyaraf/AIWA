@@ -23,7 +23,7 @@ import static org.mockito.Mockito.*;
 
 class ReviewControllerModerationTest {
 
-    private final ReviewService reviewService = mock(ReviewService.class);
+    private final com.aiwa.service.impl.ReviewServiceImpl reviewService = mock(com.aiwa.service.impl.ReviewServiceImpl.class);
     private final UserRepository userRepo = mock(UserRepository.class);
     private final AuditService auditService = mock(AuditService.class);
     private final ModerationCaseRepository moderationRepo = mock(ModerationCaseRepository.class);

@@ -44,13 +44,29 @@ public class AdminInboxController {
     private final ProviderProfileRepository providerRepo;
     private final ModerationCaseRepository moderationRepo;
     private final BookingRepository bookingRepo;
+    private final SafetyEventRepository safetyRepo;
 
     @GetMapping
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     @Operation(summary = "Recent admin-attention items across the whole app, newest first (ADMIN)")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.InboxItemDto>>> inbox(
             @RequestParam(defaultValue = "20") int limit) {
+        limit = Math.max(1, Math.min(limit, 100));
         int perSource = Math.max(1, Math.min(limit, 20));
         List<ApiResponse.InboxItemDto> items = new ArrayList<>();
+
+        // Open SOS alerts — always listed first regardless of age.
+        List<ApiResponse.InboxItemDto> sos = new ArrayList<>();
+        safetyRepo.findByTypeAndResolvedOrderByCreatedAtDesc(com.aiwa.enums.SafetyEventType.SOS, false,
+                        PageRequest.of(0, perSource))
+                .forEach(e -> sos.add(ApiResponse.InboxItemDto.builder()
+                        .id("sos-" + e.getId())
+                        .kind("SOS")
+                        .title("SOS — booking #" + e.getBooking().getId())
+                        .body(e.getActor().getFullName() + (e.getNotes() != null ? " — " + e.getNotes() : ""))
+                        .createdAt(e.getCreatedAt())
+                        .targetRoute("safety")
+                        .build()));
 
         // Complaints: users filing complaints against providers/customers.
         complaintRepo.findByStatusOrderByCreatedAtDesc(ComplaintStatus.OPEN, PageRequest.of(0, perSource))
@@ -126,8 +142,9 @@ public class AdminInboxController {
         items.sort(Comparator.comparing(
                 (ApiResponse.InboxItemDto it) -> it.getCreatedAt() == null ? LocalDateTime.MIN : it.getCreatedAt()
         ).reversed());
+        sos.addAll(items);
         return ResponseEntity.ok(ApiResponse.Success.of(
-                items.size() > limit ? items.subList(0, limit) : items
+                sos.size() > limit ? sos.subList(0, limit) : sos
         ));
     }
 }

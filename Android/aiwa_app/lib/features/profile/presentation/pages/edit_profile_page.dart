@@ -10,6 +10,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
+import '../../../../shared/widgets/aiwa_sheet.dart';
 import '../../../../shared/widgets/aiwa_text_field.dart';
 import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
@@ -93,10 +94,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
   bool get _wasArabic => _user?.preferredLanguage.toUpperCase() == 'AR';
 
   Future<Failure?> _persist() async {
-    // Backend gap: PATCH /auth/me takes no phone; a number change needs an
-    // OTP-verified endpoint.
-    if (_phone.text.trim() != (_user?.phone ?? '')) {
-      return const NotSupportedFailure('Changing your mobile number');
+    // A new number is confirmed by a code sent to it (PATCH /auth/me/phone);
+    // other sessions are signed out and the repository stores the new tokens.
+    final phone = _phone.text.trim();
+    if (phone != (_user?.phone ?? '')) {
+      final sent = await _repo.sendOtp(phone: phone);
+      if (sent.isLeft()) return sent.fold((f) => f, (_) => null);
+      if (!mounted) return null;
+      final l = AppLocalizations.of(context);
+      final code = await showAiwaSheet<String>(
+        context,
+        builder: (_) => _PhoneCodeSheet(phone: phone),
+      );
+      if (code == null) return ServerFailure(l.authEnterCode);
+      final changed = await _repo.changePhone(phone: phone, code: code);
+      if (changed.isLeft()) return changed.fold((f) => f, (_) => null);
     }
     final email = _email.text.trim();
     final profile = await _repo.updateProfile(
@@ -311,6 +323,71 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Code entry for a phone-number change; pops the 6-digit code (null: closed).
+class _PhoneCodeSheet extends StatefulWidget {
+  final String phone;
+  const _PhoneCodeSheet({required this.phone});
+
+  @override
+  State<_PhoneCodeSheet> createState() => _PhoneCodeSheetState();
+}
+
+class _PhoneCodeSheetState extends State<_PhoneCodeSheet> {
+  final _code = TextEditingController();
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  bool get _complete => RegExp(r'^[0-9]{6}$').hasMatch(_code.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l.authEnterCode,
+            style: AppTextStyles.h3.copyWith(fontSize: 22, height: 1.1),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            l.authCodeSentTo(widget.phone),
+            style: AppTextStyles.micro.copyWith(
+              fontSize: AppTextStyles.fsLabelSmPlus,
+              color: AppColors.ink3,
+            ),
+          ),
+          const SizedBox(height: 16),
+          AiwaTextField(
+            controller: _code,
+            placeholder: l.authCodePlaceholder,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            autoFocus: true,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 16),
+          AiwaButton(
+            label: l.authVerify,
+            size: AiwaButtonSize.lg,
+            fullWidth: true,
+            onPressed: _complete
+                ? () => Navigator.of(context).pop(_code.text.trim())
+                : null,
           ),
         ],
       ),

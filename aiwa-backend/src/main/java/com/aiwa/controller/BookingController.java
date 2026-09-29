@@ -6,7 +6,6 @@ import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.enums.BookingStatus;
 import com.aiwa.repository.UserRepository;
-import com.aiwa.service.BookingService;
 import com.aiwa.service.impl.BookingServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -36,7 +36,8 @@ public class BookingController {
             + "Pass a client-generated Idempotency-Key header (e.g. one UUID per tap of "
             + "\"Book\") so a retry or double-tap returns the original booking instead of "
             + "creating a duplicate; even without one, an identical request from the same "
-            + "customer within a few seconds is still deduplicated automatically.")
+            + "customer within a few seconds is still deduplicated automatically. "
+            + "A taken slot returns 409 with code booking.error.conflict.")
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> create(
             @Valid @RequestBody BookingRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -56,26 +57,43 @@ public class BookingController {
     }
 
     @GetMapping("/my")
-    @Operation(summary = "Get current customer's bookings")
+    @Operation(summary = "Get current customer's bookings, newest first — optional status filter, "
+            + "e.g. ?status=PENDING,ACCEPTED")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.BookingDto>>> myBookings(
+            @RequestParam(required = false) List<BookingStatus> status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                bookingService.getMyBookings(resolveUserId(userDetails), PageRequest.of(page, size))));
+                bookingService.getMyBookings(resolveUserId(userDetails), status, pageOf(page, size))));
     }
 
     @GetMapping("/provider")
-    @Operation(summary = "Get all bookings for the authenticated provider")
+    @Operation(summary = "Get the authenticated provider's bookings — optional status filter "
+            + "(?status=PENDING or ?status=COMPLETED,CANCELLED,NO_SHOW) and order "
+            + "(asc = soonest first, the default; desc = most recent first for past lists)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.BookingDto>>> providerBookings(
+            @RequestParam(required = false) List<BookingStatus> status,
+            @RequestParam(defaultValue = "asc") String order,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                bookingService.getProviderBookings(resolveUserId(userDetails), PageRequest.of(page, size))));
+                bookingService.getProviderBookings(resolveUserId(userDetails), status,
+                        "desc".equalsIgnoreCase(order), pageOf(page, size))));
     }
 
-    // ── Gap 8: Split status updates by semantic action ─────────────────────────
+    @GetMapping("/{id}/contact")
+    @Operation(summary = "The other party's phone for the Call button — only while the booking is "
+            + "ACCEPTED, ON_THE_WAY, ARRIVED or IN_PROGRESS")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.BookingContactDto>> contact(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                bookingService.getContact(id, resolveUserId(userDetails))));
+    }
+
+    // ── Status updates by semantic action ─────────────────────────────────────
 
     @PatchMapping("/{id}/accept")
     @Operation(summary = "Provider accepts a pending booking")
@@ -87,17 +105,14 @@ public class BookingController {
     }
 
     @PatchMapping("/{id}/cancel")
-    @Operation(summary = "Cancel a booking (customer or provider) with reason")
+    @Operation(summary = "Cancel a booking (customer or provider) with an optional reason")
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> cancel(
             @PathVariable Long id,
             @RequestParam(required = false) String reason,
             @AuthenticationPrincipal UserDetails userDetails) {
-        Long userId = resolveUserId(userDetails);
-        ApiResponse.BookingDto dto = bookingService.updateStatus(userId, id, BookingStatus.CANCELLED);
-        return ResponseEntity.ok(ApiResponse.Success.of("Booking cancelled", dto));
+        return ResponseEntity.ok(ApiResponse.Success.of("Booking cancelled",
+                bookingService.updateStatus(resolveUserId(userDetails), id, BookingStatus.CANCELLED, reason)));
     }
-
-    // ── Gap 4: Reject with reason and return alternative providers ─────────────
 
     @PatchMapping("/{id}/reject")
     @Operation(summary = "Provider rejects booking with reason + returns alternative providers")
@@ -137,13 +152,15 @@ public class BookingController {
     }
 
     @PatchMapping("/{id}/complete")
-    @Operation(summary = "Provider marks booking COMPLETED — cashCollected=false flags it DISPUTED")
+    @Operation(summary = "Provider marks booking COMPLETED — cashCollected=false flags it DISPUTED; "
+            + "note explains why cash wasn't collected")
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> complete(
             @PathVariable Long id,
             @RequestParam(defaultValue = "true") boolean cashCollected,
+            @RequestParam(required = false) String note,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of("Booking completed",
-                bookingService.complete(resolveUserId(userDetails), id, cashCollected)));
+                bookingService.complete(resolveUserId(userDetails), id, cashCollected, note)));
     }
 
     @PatchMapping("/{id}/no-show")
@@ -186,6 +203,27 @@ public class BookingController {
                 bookingService.respondToProposal(resolveUserId(userDetails), id, accept)));
     }
 
+    @PatchMapping("/{id}/travel-fee-quote")
+    @Operation(summary = "Provider quotes a travel fee for this home-service booking (customer must accept)")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> quoteTravelFee(
+            @PathVariable Long id,
+            @RequestParam BigDecimal amount,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of("Travel fee quoted",
+                bookingService.quoteTravelFee(resolveUserId(userDetails), id, amount)));
+    }
+
+    @PatchMapping("/{id}/travel-fee-response")
+    @Operation(summary = "Customer accepts (fee applied to the total) or declines (booking cancelled) a travel quote")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> travelFeeResponse(
+            @PathVariable Long id,
+            @RequestParam boolean accept,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                accept ? "Travel fee accepted" : "Travel fee declined",
+                bookingService.respondToTravelFeeQuote(resolveUserId(userDetails), id, accept)));
+    }
+
     @PatchMapping("/{id}/check-in")
     @Operation(summary = "Customer checks in at an on-site (venue) booking")
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> checkIn(
@@ -215,6 +253,10 @@ public class BookingController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(ApiResponse.Success.of(
                 bookingService.getAvailableSlots(providerId, serviceId, staffMemberId, date)));
+    }
+
+    private static Pageable pageOf(int page, int size) {
+        return PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 100)));
     }
 
     private Long resolveUserId(UserDetails ud) {

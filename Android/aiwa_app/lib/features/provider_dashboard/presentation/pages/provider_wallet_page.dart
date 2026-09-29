@@ -18,12 +18,12 @@ import '../../data/provider_manage_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-// BACKEND GAP: SettlementSummaryDto has no negative limit; the prototype's
-// EGP 500 is used until the platform setting is exposed.
-const _limit = 500.0;
+/// Fallback for an older backend that doesn't send
+/// SettlementSummaryDto.balanceLimit (aiwa.settlement.balance-limit).
+const _fallbackLimit = 500.0;
 
-/// Next settlement: 7 days after the oldest outstanding entry — mirrors
-/// SettlementController.dueDateOf, which the provider summary doesn't send.
+/// Fallback due date for an older backend without SettlementSummaryDto.dueDate:
+/// 7 days after the oldest outstanding entry (SettlementController.dueDateOf).
 DateTime? nextSettlement(List<Json> entries) {
   final dates = [
     for (final e in entries)
@@ -102,10 +102,18 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
     final entries = [
       for (final e in s?['entries'] as List? ?? const []) e as Json,
     ];
+    // dueAmount = everything still owed (DUE + OVERDUE).
     final due = (s?['dueAmount'] as num?)?.toDouble() ?? 0;
-    // Backend blocks bookings via settlementPaused; that's the over-limit flag.
-    final blocked = s?['settlementPaused'] == true || due >= _limit;
-    final next = nextSettlement(entries);
+    final limit = (s?['balanceLimit'] as num?)?.toDouble() ?? _fallbackLimit;
+    // settlementPaused is the backend's own "no new bookings" flag (over the
+    // limit or overdue); the local check only covers the gap until the hourly
+    // sweep catches up.
+    final blocked = s?['settlementPaused'] == true || due >= limit;
+    final next =
+        DateTime.tryParse('${s?['dueDate']}') ?? nextSettlement(entries);
+    // PATCH /provider/settlement/pay only reports a payment; finance confirms
+    // it. Until then paymentReportedAt is set and the button stays disabled.
+    final reported = s?['paymentReportedAt'] != null;
     final l = AppLocalizations.of(context);
 
     return Scaffold(
@@ -170,7 +178,9 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                               AppTheme.radiusXs,
                             ),
                             child: LinearProgressIndicator(
-                              value: (due / _limit).clamp(0, 1),
+                              value: limit <= 0
+                                  ? 0
+                                  : (due / limit).clamp(0, 1),
                               minHeight: 6,
                               backgroundColor: Colors.white.withValues(
                                 alpha: .18,
@@ -182,7 +192,7 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            l.walletLimit(l.egp(_limit)),
+                            l.walletLimit(l.egp(limit)),
                             style: AppTextStyles.micro.copyWith(
                               fontSize: 12,
                               color: AppColors.rose300,
@@ -208,6 +218,20 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                   icon: LucideIcons.ban,
                   title: l.walletBlocked,
                   body: l.walletBlockedBody,
+                ),
+              ),
+            if (reported && due > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppTheme.gutter,
+                  14,
+                  AppTheme.gutter,
+                  0,
+                ),
+                child: InlineBanner(
+                  tone: BannerTone.info,
+                  icon: LucideIcons.clock,
+                  body: l.walletPaymentReported,
                 ),
               ),
             Padding(
@@ -288,7 +312,9 @@ class _ProviderWalletPageState extends State<ProviderWalletPage> {
                 size: AiwaButtonSize.lg,
                 fullWidth: true,
                 loading: _paying,
-                onPressed: due > 0 && !_paying ? () => _settle(due) : null,
+                onPressed: due > 0 && !reported && !_paying
+                    ? () => _settle(due)
+                    : null,
               ),
             ),
           ],

@@ -24,6 +24,71 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Page<Booking> findByProviderIdOrderByBookingDateAscStartTimeAsc(Long providerId, Pageable pageable);
 
+    // ── Status-filtered lists (BE-9: tabs must not filter a single page client-side) ──
+    Page<Booking> findByCustomerIdAndStatusInOrderByCreatedAtDesc(
+            Long customerId, java.util.Collection<BookingStatus> statuses, Pageable pageable);
+
+    Page<Booking> findByProviderIdAndStatusInOrderByBookingDateAscStartTimeAsc(
+            Long providerId, java.util.Collection<BookingStatus> statuses, Pageable pageable);
+
+    Page<Booking> findByProviderIdAndStatusInOrderByBookingDateDescStartTimeDesc(
+            Long providerId, java.util.Collection<BookingStatus> statuses, Pageable pageable);
+
+    Page<Booking> findByProviderIdOrderByBookingDateDescStartTimeDesc(Long providerId, Pageable pageable);
+
+    /** Same slot check as {@link #existsConflict} but ignoring one booking (the one being moved). */
+    @Query("""
+        SELECT COUNT(b) > 0 FROM Booking b
+        WHERE b.provider.id = :providerId
+          AND b.id <> :excludeId
+          AND b.bookingDate = :date
+          AND b.status NOT IN (
+              com.aiwa.enums.BookingStatus.CANCELLED,
+              com.aiwa.enums.BookingStatus.REJECTED,
+              com.aiwa.enums.BookingStatus.EXPIRED)
+          AND b.startTime < :endTime
+          AND b.endTime > :startTime
+        """)
+    boolean existsConflictExcluding(@Param("providerId") Long providerId,
+                                    @Param("date") LocalDate date,
+                                    @Param("startTime") LocalTime startTime,
+                                    @Param("endTime") LocalTime endTime,
+                                    @Param("excludeId") Long excludeId);
+
+    @Query("""
+        SELECT COUNT(b) > 0 FROM Booking b
+        WHERE b.staffMember.id = :staffId
+          AND b.id <> :excludeId
+          AND b.bookingDate = :date
+          AND b.status NOT IN (
+              com.aiwa.enums.BookingStatus.CANCELLED,
+              com.aiwa.enums.BookingStatus.REJECTED,
+              com.aiwa.enums.BookingStatus.EXPIRED)
+          AND b.startTime < :endTime
+          AND b.endTime > :startTime
+        """)
+    boolean existsConflictForStaffExcluding(@Param("staffId") Long staffId,
+                                            @Param("date") LocalDate date,
+                                            @Param("startTime") LocalTime startTime,
+                                            @Param("endTime") LocalTime endTime,
+                                            @Param("excludeId") Long excludeId);
+
+    /** Providers currently out on a visit — the "busy" flag on discovery rows. */
+    @Query("""
+        SELECT DISTINCT b.provider.id FROM Booking b
+        WHERE b.provider.id IN :providerIds
+          AND b.status IN (
+              com.aiwa.enums.BookingStatus.ON_THE_WAY,
+              com.aiwa.enums.BookingStatus.ARRIVED,
+              com.aiwa.enums.BookingStatus.IN_PROGRESS)
+        """)
+    List<Long> findBusyProviderIds(@Param("providerIds") java.util.Collection<Long> providerIds);
+
+    /** Accepted-or-later bookings created in a window — admin dashboard deltas. */
+    long countByCreatedAtBetween(java.time.LocalDateTime from, java.time.LocalDateTime to);
+
+    long countByStatusAndCreatedAtBetween(BookingStatus status, java.time.LocalDateTime from, java.time.LocalDateTime to);
+
     List<Booking> findByProviderIdAndBookingDate(Long providerId, LocalDate date);
 
     List<Booking> findByStaffMemberIdAndBookingDate(Long staffMemberId, LocalDate date);
@@ -46,6 +111,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                    @Param("endTime") LocalTime endTime);
 
     List<Booking> findByCustomerIdAndStatus(Long customerId, BookingStatus status);
+
+    boolean existsBySavedAddressId(Long savedAddressId);
 
     /** Check for conflicting slots on the same provider/date (ignoring slot-releasing states) */
     @Query("""

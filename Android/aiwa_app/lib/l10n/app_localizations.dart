@@ -3965,20 +3965,26 @@ abstract class AppLocalizations {
   /// No description provided for @walletSettleTitle.
   ///
   /// In en, this message translates to:
-  /// **'Settle {amount} now?'**
+  /// **'Report paying {amount}?'**
   String walletSettleTitle(String amount);
 
   /// No description provided for @walletSettleBalance.
   ///
   /// In en, this message translates to:
-  /// **'Settle balance'**
+  /// **'I\'ve paid'**
   String get walletSettleBalance;
 
   /// No description provided for @walletSettled.
   ///
   /// In en, this message translates to:
-  /// **'Balance settled.'**
+  /// **'Payment reported. AIWA finance will confirm it shortly.'**
   String get walletSettled;
+
+  /// No description provided for @walletPaymentReported.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reported — waiting for AIWA finance to confirm.'**
+  String get walletPaymentReported;
 
   /// No description provided for @walletTitle.
   ///
@@ -4007,7 +4013,7 @@ abstract class AppLocalizations {
   /// No description provided for @walletBlockedBody.
   ///
   /// In en, this message translates to:
-  /// **'You can still finish any job you\'ve already accepted — completing those and settling this balance lifts the block automatically.'**
+  /// **'You can still finish any job you\'ve already accepted — completing those and settling this balance lifts the block once finance confirms your payment.'**
   String get walletBlockedBody;
 
   /// No description provided for @walletNextSettlement.
@@ -4043,7 +4049,7 @@ abstract class AppLocalizations {
   /// No description provided for @walletSettleNow.
   ///
   /// In en, this message translates to:
-  /// **'Settle balance now'**
+  /// **'I\'ve paid this balance'**
   String get walletSettleNow;
 
   /// No description provided for @walletCommission.
@@ -4297,6 +4303,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Approved by AIWA.'**
   String get ppApproved;
+
+  /// No description provided for @ppApprovedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved by AIWA on {date}.'**
+  String ppApprovedOn(String date);
 
   /// No description provided for @ppBusinessInfo.
   ///

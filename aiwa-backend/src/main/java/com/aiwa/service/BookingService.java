@@ -28,4 +28,5 @@ public interface BookingService {
     ApiResponse.BookingDto adminForceCancel(Long bookingId, String reason);
     ApiResponse.BookingDto adminResolveDispute(Long bookingId, boolean paid);
     ApiResponse.BookingDto adminResolveDispute(Long bookingId, String outcome);
+    ApiResponse.BookingDto adminResolveDispute(Long bookingId, String outcome, String reason);
 }

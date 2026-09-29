@@ -62,6 +62,11 @@ class BookingIdempotencyTest {
 
         when(userRepo.findById(CUSTOMER_ID)).thenReturn(Optional.of(customer));
         when(providerRepo.findById(7L)).thenReturn(Optional.of(provider));
+        when(providerRepo.findByIdForUpdate(7L)).thenReturn(Optional.of(provider));
+        when(availabilityRepo.findByProviderIdAndStaffMemberIsNullAndDayOfWeek(eq(7L), any()))
+                .thenReturn(Optional.of(com.aiwa.entity.Availability.builder().provider(provider)
+                        .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(22, 0))
+                        .slotDurationMinutes(30).available(true).build()));
         when(serviceRepo.findById(3L)).thenReturn(Optional.of(svc));
         when(bookingRepo.existsConflict(anyLong(), any(), any(), any())).thenReturn(false);
         when(bookingRepo.save(any(Booking.class))).thenAnswer(inv -> {

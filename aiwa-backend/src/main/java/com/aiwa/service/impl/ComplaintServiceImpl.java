@@ -30,17 +30,34 @@ public class ComplaintServiceImpl {
         User reporter = userRepo.findById(reporterId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", reporterId));
 
+        if (category == null || category.isBlank() || category.length() > 60) {
+            throw new BusinessException("complaint.error.category_invalid");
+        }
+        if (description == null || description.isBlank() || description.length() > 2000) {
+            throw new BusinessException("complaint.error.description_invalid");
+        }
+
         ProviderProfile targetProvider = targetProviderId != null
                 ? providerRepo.findById(targetProviderId).orElse(null) : null;
         Booking booking = bookingId != null
                 ? bookingRepo.findById(bookingId).orElse(null) : null;
+        // A complaint may only reference a booking the reporter took part in —
+        // otherwise anyone could attach (and have admins read) someone else's booking.
+        if (booking != null) {
+            boolean party = booking.getCustomer().getId().equals(reporterId)
+                    || booking.getProvider().getUser().getId().equals(reporterId);
+            if (!party) throw new com.aiwa.exception.ForbiddenException("error.access_denied");
+            if (targetProvider == null && booking.getCustomer().getId().equals(reporterId)) {
+                targetProvider = booking.getProvider();
+            }
+        }
 
         Complaint complaint = Complaint.builder()
                 .reporter(reporter)
                 .targetProvider(targetProvider)
                 .booking(booking)
-                .category(category)
-                .description(description)
+                .category(category.trim())
+                .description(description.trim())
                 .status(ComplaintStatus.OPEN)
                 .build();
 

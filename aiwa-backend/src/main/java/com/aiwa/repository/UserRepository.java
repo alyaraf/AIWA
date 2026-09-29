@@ -15,6 +15,8 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     Optional<User> findByPhone(String phone);
+    java.util.List<User> findByPushToken(String pushToken);
+    long countByRoleAndCreatedAtBetween(UserRole role, java.time.LocalDateTime from, java.time.LocalDateTime to);
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
     long countByRole(UserRole role);

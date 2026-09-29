@@ -1274,7 +1274,7 @@
   "staffRole": "Role",
   "staffSkillsHint": "Separate with commas.",
   "walletEyebrow": "Commission & settlement",
-  "walletSettleTitle": "Settle {amount} now?",
+  "walletSettleTitle": "Report paying {amount}?",
   "@walletSettleTitle": {
     "placeholders": {
       "amount": {
@@ -1282,8 +1282,9 @@
       }
     }
   },
-  "walletSettleBalance": "Settle balance",
-  "walletSettled": "Balance settled.",
+  "walletSettleBalance": "I've paid",
+  "walletSettled": "Payment reported. AIWA finance will confirm it shortly.",
+  "walletPaymentReported": "Payment reported — waiting for AIWA finance to confirm.",
   "walletTitle": "Wallet",
   "walletOwed": "Wallet balance owed to AIWA",
   "walletLimit": "Negative limit {amount} — settle weekly to keep taking bookings.",
@@ -1295,13 +1296,13 @@
     }
   },
   "walletBlocked": "Blocked from new bookings",
-  "walletBlockedBody": "You can still finish any job you've already accepted — completing those and settling this balance lifts the block automatically.",
+  "walletBlockedBody": "You can still finish any job you've already accepted — completing those and settling this balance lifts the block once finance confirms your payment.",
   "walletNextSettlement": "Next settlement",
   "walletStatus": "Status",
   "walletLedger": "Ledger",
   "walletNoCommission": "No commission yet",
   "walletNoCommissionBody": "Completed bookings show up here.",
-  "walletSettleNow": "Settle balance now",
+  "walletSettleNow": "I've paid this balance",
   "walletCommission": "Commission",
   "walletCommissionBooking": "Commission · Booking #{id}",
   "@walletCommissionBooking": {
@@ -1372,6 +1373,14 @@
   "ppVacationOff": "Pause new bookings temporarily.",
   "ppVerified": "Verified provider",
   "ppApproved": "Approved by AIWA.",
+  "ppApprovedOn": "Approved by AIWA on {date}.",
+  "@ppApprovedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "ppBusinessInfo": "Business info",
   "ppPhotos": "{count, plural, =1{1 photo} other{{count} photos}}",
   "@ppPhotos": {

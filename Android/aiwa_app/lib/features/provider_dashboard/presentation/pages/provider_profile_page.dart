@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -214,9 +215,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     icon: LucideIcons.badgeCheck,
                     title: l.ppVerified,
                     titleColor: AppColors.success700,
-                    // BACKEND GAP: no approval date (verifiedAt) in any
-                    // provider payload, so the date is dropped.
-                    body: l.ppApproved,
+                    // ProviderDetailDto.verifiedAt — the approval date.
+                    body: switch (DateTime.tryParse('${d?['verifiedAt']}')) {
+                      final at? => l.ppApprovedOn(
+                        DateFormat.yMMMd(l.localeName).format(at),
+                      ),
+                      null => l.ppApproved,
+                    },
                     bodyStyle: AppTextStyles.micro.copyWith(
                       fontSize: 12,
                       color: AppColors.success700.withValues(alpha: .85),

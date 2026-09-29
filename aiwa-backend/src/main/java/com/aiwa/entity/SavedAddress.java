@@ -27,4 +27,8 @@ public class SavedAddress extends BaseEntity {
 
     @Builder.Default
     private boolean defaultAddress = false;
+
+    /** Hidden from the list but kept because past bookings still point at it. */
+    @Builder.Default
+    private boolean archived = false;
 }

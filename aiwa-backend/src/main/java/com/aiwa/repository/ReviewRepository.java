@@ -19,6 +19,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     // Public listing excludes admin-hidden reviews.
     Page<Review> findByProviderIdAndHiddenFalseOrderByCreatedAtDesc(Long providerId, Pageable pageable);
 
+    /** Public listing: customer reviews of the provider only, excluding admin-hidden ones. */
+    Page<Review> findByProviderIdAndDirectionAndHiddenFalseOrderByCreatedAtDesc(
+            Long providerId, ReviewDirection direction, Pageable pageable);
+
     Page<Review> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     boolean existsByBookingIdAndDirection(Long bookingId, ReviewDirection direction);

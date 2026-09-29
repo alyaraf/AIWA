@@ -31,6 +31,9 @@ public class ApiResponse {
         private boolean success = false;
         private int status;
         private String error;
+        /** Stable machine-readable reason (the i18n key, e.g. "booking.error.conflict"),
+         *  so clients can branch without matching translated message text. */
+        private String code;
         private String message;
         private LocalDateTime timestamp = LocalDateTime.now();
     }
@@ -77,11 +80,20 @@ public class ApiResponse {
         private String profileImageUrl;
         private Language preferredLanguage;
         private boolean termsAccepted;
+        /** Version the user last accepted — the app compares it to /terms/latest. */
+        private String acceptedTermsVersion;
+        private LocalDateTime termsAcceptedAt;
         private boolean active;
         private java.util.List<String> permissions;
         private Long providerProfileId;
         private VerificationStatus providerStatus;
         private Long bookingCount;
+        /** Reviews this user has written (customer profile stats tile). */
+        private Long reviewCount;
+        /** "Your area" — where discovery starts when GPS isn't used. */
+        private String searchAreaLabel;
+        private Double searchAreaLatitude;
+        private Double searchAreaLongitude;
         private LocalDateTime createdAt;
     }
 
@@ -106,6 +118,13 @@ public class ApiResponse {
         private boolean vacationMode;
         private boolean offlineMode;
         private boolean settlementPaused;
+        /** Cheapest active service price ("From EGP …"); null when no active service. */
+        private BigDecimal startingPrice;
+        /** Accepting bookings AND inside today's working hours (Africa/Cairo). */
+        private Boolean openNow;
+        /** Currently on a visit (ON_THE_WAY / ARRIVED / IN_PROGRESS) — Book Now would wait. */
+        private Boolean busyNow;
+        private LocalDateTime verifiedAt;
     }
 
     // â”€â”€â”€ Provider Detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -135,6 +154,11 @@ public class ApiResponse {
         private List<StaffMemberDto> staffMembers;
         private List<String> galleryImages;
         private Double distanceKm;
+        private BigDecimal startingPrice;
+        private Boolean openNow;
+        private LocalDateTime verifiedAt;
+        /** How far the provider travels for home service (km); null = not stated. */
+        private Double serviceRadiusKm;
     }
 
     // â”€â”€â”€ Provider Verification (admin view) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -214,6 +238,8 @@ public class ApiResponse {
         private String phone;
         private String skills;
         private boolean active;
+        /** Services this staff member performs; empty = all of the provider's services. */
+        private List<Long> serviceIds;
     }
 
     @Data @Builder
@@ -255,11 +281,28 @@ public class ApiResponse {
         private String rejectionReason;
         private LocalDate proposedDate;
         private LocalTime proposedStartTime;
+        /** The proposed slot lapses at this time if the customer doesn't answer. */
+        private LocalDateTime proposalExpiresAt;
+        /** Provider's per-booking travel quote and where it stands (PENDING/ACCEPTED/DECLINED). */
+        private BigDecimal travelFeeQuote;
+        private TravelFeeQuoteStatus travelFeeQuoteStatus;
+        /** Provider's note when completing without collecting cash. */
+        private String completionNote;
         private boolean penaltyApplied;
         private BigDecimal commissionAmount;
         private LocalDateTime checkedInAt;
         private LocalDateTime createdAt;
         private boolean reviewed;
+    }
+
+    /** The other party's phone, released only while a booking is live. */
+    @Data @Builder
+    public static class BookingContactDto {
+        private Long bookingId;
+        private String name;
+        private String phone;
+        /** CUSTOMER or PROVIDER — who this number belongs to. */
+        private String role;
     }
 
     // â”€â”€â”€ Booking with alternatives (reject flow) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -282,6 +325,11 @@ public class ApiResponse {
         private java.util.List<String> quickTags;
         private ReviewDirection direction;
         private boolean hidden;
+        private Long bookingId;
+        private String serviceName;
+        /** Provider's public reply, if any. */
+        private String reply;
+        private LocalDateTime repliedAt;
         private LocalDateTime createdAt;
     }
 
@@ -319,6 +367,55 @@ public class ApiResponse {
         private Double latitude;
         private Double longitude;
         private String notes;
+        private boolean resolved;
+        private LocalDateTime resolvedAt;
+        private String resolvedByName;
+        private String resolutionNotes;
+        private LocalDateTime createdAt;
+    }
+
+    /** One SOS in the admin safety queue, with enough context to act on it. */
+    @Data @Builder
+    public static class AdminSafetyEventDto {
+        private Long id;
+        private Long bookingId;
+        private BookingStatus bookingStatus;
+        private boolean homeService;
+        private String address;
+        private Long actorId;
+        private String actorName;
+        private String actorPhone;
+        /** CUSTOMER or PROVIDER — who pressed SOS. */
+        private String actorRole;
+        private String customerName;
+        private String customerPhone;
+        private String providerName;
+        private String providerPhone;
+        private Double latitude;
+        private Double longitude;
+        private String notes;
+        private boolean resolved;
+        private LocalDateTime resolvedAt;
+        private String resolvedByName;
+        private String resolutionNotes;
+        private LocalDateTime createdAt;
+    }
+
+    @Data @Builder
+    public static class TrustedContactDto {
+        private Long id;
+        private String name;
+        private String phone;
+        private String relationship;
+        private LocalDateTime createdAt;
+    }
+
+    /** A gallery photo with its id (provider's own view / moderation). */
+    @Data @Builder
+    public static class GalleryImageDto {
+        private Long id;
+        private String url;
+        private boolean hidden;
         private LocalDateTime createdAt;
     }
 
@@ -338,7 +435,20 @@ public class ApiResponse {
     @Data @Builder
     public static class SettlementSummaryDto {
         private Long providerId;
+        /** Outstanding commission not yet overdue (DUE entries). */
         private BigDecimal dueAmount;
+        /** Outstanding commission past its due date (OVERDUE entries). */
+        private BigDecimal overdueAmount;
+        /** Everything still owed (DUE + OVERDUE). */
+        private BigDecimal owedAmount;
+        /** Owed balance at which new bookings pause until settled. */
+        private BigDecimal balanceLimit;
+        /** When the oldest outstanding entry falls due. */
+        private LocalDateTime dueDate;
+        /** SETTLED | WITHIN_LIMIT | OVERDUE */
+        private String status;
+        /** Set when the provider has reported paying and finance hasn't confirmed yet. */
+        private LocalDateTime paymentReportedAt;
         private boolean settlementPaused;
         private List<CommissionLedgerDto> entries;
     }
@@ -440,6 +550,11 @@ public class ApiResponse {
         private String reason;
         private ModerationStatus status;
         private String adminNotes;
+        /** For GALLERY_IMAGE cases: the reported photo, so the admin sees it before hiding. */
+        private String imageUrl;
+        private boolean imageHidden;
+        private Long providerId;
+        private String providerName;
         private LocalDateTime createdAt;
     }
 
@@ -618,6 +733,7 @@ public class ApiResponse {
         private String type;
         private String contentEn;
         private String contentAr;
+        private String pdfUrl;
         private boolean active;
         private LocalDateTime createdAt;
     }
@@ -632,6 +748,8 @@ public class ApiResponse {
         private long completedBookings;
         private BigDecimal totalRevenue;
         private Double averageRating;
+        /** Published customer reviews (ProviderProfile.totalReviews). */
+        private long totalReviews;
         private long totalClients;
         private List<BookingDto> todayBookings;
     }
@@ -652,6 +770,17 @@ public class ApiResponse {
         private long openDisputes;
         private long overdueSettlements;
         private BigDecimal totalRevenue;          // SRS FR-019
+        /** Unresolved SOS alerts — the safety queue badge. */
+        private long openSos;
+        // Windowed booking counts (by creation time, Africa/Cairo) for the
+        // "Today / 7 days / 30 days with delta" tiles.
+        private long bookingsToday;
+        private long bookingsLast7Days;
+        private long bookingsPrevious7Days;
+        private long bookingsLast30Days;
+        private long bookingsPrevious30Days;
+        private long newCustomersLast30Days;
+        private long newCustomersPrevious30Days;
     }
 }
 

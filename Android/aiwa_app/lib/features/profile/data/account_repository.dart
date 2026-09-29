@@ -67,9 +67,27 @@ class AccountRepository {
     ),
   );
 
-  /// Backend gap: AccountController has no PUT /account/addresses/{id}.
-  Future<Either<Failure, void>> updateAddress(String id) async =>
-      const Left(NotSupportedFailure('Editing a saved address'));
+  /// PUT /account/addresses/{id} — same body as add; isDefault=true makes it
+  /// the only default.
+  Future<Either<Failure, void>> updateAddress(
+    String id, {
+    required String label,
+    required String addressLine,
+    double? latitude,
+    double? longitude,
+    bool? isDefault,
+  }) => _run(
+    () => _api.put(
+      ApiConstants.savedAddressById(id),
+      data: {
+        'label': label,
+        'addressLine': addressLine,
+        'latitude': ?latitude,
+        'longitude': ?longitude,
+        'defaultAddress': ?isDefault,
+      },
+    ),
+  );
 
   Future<Either<Failure, void>> deleteAddress(String id) =>
       _run(() => _api.delete(ApiConstants.savedAddressById(id)));
@@ -79,19 +97,21 @@ class AccountRepository {
   Future<Either<Failure, void>> deleteAccount() =>
       _run(() => _api.delete(ApiConstants.account));
 
-  /// Header stats: total bookings and saved providers. Reviews written by
-  /// the customer have no endpoint, so that tile has no count.
-  Future<Either<Failure, ({int bookings, int favorites})>> stats() =>
-      _run(() async {
-        final res = await Future.wait([
-          _api.get(ApiConstants.myBookings, queryParameters: {'size': 1}),
-          _api.get(ApiConstants.savedProviders),
-        ]);
-        return (
-          bookings: (_data(res[0].data) as Map?)?['totalElements'] as int? ?? 0,
-          favorites: (_data(res[1].data) as List?)?.length ?? 0,
-        );
-      });
+  /// Header stats: total bookings, saved providers and reviews written
+  /// (each list's totalElements).
+  Future<Either<Failure, ({int bookings, int favorites, int reviews})>>
+  stats() => _run(() async {
+    final res = await Future.wait([
+      _api.get(ApiConstants.myBookings, queryParameters: {'size': 1}),
+      _api.get(ApiConstants.savedProviders),
+      _api.get(ApiConstants.myReviews, queryParameters: {'size': 1}),
+    ]);
+    return (
+      bookings: (_data(res[0].data) as Map?)?['totalElements'] as int? ?? 0,
+      favorites: (_data(res[1].data) as List?)?.length ?? 0,
+      reviews: (_data(res[2].data) as Map?)?['totalElements'] as int? ?? 0,
+    );
+  });
 
   // ── Notification preferences (NotificationPreferencesDto) ──────────
 
@@ -127,17 +147,45 @@ class AccountRepository {
   );
 
   // ── Trusted contacts ───────────────────────────────────────────────
-  // Backend gap: no trusted-contact endpoints exist yet.
+  // /account/trusted-contacts — texted by SMS when you press SOS (max 5).
 
-  Future<Either<Failure, List<TrustedContact>>> trustedContacts() async =>
-      const Left(NotSupportedFailure('Trusted contacts'));
+  static TrustedContact _contact(Map<String, dynamic> e) => (
+    id: '${e['id']}',
+    name: e['name'] as String? ?? '',
+    phone: e['phone'] as String? ?? '',
+    relationship: e['relationship'] as String? ?? '',
+  );
+
+  Future<Either<Failure, List<TrustedContact>>> trustedContacts() => _run(
+    () async => [
+      for (final e
+          in _data((await _api.get(ApiConstants.trustedContacts)).data)
+                  as List? ??
+              const [])
+        _contact(e as Map<String, dynamic>),
+    ],
+  );
 
   Future<Either<Failure, TrustedContact>> addTrustedContact({
     required String name,
     required String phone,
     required String relationship,
-  }) async => const Left(NotSupportedFailure('Adding a trusted contact'));
+  }) => _run(
+    () async => _contact(
+      _data(
+            (await _api.post(
+              ApiConstants.trustedContacts,
+              data: {
+                'name': name,
+                'phone': phone,
+                if (relationship.isNotEmpty) 'relationship': relationship,
+              },
+            )).data,
+          )
+          as Map<String, dynamic>,
+    ),
+  );
 
-  Future<Either<Failure, void>> removeTrustedContact(String id) async =>
-      const Left(NotSupportedFailure('Removing a trusted contact'));
+  Future<Either<Failure, void>> removeTrustedContact(String id) =>
+      _run(() => _api.delete(ApiConstants.trustedContactById(id)));
 }

@@ -20,11 +20,26 @@ abstract class HomeRemoteDataSource {
     int page = 0,
     int size = 20,
   });
+
+  /// POST /providers/waitlist — alert me once when a provider in [category]
+  /// (near lat/lng when given) is approved.
+  Future<void> joinWaitlist({String? category, double? lat, double? lng});
 }
 
 class HomeRemoteDataSourceImpl implements HomeRemoteDataSource {
   final ApiClient _client;
   HomeRemoteDataSourceImpl(this._client);
+
+  @override
+  Future<void> joinWaitlist({String? category, double? lat, double? lng}) =>
+      _client.post(
+        ApiConstants.providerWaitlist,
+        queryParameters: {
+          'category': ?category,
+          'lat': ?lat,
+          'lng': ?lng,
+        },
+      );
 
   @override
   Future<PagedData<ProviderSummaryModel>> getNearbyProviders({

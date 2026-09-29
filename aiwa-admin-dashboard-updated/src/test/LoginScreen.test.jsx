@@ -9,7 +9,20 @@ import * as apiModule from "../api.js";
  * on the floor means nobody can sign in. Pin both paths.
  */
 
+/** The form starts empty outside mock mode, so type credentials, then submit. */
+function signIn() {
+  fireEvent.change(screen.getByLabelText(/Email/), { target: { value: "admin@aiwa.com" } });
+  fireEvent.change(screen.getByLabelText(/Password/), { target: { value: "secret-password" } });
+  fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+}
+
 describe("<LoginScreen>", () => {
+  it("starts with empty credentials outside mock mode (no seeded account in the bundle)", () => {
+    render(<LoginScreen onLogin={vi.fn()} />);
+    expect(screen.getByLabelText(/Email/)).toHaveValue("");
+    expect(screen.getByLabelText(/Password/)).toHaveValue("");
+  });
+
   beforeEach(() => {
     window.localStorage.clear();
   });
@@ -23,7 +36,7 @@ describe("<LoginScreen>", () => {
     const onLogin = vi.fn();
     render(<LoginScreen onLogin={onLogin} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    signIn();
 
     await waitFor(() => expect(onLogin).toHaveBeenCalledTimes(1));
     expect(onLogin.mock.calls[0][0].user.fullName).toBe("S. Mahmoud");
@@ -39,7 +52,7 @@ describe("<LoginScreen>", () => {
     const onLogin = vi.fn();
     render(<LoginScreen onLogin={onLogin} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    signIn();
 
     await waitFor(() =>
       expect(screen.getByText("Invalid credentials")).toBeInTheDocument()
@@ -56,7 +69,7 @@ describe("<LoginScreen>", () => {
     const onLogin = vi.fn();
     render(<LoginScreen onLogin={onLogin} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    signIn();
 
     await waitFor(() =>
       expect(screen.getByText(/Enter your code/i)).toBeInTheDocument()
@@ -72,7 +85,7 @@ describe("<LoginScreen>", () => {
       mfaRequired: true, mfaToken: "challenge-token"
     });
     render(<LoginScreen onLogin={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    signIn();
 
     const codeInput = await screen.findByLabelText(/Authentication code/i);
     const verifyBtn = screen.getByRole("button", { name: /^Verify$/i });
@@ -90,7 +103,7 @@ describe("<LoginScreen>", () => {
       mfaRequired: true, mfaToken: "challenge-token"
     });
     render(<LoginScreen onLogin={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    signIn();
 
     const codeInput = await screen.findByLabelText(/Authentication code/i);
     fireEvent.change(codeInput, { target: { value: "12a3-b4c56789" } });
@@ -109,7 +122,7 @@ describe("<LoginScreen>", () => {
     const onLogin = vi.fn();
     render(<LoginScreen onLogin={onLogin} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    signIn();
     const codeInput = await screen.findByLabelText(/Authentication code/i);
     fireEvent.change(codeInput, { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: /^Verify$/i }));
@@ -125,7 +138,7 @@ describe("<LoginScreen>", () => {
     });
     render(<LoginScreen onLogin={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    signIn();
     await screen.findByLabelText(/Authentication code/i);
 
     fireEvent.click(screen.getByRole("button", { name: /Back to sign in/i }));
@@ -144,7 +157,7 @@ describe("<LoginScreen>", () => {
     );
     render(<LoginScreen onLogin={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    signIn();
     const codeInput = await screen.findByLabelText(/Authentication code/i);
     fireEvent.change(codeInput, { target: { value: "000000" } });
     fireEvent.click(screen.getByRole("button", { name: /^Verify$/i }));

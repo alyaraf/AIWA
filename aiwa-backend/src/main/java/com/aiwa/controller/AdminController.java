@@ -41,6 +41,7 @@ public class AdminController {
     private final ComplaintRepository complaintRepo;
     private final ReviewRepository reviewRepo;
     private final CommissionLedgerRepository ledgerRepo;
+    private final SafetyEventRepository safetyRepo;
 
     @GetMapping("/dashboard")
     @Operation(summary = "Platform dashboard stats (ADMIN) - FR-019")
@@ -75,6 +76,18 @@ public class AdminController {
                 .overdueSettlements(overdueSettlements)
                 .totalRevenue(totalRevenue)
                 .build();
+
+        java.time.LocalDateTime now = com.aiwa.util.AiwaTime.now();
+        java.time.LocalDateTime startOfToday = com.aiwa.util.AiwaTime.today().atStartOfDay();
+        dto.setOpenSos(safetyRepo.countByTypeAndResolvedFalse(com.aiwa.enums.SafetyEventType.SOS));
+        dto.setBookingsToday(bookingRepo.countByCreatedAtBetween(startOfToday, now));
+        dto.setBookingsLast7Days(bookingRepo.countByCreatedAtBetween(now.minusDays(7), now));
+        dto.setBookingsPrevious7Days(bookingRepo.countByCreatedAtBetween(now.minusDays(14), now.minusDays(7)));
+        dto.setBookingsLast30Days(bookingRepo.countByCreatedAtBetween(now.minusDays(30), now));
+        dto.setBookingsPrevious30Days(bookingRepo.countByCreatedAtBetween(now.minusDays(60), now.minusDays(30)));
+        dto.setNewCustomersLast30Days(userRepo.countByRoleAndCreatedAtBetween(UserRole.CUSTOMER, now.minusDays(30), now));
+        dto.setNewCustomersPrevious30Days(userRepo.countByRoleAndCreatedAtBetween(
+                UserRole.CUSTOMER, now.minusDays(60), now.minusDays(30)));
 
         return ResponseEntity.ok(ApiResponse.Success.of(dto));
     }

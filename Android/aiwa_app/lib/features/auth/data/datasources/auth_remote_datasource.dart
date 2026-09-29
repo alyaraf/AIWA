@@ -23,6 +23,13 @@ abstract class AuthRemoteDataSource {
 
   Future<void> sendOtp({required String phone});
   Future<void> verifyOtp({required String phone, required String code});
+
+  /// PATCH /auth/me/phone — the code was sent to the NEW number. Every other
+  /// session is signed out, so the returned token pair must replace ours.
+  Future<Map<String, String>> changePhone({
+    required String phone,
+    required String code,
+  });
   Future<UserModel> getCurrentUser();
   Future<UserModel> updateProfile({
     String? fullName,
@@ -54,6 +61,10 @@ abstract class AuthRemoteDataSource {
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   final ApiClient _client;
   AuthRemoteDataSourceImpl(this._client);
+
+  /// OTP destination: the backend takes {phone} (SMS) or {email} (email code).
+  static Map<String, String> _destination(String identifier) =>
+      identifier.contains('@') ? {'email': identifier} : {'phone': identifier};
 
   @override
   Future<Map<String, String>> login({
@@ -122,7 +133,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<void> sendOtp({required String phone}) async {
     final response = await _client.post(
       ApiConstants.sendOtp,
-      data: {'phone': phone},
+      data: _destination(phone),
     );
     final data = response.data as Map<String, dynamic>;
     if (data['success'] != true) {
@@ -136,7 +147,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<void> verifyOtp({required String phone, required String code}) async {
     final response = await _client.post(
       ApiConstants.verifyOtp,
-      data: {'phone': phone, 'code': code},
+      data: {..._destination(phone), 'code': code},
     );
     final data = response.data as Map<String, dynamic>;
     if (data['success'] != true) {
@@ -144,6 +155,26 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         message: data['message'] as String? ?? 'Invalid OTP',
       );
     }
+  }
+
+  @override
+  Future<Map<String, String>> changePhone({
+    required String phone,
+    required String code,
+  }) async {
+    final response = await _client.patch(
+      ApiConstants.mePhone,
+      data: {'phone': phone, 'code': code},
+    );
+    final data = response.data as Map<String, dynamic>;
+    if (data['success'] != true) {
+      throw ServerException(message: data['message'] as String? ?? 'Failed');
+    }
+    final authData = data['data'] as Map<String, dynamic>;
+    return {
+      'accessToken': authData['accessToken'] as String,
+      'refreshToken': authData['refreshToken'] as String,
+    };
   }
 
   @override
@@ -197,7 +228,11 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     required String newPassword,
   }) => _client.post(
     ApiConstants.resetPassword,
-    data: {'phone': phone, 'code': code, 'newPassword': newPassword},
+    data: {
+      ..._destination(phone),
+      'code': code,
+      'newPassword': newPassword,
+    },
   );
 
   /// Multipart `image`.

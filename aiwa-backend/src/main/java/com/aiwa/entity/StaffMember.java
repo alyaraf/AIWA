@@ -27,4 +27,20 @@ public class StaffMember extends BaseEntity {
 
     @Builder.Default
     private boolean active = true;
+
+    /**
+     * Services this staff member performs. Empty = performs every service of
+     * the provider (the behaviour before the link existed).
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "staff_services",
+            joinColumns = @JoinColumn(name = "staff_member_id"),
+            inverseJoinColumns = @JoinColumn(name = "service_id"))
+    @Builder.Default
+    private java.util.Set<Service> services = new java.util.HashSet<>();
+
+    public boolean performs(Service service) {
+        return services == null || services.isEmpty()
+                || services.stream().anyMatch(s -> s.getId().equals(service.getId()));
+    }
 }

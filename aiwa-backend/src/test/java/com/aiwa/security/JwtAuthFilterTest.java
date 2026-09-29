@@ -38,6 +38,7 @@ class JwtAuthFilterTest {
     private void primeValidToken(String identifier) {
         when(blacklist.isBlacklisted("tok")).thenReturn(false);
         when(jwtUtils.validateToken("tok")).thenReturn(true);
+        when(jwtUtils.isAccessToken("tok")).thenReturn(true);
         when(jwtUtils.getSubjectFromToken("tok")).thenReturn(identifier);
     }
 
