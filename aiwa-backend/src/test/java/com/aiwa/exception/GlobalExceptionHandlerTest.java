@@ -81,6 +81,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void anUnknownRouteIsA404NotA500() {
+        var response = handler.handleNoRoute(new org.springframework.web.servlet.resource.NoResourceFoundException(
+                org.springframework.http.HttpMethod.GET, "v3/api-docs"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().getMessage()).isEqualTo("No such endpoint");
+    }
+
+    @Test
     void invalidTokenExceptionMapsTo401() {
         var response = handler.handleInvalidToken(new InvalidTokenException("auth.error.token_invalid"));
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);

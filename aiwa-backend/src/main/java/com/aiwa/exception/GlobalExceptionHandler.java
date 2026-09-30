@@ -146,6 +146,16 @@ public class GlobalExceptionHandler {
                 .body(buildError(HttpStatus.BAD_REQUEST, "Validation Error", msg));
     }
 
+    /**
+     * An unknown URL (a typo, a bot probe, or the API docs that are switched off
+     * in prod) is a 404, not a 500 with an ERROR stack trace in the logs.
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse.Error> handleNoRoute(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(buildError(HttpStatus.NOT_FOUND, "Not Found", "No such endpoint"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse.Error> handleGeneral(Exception ex) {
         log.error("Unhandled exception", ex);
