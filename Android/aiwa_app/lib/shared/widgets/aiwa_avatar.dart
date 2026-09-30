@@ -64,8 +64,8 @@ class AiwaAvatar extends StatelessWidget {
             image: DecorationImage(image: imageProvider, fit: BoxFit.cover),
           ),
         ),
-        placeholder: (_, __) => _initials(initial, textColor, gradient),
-        errorWidget: (_, __, ___) => _initials(initial, textColor, gradient),
+        placeholder: (_, _) => _initials(initial, textColor, gradient),
+        errorWidget: (_, _, _) => _initials(initial, textColor, gradient),
       );
     } else {
       avatar = _initials(initial, textColor, gradient);

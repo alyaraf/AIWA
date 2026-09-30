@@ -43,9 +43,9 @@ class AiwaIconButton extends StatelessWidget {
         fg = AppColors.plum900;
         break;
       case AiwaIconButtonVariant.glass:
-        bg = Colors.white.withOpacity(0.85);
+        bg = Colors.white.withValues(alpha: 0.85);
         fg = AppColors.plum700;
-        border = Border.all(color: AppColors.divider.withOpacity(0.7));
+        border = Border.all(color: AppColors.divider.withValues(alpha: 0.7));
         break;
     }
     final shadow =
@@ -53,7 +53,7 @@ class AiwaIconButton extends StatelessWidget {
             variant == AiwaIconButtonVariant.glass
         ? [
             BoxShadow(
-              color: AppColors.shadowTint.withOpacity(0.05),
+              color: AppColors.shadowTint.withValues(alpha: 0.05),
               blurRadius: 2,
               offset: const Offset(0, 1),
             ),

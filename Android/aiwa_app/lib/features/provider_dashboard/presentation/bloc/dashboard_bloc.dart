@@ -10,9 +10,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
   DashboardBloc({
     required this.getDashboard,
-    required DashboardRepository repository,
-  }) : _repository = repository,
-       super(DashboardInitial()) {
+    required this._repository,
+  }) : super(DashboardInitial()) {
     on<DashboardLoadEvent>(_onLoad);
   }
 

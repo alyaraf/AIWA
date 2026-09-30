@@ -110,8 +110,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     if (phone != null) body['phone'] = phone;
     if (gender != null) body['gender'] = gender;
     if (profileImageUrl != null) body['profileImageUrl'] = profileImageUrl;
-    if (preferredLanguage != null)
+    if (preferredLanguage != null) {
       body['preferredLanguage'] = preferredLanguage;
+    }
 
     final response = await _client.post(ApiConstants.register, data: body);
     final data = response.data as Map<String, dynamic>;

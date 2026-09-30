@@ -27,7 +27,7 @@ flutter test --update-goldens test/goldens    # after an intended UI change
 Goldens (`test/goldens/`) cover Home, Provider profile, Booking (Book now)
 and Tracking in both palettes, LTR and RTL. They load the bundled fonts and
 serve fixtures captured from the seeded backend, so no network is needed.
-Goldens are platform-specific: regenerate them on the OS your CI runs.
+Goldens are platform-specific: they are recorded on Windows with Flutter 3.47.5, and CI runs them on windows-latest with that version. Regenerate them on Windows after an intended UI change or a Flutter upgrade.
 
 The end-to-end booking lifecycle (`integration_test/`) needs a device or
 emulator and a backend seeded by `LocalDataSeeder` (Spring `local` profile).

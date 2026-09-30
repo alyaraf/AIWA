@@ -18,8 +18,7 @@ class UnauthorizedFailure extends Failure {
 }
 
 class NetworkFailure extends Failure {
-  const NetworkFailure([String message = 'No internet connection'])
-    : super(message);
+  const NetworkFailure([super.message = 'No internet connection']);
 }
 
 class CacheFailure extends Failure {

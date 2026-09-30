@@ -76,12 +76,12 @@ class AppTheme {
 
   static List<BoxShadow> get shadow1 => [
     BoxShadow(
-      color: AppColors.shadowTint.withOpacity(0.06),
+      color: AppColors.shadowTint.withValues(alpha: 0.06),
       blurRadius: 2,
       offset: const Offset(0, 1),
     ),
     BoxShadow(
-      color: AppColors.shadowInk.withOpacity(0.04),
+      color: AppColors.shadowInk.withValues(alpha: 0.04),
       blurRadius: 1,
       offset: const Offset(0, 1),
     ),
@@ -89,12 +89,12 @@ class AppTheme {
 
   static List<BoxShadow> get shadow2 => [
     BoxShadow(
-      color: AppColors.shadowTint.withOpacity(0.08),
+      color: AppColors.shadowTint.withValues(alpha: 0.08),
       blurRadius: 14,
       offset: const Offset(0, 4),
     ),
     BoxShadow(
-      color: AppColors.shadowInk.withOpacity(0.04),
+      color: AppColors.shadowInk.withValues(alpha: 0.04),
       blurRadius: 4,
       offset: const Offset(0, 2),
     ),
@@ -102,12 +102,12 @@ class AppTheme {
 
   static List<BoxShadow> get shadow3 => [
     BoxShadow(
-      color: AppColors.shadowTint.withOpacity(0.14),
+      color: AppColors.shadowTint.withValues(alpha: 0.14),
       blurRadius: 32,
       offset: const Offset(0, 12),
     ),
     BoxShadow(
-      color: AppColors.shadowInk.withOpacity(0.06),
+      color: AppColors.shadowInk.withValues(alpha: 0.06),
       blurRadius: 10,
       offset: const Offset(0, 4),
     ),
@@ -250,7 +250,7 @@ class AppTheme {
         labelStyle: AppTextStyles.label,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.scrim.withOpacity(0.96),
+        backgroundColor: AppColors.scrim.withValues(alpha: 0.96),
         contentTextStyle: AppTextStyles.bodySm.copyWith(
           color: AppColors.bone,
           fontWeight: FontWeight.w500,
@@ -277,7 +277,7 @@ class AppTheme {
         activeTrackColor: AppColors.plum700,
         inactiveTrackColor: AppColors.divider,
         thumbColor: AppColors.plum700,
-        overlayColor: AppColors.plum700.withOpacity(0.12),
+        overlayColor: AppColors.plum700.withValues(alpha: 0.12),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

@@ -126,7 +126,7 @@ class _RoleCard extends StatelessWidget {
                   height: 42,
                   decoration: BoxDecoration(
                     color: active
-                        ? Colors.white.withOpacity(0.18)
+                        ? Colors.white.withValues(alpha: 0.18)
                         : AppColors.plum100,
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),

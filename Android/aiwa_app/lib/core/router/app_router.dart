@@ -242,10 +242,10 @@ final router = GoRouter(
       path: AppRoutes.forbidden,
       builder: (_, _) => const ForbiddenPage(),
     ),
-    GoRoute(path: AppRoutes.splash, builder: (_, __) => const SplashPage()),
+    GoRoute(path: AppRoutes.splash, builder: (_, _) => const SplashPage()),
     GoRoute(
       path: AppRoutes.roleChoice,
-      builder: (_, __) => const RoleChoicePage(),
+      builder: (_, _) => const RoleChoicePage(),
     ),
     GoRoute(
       path: AppRoutes.authChoice,
@@ -364,7 +364,7 @@ final router = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.providerPending,
-      builder: (_, __) => const ProviderPendingPage(),
+      builder: (_, _) => const ProviderPendingPage(),
     ),
     ShellRoute(
       navigatorKey: shellNavigatorKey,

@@ -264,7 +264,7 @@ class _HomePageState extends State<HomePage> {
             border: Border.all(color: AppColors.divider),
             boxShadow: [
               BoxShadow(
-                color: AppColors.shadowTint.withOpacity(0.06),
+                color: AppColors.shadowTint.withValues(alpha: 0.06),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -496,8 +496,8 @@ class _HomePageState extends State<HomePage> {
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: AppTheme.gutter),
             itemCount: 3,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (_, __) => const SkeletonTile(width: 200, height: 110),
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (_, _) => const SkeletonTile(width: 200, height: 110),
           ),
         ),
         const SizedBox(height: 22),

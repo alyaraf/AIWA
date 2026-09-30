@@ -32,7 +32,7 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
     final data = response.data['data'] ?? response.data;
     return PagedData.fromJson(
       data,
-      (e) => NotificationModel.fromJson(e as Map<String, dynamic>),
+      (e) => NotificationModel.fromJson(e),
     );
   }
 

@@ -67,14 +67,14 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
       queryParameters: {
         'page': page,
         'size': size,
-        if (status != null) 'status': status,
+        'status': ?status,
         if (newestFirst) 'order': 'desc',
       },
     );
     final data = response.data['data'] ?? response.data;
     return PagedData.fromJson(
       data,
-      (e) => BookingModel.fromJson(e as Map<String, dynamic>),
+      (e) => BookingModel.fromJson(e),
     );
   }
 

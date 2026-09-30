@@ -219,11 +219,11 @@ class _LanguageButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
           decoration: BoxDecoration(
-            color: filled ? AppColors.bone : AppColors.bone.withOpacity(0.12),
+            color: filled ? AppColors.bone : AppColors.bone.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(AppTheme.radiusPill),
             border: filled
                 ? null
-                : Border.all(color: AppColors.bone.withOpacity(0.25)),
+                : Border.all(color: AppColors.bone.withValues(alpha: 0.25)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

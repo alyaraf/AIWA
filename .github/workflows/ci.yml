@@ -89,7 +89,10 @@ jobs:
           VITE_API_BASE_URL: https://api.example.invalid/api
 
   flutter:
-    runs-on: ubuntu-latest
+    # The golden screenshots (test/goldens) are recorded on Windows; text
+    # anti-aliasing differs on Linux, so this job runs where they were made.
+    # Pinned so a new Flutter release can't shift the goldens silently.
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: Android/aiwa_app
@@ -98,10 +101,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.5
           cache: true
       - run: flutter pub get
       - run: flutter analyze
-      # Goldens are platform-specific; regenerate on Linux once, then enforce.
       - run: flutter test
 
   # OPS-6: deploy main to staging once backend and admin are green. Inactive

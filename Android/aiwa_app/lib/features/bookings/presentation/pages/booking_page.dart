@@ -21,7 +21,6 @@ import '../../../providers/domain/entities/provider_detail_entity.dart';
 import '../../../providers/presentation/bloc/provider_bloc.dart';
 import '../../../providers/presentation/bloc/provider_event.dart';
 import '../../../providers/presentation/bloc/provider_state.dart';
-import '../../domain/entities/booking_entity.dart';
 import '../../domain/entities/saved_address_entity.dart';
 import '../../domain/repositories/booking_repository.dart';
 import '../bloc/booking_bloc.dart';
@@ -761,7 +760,7 @@ class _DayChip extends StatelessWidget {
               style: AppTextStyles.labelSm.copyWith(
                 fontSize: 11,
                 letterSpacing: 1.1,
-                color: fg.withOpacity(0.7),
+                color: fg.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 2),

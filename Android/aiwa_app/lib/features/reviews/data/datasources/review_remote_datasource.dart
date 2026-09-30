@@ -28,7 +28,7 @@ class ReviewRemoteDataSourceImpl implements ReviewRemoteDataSource {
       data: {
         'bookingId': bookingId,
         'rating': rating,
-        if (comment != null) 'comment': comment,
+        'comment': ?comment,
         // ReviewRequest.quickTags; direction defaults to CUSTOMER_TO_PROVIDER.
         if (tags.isNotEmpty) 'quickTags': tags,
         'direction': ?direction,

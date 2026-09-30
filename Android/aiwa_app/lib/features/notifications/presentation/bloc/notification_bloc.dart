@@ -14,9 +14,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   NotificationBloc({
     required this.getNotifications,
     required this.getUnreadCount,
-    required NotificationRepository repository,
-  }) : _repository = repository,
-       super(NotificationInitial()) {
+    required this._repository,
+  }) : super(NotificationInitial()) {
     on<NotificationGetUnreadCountEvent>(_onGetCount);
     on<NotificationLoadEvent>(_onLoad);
     on<NotificationLoadMoreEvent>(_onLoadMore);

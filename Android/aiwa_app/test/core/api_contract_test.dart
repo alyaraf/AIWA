@@ -2,7 +2,6 @@
 // aiwa-backend/.../dto/response/ApiResponse.java.
 import 'package:aiwa_app/features/auth/data/models/user_model.dart';
 import 'package:aiwa_app/features/bookings/data/models/booking_model.dart';
-import 'package:aiwa_app/features/bookings/domain/entities/booking_entity.dart';
 import 'package:aiwa_app/features/home/data/models/provider_summary_model.dart';
 import 'package:aiwa_app/features/provider_dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:aiwa_app/features/providers/data/models/provider_detail_model.dart';

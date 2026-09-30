@@ -29,7 +29,7 @@ Future<bool> showConfirmSheet(
     context: context,
     useRootNavigator: true,
     backgroundColor: Colors.transparent,
-    barrierColor: AppColors.scrim.withOpacity(0.48),
+    barrierColor: AppColors.scrim.withValues(alpha: 0.48),
     isScrollControlled: true,
     sheetAnimationStyle: AnimationStyle(
       duration: AppTheme.dur3,

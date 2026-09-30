@@ -282,7 +282,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
               imageUrl: ApiConstants.mediaUrl(p.profileImageUrl!),
               fit: BoxFit.cover,
               memCacheWidth: (MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context)).round(),
-              errorWidget: (_, __, ___) =>
+              errorWidget: (_, _, _) =>
                   CoverImage(initial: p.displayName, hero: true),
             )
           else
@@ -296,7 +296,7 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    AppColors.plum900.withOpacity(0.55),
+                    AppColors.plum900.withValues(alpha: 0.55),
                   ],
                   stops: const [0.35, 1],
                 ),
@@ -593,8 +593,8 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
                       imageUrl: ApiConstants.mediaUrl(url),
                       fit: BoxFit.cover,
                       memCacheWidth: (MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context) / 3).round(),
-                      placeholder: (_, __) => const ShimmerBox(height: 120),
-                      errorWidget: (_, __, ___) =>
+                      placeholder: (_, _) => const ShimmerBox(height: 120),
+                      errorWidget: (_, _, _) =>
                           Container(color: AppColors.cream),
                     ),
                   ),

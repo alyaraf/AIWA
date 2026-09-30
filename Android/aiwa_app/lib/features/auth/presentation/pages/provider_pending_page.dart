@@ -114,12 +114,12 @@ class _ProviderPendingPageState extends State<ProviderPendingPage> {
                               width: 72,
                               height: 72,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.16),
+                                color: Colors.white.withValues(alpha: 0.16),
                                 borderRadius: BorderRadius.circular(
                                   AppTheme.radius22,
                                 ),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.18),
+                                  color: Colors.white.withValues(alpha: 0.18),
                                 ),
                               ),
                               child: Icon(
@@ -299,9 +299,9 @@ class _StatusRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [

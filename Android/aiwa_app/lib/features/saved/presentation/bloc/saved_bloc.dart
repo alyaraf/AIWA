@@ -11,9 +11,8 @@ class SavedBloc extends Bloc<SavedEvent, SavedState> {
 
   SavedBloc({
     required this.getSavedProviders,
-    required SavedRepository repository,
-  }) : _repository = repository,
-       super(SavedInitial()) {
+    required this._repository,
+  }) : super(SavedInitial()) {
     on<SavedLoadEvent>(_onLoad);
     on<SavedLoadMoreEvent>(_onLoadMore);
     on<SavedRemoveEvent>(_onRemove);

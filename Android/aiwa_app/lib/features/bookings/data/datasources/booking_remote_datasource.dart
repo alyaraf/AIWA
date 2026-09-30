@@ -110,7 +110,7 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
         'homeService': homeService,
         'savedAddressId': ?savedAddressId,
         'paymentMethod': 'CASH',
-        if (customerNote != null) 'notes': customerNote,
+        'notes': ?customerNote,
       },
       options: Options(headers: {'Idempotency-Key': ?idempotencyKey}),
     );
@@ -129,14 +129,14 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
       queryParameters: {
         'page': page,
         'size': size,
-        if (status != null) 'status': status,
+        'status': ?status,
       },
     );
     // The backend filters by status (comma-separated) before paging.
     final data = response.data['data'] ?? response.data;
     return PagedData.fromJson(
       data,
-      (e) => BookingModel.fromJson(e as Map<String, dynamic>),
+      (e) => BookingModel.fromJson(e),
     );
   }
 
