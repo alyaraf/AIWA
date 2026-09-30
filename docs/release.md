@@ -44,7 +44,7 @@ Optional: `APP_LINK_BASE=https://<domain>/p` for share links (FE-13).
 
 ## Servers (BE-22, OPS-8)
 
-`deploy/docker-compose.prod.yml` runs everything behind Caddy, which gets and
+`deploy/docker-compose.prod.yml` is the full stack (backend + admin panel) and runs everything behind Caddy, which gets and
 renews TLS certificates automatically:
 
 | Service  | Public? | Notes |
@@ -55,9 +55,13 @@ renews TLS certificates automatically:
 | postgres | no      | data volume; back it up (see OPS-2) |
 | redis    | no      | password required |
 
+`aiwa-backend/docker-compose.prod.yml` is the older backend-only file for hosts that
+already have their own TLS proxy; its guides stay valid.
+
 ```bash
 cd deploy
 cp .env.example .env   # fill in every value; never commit .env
+mkdir -p secrets        # put firebase-service-account.json here (git-ignored)
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
