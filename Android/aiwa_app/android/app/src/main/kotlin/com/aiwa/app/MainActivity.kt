@@ -1,4 +1,4 @@
-package com.aiwa.aiwa_app
+package com.aiwa.app
 
 import io.flutter.embedding.android.FlutterActivity
 
