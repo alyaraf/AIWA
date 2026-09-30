@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 
 import '../constants/api_constants.dart';
 import '../network/api_client.dart';
@@ -17,7 +17,9 @@ typedef PushTokenSource = Future<String?> Function();
 class PushRegistrar {
   PushRegistrar(this._api, {PushTokenSource? tokenSource, String? platform})
     : _tokenSource = tokenSource ?? _noToken,
-      _platform = platform ?? (Platform.isIOS ? 'IOS' : 'ANDROID');
+      _platform = platform ?? (_isIOS ? 'IOS' : 'ANDROID');
+
+  static bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
 
   final ApiClient _api;
   final PushTokenSource _tokenSource;

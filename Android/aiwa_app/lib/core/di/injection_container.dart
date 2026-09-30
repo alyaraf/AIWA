@@ -5,6 +5,7 @@ import 'package:get_it/get_it.dart';
 
 import '../network/api_client.dart';
 import '../push/push_registrar.dart';
+import '../push/push_service.dart';
 import '../storage/secure_storage.dart';
 
 // Auth
@@ -89,9 +90,10 @@ Future<void> initDependencies() async {
     SecureStorage(sl<FlutterSecureStorage>()),
   );
   sl.registerSingleton<ApiClient>(ApiClient(sl<SecureStorage>()));
-  // FE-3: pass tokenSource: () => FirebaseMessaging.instance.getToken() once
-  // the Firebase project exists; until then registration is a no-op.
-  sl.registerLazySingleton(() => PushRegistrar(sl<ApiClient>()));
+  // FE-3: the FCM token, or null (no-op) until Firebase is configured.
+  sl.registerLazySingleton(
+    () => PushRegistrar(sl<ApiClient>(), tokenSource: PushService.token),
+  );
   sl.registerFactory(() => AccountRepository(sl<ApiClient>()));
   sl.registerFactory(() => ProviderManageRepository(sl<ApiClient>()));
 

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/constants/api_constants.dart';
 import 'core/di/injection_container.dart' as di;
+import 'core/push/push_service.dart';
 import 'core/theme/theme_controller.dart';
 import 'app.dart';
 
@@ -26,6 +27,8 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
   await di.initDependencies();
+  // FE-3: no-op until the FIREBASE_* dart-defines are set (tool/build_release.sh).
+  await PushService.init();
   await ThemeController.load();
   await LocaleController.load();
   // --dart-define=SENTRY_DSN=…; empty (dev, tests) keeps Sentry off.

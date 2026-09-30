@@ -83,5 +83,9 @@
 	<string>To verify providers we capture your national ID and a live selfie.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a profile photo or upload your verification documents.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

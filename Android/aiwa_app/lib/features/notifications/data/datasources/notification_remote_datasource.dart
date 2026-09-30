@@ -30,10 +30,7 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
       queryParameters: {'page': page, 'size': size},
     );
     final data = response.data['data'] ?? response.data;
-    return PagedData.fromJson(
-      data,
-      (e) => NotificationModel.fromJson(e),
-    );
+    return PagedData.fromJson(data, (e) => NotificationModel.fromJson(e));
   }
 
   @override

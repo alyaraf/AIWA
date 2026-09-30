@@ -43,6 +43,12 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // FE-13: App Links host, from --dart-define=APP_LINK_BASE=https://<domain>.
+        // Without one the filter points at a reserved name that never verifies.
+        manifestPlaceholders["appLinkHost"] = dartDefines["APP_LINK_BASE"]
+            ?.takeIf { it.startsWith("https://") }
+            ?.removePrefix("https://")?.substringBefore("/")
+            ?: "app-links.invalid"
     }
 
     signingConfigs {

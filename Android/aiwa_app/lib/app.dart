@@ -4,12 +4,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection_container.dart';
 import 'l10n/app_localizations.dart';
 import 'core/network/api_client.dart';
+import 'core/push/push_registrar.dart';
+import 'core/push/push_service.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
+import 'features/notifications/notification_routes.dart';
 import 'features/notifications/presentation/bloc/notification_bloc.dart';
 import 'shared/widgets/offline_banner.dart';
 
@@ -43,6 +46,12 @@ class AiwaApp extends StatelessWidget {
               router.push(AppRoutes.termsReaccept);
             }
           }
+          // A push that cold-started the app is routed once someone is signed in.
+          final launch = PushService.pendingLaunchTap;
+          if (s is AuthAuthenticated && launch != null) {
+            PushService.pendingLaunchTap = null;
+            openPushTarget(launch, isProvider: s.user.isProvider);
+          }
         },
         child: const _ThemedApp(),
       ),
@@ -64,6 +73,8 @@ class _ThemedApp extends StatefulWidget {
 
 class _ThemedAppState extends State<_ThemedApp> {
   late final StreamSubscription<int> _authEvents;
+  late final StreamSubscription<Map<String, String>> _pushTaps;
+  late final StreamSubscription<String> _tokenRefresh;
 
   @override
   void initState() {
@@ -71,6 +82,20 @@ class _ThemedAppState extends State<_ThemedApp> {
     ThemeController.mode.addListener(_onThemeChanged);
     LocaleController.locale.addListener(_onLocaleChanged);
     _authEvents = ApiClient.authEvents.stream.listen(_onAuthEvent);
+    // FE-3: a tapped push opens its screen; a rotated FCM token is re-sent.
+    _pushTaps = PushService.taps.stream.listen((data) {
+      if (!mounted) return;
+      final auth = context.read<AuthBloc>().state;
+      if (auth is AuthAuthenticated) {
+        openPushTarget(data, isProvider: auth.user.isProvider);
+      }
+    });
+    _tokenRefresh = PushService.tokenRefresh.listen((_) {
+      if (!mounted) return;
+      if (context.read<AuthBloc>().state is AuthAuthenticated) {
+        sl<PushRegistrar>().register();
+      }
+    });
   }
 
   @override
@@ -78,6 +103,8 @@ class _ThemedAppState extends State<_ThemedApp> {
     ThemeController.mode.removeListener(_onThemeChanged);
     LocaleController.locale.removeListener(_onLocaleChanged);
     _authEvents.cancel();
+    _pushTaps.cancel();
+    _tokenRefresh.cancel();
     super.dispose();
   }
 
@@ -123,4 +150,14 @@ class _ThemedAppState extends State<_ThemedApp> {
       builder: (_, child) => Stack(children: [child!, const OfflineBanner()]),
     );
   }
+}
+
+/// Opens the screen for a tapped push ({type, relatedBookingId, ...}).
+void openPushTarget(Map<String, String> data, {required bool isProvider}) {
+  final to = notificationTarget(
+    type: data['type'] ?? '',
+    bookingId: data['relatedBookingId'],
+    isProvider: isProvider,
+  );
+  if (to != null) router.push(to);
 }

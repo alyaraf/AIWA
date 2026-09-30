@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../core/router/app_router.dart';
+import '../../notification_routes.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -144,29 +144,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         NotificationMarkReadEvent(n.id),
                       );
                     }
-                    final id = n.referenceId;
                     final auth = context.read<AuthBloc>().state;
-                    if (auth is AuthAuthenticated && auth.user.isProvider) {
-                      final to = _providerTarget(n.type, id);
-                      if (to != null) context.push(to);
-                      return;
-                    }
-                    if (n.type.toUpperCase().contains('TERMS')) {
-                      context.push(AppRoutes.termsReaccept);
-                    } else if (id != null &&
-                        RegExp(
-                          r'^(BOOKING|CHAT|PAYMENT|SAFETY)_',
-                        ).hasMatch(n.type)) {
-                      // Booking notifications open the live booking; the
-                      // rest reference other things, so they only mark read.
-                      context.push(switch (n.type) {
-                        'BOOKING_TIME_PROPOSED' => '/booking/$id/proposed-time',
-                        'CHAT_MESSAGE' => '/booking/$id/chat',
-                        'BOOKING_REJECTED' => '/booking/$id/rejected',
-                        'BOOKING_EXPIRED' => '/booking/$id/expired',
-                        _ => '/booking/$id/track',
-                      });
-                    }
+                    final to = notificationTarget(
+                      type: n.type,
+                      bookingId: n.referenceId,
+                      isProvider:
+                          auth is AuthAuthenticated && auth.user.isProvider,
+                    );
+                    if (to != null) context.push(to);
                   },
                 ),
               ),
@@ -192,24 +177,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ),
     ];
   }
-}
-
-/// Provider taps (FE-25): bookings open the job, money goes to the wallet,
-/// verification to the pending screen. Others only mark read.
-String? _providerTarget(String type, String? id) {
-  final t = type.toUpperCase();
-  if (t.contains('TERMS')) return AppRoutes.termsReaccept;
-  if (t.startsWith('COMMISSION_') || t.startsWith('SETTLEMENT_')) {
-    return AppRoutes.providerWallet;
-  }
-  if (t.startsWith('PROVIDER_VERIFICATION_') || t == 'PROVIDER_INFO_REQUESTED') {
-    return AppRoutes.providerPending;
-  }
-  if (id != null &&
-      RegExp(r'^(BOOKING|CHAT|PAYMENT|TRAVEL_FEE)_').hasMatch(t)) {
-    return AppRoutes.providerBooking(id);
-  }
-  return null;
 }
 
 class _NotificationRow extends StatelessWidget {

@@ -74,9 +74,10 @@ class _ProviderDetailPageState extends State<ProviderDetailPage> {
     }
   }
 
-  /// Link base for shared profiles. The aiwa:// scheme opens the installed app
-  /// (AndroidManifest / Info.plist). Pass --dart-define=APP_LINK_BASE=https://…
-  /// once a verified App Links / Universal Links host exists.
+  /// Link base for shared profiles (FE-13). Default aiwa://app opens the
+  /// installed app. With `--dart-define=APP_LINK_BASE=https://your-domain` links are
+  /// https App Links / Universal Links: the app opens when installed, the public
+  /// site's /provider/* page otherwise (deploy/Caddyfile).
   static const _linkBase = String.fromEnvironment(
     'APP_LINK_BASE',
     defaultValue: 'aiwa://app',

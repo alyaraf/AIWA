@@ -37,6 +37,23 @@
 	import common
 	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 	header Referrer-Policy "no-referrer"
+	# FE-13: App Links / Universal Links verification. ANDROID_CERT_SHA256 is the
+	# Play App Signing certificate fingerprint (Play Console -> App integrity);
+	# APPLE_TEAM_ID is from developer.apple.com -> Membership.
+	handle /.well-known/assetlinks.json {
+		header Content-Type application/json
+		respond `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.aiwa.app","sha256_cert_fingerprints":["{$ANDROID_CERT_SHA256}"]}}]` 200
+	}
+	handle /.well-known/apple-app-site-association {
+		header Content-Type application/json
+		respond `{"applinks":{"details":[{"appIDs":["{$APPLE_TEAM_ID}.com.aiwa.app"],"components":[{"/":"/provider/*"}]}]}}` 200
+	}
+	# A shared profile link opened where the app isn't installed.
+	handle /provider/* {
+		rewrite * /open-app.html
+		root * /srv/site
+		file_server
+	}
 	@publicApi path /api/terms/latest /api/support/contact
 	handle @publicApi {
 		reverse_proxy backend:8080

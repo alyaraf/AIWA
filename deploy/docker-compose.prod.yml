@@ -18,6 +18,9 @@ services:
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:?Set ADMIN_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
       SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN}
+      # FE-13 link verification; empty until the stores exist (links then open the web page).
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./site:/srv/site:ro

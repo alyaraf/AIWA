@@ -40,7 +40,7 @@ API_BASE_URL=https://api.<domain>/api SENTRY_DSN=<dsn> tool/build_release.sh app
 API_BASE_URL=https://api.<domain>/api SENTRY_DSN=<dsn> tool/build_release.sh ipa
 ```
 
-Optional: `APP_LINK_BASE=https://<domain>/p` for share links (FE-13).
+Optional: `APP_LINK_BASE=https://<domain>` makes shared profile links https App Links / Universal Links (FE-13); set `ANDROID_CERT_SHA256` and `APPLE_TEAM_ID` in `deploy/.env` so the site serves the verification files, and add `applinks:<domain>` to the Associated Domains capability in Xcode.
 
 ## Servers (BE-22, OPS-2, OPS-4, OPS-5, OPS-8)
 
