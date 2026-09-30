@@ -38,6 +38,9 @@ public class ProductionGuardConfig {
     @Value("${aiwa.email.api-url:}")
     private String emailApiUrl;
 
+    @Value("${aiwa.safety.oncall-phones:}")
+    private String onCallPhones;
+
     @PostConstruct
     public void validateProductionSettings() {
         if ("dev-log".equalsIgnoreCase(smsProvider)) {
@@ -60,6 +63,10 @@ public class ProductionGuardConfig {
         }
         if ("http".equalsIgnoreCase(emailProvider) && (emailApiUrl == null || emailApiUrl.isBlank())) {
             throw new IllegalStateException("EMAIL_API_URL must be configured when EMAIL_PROVIDER=http");
+        }
+        // Without it an SOS only reaches admins in the app — nobody is texted.
+        if (onCallPhones == null || onCallPhones.isBlank()) {
+            throw new IllegalStateException("SAFETY_ONCALL_PHONES must list at least one on-call number in prod");
         }
     }
 }

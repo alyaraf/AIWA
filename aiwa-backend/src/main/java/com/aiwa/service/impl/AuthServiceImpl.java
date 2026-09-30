@@ -207,9 +207,12 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
-        ApiResponse.AuthResponse response = buildAuthResponse(user, identifier);
-        tokenBlacklistService.blacklist(refreshToken);
-        return response;
+        // Spend the token atomically before minting new ones: of two parallel
+        // refreshes with the same token only one gets a new pair (BE-42).
+        if (!tokenBlacklistService.claim(refreshToken)) {
+            throw new InvalidTokenException("auth.error.token_invalid");
+        }
+        return buildAuthResponse(user, identifier);
     }
 
     @Override

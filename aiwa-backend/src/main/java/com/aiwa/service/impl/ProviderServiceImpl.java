@@ -440,9 +440,12 @@ public class ProviderServiceImpl implements ProviderService {
     private List<ProviderProfile> findProvidersInOrder(List<Long> ids) {
         Map<Long, ProviderProfile> byId = providerRepo.findAllById(ids).stream()
                 .collect(Collectors.toMap(ProviderProfile::getId, p -> p, (a, b) -> a, LinkedHashMap::new));
+        // Cached ids can be up to 5 minutes old: a provider suspended by an admin
+        // since then must not keep showing up in search (BE-41).
         return ids.stream()
                 .map(byId::get)
                 .filter(Objects::nonNull)
+                .filter(p -> p.getVerificationStatus() == com.aiwa.enums.VerificationStatus.APPROVED)
                 .toList();
     }
 

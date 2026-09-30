@@ -71,6 +71,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void aStaleWriteMapsTo409AskingToRefresh() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        var response = handler.handleStaleWrite(
+                new org.springframework.orm.ObjectOptimisticLockingFailureException(com.aiwa.entity.Booking.class, 55L));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getMessage()).contains("Refresh and try again");
+    }
+
+    @Test
     void invalidTokenExceptionMapsTo401() {
         var response = handler.handleInvalidToken(new InvalidTokenException("auth.error.token_invalid"));
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);

@@ -48,7 +48,7 @@ public class ComplaintController {
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                complaintService.getMyComplaints(resolveUserId(userDetails), PageRequest.of(page, size))));
+                complaintService.getMyComplaints(resolveUserId(userDetails), com.aiwa.util.Pages.of(page, size))));
     }
 
     @GetMapping("/admin/complaints")
@@ -59,7 +59,7 @@ public class ComplaintController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                complaintService.adminGetAll(status, PageRequest.of(page, size))));
+                complaintService.adminGetAll(status, com.aiwa.util.Pages.admin(page, size))));
     }
 
     @PostMapping("/admin/complaints/{id}/resolve")

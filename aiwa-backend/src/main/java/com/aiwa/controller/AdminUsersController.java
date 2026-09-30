@@ -49,7 +49,7 @@ public class AdminUsersController {
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = com.aiwa.util.Pages.admin(page, size);
         Page<User> users;
 
         if (q != null && !q.isBlank()) {

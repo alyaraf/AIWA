@@ -75,7 +75,7 @@ public class VerificationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                verificationService.getPendingVerifications(PageRequest.of(page, size))));
+                verificationService.getPendingVerifications(com.aiwa.util.Pages.admin(page, size))));
     }
 
     @GetMapping("/admin/verification")
@@ -86,7 +86,7 @@ public class VerificationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                verificationService.getByVerificationStatus(status, PageRequest.of(page, size))));
+                verificationService.getByVerificationStatus(status, com.aiwa.util.Pages.admin(page, size))));
     }
 
     @PostMapping("/admin/verification/{providerId}/approve")

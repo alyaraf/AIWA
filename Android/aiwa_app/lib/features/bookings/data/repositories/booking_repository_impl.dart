@@ -153,8 +153,17 @@ class BookingRepositoryImpl implements BookingRepository {
   });
 
   @override
-  Future<Either<Failure, void>> sendSos(String bookingId) =>
-      _guard(() => _remote.sendSos(bookingId));
+  Future<Either<Failure, void>> sendSos(
+    String bookingId, {
+    double? latitude,
+    double? longitude,
+  }) => _guard(
+    () => _remote.sendSos(bookingId, latitude: latitude, longitude: longitude),
+  );
+
+  @override
+  Future<Either<Failure, bool>> hasOpenSos(String bookingId) =>
+      _guard(() => _remote.hasOpenSos(bookingId));
 
   /// "I'm safe" — POST /bookings/{id}/safety/{eventId}/resolve.
   @override

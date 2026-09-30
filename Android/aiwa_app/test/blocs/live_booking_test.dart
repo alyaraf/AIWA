@@ -42,8 +42,23 @@ class _Repo implements BookingRepository {
     return Right(booking);
   }
 
+  /// What sendSos returns, and whether GET /safety then shows an open SOS.
+  Either<Failure, void> sosResult = const Right(null);
+  bool recorded = false;
+  ({double? lat, double? lng})? sentAt;
+
   @override
-  Future<Either<Failure, void>> sendSos(String id) async => const Right(null);
+  Future<Either<Failure, void>> sendSos(
+    String id, {
+    double? latitude,
+    double? longitude,
+  }) async {
+    sentAt = (lat: latitude, lng: longitude);
+    return sosResult;
+  }
+
+  @override
+  Future<Either<Failure, bool>> hasOpenSos(String id) async => Right(recorded);
 
   @override
   Future<Either<Failure, void>> resolveSos(String id) async =>
@@ -103,6 +118,54 @@ void main() {
     expect(await c.confirmPayment(paid: true), isFalse);
     expect(c.state.actionError, 'nope');
     expect(c.state.busy, isFalse);
+    await c.close();
+  });
+
+  test('SOS carries the location when there is a fix (FE-31)', () async {
+    final b = BookingModel.fromJson(_json);
+    final repo = _Repo(b);
+    final c = LiveBookingCubit(
+      repo,
+      '7',
+      initial: b,
+      locate: () async => (lat: 30.05, lng: 31.23),
+    );
+    await c.sos();
+    expect(repo.sentAt, (lat: 30.05, lng: 31.23));
+    expect(c.state.sos, SosStage.notified);
+    await c.close();
+  });
+
+  test('SOS without a fix is still sent', () async {
+    final b = BookingModel.fromJson(_json);
+    final repo = _Repo(b);
+    final c = LiveBookingCubit(repo, '7', initial: b, locate: () async => null);
+    await c.sos();
+    expect(repo.sentAt, (lat: null, lng: null));
+    expect(c.state.sos, SosStage.notified);
+    await c.close();
+  });
+
+  test('a timed-out SOS that was recorded shows as sent, not failed', () async {
+    final b = BookingModel.fromJson(_json);
+    final repo = _Repo(b)
+      ..sosResult = const Left(NetworkFailure('Connection timed out'))
+      ..recorded = true;
+    final c = LiveBookingCubit(repo, '7', initial: b, locate: () async => null);
+    await c.sos();
+    expect(c.state.sos, SosStage.notified);
+    expect(c.state.actionError, isNull);
+    await c.close();
+  });
+
+  test('an SOS that really failed says so', () async {
+    final b = BookingModel.fromJson(_json);
+    final repo = _Repo(b)
+      ..sosResult = const Left(NetworkFailure('Connection timed out'));
+    final c = LiveBookingCubit(repo, '7', initial: b, locate: () async => null);
+    await c.sos();
+    expect(c.state.sos, SosStage.none);
+    expect(c.state.actionError, 'Connection timed out');
     await c.close();
   });
 }

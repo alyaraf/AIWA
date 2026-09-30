@@ -80,7 +80,11 @@ src/main/java/com/aiwa/
 
 ### 1 – Run with Docker Compose (recommended)
 
+The app refuses to start with the checked-in default JWT secret, so create a
+`.env` next to `docker-compose.yml` with your own first:
+
 ```bash
+echo "JWT_SECRET=$(openssl rand -base64 48)" > .env
 docker-compose up --build
 ```
 

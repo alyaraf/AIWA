@@ -45,7 +45,10 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
-      JWT_SECRET: aiwa-super-secret-key-change-in-production-2024
+      # Required: the checked-in default is refused by JwtSecretGuardConfig on this
+      # (default) profile, which made the container restart-loop (BE-43).
+      # Put a long random value in .env next to this file (see .env.example).
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in aiwa-backend/.env - e.g. openssl rand -base64 48}
     ports:
       - "8080:8080"
     restart: on-failure

@@ -168,7 +168,7 @@ public class AdminController {
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ReviewDto>>> reviews(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = com.aiwa.util.Pages.admin(page, size);
         Page<Review> reviews = reviewRepo.findAllByOrderByCreatedAtDesc(pageable);
         List<ApiResponse.ReviewDto> dtos = reviews.getContent().stream().map(this::toReviewDto).toList();
         return ResponseEntity.ok(ApiResponse.Success.of(new PageImpl<>(dtos, pageable, reviews.getTotalElements())));
@@ -180,7 +180,7 @@ public class AdminController {
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ComplaintDto>>> flags(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = com.aiwa.util.Pages.admin(page, size);
         Page<Complaint> flags = complaintRepo.findByFlaggedTrueOrderByCreatedAtDesc(pageable);
         List<ApiResponse.ComplaintDto> dtos = flags.getContent().stream().map(this::toComplaintDto).toList();
         return ResponseEntity.ok(ApiResponse.Success.of(new PageImpl<>(dtos, pageable, flags.getTotalElements())));

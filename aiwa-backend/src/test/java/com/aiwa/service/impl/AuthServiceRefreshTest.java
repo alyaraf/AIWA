@@ -39,6 +39,7 @@ class AuthServiceRefreshTest {
         when(jwtUtils.validateToken("refresh")).thenReturn(true);
         when(jwtUtils.isRefreshToken("refresh")).thenReturn(true);
         when(jwtUtils.getSubjectFromToken("refresh")).thenReturn(identifier);
+        when(blacklist.claim("refresh")).thenReturn(true);
     }
 
     @Test
@@ -61,8 +62,21 @@ class AuthServiceRefreshTest {
 
         service.refreshToken("refresh");
 
-        // The old refresh token is revoked, so a stolen copy can't mint sessions in parallel.
-        verify(blacklist).blacklist("refresh");
+        // The old refresh token is spent, so a stolen copy can't mint sessions in parallel.
+        verify(blacklist).claim("refresh");
+    }
+
+    @Test
+    void aSecondConcurrentUseOfTheSameRefreshTokenIsRejected() {
+        primeToken("live@x.com");
+        User active = User.builder().id(1L).email("live@x.com").role(UserRole.CUSTOMER).active(true).build();
+        when(userRepo.findByEmail("live@x.com")).thenReturn(Optional.of(active));
+        // The other request claimed it first (Redis SET NX lost).
+        when(blacklist.claim("refresh")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.refreshToken("refresh"))
+                .isInstanceOf(InvalidTokenException.class);
+        verify(jwtUtils, never()).generateRefreshToken(any());
     }
 
     @Test

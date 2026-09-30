@@ -43,6 +43,9 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        # Lazy relations on list pages (customer, provider, service, staff…)
+        # load in batches of up to 50 instead of one query per row (BE-39).
+        default_batch_fetch_size: 50
     # Several controllers map entities with lazy relations after the repository
     # call returns. Every manual and automated run so far used open-in-view=true
     # (the local profile); with it off, those endpoints throw

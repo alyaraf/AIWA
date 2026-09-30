@@ -32,6 +32,27 @@ public class TokenBlacklistService {
     }
 
     /**
+     * Atomically spends a single-use token (refresh rotation, BE-42): one Redis
+     * SET NX with the token's remaining lifetime. Two parallel refreshes with the
+     * same token can no longer both succeed — only the first claim wins.
+     *
+     * @return true when this call claimed the token; false when it was already
+     * spent or logged out. Fails open on a Redis outage, like the blacklist check.
+     */
+    public boolean claim(String token) {
+        if (token == null || token.isBlank()) return false;
+        long ttlMillis = jwtUtils.getRemainingValidityMillis(token);
+        if (ttlMillis <= 0) return false;
+        try {
+            if (redis.exists(legacyKey(token))) return false;
+            return redis.setIfAbsent(key(token), "1", Duration.ofMillis(ttlMillis));
+        } catch (RuntimeException e) {
+            log.warn("Refresh-token claim failed (Redis unavailable?) — allowing it: {}", e.getMessage());
+            return true;
+        }
+    }
+
+    /**
      * @return true only when Redis is reachable AND confirms this exact token was
      * explicitly logged out. A Redis outage/hiccup here must NOT be treated as
      * "blacklisted" — that would silently deauthenticate every signed-in user on

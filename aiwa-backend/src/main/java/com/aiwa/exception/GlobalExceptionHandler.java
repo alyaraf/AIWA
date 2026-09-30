@@ -43,6 +43,13 @@ public class GlobalExceptionHandler {
         return keyed(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests", ex.getMessage());
     }
 
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse.Error> handleStaleWrite(org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+        // Someone else changed the same booking/profile first (@Version, BE-38):
+        // the client should reload and try again rather than overwrite it.
+        return keyed(HttpStatus.CONFLICT, "Conflict", "error.concurrent_update");
+    }
+
     @ExceptionHandler(org.springframework.dao.PessimisticLockingFailureException.class)
     public ResponseEntity<ApiResponse.Error> handleLockTimeout(org.springframework.dao.PessimisticLockingFailureException ex) {
         // Two bookings raced for the same provider calendar and this one lost the

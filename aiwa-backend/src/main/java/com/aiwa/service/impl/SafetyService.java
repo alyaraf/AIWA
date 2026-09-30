@@ -14,6 +14,8 @@ import com.aiwa.repository.*;
 import com.aiwa.service.SmsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Executor;
 
 /**
  * Safety events during a booking, and the SOS incident flow (BE-4).
@@ -53,6 +56,11 @@ public class SafetyService {
 
     @Value("${aiwa.safety.oncall-phones:}")
     private String onCallPhones;
+
+    /** The push pool (PushExecutorConfig): SMS latency must not hold the SOS request open. */
+    @Autowired
+    @Qualifier("pushExecutor")
+    private Executor smsExecutor;
 
     // ── Participant side ─────────────────────────────────────────────────────
 
@@ -102,7 +110,7 @@ public class SafetyService {
                 user.getFullName() + " marked themselves safe on booking #" + event.getBooking().getId() + ".",
                 user.getFullName() + " أكد أنه بأمان في الحجز رقم " + event.getBooking().getId() + ".");
         String text = user.getFullName() + " marked themselves safe on AIWA. Thank you for standing by.";
-        afterCommit(() -> contactsOf(user).forEach(c -> smsService.send(c.getPhone(), text)));
+        textAfterCommit(contactsOf(user).stream().map(TrustedContact::getPhone).toList(), text);
         return toDto(event);
     }
 
@@ -176,11 +184,8 @@ public class SafetyService {
         String contactText = actor.getFullName() + " triggered an SOS on AIWA during a booking" + where(event)
                 + ". AIWA support has been alerted. If you can't reach them, call 122.";
         List<String> supportPhones = onCallNumbers();
-        List<TrustedContact> contacts = contactsOf(actor);
-        afterCommit(() -> {
-            supportPhones.forEach(p -> smsService.send(p, supportText));
-            contacts.forEach(c -> smsService.send(c.getPhone(), contactText));
-        });
+        textAfterCommit(supportPhones, supportText);
+        textAfterCommit(contactsOf(actor).stream().map(TrustedContact::getPhone).toList(), contactText);
         if (supportPhones.isEmpty()) {
             log.warn("SOS on booking #{} — no on-call phone configured (aiwa.safety.oncall-phones)", booking.getId());
         }
@@ -218,24 +223,35 @@ public class SafetyService {
                 : "";
     }
 
-    private static void afterCommit(Runnable r) {
-        Runnable guarded = () -> {
+    /**
+     * Texts each number after commit (a rolled-back request never texts anyone),
+     * one background task per number: the SOS response doesn't wait on a slow
+     * gateway (5 s connect + 10 s read per send), and one failed send doesn't
+     * stop the others.
+     */
+    private void textAfterCommit(List<String> phones, String text) {
+        if (phones.isEmpty()) return;
+        Runnable fanOut = () -> phones.forEach(phone -> smsExecutor.execute(() -> {
             try {
-                r.run();
+                smsService.send(phone, text);
             } catch (RuntimeException e) {
-                log.warn("Safety SMS fan-out failed: {}", e.getMessage());
+                log.warn("Safety SMS to {} failed: {}", mask(phone), e.getMessage());
             }
-        };
+        }));
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    guarded.run();
+                    fanOut.run();
                 }
             });
         } else {
-            guarded.run();
+            fanOut.run();
         }
+    }
+
+    private static String mask(String phone) {
+        return phone == null || phone.length() < 4 ? "***" : "***" + phone.substring(phone.length() - 3);
     }
 
     private Booking loadAuthorizedBooking(Long bookingId, Long userId) {

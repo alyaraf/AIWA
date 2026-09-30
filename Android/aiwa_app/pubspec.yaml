@@ -100,7 +100,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
-    - assets/animations/
     # Bundled so google_fonts never downloads at runtime (see main.dart).
     - assets/google_fonts/
 

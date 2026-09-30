@@ -76,6 +76,7 @@ class ApiFlowIntegrationTest {
     @Autowired NotificationRepository notificationRepo;
     @Autowired CommissionLedgerRepository ledgerRepo;
     @Autowired GalleryImageRepository galleryRepo;
+    @Autowired BookingRepository bookingRepo;
     @Autowired PasswordEncoder encoder;
     @Autowired RedisRuntimeService redis;
     @MockBean SmsService smsService;
@@ -377,7 +378,8 @@ class ApiFlowIntegrationTest {
                 .andExpect(status().isCreated())).get("id").asLong();
 
         // Trusted contact texted; the provider is not told and can't see it.
-        verify(smsService).send(eq("+201099999999"), contains("SOS"));
+        // Texts go out on the background pool after commit (BE-37).
+        verify(smsService, timeout(5000)).send(eq("+201099999999"), contains("SOS"));
         mvc.perform(get("/bookings/" + id + "/safety").header("Authorization", bearer(pTok)))
                 .andExpect(jsonPath("$.data.length()").value(0));
         assertThat(notificationRepo.findByUserIdOrderByCreatedAtDesc(p.user().getId(),
@@ -461,6 +463,49 @@ class ApiFlowIntegrationTest {
                         .param("filePath", "uploads/private/../../pom.xml")
                         .header("Authorization", bearer(admin)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void nearbySearchUsesTheRadiusAndDropsAProviderSuspendedAfterCaching() throws Exception {
+        Provider near = approvedProvider();                    // Zamalek, Cairo
+        Provider far = approvedProvider();
+        far.profile().setLatitude(31.20);                       // Alexandria, ~180 km away
+        far.profile().setLongitude(29.92);
+        providerRepo.save(far.profile());
+
+        java.util.function.Supplier<java.util.List<Long>> search = () -> {
+            try {
+                JsonNode page = data(mvc.perform(get("/providers/nearby")
+                        .param("lat", "30.0551").param("lng", "31.2201").param("radiusKm", "10").param("size", "100")));
+                return java.util.stream.StreamSupport.stream(page.get("content").spliterator(), false)
+                        .map(n -> n.get("id").asLong()).toList();
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        assertThat(search.get()).contains(near.profile().getId()).doesNotContain(far.profile().getId());
+
+        // Suspended after the ids were cached: must not keep showing.
+        ProviderProfile p = providerRepo.findById(near.profile().getId()).orElseThrow();
+        p.setVerificationStatus(VerificationStatus.SUSPENDED);
+        providerRepo.save(p);
+        assertThat(search.get()).doesNotContain(near.profile().getId());
+    }
+
+    @Test
+    void aStaleBookingWriteIsRejectedNotSilentlyApplied() throws Exception {
+        Provider p = approvedProvider();
+        User c = user(UserRole.CUSTOMER);
+        long id = book(login(c), p, LocalDate.now().plusDays(3), LocalTime.of(11, 0));
+        Booking stale = bookingRepo.findById(id).orElseThrow(); // detached copy, version v
+
+        mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(login(p.user()))))
+                .andExpect(status().isOk()); // version v+1
+
+        stale.setStatus(BookingStatus.CANCELLED);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookingRepo.save(stale))
+                .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
+        assertThat(bookingRepo.findById(id).orElseThrow().getStatus()).isEqualTo(BookingStatus.ACCEPTED);
     }
 
     // ── cross-app handoffs (provider app → admin panel) ──────────────────────

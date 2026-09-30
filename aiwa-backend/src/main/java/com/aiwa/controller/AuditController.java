@@ -26,7 +26,7 @@ public class AuditController {
             @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = com.aiwa.util.Pages.admin(page, size);
         Page<AuditLogEntry> result = (query != null && !query.isBlank())
                 ? auditRepo.search(query.trim(), pageable)
                 : auditRepo.findAllByOrderByCreatedAtDesc(pageable);

@@ -22,9 +22,34 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
     // The acos argument is clamped to [-1, 1]: floating-point rounding can push it
     // a hair past 1 for a provider at (almost) the search point, and PostgreSQL
     // then fails the whole query with "input is out of range".
+    //
+    // A lat/lng bounding box (indexed, V16) narrows the rows first, so the
+    // distance formula runs only on candidates near the point instead of on
+    // every approved provider (BE-41). Longitude wrap at ±180° is ignored —
+    // fine for a service area in Egypt.
+    default List<ProviderProfile> findNearby(double lat, double lng, double radiusKm) {
+        double[] b = box(lat, lng, radiusKm);
+        return findNearbyInBox(lat, lng, radiusKm, b[0], b[1], b[2], b[3]);
+    }
+
+    /** Nearby providers whose primary category, or any active service, is in {@code category}. */
+    default List<ProviderProfile> findNearbyByCategory(double lat, double lng, double radiusKm,
+                                                       ServiceCategory category) {
+        double[] b = box(lat, lng, radiusKm);
+        return findNearbyByCategoryInBox(lat, lng, radiusKm, category, b[0], b[1], b[2], b[3]);
+    }
+
+    /** {latMin, latMax, lngMin, lngMax} around the point, 1° latitude ≈ 111 km. */
+    static double[] box(double lat, double lng, double radiusKm) {
+        double dLat = radiusKm / 111.0;
+        double dLng = radiusKm / (111.0 * Math.max(0.01, Math.cos(Math.toRadians(lat))));
+        return new double[]{Math.max(-90, lat - dLat), Math.min(90, lat + dLat), lng - dLng, lng + dLng};
+    }
+
     @Query("""
         SELECT p FROM ProviderProfile p
-        WHERE p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+        WHERE p.latitude BETWEEN :latMin AND :latMax
+          AND p.longitude BETWEEN :lngMin AND :lngMax
           AND p.verificationStatus = com.aiwa.enums.VerificationStatus.APPROVED
           AND (6371 * acos(least(1.0, greatest(-1.0,
                 cos(radians(:lat)) * cos(radians(p.latitude))
@@ -37,28 +62,32 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
                 + sin(radians(:lat)) * sin(radians(p.latitude))
               )))) ASC
         """)
-    List<ProviderProfile> findNearby(@Param("lat") double lat,
-                                      @Param("lng") double lng,
-                                      @Param("radiusKm") double radiusKm);
+    List<ProviderProfile> findNearbyInBox(@Param("lat") double lat,
+                                          @Param("lng") double lng,
+                                          @Param("radiusKm") double radiusKm,
+                                          @Param("latMin") double latMin, @Param("latMax") double latMax,
+                                          @Param("lngMin") double lngMin, @Param("lngMax") double lngMax);
 
-    /** Nearby providers whose primary category, or any active service, is in {@code category}. */
     @Query("""
         SELECT p FROM ProviderProfile p
         WHERE (p.primaryCategory = :category
                OR EXISTS (SELECT 1 FROM Service s
                           WHERE s.provider = p AND s.active = true AND s.category = :category))
           AND p.verificationStatus = com.aiwa.enums.VerificationStatus.APPROVED
-          AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+          AND p.latitude BETWEEN :latMin AND :latMax
+          AND p.longitude BETWEEN :lngMin AND :lngMax
           AND (6371 * acos(least(1.0, greatest(-1.0,
                 cos(radians(:lat)) * cos(radians(p.latitude))
                 * cos(radians(p.longitude) - radians(:lng))
                 + sin(radians(:lat)) * sin(radians(p.latitude))
               )))) <= :radiusKm
         """)
-    List<ProviderProfile> findNearbyByCategory(@Param("lat") double lat,
-                                                @Param("lng") double lng,
-                                                @Param("radiusKm") double radiusKm,
-                                                @Param("category") ServiceCategory category);
+    List<ProviderProfile> findNearbyByCategoryInBox(@Param("lat") double lat,
+                                                    @Param("lng") double lng,
+                                                    @Param("radiusKm") double radiusKm,
+                                                    @Param("category") ServiceCategory category,
+                                                    @Param("latMin") double latMin, @Param("latMax") double latMax,
+                                                    @Param("lngMin") double lngMin, @Param("lngMax") double lngMax);
 
     @Query("SELECT p FROM ProviderProfile p WHERE LOWER(p.businessName) LIKE LOWER(CONCAT('%', :q, '%')) AND p.verificationStatus = com.aiwa.enums.VerificationStatus.APPROVED")
     Page<ProviderProfile> searchByName(@Param("q") String query, Pageable pageable);

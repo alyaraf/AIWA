@@ -56,7 +56,15 @@ abstract class BookingRepository {
     String? reason,
   });
 
-  Future<Either<Failure, void>> sendSos(String bookingId);
+  /// [latitude]/[longitude]: where the user is, when a fix was available.
+  Future<Either<Failure, void>> sendSos(
+    String bookingId, {
+    double? latitude,
+    double? longitude,
+  });
+
+  /// Whether an SOS on this booking is recorded and still open.
+  Future<Either<Failure, bool>> hasOpenSos(String bookingId);
 
   /// "I'm safe" after an SOS. Not in the backend.
   Future<Either<Failure, void>> resolveSos(String bookingId);

@@ -19,6 +19,11 @@ public class ProviderProfile extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Optimistic lock: two status changes racing on the same row can't both win (BE-38). */
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;

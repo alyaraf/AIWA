@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dartz/dartz.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/booking_entity.dart';
@@ -55,8 +56,36 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
   final String bookingId;
   Timer? _poll;
 
-  LiveBookingCubit(this._repo, this.bookingId, {BookingEntity? initial})
-    : super(LiveBookingState(booking: initial));
+  /// Where the user is for an SOS, or null. Injectable for tests.
+  final Future<({double lat, double lng})?> Function() _locate;
+
+  LiveBookingCubit(
+    this._repo,
+    this.bookingId, {
+    BookingEntity? initial,
+    Future<({double lat, double lng})?> Function()? locate,
+  }) : _locate = locate ?? _deviceLocation,
+       super(LiveBookingState(booking: initial));
+
+  /// Last known fix, else a fresh one within 4 s. Never prompts for
+  /// permission mid-emergency; any failure just means "no location".
+  static Future<({double lat, double lng})?> _deviceLocation() async {
+    try {
+      final perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return null;
+      }
+      final p =
+          await Geolocator.getLastKnownPosition() ??
+          await Geolocator.getCurrentPosition(
+            timeLimit: const Duration(seconds: 4),
+          );
+      return (lat: p.latitude, lng: p.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
 
   static const _live = {
     'PENDING',
@@ -135,13 +164,31 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
     ),
   );
 
+  /// SOS with the user's location when one is available (it becomes the maps
+  /// link in the support / trusted-contact SMS). A timed-out request may still
+  /// have been recorded, so check before telling the user it failed (FE-31).
   Future<void> sos() async {
     emit(state.copyWith(sos: SosStage.alerting));
-    final r = await _repo.sendSos(bookingId);
+    final at = await _locate();
+    final r = await _repo.sendSos(
+      bookingId,
+      latitude: at?.lat,
+      longitude: at?.lng,
+    );
     if (isClosed) return;
-    r.fold(
-      (f) => emit(state.copyWith(sos: SosStage.none, actionError: f.message)),
-      (_) => emit(state.copyWith(sos: SosStage.notified)),
+    var sent = r.isRight();
+    if (!sent && r.fold((f) => f is NetworkFailure, (_) => false)) {
+      final open = await _repo.hasOpenSos(bookingId);
+      if (isClosed) return;
+      sent = open.fold((_) => false, (o) => o);
+    }
+    emit(
+      sent
+          ? state.copyWith(sos: SosStage.notified)
+          : state.copyWith(
+              sos: SosStage.none,
+              actionError: r.fold((f) => f.message, (_) => null),
+            ),
     );
   }
 

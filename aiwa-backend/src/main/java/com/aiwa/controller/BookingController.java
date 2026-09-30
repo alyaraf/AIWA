@@ -256,7 +256,7 @@ public class BookingController {
     }
 
     private static Pageable pageOf(int page, int size) {
-        return PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 100)));
+        return com.aiwa.util.Pages.of(page, size);
     }
 
     private Long resolveUserId(UserDetails ud) {

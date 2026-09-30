@@ -38,7 +38,16 @@ abstract class BookingRemoteDataSource {
 
   Future<BookingModel> confirmPayment(String bookingId, bool paid);
 
-  Future<void> sendSos(String bookingId, {String? notes});
+  Future<void> sendSos(
+    String bookingId, {
+    String? notes,
+    double? latitude,
+    double? longitude,
+  });
+
+  /// True when the caller has an unresolved SOS on this booking — used to
+  /// confirm an SOS whose request timed out.
+  Future<bool> hasOpenSos(String bookingId);
 
   /// "I'm safe": closes the caller's latest open SOS on this booking.
   Future<void> resolveSos(String bookingId);
@@ -184,10 +193,29 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
       );
 
   @override
-  Future<void> sendSos(String bookingId, {String? notes}) => _api.post(
+  Future<void> sendSos(
+    String bookingId, {
+    String? notes,
+    double? latitude,
+    double? longitude,
+  }) => _api.post(
     ApiConstants.bookingSafety(bookingId),
-    data: {'type': 'SOS', 'notes': ?notes},
+    // The location goes into the support and trusted-contact SMS as a maps link.
+    data: {
+      'type': 'SOS',
+      'notes': ?notes,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
+    },
   );
+
+  @override
+  Future<bool> hasOpenSos(String bookingId) async {
+    final response = await _api.get(ApiConstants.bookingSafety(bookingId));
+    return (response.data['data'] as List? ?? const []).any(
+      (e) => (e as Map)['type'] == 'SOS' && e['resolved'] != true,
+    );
+  }
 
   @override
   Future<void> resolveSos(String bookingId) async {

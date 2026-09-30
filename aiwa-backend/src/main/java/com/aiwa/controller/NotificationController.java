@@ -31,7 +31,7 @@ public class NotificationController {
 
         return ResponseEntity.ok(ApiResponse.Success.of(
                 notificationService.getMyNotifications(resolveUserId(userDetails),
-                        PageRequest.of(page, size))));
+                        com.aiwa.util.Pages.of(page, size))));
     }
 
     @GetMapping("/unread-count")
