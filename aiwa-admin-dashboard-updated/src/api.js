@@ -92,6 +92,24 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
   return unwrap(data);
 }
 
+/**
+ * Every row of a paged admin list (OPS-8). These queues used to ask for one
+ * page of 500 and silently drop the rest; now they walk the pages. Capped at
+ * 50 pages so a runaway list can't hang the panel.
+ */
+export async function requestAllPages(path, size = 200) {
+  const sep = path.includes("?") ? "&" : "?";
+  const all = [];
+  for (let page = 0; page < 50; page += 1) {
+    const result = await request(`${path}${sep}page=${page}&size=${size}`);
+    const items = normalizeList(result);
+    all.push(...items);
+    const totalPages = result?.totalPages ?? result?.data?.totalPages;
+    if (totalPages == null || page + 1 >= totalPages || items.length < size) break;
+  }
+  return all;
+}
+
 export const api = {
   login: (payload) => request("/auth/login", {
     method: "POST",
@@ -122,8 +140,8 @@ export const api = {
   totpDisable: () => request("/auth/2fa/disable", { method: "POST" }),
   dashboard: () => request("/admin/dashboard").then(normalizeDashboard),
   dashboardRaw: () => request("/admin/dashboard").then(unwrap),
-  verifications: () => request("/admin/verification/pending?size=500").then(normalizeList).then((items) => items.map(normalizeVerification)),
-  verificationByStatus: (status) => request(`/admin/verification?status=${encodeURIComponent(status)}&size=500`).then(normalizeList).then((items) => items.map(normalizeVerification)),
+  verifications: () => requestAllPages("/admin/verification/pending").then((items) => items.map(normalizeVerification)),
+  verificationByStatus: (status) => requestAllPages(`/admin/verification?status=${encodeURIComponent(status)}`).then((items) => items.map(normalizeVerification)),
   approveProvider: (providerId) => request(`/admin/verification/${providerId}/approve`, { method: "POST" }),
   rejectProvider: (providerId, reason) => request(`/admin/verification/${providerId}/reject?reason=${encodeURIComponent(reason)}`, { method: "POST" }),
   /** Blob URL for a private verification document (caller must revokeObjectURL). */
@@ -147,16 +165,22 @@ export const api = {
   resolveReviewReport: (caseId, action) => request(`/admin/reviews/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
   chatReports: () => request("/admin/chat/moderation").then(normalizeList).then((items) => items.map(normalizeChatReport)),
   resolveChatReport: (caseId, action) => request(`/admin/chat/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
-  complaints: () => request("/admin/complaints?size=500").then(normalizeList).then((items) => items.map(normalizeComplaint)),
+  complaints: () => requestAllPages("/admin/complaints").then((items) => items.map(normalizeComplaint)),
   resolveComplaint: (id, notes) => request(`/admin/complaints/${id}/resolve?notes=${encodeURIComponent(notes)}`, { method: "POST" }).then(normalizeComplaint),
   flagComplaint: (id) => request(`/admin/complaints/${id}/flag`, { method: "POST" }),
   userActivity: (id) => request(`/admin/users/${id}/activity`).then(unwrap),
   editUser: (id, fields) => request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(fields) }).then(normalizeUser),
   resetUserPassword: (id) => request(`/admin/users/${id}/reset-password`, { method: "POST" }).then(unwrap),
-  users: (role) => {
-    const qs = new URLSearchParams({ page: "0", size: "500" });
+  /** Server-side role filter, search (name/email/phone) and paging (OPS-8). */
+  users: ({ role, query = "", page = 0, size = 20 } = {}) => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) });
     if (role) qs.set("role", role);
-    return request(`/admin/users?${qs.toString()}`).then(normalizeList).then((items) => items.map(normalizeUser));
+    if (query.trim()) qs.set("q", query.trim());
+    return request(`/admin/users?${qs.toString()}`).then((result) => ({
+      items: normalizeList(result).map(normalizeUser),
+      totalPages: Math.max(1, result?.totalPages ?? result?.data?.totalPages ?? 1),
+      total: result?.totalElements ?? result?.data?.totalElements ?? normalizeList(result).length
+    }));
   },
   createAdmin: (payload) => request("/admin/users/admins", { method: "POST", body: JSON.stringify(payload) }),
   updateAdminPermissions: (id, permissions) => {
@@ -274,8 +298,8 @@ export const api = {
   bookingStats: () => request("/admin/bookings/stats"),
   exportBookingList: (query = "", filter = "All") =>
     downloadFile(`/admin/bookings/export?${bookingParams(query, filter)}`, "aiwa-bookings.csv", "text/csv"),
-  reviews: () => request("/admin/reviews?size=500").then(normalizeList).then((items) => items.map(normalizeReview)),
-  flags: () => request("/admin/flags?size=500").then(normalizeList).then((items) => items.map(normalizeFlag))
+  reviews: () => requestAllPages("/admin/reviews").then((items) => items.map(normalizeReview)),
+  flags: () => requestAllPages("/admin/flags").then((items) => items.map(normalizeFlag))
 };
 
 function unwrap(payload) {
@@ -878,7 +902,15 @@ async function mockRequest(path, options = {}) {
       Object.assign(u, body);
       return { ...u };
     }
-    return mock.users;
+    // Same contract as GET /admin/users: role + q combine, newest first, paged.
+    const qs = new URLSearchParams(path.split("?")[1] || "");
+    const role = (qs.get("role") || "").toUpperCase();
+    const q = (qs.get("q") || "").toLowerCase();
+    const page = Number(qs.get("page") || 0);
+    const size = Number(qs.get("size") || 20);
+    const hits = mock.users.filter((u) => (!role || u.role === role)
+      && (!q || [u.fullName, u.email, u.phone].some((v) => String(v || "").toLowerCase().includes(q))));
+    return { content: hits.slice(page * size, (page + 1) * size), totalPages: Math.max(1, Math.ceil(hits.length / size)), totalElements: hits.length, number: page };
   }
   if (path === "/admin/moderation") return mock.moderation;
   if (path.startsWith("/admin/audit")) {
@@ -1093,8 +1125,8 @@ async function mockRequest(path, options = {}) {
   if (path === "/admin/settlements") return mock.settlements;
   if (path.split("?")[0] === "/admin/bookings") return mock.bookings;
   if (path === "/admin/bookings/stats") return { today: 38, inProgress: 6, openDisputes: 1, cancelRate7d: 4.2 };
-  if (path === "/admin/reviews") return mock.reviews;
-  if (path === "/admin/flags") return mock.complaints.filter((item) => item.priority === "High").map((item, index) => ({
+  if (path.split("?")[0] === "/admin/reviews") return mock.reviews;
+  if (path.split("?")[0] === "/admin/flags") return mock.complaints.filter((item) => item.priority === "High").map((item, index) => ({
     id: item.id,
     targetProviderName: item.provider,
     targetProviderId: 20 + index,

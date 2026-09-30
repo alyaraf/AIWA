@@ -58,7 +58,6 @@ import '../../features/notifications/presentation/bloc/notification_bloc.dart';
 import '../../features/reviews/data/datasources/review_remote_datasource.dart';
 import '../../features/reviews/data/repositories/review_repository_impl.dart';
 import '../../features/reviews/domain/repositories/review_repository.dart';
-import '../../features/reviews/domain/usecases/submit_review_usecase.dart';
 import '../../features/reviews/presentation/bloc/review_bloc.dart';
 
 // Saved
@@ -205,8 +204,6 @@ Future<void> initDependencies() async {
   sl.registerFactory<ReviewRepository>(
     () => ReviewRepositoryImpl(sl<ReviewRemoteDataSource>()),
   );
-  // ponytail: registered but never resolved (ReviewBloc uses ReviewRepository), delete with its file
-  sl.registerFactory(() => SubmitReviewUseCase(sl<ReviewRepository>()));
   sl.registerFactory(() => ReviewBloc(sl<ReviewRepository>()));
 
   // Saved

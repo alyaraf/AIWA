@@ -36,8 +36,21 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
-      - name: Unit and API tests
+      - name: Unit and API tests (H2)
         run: mvn -B test
+      # BE-23: the same suite on real PostgreSQL 16 + Redis, with the Flyway
+      # migrations and ddl-auto=validate. MigrationSchemaValidationTest is the
+      # H2-only migration check, so it is left out here.
+      - name: Unit and API tests on PostgreSQL 16 (BE-23)
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/aiwa_db
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+          SPRING_DATASOURCE_USERNAME: aiwa
+          SPRING_DATASOURCE_PASSWORD: ci-only-password
+          SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+          SPRING_FLYWAY_ENABLED: "true"
+          SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+        run: mvn -B test '-Dtest=!MigrationSchemaValidationTest'
       - name: Migrations + schema validation on PostgreSQL 16 (BE-31)
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/aiwa_db

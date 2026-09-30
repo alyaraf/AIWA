@@ -223,6 +223,35 @@ class ApiFlowIntegrationTest {
     }
 
     @Test
+    void adminUserSearchCombinesRoleAndQueryOnTheServer() throws Exception {
+        String tag = "qzx" + SEQ.incrementAndGet();
+        User customer = user(UserRole.CUSTOMER);
+        customer.setFullName("Nour " + tag);
+        userRepo.save(customer);
+        User provider = user(UserRole.PROVIDER);
+        provider.setFullName("Nour " + tag + " Studio");
+        userRepo.save(provider);
+        String admin = login(user(UserRole.ADMIN, AdminPermission.SUPER_ADMIN));
+
+        // OPS-8: before, q ignored role and the panel filtered 500 rows in the browser.
+        JsonNode both = data(mvc.perform(get("/admin/users").param("q", tag.toUpperCase()).param("size", "5")
+                .header("Authorization", bearer(admin))).andExpect(status().isOk()));
+        assertThat(both.get("totalElements").asInt()).isEqualTo(2);
+        // Newest first.
+        assertThat(both.get("content").get(0).get("id").asLong()).isEqualTo(provider.getId());
+
+        JsonNode providersOnly = data(mvc.perform(get("/admin/users").param("q", tag).param("role", "provider")
+                .header("Authorization", bearer(admin))).andExpect(status().isOk()));
+        assertThat(providersOnly.get("totalElements").asInt()).isEqualTo(1);
+        assertThat(providersOnly.get("content").get(0).get("id").asLong()).isEqualTo(provider.getId());
+
+        JsonNode paged = data(mvc.perform(get("/admin/users").param("q", tag).param("size", "1").param("page", "1")
+                .header("Authorization", bearer(admin))).andExpect(status().isOk()));
+        assertThat(paged.get("content").get(0).get("id").asLong()).isEqualTo(customer.getId());
+        assertThat(paged.get("totalPages").asInt()).isEqualTo(2);
+    }
+
+    @Test
     void theMfaChallengeTokenCannotCallTheApi() throws Exception {
         User admin = user(UserRole.ADMIN, AdminPermission.SUPER_ADMIN);
         admin.setTotpEnabled(true);

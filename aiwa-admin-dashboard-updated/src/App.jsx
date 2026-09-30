@@ -1823,7 +1823,13 @@ const PERMISSION_META = {
 };
 
 function UsersPage({ currentUser }) {
-  const { data, setData, error, loading, reload } = useLoad(api.users, mock.users);
+  const [data, setData] = useState([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((k) => k + 1);
   const [filter, setFilter] = useState("ALL");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -1838,36 +1844,30 @@ function UsersPage({ currentUser }) {
   const PAGE_SIZE = 10;
   const isSuper = USE_MOCKS || (currentUser?.permissions || []).includes("SUPER_ADMIN");
 
-  // Search covers every column shown in the table: name, email, phone, role,
-  // bookings count, joined date, status, plus permission labels for admins.
-  // Multiple whitespace-separated tokens all have to match somewhere ("layla
-  // admin" → both terms present) so a longer query narrows results instead of
-  // widening them.
-  const rows = useMemo(() => {
-    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return data.filter((user) => {
-      if (filter !== "ALL" && user.role !== filter) return false;
-      if (tokens.length === 0) return true;
-      const perms = Array.isArray(user.permissions)
-        ? user.permissions.map((p) => (PERMISSION_META[p]?.label || p)).join(" ")
-        : "";
-      const haystack = [
-        user.fullName, user.email, user.phone,
-        user.role, user.status,
-        user.bookings, user.joined,
-        perms,
-        user.providerStatus, user.providerType
-      ].filter((v) => v != null).join(" ").toLowerCase();
-      return tokens.every((t) => haystack.includes(t));
-    });
-  }, [data, filter, query]);
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  // Role filter, search (name / email / phone) and paging run on the server
+  // (GET /admin/users), debounced — the list used to stop at 500 rows (OPS-8).
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError("");
+    const handle = setTimeout(() => {
+      api.users({ role: filter === "ALL" ? undefined : filter, query, page: page - 1, size: PAGE_SIZE })
+        .then((result) => { if (alive) { setData(result.items); setTotalPages(result.totalPages); setTotal(result.total); } })
+        .catch((err) => { if (alive) { setError(err.message || "Could not load users"); setData([]); } })
+        .finally(() => { if (alive) setLoading(false); });
+    }, 200);
+    return () => { alive = false; clearTimeout(handle); };
+  }, [filter, query, page, reloadKey]);
+
+  useEffect(() => {
+    appRefreshListeners.add(reload);
+    return () => appRefreshListeners.delete(reload);
+  }, []);
 
   useEffect(() => { setPage(1); }, [filter, query]);
-  useEffect(() => { if (page !== safePage) setPage(safePage); }, [page, safePage]);
-  const activeSuperAdmins = data.filter((u) => u.role === "ADMIN" && u.status === "ACTIVE" && (u.permissions || []).includes("SUPER_ADMIN"));
+  const rows = data;
+  const pageRows = data;
+  const safePage = Math.min(page, totalPages);
 
   async function createAdmin(payload) {
     const created = await api.createAdmin(payload);
@@ -1900,10 +1900,8 @@ function UsersPage({ currentUser }) {
 
   function requestDeactivate(user) {
     setMenuOpen(null);
-    if (user.role === "ADMIN" && (user.permissions || []).includes("SUPER_ADMIN") && activeSuperAdmins.length <= 1) {
-      setBlockedNote(`Can't deactivate ${user.fullName} — they're the last active super admin.`);
-      return;
-    }
+    // The "last active super admin" rule is enforced by the backend; with a
+    // paged list the panel can't count them itself (doDeactivate shows it).
     setConfirm({
       title: user.role === "ADMIN" ? "Deactivate admin?" : "Suspend account?",
       body: `${user.fullName} will be signed out and blocked until reactivated.`,
@@ -2031,7 +2029,7 @@ function UsersPage({ currentUser }) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search name, email, phone, role, status, permission…"
+          placeholder="Search name, email or phone…"
           aria-label="Search users"
         />
         {query && (
@@ -2125,7 +2123,7 @@ function UsersPage({ currentUser }) {
       {!loading && !error && rows.length > 0 && (
         <div className="table-footer">
           <span className="dim">
-            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, rows.length)} of {rows.length}
+            {(safePage - 1) * PAGE_SIZE + 1}–{(safePage - 1) * PAGE_SIZE + rows.length} of {total}
           </span>
           <Pagination page={safePage} totalPages={totalPages} onPage={setPage} />
         </div>

@@ -1,0 +1,43 @@
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { api } from "../api.js";
+
+/**
+ * OPS-8: moderation queues asked for one page of 500 and silently dropped the
+ * rest. They now walk every page until the server says it was the last.
+ */
+function pagedServer(total, seen) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    const u = new URL(url);
+    seen.push(u.pathname + u.search);
+    const page = Number(u.searchParams.get("page"));
+    const size = Number(u.searchParams.get("size"));
+    const content = Array.from({ length: Math.max(0, Math.min(size, total - page * size)) },
+      (_, i) => ({ id: page * size + i + 1, status: "OPEN", subject: "x" }));
+    return new Response(JSON.stringify({ success: true, data: { content, totalPages: Math.ceil(total / size), number: page } }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  });
+}
+
+describe("paged admin lists", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("collects every complaint past the old 500-row cutoff", async () => {
+    const seen = [];
+    pagedServer(450, seen);
+    const all = await api.complaints();
+    expect(all).toHaveLength(450);
+    expect(new Set(all.map((c) => c.id)).size).toBe(450);
+    expect(seen).toEqual([
+      "/api/admin/complaints?page=0&size=200",
+      "/api/admin/complaints?page=1&size=200",
+      "/api/admin/complaints?page=2&size=200"
+    ]);
+  });
+
+  it("stops after one request when everything fits on the first page", async () => {
+    const seen = [];
+    pagedServer(3, seen);
+    expect(await api.reviews()).toHaveLength(3);
+    expect(seen).toHaveLength(1);
+  });
+});

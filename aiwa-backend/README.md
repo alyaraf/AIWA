@@ -174,7 +174,6 @@ java -jar target/aiwa-backend-1.0.0.jar
 | `DB_USERNAME`     | `postgres`                           | Database username      |
 | `DB_PASSWORD`     | `postgres`                           | Database password      |
 | `JWT_SECRET`      | `aiwa-super-secret-key-…`            | **Change in production!** |
-| `GOOGLE_MAPS_API_KEY` | `your-google-maps-key`          | Maps API key           |
 
 ---
 

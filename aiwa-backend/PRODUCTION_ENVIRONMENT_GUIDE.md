@@ -4,6 +4,8 @@ This guide explains how to prepare, configure, run, and maintain the AIWA backen
 
 The backend is a Spring Boot REST API. It already includes embedded Tomcat, so you do not need to deploy it into an external Tomcat server. The recommended production setup is Docker Compose behind Nginx with HTTPS.
 
+This is the single deploy guide for the backend (it replaces the old PRODUCTION_RUN.md and HOSTING_PROVIDER_GUIDE.md). To run the backend **and** the admin panel behind Caddy with automatic HTTPS instead, use the full stack in `deploy/` at the repo root (see `docs/release.md`).
+
 ## 1. Production Architecture
 
 Recommended first production architecture:
@@ -63,6 +65,19 @@ Install Docker Compose plugin if needed:
 docker compose version
 ```
 
+### Choosing a host
+
+Any VPS that runs Docker works; shared, cPanel, PHP or static hosting (Netlify, Vercel, Firebase Hosting) does not, because the backend needs Java, PostgreSQL, Redis and a long-running process.
+
+| Need | Choice |
+|------|--------|
+| Lowest cost | Hetzner Cloud, 2–4 vCPU / 4–8 GB |
+| Easiest setup | DigitalOcean Droplet, 2 vCPU / 4 GB |
+| AWS or Azure already in use | AWS Lightsail or an Azure VM of the same size |
+| Real paying users, downtime is expensive | Managed PostgreSQL + managed Redis, backend container on the VPS |
+
+PostgreSQL and Redis inside Docker Compose are fine for the first launch **only with the daily backups in section 11**.
+
 ## 3. Domain And DNS
 
 Create a DNS record:
@@ -114,7 +129,6 @@ SMS_PROVIDER=external
 SMS_API_URL=https://sms-provider.example/send
 SMS_API_KEY=change-this-sms-api-key
 SMS_SENDER=AIWA
-GOOGLE_MAPS_API_KEY=change-this-google-maps-key
 ADMIN_EMAIL=admin@yourdomain.com
 ADMIN_PHONE=
 ADMIN_PASSWORD=change-this-admin-password
@@ -239,6 +253,14 @@ docker compose -f docker-compose.prod.yml down
 ```
 
 Do not use `-v` with `down` in production unless you intentionally want to delete database and Redis volumes.
+
+### Without Docker (executable jar)
+
+Run PostgreSQL and Redis first, set the same variables as in section 5 in the environment, then:
+
+```bash
+SPRING_PROFILES_ACTIVE=prod java -jar target/aiwa-backend-1.0.0.jar
+```
 
 ## 7. Nginx Reverse Proxy
 

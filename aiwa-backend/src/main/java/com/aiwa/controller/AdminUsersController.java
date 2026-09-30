@@ -50,21 +50,15 @@ public class AdminUsersController {
             @RequestParam(defaultValue = "20") int size) {
 
         Pageable pageable = com.aiwa.util.Pages.admin(page, size);
-        Page<User> users;
-
-        if (q != null && !q.isBlank()) {
-            users = userRepo.searchUsers(q.trim(), pageable);
-        } else if (role != null) {
-            UserRole r;
+        UserRole r = null;
+        if (role != null && !role.isBlank()) {
             try {
                 r = UserRole.valueOf(role.toUpperCase());
             } catch (IllegalArgumentException ex) {
                 throw new BusinessException("Invalid role filter: " + role);
             }
-            users = userRepo.findByRoleOrderByCreatedAtDesc(r, pageable);
-        } else {
-            users = userRepo.findAll(pageable);
         }
+        Page<User> users = userRepo.adminSearch(r, likePattern(q), pageable);
 
         java.util.List<ApiResponse.UserDto> dtos = users.getContent().stream().map(this::toDto).toList();
         return ResponseEntity.ok(ApiResponse.Success.of(
@@ -430,6 +424,13 @@ public class AdminUsersController {
                 .or(() -> userRepo.findByPhone(userDetails.getUsername()))
                 .orElseThrow(() -> new BusinessException("Current admin not found"));
     }
+    /** "%term%" in lower case, or "%" for no search; wildcards the admin typed are dropped. */
+    static String likePattern(String query) {
+        if (query == null) return "%";
+        String q = query.strip().toLowerCase().replace("%", "").replace("_", "");
+        return q.isEmpty() ? "%" : "%" + q + "%";
+    }
+
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
     }

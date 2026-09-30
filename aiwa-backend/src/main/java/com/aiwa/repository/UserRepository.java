@@ -30,11 +30,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Page<User> findByRoleOrderByCreatedAtDesc(UserRole role, Pageable pageable);
 
-    @Query("SELECT u FROM User u WHERE " +
-           "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
-           "LOWER(u.email)    LIKE LOWER(CONCAT('%', :q, '%')) OR " +
-           "u.phone           LIKE CONCAT('%', :q, '%')")
-    Page<User> searchUsers(@Param("q") String query, Pageable pageable);
+    /**
+     * Admin Users screen (OPS-8): role filter and search combine, newest first.
+     * pattern is "%" for no search, else "%term%" in lower case.
+     */
+    @Query("SELECT u FROM User u WHERE (:role IS NULL OR u.role = :role) AND (:pattern = '%' " +
+           "OR LOWER(u.fullName) LIKE :pattern OR LOWER(u.email) LIKE :pattern OR u.phone LIKE :pattern) " +
+           "ORDER BY u.createdAt DESC")
+    Page<User> adminSearch(@Param("role") UserRole role, @Param("pattern") String pattern, Pageable pageable);
 
     Page<User> findByActiveOrderByCreatedAtDesc(boolean active, Pageable pageable);
 }
