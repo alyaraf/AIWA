@@ -77,6 +77,8 @@ class ApiFlowIntegrationTest {
     @Autowired CommissionLedgerRepository ledgerRepo;
     @Autowired GalleryImageRepository galleryRepo;
     @Autowired BookingRepository bookingRepo;
+    @Autowired io.micrometer.core.instrument.MeterRegistry meterRegistry;
+    @Autowired SavedAddressRepository savedAddressRepo;
     @Autowired PasswordEncoder encoder;
     @Autowired RedisRuntimeService redis;
     @MockBean SmsService smsService;
@@ -400,11 +402,14 @@ class ApiFlowIntegrationTest {
         String cTok = login(customer), pTok = login(p.user());
         long id = book(cTok, p, LocalDate.now().plusDays(1), LocalTime.of(15, 0));
         mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        double sosBefore = meterRegistry.counter("aiwa.sos.alerts").count();
 
         long eventId = data(mvc.perform(post("/bookings/" + id + "/safety").header("Authorization", bearer(cTok))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("type", "SOS", "latitude", 30.05, "longitude", 31.23))))
                 .andExpect(status().isCreated())).get("id").asLong();
+        // OPS-5: the monitoring alert rule fires on this counter.
+        assertThat(meterRegistry.counter("aiwa.sos.alerts").count()).isEqualTo(sosBefore + 1);
 
         // Trusted contact texted; the provider is not told and can't see it.
         // Texts go out on the background pool after commit (BE-37).
@@ -430,6 +435,33 @@ class ApiFlowIntegrationTest {
     }
 
     // ── account & notifications ──────────────────────────────────────────────
+
+    @Test
+    void supportCanDeleteACustomerWhoHasBookingsAndTheirDataIsErased() throws Exception {
+        Provider p = approvedProvider();
+        User customer = user(UserRole.CUSTOMER);
+        String cTok = login(customer);
+        book(cTok, p, LocalDate.now().plusDays(2), LocalTime.of(11, 0));
+        SavedAddress home = savedAddressRepo.save(SavedAddress.builder().user(customer).label("Home")
+                .addressLine("12 Nile St, Zamalek").latitude(30.06).longitude(31.22).build());
+        String admin = login(user(UserRole.ADMIN, AdminPermission.SUPER_ADMIN));
+
+        // OPS-4: this used to be a hard delete that failed on the booking row.
+        mvc.perform(delete("/admin/users/" + customer.getId()).header("Authorization", bearer(admin)))
+                .andExpect(status().isOk());
+
+        User after = userRepo.findById(customer.getId()).orElseThrow();
+        assertThat(after.isActive()).isFalse();
+        assertThat(after.getEmail()).isNull();
+        assertThat(after.getPhone()).isNull();
+        assertThat(after.getFullName()).isEqualTo("Deleted user");
+        SavedAddress scrubbed = savedAddressRepo.findById(home.getId()).orElseThrow();
+        assertThat(scrubbed.getAddressLine()).isEqualTo("Deleted");
+        assertThat(scrubbed.getLatitude()).isNull();
+        assertThat(bookingRepo.findByCustomerIdAndStatus(customer.getId(), BookingStatus.PENDING)).isEmpty();
+        // Their old session is dead too.
+        mvc.perform(get("/auth/me").header("Authorization", bearer(cTok))).andExpect(status().isUnauthorized());
+    }
 
     @Test
     void addressEditingKeepsASingleDefaultAndOwnership() throws Exception {

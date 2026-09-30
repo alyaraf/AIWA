@@ -85,14 +85,29 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
       show-details: when_authorized
+  # Latency buckets for the SlowApi alert (deploy/monitoring/alerts.yml).
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+# OPS-5: error tracking. Off until SENTRY_DSN is set; no personal data is sent.
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:production}
+  send-default-pii: false
+  traces-sample-rate: 0.0
 
 aiwa:
+  # Bearer token Prometheus sends to /actuator/prometheus; empty = endpoint hidden.
+  metrics:
+    token: ${METRICS_TOKEN:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}
   default-radius-km: 10

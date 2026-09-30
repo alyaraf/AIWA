@@ -24,6 +24,7 @@
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.release>17</maven.compiler.release>
         <jjwt.version>0.11.5</jjwt.version>
+        <sentry.version>7.14.0</sentry.version>
     </properties>
 
     <dependencies>
@@ -52,6 +53,17 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- OPS-5: /actuator/prometheus on the internal management port -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <!-- OPS-5: error tracking; inactive until SENTRY_DSN is set -->
+        <dependency>
+            <groupId>io.sentry</groupId>
+            <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+            <version>${sentry.version}</version>
         </dependency>
 
         <!-- Database -->

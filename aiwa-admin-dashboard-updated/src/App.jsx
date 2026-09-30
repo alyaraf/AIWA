@@ -1925,7 +1925,7 @@ function UsersPage({ currentUser }) {
     setMenuOpen(null);
     setConfirm({
       title: "Delete account?",
-      body: `${user.fullName} will be permanently removed. This cannot be undone.`,
+      body: `${user.fullName}'s personal data is erased (name, contacts, addresses, ID documents, photos) and the account is closed. Past bookings stay as "Deleted user". This cannot be undone.`,
       confirmLabel: "Delete",
       tone: "danger",
       onConfirm: async () => {

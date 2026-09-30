@@ -1,0 +1,43 @@
+# OPS-5 alert rules. They show on Prometheus's Alerts page; to get paged, add an
+# Alertmanager with your email / Telegram / WhatsApp webhook (docs/runbooks.md).
+# The SOS text to the on-call phones does not depend on any of this.
+groups:
+  - name: aiwa
+    rules:
+      - alert: BackendDown
+        expr: up{job="aiwa-backend"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "AIWA backend is not answering the metrics scrape"
+
+      - alert: SosRaised
+        expr: increase(aiwa_sos_alerts_total[5m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: "A customer or provider raised an SOS; open the admin Safety queue now"
+
+      - alert: HighServerErrorRate
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1e-9) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 5% of API requests fail with a 5xx"
+
+      - alert: SlowApi
+        expr: >
+          histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "95th percentile API latency above 2 s"
+
+      - alert: HeapNearlyFull
+        expr: >
+          sum(jvm_memory_used_bytes{area="heap"}) / sum(jvm_memory_max_bytes{area="heap"}) > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "JVM heap above 90% for 10 minutes"

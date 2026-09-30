@@ -13,3 +13,6 @@ test/goldens/failures/
 
 # Production secrets mounted into containers
 deploy/secrets/
+
+# Local backups written by the backup service
+deploy/backups/

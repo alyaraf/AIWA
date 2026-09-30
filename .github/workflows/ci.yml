@@ -62,7 +62,7 @@ jobs:
         run: |
           mvn -B -q package -DskipTests
           java -jar target/*.jar > app.log 2>&1 &
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl -fs http://localhost:8080/api/actuator/health >/dev/null; then echo "started"; exit 0; fi
             sleep 2
           done
@@ -103,3 +103,33 @@ jobs:
       - run: flutter analyze
       # Goldens are platform-specific; regenerate on Linux once, then enforce.
       - run: flutter test
+
+  # OPS-6: deploy main to staging once backend and admin are green. Inactive
+  # until the repo has the variables STAGING_HOST, STAGING_USER, STAGING_API_DOMAIN
+  # and the secrets STAGING_SSH_KEY, STAGING_KNOWN_HOSTS (docs/release.md).
+  deploy-staging:
+    needs: [backend, admin]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_HOST != ''
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency: staging
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+          HOST: ${{ vars.STAGING_HOST }}
+          USER_NAME: ${{ vars.STAGING_USER }}
+          SHA: ${{ github.sha }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The server holds a deploy-only checkout at /srv/aiwa with its own deploy/.env.
+          # $SHA is meant to expand here, on the runner.
+          # shellcheck disable=SC2029
+          ssh "$USER_NAME@$HOST" "set -e; cd /srv/aiwa && git fetch --quiet origin && git checkout --quiet --detach $SHA && cd deploy && docker compose -f docker-compose.prod.yml up -d --build --remove-orphans"
+      - name: Health check
+        env:
+          API_DOMAIN: ${{ vars.STAGING_API_DOMAIN }}
+        run: curl -fsS --retry 30 --retry-delay 5 --retry-all-errors "https://$API_DOMAIN/api/actuator/health"

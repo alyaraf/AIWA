@@ -159,6 +159,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse.Error> handleGeneral(Exception ex) {
         log.error("Unhandled exception", ex);
+        // Every unexpected error lands here rather than escaping to Spring, so
+        // report it explicitly (a no-op without SENTRY_DSN).
+        io.sentry.Sentry.captureException(ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(buildError(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "Something went wrong"));
     }

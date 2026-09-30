@@ -39,6 +39,7 @@ public class AdminUsersController {
     private final PasswordEncoder passwordEncoder;
     private final com.aiwa.service.impl.NotificationServiceImpl notificationService;
     private final com.aiwa.service.impl.AuditService auditService;
+    private final com.aiwa.service.impl.AccountDeletionService accountDeletion;
 
     @GetMapping
     @Operation(summary = "List all users â€” filter by role, search by name/phone/email")
@@ -250,12 +251,18 @@ public class AdminUsersController {
         }
 
         String label = user.getFullName();
-        try {
-            userRepo.delete(user);
-        } catch (DataIntegrityViolationException ex) {
-            throw new BusinessException("User has related records. Deactivate the account instead.");
+        if (UserRole.ADMIN.equals(user.getRole())) {
+            try {
+                userRepo.delete(user);
+            } catch (DataIntegrityViolationException ex) {
+                throw new BusinessException("User has related records. Deactivate the account instead.");
+            }
+        } else {
+            // A deletion request to support (OPS-4): the same erasure as in-app
+            // deletion. A hard delete failed for anyone who had ever booked.
+            accountDeletion.delete(user);
         }
-        auditService.record("USER_DELETED", label);
+        auditService.record("USER_DELETED", label + " (#" + id + ")");
         return ResponseEntity.ok(ApiResponse.Success.of("User deleted", null));
     }
 

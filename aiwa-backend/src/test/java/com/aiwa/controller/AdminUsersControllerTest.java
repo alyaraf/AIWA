@@ -37,9 +37,11 @@ class AdminUsersControllerTest {
     private final PasswordEncoder encoder = mock(PasswordEncoder.class);
     private final NotificationServiceImpl notificationService = mock(NotificationServiceImpl.class);
     private final AuditService auditService = mock(AuditService.class);
+    private final com.aiwa.service.impl.AccountDeletionService accountDeletion =
+            mock(com.aiwa.service.impl.AccountDeletionService.class);
 
     private final AdminUsersController controller =
-            new AdminUsersController(userRepo, providerRepo, bookingRepo, reviewRepo, complaintRepo, encoder, notificationService, auditService);
+            new AdminUsersController(userRepo, providerRepo, bookingRepo, reviewRepo, complaintRepo, encoder, notificationService, auditService, accountDeletion);
 
     private UserDetails principal(String username) {
         return new org.springframework.security.core.userdetails.User(
@@ -48,6 +50,22 @@ class AdminUsersControllerTest {
 
     private User admin(long id, String email, boolean active) {
         return User.builder().id(id).email(email).role(UserRole.ADMIN).active(active).build();
+    }
+
+    @Test
+    void deletingACustomerErasesTheirDataInsteadOfAHardDelete() {
+        User me = admin(1L, "me@x.com", true);
+        User customer = User.builder().id(5L).fullName("Layla").email("l@x.com").role(UserRole.CUSTOMER).active(true).build();
+        when(userRepo.findByEmail("me@x.com")).thenReturn(Optional.of(me));
+        when(userRepo.findById(5L)).thenReturn(Optional.of(customer));
+
+        controller.deleteUser(5L, principal("me@x.com"));
+
+        // OPS-4: a support deletion request works for someone with bookings (the
+        // hard delete used to fail on their rows) and erases what the policy promises.
+        verify(accountDeletion).delete(customer);
+        verify(userRepo, never()).delete(any(User.class));
+        verify(auditService).record(eq("USER_DELETED"), contains("#5"));
     }
 
     @Test

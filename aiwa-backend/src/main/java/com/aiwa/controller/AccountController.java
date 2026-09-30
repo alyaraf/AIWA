@@ -39,6 +39,7 @@ public class AccountController {
     private final TrustedContactRepository trustedContactRepo;
     private final ProviderProfileRepository providerRepo;
     private final NotificationServiceImpl notificationService;
+    private final com.aiwa.service.impl.AccountDeletionService accountDeletion;
 
     // ── Saved addresses ──────────────────────────────────────────────────────
 
@@ -183,73 +184,12 @@ public class AccountController {
     // ── Account deletion ─────────────────────────────────────────────────────
 
     /**
-     * Anonymise and disable the account. For a provider this also takes the
-     * listing down and cancels their open bookings (before, a deleted provider
-     * stayed APPROVED and bookable with a "Deleted user" owner).
+     * Anonymise and disable the account; see {@link com.aiwa.service.impl.AccountDeletionService}.
      */
     @DeleteMapping
-    @Transactional
     public ResponseEntity<ApiResponse.Success<Void>> deleteAccount(
             @AuthenticationPrincipal UserDetails userDetails) {
-        User user = resolveUser(userDetails);
-        LocalDateTime now = LocalDateTime.now();
-
-        // Cancel any still-active bookings the customer holds.
-        for (BookingStatus st : List.of(BookingStatus.PENDING, BookingStatus.ACCEPTED)) {
-            bookingRepo.findByCustomerIdAndStatus(user.getId(), st).forEach(b -> {
-                b.setStatus(BookingStatus.CANCELLED);
-                b.setCancelledBy("CUSTOMER");
-                b.setCancellationReason("Account deleted");
-                b.setCancelledAt(now);
-                bookingRepo.save(b);
-                notificationService.send(b.getProvider().getUser().getId(), NotificationType.BOOKING_CANCELLED,
-                        "Booking cancelled", "تم إلغاء الحجز",
-                        "A customer closed their account; booking #" + b.getId() + " was cancelled.",
-                        "أغلق أحد العملاء حسابه وتم إلغاء الحجز رقم " + b.getId() + ".",
-                        b.getId(), b.getProvider().getId());
-            });
-        }
-
-        providerRepo.findByUserId(user.getId()).ifPresent(profile -> {
-            profile.setVerificationStatus(VerificationStatus.SUSPENDED);
-            profile.setOfflineMode(true);
-            providerRepo.save(profile);
-            bookingRepo.findByProviderIdAndStatusInOrderByBookingDateAscStartTimeAsc(profile.getId(),
-                            List.of(BookingStatus.PENDING, BookingStatus.ACCEPTED),
-                            org.springframework.data.domain.Pageable.unpaged())
-                    .forEach(b -> {
-                        b.setStatus(BookingStatus.CANCELLED);
-                        b.setCancelledBy("PROVIDER");
-                        b.setCancellationReason("Provider account closed");
-                        b.setCancelledAt(now);
-                        bookingRepo.save(b);
-                        notificationService.send(b.getCustomer().getId(), NotificationType.BOOKING_CANCELLED,
-                                "Booking cancelled", "تم إلغاء الحجز",
-                                "Your booking for " + b.getService().getName()
-                                        + " was cancelled because the provider closed their account.",
-                                "تم إلغاء حجزك لـ " + b.getService().getName() + " لأن مقدم الخدمة أغلق حسابه.",
-                                b.getId(), profile.getId());
-                    });
-        });
-
-        trustedContactRepo.deleteAll(trustedContactRepo.findByUserIdOrderByCreatedAtAsc(user.getId()));
-
-        // Anonymize personal data and disable the account (soft-delete + GDPR-style scrub).
-        user.setFullName("Deleted user");
-        user.setEmail(null);
-        user.setPhone(null);
-        user.setProfileImageUrl(null);
-        user.setPushToken(null);
-        user.setPushPlatform(null);
-        user.setTotpSecret(null);
-        user.setTotpEnabled(false);
-        user.setSearchAreaLabel(null);
-        user.setSearchAreaLatitude(null);
-        user.setSearchAreaLongitude(null);
-        user.setActive(false);
-        user.setTokensValidAfter(Instant.now());
-        userRepo.save(user);
-
+        accountDeletion.delete(resolveUser(userDetails));
         return ResponseEntity.ok(ApiResponse.Success.of("Account deleted", null));
     }
 

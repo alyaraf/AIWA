@@ -30,3 +30,20 @@
 	import common
 	reverse_proxy admin:8080
 }
+
+# Public site (OPS-4): privacy policy, terms and the account-deletion page the
+# stores require. Only the two public read endpoints it needs reach the backend.
+{$SITE_DOMAIN} {
+	import common
+	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+	header Referrer-Policy "no-referrer"
+	@publicApi path /api/terms/latest /api/support/contact
+	handle @publicApi {
+		reverse_proxy backend:8080
+	}
+	handle {
+		root * /srv/site
+		try_files {path} {path}.html
+		file_server
+	}
+}

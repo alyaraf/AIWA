@@ -62,6 +62,10 @@ public class SafetyService {
     @Qualifier("pushExecutor")
     private Executor smsExecutor;
 
+    /** aiwa_sos_alerts_total for the monitoring alert rule (OPS-5); absent in plain unit tests. */
+    @Autowired(required = false)
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
     // ── Participant side ─────────────────────────────────────────────────────
 
     /** Events the requester may see: their own, plus the other party's non-SOS events. */
@@ -89,6 +93,7 @@ public class SafetyService {
 
         if (request.getType() == SafetyEventType.SOS) {
             raiseSos(booking, actor, event);
+            if (meterRegistry != null) meterRegistry.counter("aiwa.sos.alerts").increment();
         }
         return toDto(event);
     }

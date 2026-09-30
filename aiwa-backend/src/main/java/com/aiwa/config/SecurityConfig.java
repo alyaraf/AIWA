@@ -58,6 +58,7 @@ public class SecurityConfig {
             "/auth/2fa/server-time",
             "/dev/2fa/**",   // dev-only reset endpoint below; the whole controller is @Profile("local")
             "/actuator/health/**",
+            "/actuator/prometheus", // MetricsTokenFilter requires the scrape token
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html"
