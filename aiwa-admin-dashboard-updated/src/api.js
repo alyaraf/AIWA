@@ -69,7 +69,14 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
 
   const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  // A proxy error page (HTML 502/504) is not JSON; keep the status instead of
+  // surfacing "Unexpected token <".
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch {
+      if (response.ok) throw new Error("The server sent an unreadable response.");
+    }
+  }
 
   if (!response.ok) {
     if (response.status === 401 && !isRetryAfterRefresh && !NO_REFRESH_RETRY_PATHS.has(path)) {

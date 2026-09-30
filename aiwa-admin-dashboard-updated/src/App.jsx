@@ -3840,8 +3840,11 @@ function Settlements() {
       .then(([ov, list]) => { if (alive) { setOverview(ov); setRows(list); } })
       .catch((err) => {
         if (!alive) return;
-        if (err?.status === 401 || err?.status === 403) { onAuthExpired(); }
-        setError(err.message || "Could not load settlements.");
+        // 401 = the session is gone; 403 = signed in but without FINANCE.
+        if (err?.status === 401) { onAuthExpired(); return; }
+        setError(err?.status === 403
+          ? "You don't have permission to view settlements."
+          : err.message || "Could not load settlements.");
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
