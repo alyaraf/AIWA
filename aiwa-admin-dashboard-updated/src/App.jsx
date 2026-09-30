@@ -2254,7 +2254,7 @@ function MyProfile({ currentUser, onBack, onSelfPatch }) {
   );
 }
 
-function ProfileView({ user: userProp, onBack, onStatusChange, onUserChange, currentUser, selfView = false }) {
+export function ProfileView({ user: userProp, onBack, onStatusChange, onUserChange, currentUser, selfView = false }) {
   const [user, setUser] = useState(userProp);
   const isProvider = user.role === "PROVIDER" && user.providerProfileId != null;
   const isAdmin = user.role === "ADMIN";
@@ -2403,14 +2403,26 @@ function ProfileView({ user: userProp, onBack, onStatusChange, onUserChange, cur
     });
   }
 
-  async function toggleBookingPause() {
+  // Same confirm as the Settlements screen (OPS-10): pausing stops a provider's income.
+  function toggleBookingPause() {
     const paused = provider?.settlementPaused;
-    setBusy(true);
-    try {
-      await runAction(() => api.setSettlementPause(user.providerProfileId, !paused),
-        { success: paused ? "Bookings resumed" : "New bookings paused" });
-      setProvider((p) => ({ ...p, settlementPaused: !paused }));
-    } catch { /* toast */ } finally { setBusy(false); }
+    setConfirm({
+      tone: paused ? "plum" : "danger",
+      eyebrow: "New bookings",
+      title: paused ? `Resume bookings for ${user.fullName}?` : `Pause new bookings for ${user.fullName}?`,
+      body: paused
+        ? "They can receive new bookings again straight away."
+        : "They stay listed but can't take new bookings until the balance is settled. Existing jobs continue.",
+      confirmLabel: paused ? "Resume bookings" : "Pause bookings",
+      onConfirm: async () => {
+        setBusy(true);
+        try {
+          await runAction(() => api.setSettlementPause(user.providerProfileId, !paused),
+            { success: paused ? "Bookings resumed" : "New bookings paused" });
+          setProvider((p) => ({ ...p, settlementPaused: !paused }));
+        } catch { /* toast */ } finally { setBusy(false); }
+      }
+    });
   }
 
   return (

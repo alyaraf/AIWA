@@ -40,15 +40,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (token != null && !tokenBlacklistService.isBlacklisted(token)
                     && jwtUtils.validateToken(token) && jwtUtils.isAccessToken(token)) {
                 String identifier = jwtUtils.getSubjectFromToken(token);
-                UserDetails userDetails;
-                try {
-                    userDetails = userDetailsService.loadUserByUsername(identifier);
-                } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
-                    // The account's sign-in email changed since this token was issued.
-                    Long userId = jwtUtils.getUserIdFromToken(token);
-                    if (userId == null || !(userDetailsService instanceof UserDetailsServiceImpl impl)) throw e;
-                    userDetails = impl.loadUserById(userId);
-                }
+                // One primary-key lookup via the token's userId claim (BE-39) instead
+                // of email-then-phone. The user is still reloaded on every request so
+                // deactivation and password resets take effect immediately.
+                Long userId = jwtUtils.getUserIdFromToken(token);
+                UserDetails userDetails =
+                        userId != null && userDetailsService instanceof UserDetailsServiceImpl impl
+                                ? impl.loadUserById(userId)
+                                : userDetailsService.loadUserByUsername(identifier);
 
                 // Tokens minted before a password reset / admin deactivation are dead.
                 boolean sessionCurrent = !(userDetails instanceof AiwaUserDetails aiwa)

@@ -1,8 +1,26 @@
+import java.util.Base64
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing (FE-2): android/key.properties (git-ignored) points at the
+// upload keystore. See docs/release.md.
+val keystoreProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+// --dart-define values arrive base64-encoded and comma-separated in "dart-defines".
+val dartDefines: Map<String, String> =
+    (project.findProperty("dart-defines") as String? ?: "")
+        .split(",").filter { it.isNotBlank() }
+        .map { String(Base64.getDecoder().decode(it)) }
+        .mapNotNull { d -> d.indexOf('=').takeIf { it > 0 }?.let { d.substring(0, it) to d.substring(it + 1) } }
+        .toMap()
 
 android {
     namespace = "com.aiwa.aiwa_app"
@@ -27,14 +45,42 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (keystoreProperties.containsKey("storeFile")) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Never ship with the debug key: without key.properties a release
+            // build fails in checkReleaseConfig below instead.
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 }
+
+// FE-1 / FE-2: a release build must point at a real HTTPS API and be signed
+// with the upload key. Fails fast instead of shipping the emulator loopback.
+val checkReleaseConfig by tasks.registering {
+    doLast {
+        val problems = mutableListOf<String>()
+        val api = dartDefines["API_BASE_URL"].orEmpty()
+        if (!api.startsWith("https://")) {
+            problems += "API_BASE_URL must be an https:// URL (pass --dart-define=API_BASE_URL=https://api.<domain>/api)."
+        }
+        if (!keystoreProperties.containsKey("storeFile")) {
+            problems += "android/key.properties is missing, so the release would be unsigned (see docs/release.md)."
+        }
+        if (problems.isNotEmpty()) throw GradleException("Release build blocked:\n - " + problems.joinToString("\n - "))
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(checkReleaseConfig) }
 
 kotlin {
     compilerOptions {

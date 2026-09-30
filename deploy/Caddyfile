@@ -1,0 +1,32 @@
+{
+	email {$ACME_EMAIL}
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+}
+
+{$API_DOMAIN} {
+	import common
+	# Uploads are capped at 30 MB by Spring; stop bigger bodies here.
+	request_body {
+		max_size 32MB
+	}
+	# Actuator stays internal apart from health checks.
+	@actuator {
+		path /api/actuator/*
+		not path /api/actuator/health /api/actuator/health/*
+	}
+	respond @actuator 404
+	reverse_proxy backend:8080
+}
+
+{$ADMIN_DOMAIN} {
+	import common
+	reverse_proxy admin:8080
+}

@@ -4,6 +4,7 @@ import com.aiwa.entity.Booking;
 import com.aiwa.enums.BookingStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -32,6 +33,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                    OR CAST(b.id AS String) LIKE :pattern)
             ORDER BY b.createdAt DESC
             """)
+    // BE-39: the admin list reads all of these per row; fetch them in the page query.
+    @EntityGraph(attributePaths = {"customer", "provider", "provider.user", "service", "staffMember"})
     Page<Booking> adminSearch(@Param("status") BookingStatus status,
                               @Param("disputed") boolean disputed,
                               @Param("pattern") String pattern,

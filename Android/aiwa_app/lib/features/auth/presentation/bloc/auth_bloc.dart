@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/push/push_registrar.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../domain/usecases/get_current_user_usecase.dart';
 import '../../domain/usecases/login_usecase.dart';
@@ -23,6 +24,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// Revokes the session server-side on sign-out; null in unit tests.
   final ApiClient? apiClient;
 
+  /// Registers / clears this device's push token with the session (FE-3).
+  final PushRegistrar? pushRegistrar;
+
   AuthBloc({
     required this.loginUseCase,
     required this.registerUseCase,
@@ -32,6 +36,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.updateProfileUseCase,
     required this.secureStorage,
     this.apiClient,
+    this.pushRegistrar,
   }) : super(AuthInitial()) {
     on<AuthCheckSessionEvent>(_safe(_onCheckSession, AuthUnauthenticated()));
     on<AuthLoginEvent>(_safe(_onLogin));
@@ -54,6 +59,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       Sentry.configureScope(
         (s) => s.setUser(SentryUser(id: '${next.user.id}')),
       );
+      // Only on entering a session, not on every profile refresh.
+      if (change.currentState is! AuthAuthenticated) {
+        pushRegistrar?.register();
+      }
     } else if (next is AuthUnauthenticated) {
       Sentry.configureScope((s) => s.setUser(null));
     }
@@ -162,6 +171,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onLogout(AuthLogoutEvent event, Emitter<AuthState> emit) async {
+    // Clear the push address while the access token still works.
+    await pushRegistrar?.unregister();
     await apiClient?.logout();
     await secureStorage.clearAll();
     emit(AuthUnauthenticated());

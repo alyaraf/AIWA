@@ -14,12 +14,34 @@ import java.util.Collection;
 public class AiwaUserDetails extends User {
 
     private final Instant tokensValidAfter;
+    private final Long userId;
 
     public AiwaUserDetails(String username, String password, boolean enabled,
                            Collection<? extends GrantedAuthority> authorities,
                            Instant tokensValidAfter) {
+        this(null, username, password, enabled, authorities, tokensValidAfter);
+    }
+
+    public AiwaUserDetails(Long userId, String username, String password, boolean enabled,
+                           Collection<? extends GrantedAuthority> authorities,
+                           Instant tokensValidAfter) {
         super(username, password, enabled, true, true, true, authorities);
+        this.userId = userId;
         this.tokensValidAfter = tokensValidAfter;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    /**
+     * The signed-in user's id straight from the principal the JWT filter built,
+     * so controllers skip a second users lookup per request (BE-39). Null for
+     * principals that don't carry it (e.g. @WithMockUser in tests); callers
+     * then fall back to looking the user up by name.
+     */
+    public static Long idOf(org.springframework.security.core.userdetails.UserDetails ud) {
+        return ud instanceof AiwaUserDetails a ? a.userId : null;
     }
 
     public Instant getTokensValidAfter() {

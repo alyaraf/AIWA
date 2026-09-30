@@ -10,3 +10,6 @@ key.properties
 
 # flutter golden test failure output
 test/goldens/failures/
+
+# Production secrets mounted into containers
+deploy/secrets/

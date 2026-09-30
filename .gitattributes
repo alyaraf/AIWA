@@ -1,0 +1,2 @@
+# Shell scripts must keep LF or they fail on Linux/macOS CI.
+*.sh text eol=lf

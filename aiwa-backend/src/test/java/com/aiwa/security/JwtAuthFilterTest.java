@@ -82,4 +82,39 @@ class JwtAuthFilterTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(chain).doFilter(any(HttpServletRequest.class), any(HttpServletResponse.class));
     }
+
+    @Test
+    void tokenWithUserIdLoadsByPrimaryKeyAndPrincipalCarriesTheId() throws Exception {
+        UserDetailsServiceImpl impl = mock(UserDetailsServiceImpl.class);
+        JwtAuthFilter byId = new JwtAuthFilter(jwtUtils, impl, blacklist);
+        primeValidToken("old@x.com");
+        when(jwtUtils.getUserIdFromToken("tok")).thenReturn(7L);
+        when(impl.loadUserById(7L)).thenReturn(new AiwaUserDetails(7L, "new@x.com", "pw", true,
+                List.of(new SimpleGrantedAuthority("ROLE_CUSTOMER")), null));
+
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader("Authorization", "Bearer tok");
+        byId.doFilterInternal(req, new MockHttpServletResponse(), mock(FilterChain.class));
+
+        // BE-39: one lookup by id, none by email/phone, and controllers get the id for free.
+        verify(impl, never()).loadUserByUsername(any());
+        UserDetails principal = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        assertThat(AiwaUserDetails.idOf(principal)).isEqualTo(7L);
+    }
+
+    @Test
+    void aDeactivatedAccountIsStillRejectedOnTheIdPath() throws Exception {
+        UserDetailsServiceImpl impl = mock(UserDetailsServiceImpl.class);
+        JwtAuthFilter byId = new JwtAuthFilter(jwtUtils, impl, blacklist);
+        primeValidToken("gone@x.com");
+        when(jwtUtils.getUserIdFromToken("tok")).thenReturn(9L);
+        when(impl.loadUserById(9L)).thenReturn(new AiwaUserDetails(9L, "gone@x.com", "pw", false,
+                List.of(new SimpleGrantedAuthority("ROLE_CUSTOMER")), null));
+
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader("Authorization", "Bearer tok");
+        byId.doFilterInternal(req, new MockHttpServletResponse(), mock(FilterChain.class));
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
 }

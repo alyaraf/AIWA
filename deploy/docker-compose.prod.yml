@@ -1,0 +1,91 @@
+# Production stack (BE-22 / OPS-2 / OPS-8). Only Caddy is reachable from the
+# internet; it terminates TLS (automatic Let's Encrypt certificates) and proxies
+# to the backend and the admin panel. See docs/release.md.
+#   cp .env.example .env && docker compose -f docker-compose.prod.yml up -d --build
+name: aiwa
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?Set ADMIN_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [backend, admin]
+
+  backend:
+    build: ../aiwa-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/aiwa_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CORS_ALLOWED_ORIGINS: https://${ADMIN_DOMAIN}
+    volumes:
+      - uploads:/app/uploads
+      - ./secrets:/run/secrets:ro   # firebase-service-account.json (git-ignored)
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  admin:
+    build:
+      context: ../aiwa-admin-dashboard-updated
+      args:
+        VITE_API_BASE_URL: https://${API_DOMAIN}/api
+    restart: unless-stopped
+    environment:
+      API_ORIGIN: https://${API_DOMAIN}
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aiwa_db}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata:
+  redisdata:
+  uploads:

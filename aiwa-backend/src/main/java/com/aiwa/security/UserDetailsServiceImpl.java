@@ -59,6 +59,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         }
 
         return new AiwaUserDetails(
+                user.getId(),
                 identifier,
                 user.getPassword(),
                 user.isActive(),

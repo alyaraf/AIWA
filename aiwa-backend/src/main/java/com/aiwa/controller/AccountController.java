@@ -260,6 +260,8 @@ public class AccountController {
     }
 
     private Long resolveUserId(UserDetails ud) {
+        Long id = com.aiwa.security.AiwaUserDetails.idOf(ud);
+        if (id != null) return id;
         return resolveUser(ud).getId();
     }
 

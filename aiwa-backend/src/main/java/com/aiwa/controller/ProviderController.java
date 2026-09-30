@@ -121,6 +121,8 @@ public class ProviderController {
     // ── helper ────────────────────────────────────────────────────────────────
 
     private Long resolveUserId(UserDetails userDetails) {
+        Long id = com.aiwa.security.AiwaUserDetails.idOf(userDetails);
+        if (id != null) return id;
         return userRepo.findByEmail(userDetails.getUsername())
                 .or(() -> userRepo.findByPhone(userDetails.getUsername()))
                 .map(User::getId)

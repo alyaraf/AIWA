@@ -93,6 +93,7 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
     Page<ProviderProfile> searchByName(@Param("q") String query, Pageable pageable);
 
     // ── Verification (req 1, 2) ───────────────────────────────────────────────
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"user"})
     Page<ProviderProfile> findByVerificationStatus(VerificationStatus status, Pageable pageable);
 
     /** Providers who reported paying commission that finance hasn't confirmed yet. */

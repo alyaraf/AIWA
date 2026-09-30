@@ -1,0 +1,32 @@
+# Admin panel static server (OPS-8). The nginx image renders this with envsubst
+# at start-up: ${API_ORIGIN} is the backend origin only, e.g. https://api.aiwa.app
+# Security headers live at server level only: an add_header inside a location
+# block would silently drop every inherited one.
+map $uri $admin_cache_control {
+    ~^/assets/  "public, max-age=31536000, immutable";
+    default     "no-store";
+}
+
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    server_tokens off;
+
+    # Only our own bundle runs, and the API is the only origin it talks to.
+    # blob: covers verification-document previews and CSV/file downloads.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: ${API_ORIGIN}; connect-src 'self' ${API_ORIGIN}; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Cache-Control $admin_cache_control always;
+
+    location /assets/ {
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri /index.html;
+    }
+}

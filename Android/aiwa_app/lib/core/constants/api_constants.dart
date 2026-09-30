@@ -6,6 +6,7 @@ class ApiConstants {
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:8080/api',
   );
+
   /// Backend media paths are relative to the API base ("/files/public/gallery/x.jpg");
   /// image widgets need an absolute URL. Absolute URLs pass through unchanged.
   static String mediaUrl(String path) =>
@@ -31,6 +32,7 @@ class ApiConstants {
   static const String verifyOtp = '/auth/verify-otp';
   static const String resetPassword = '/auth/reset-password';
   static const String meAvatar = '/auth/me/avatar';
+  static const String mePushToken = '/auth/me/push-token';
   static const String meNotificationPreferences =
       '/auth/me/notification-preferences';
 
@@ -112,7 +114,8 @@ class ApiConstants {
 
   // Trusted contacts (texted on SOS)
   static const String trustedContacts = '/account/trusted-contacts';
-  static String trustedContactById(String id) => '/account/trusted-contacts/$id';
+  static String trustedContactById(String id) =>
+      '/account/trusted-contacts/$id';
 
   /// DELETE: anonymize the account and cancel active bookings.
   static const String account = '/account';

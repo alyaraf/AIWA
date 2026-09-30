@@ -31,6 +31,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # Empty locally; required by deploy/docker-compose.prod.yml.
+      password: ${REDIS_PASSWORD:}
       timeout: 2s
       repositories:
         enabled: false

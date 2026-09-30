@@ -10,7 +10,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ComplaintRepository extends JpaRepository<Complaint, Long> {
     Page<Complaint> findByReporterIdOrderByCreatedAtDesc(Long reporterId, Pageable pageable);
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"reporter", "targetUser", "targetProvider", "booking"})
     Page<Complaint> findByStatusOrderByCreatedAtDesc(ComplaintStatus status, Pageable pageable);
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"reporter", "targetUser", "targetProvider", "booking"})
     Page<Complaint> findByFlaggedTrueOrderByCreatedAtDesc(Pageable pageable);
     long countByStatus(ComplaintStatus status);
 

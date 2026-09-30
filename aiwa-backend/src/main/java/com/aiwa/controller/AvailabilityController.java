@@ -54,6 +54,8 @@ public class AvailabilityController {
     }
 
     private Long resolveUserId(UserDetails ud) {
+        Long id = com.aiwa.security.AiwaUserDetails.idOf(ud);
+        if (id != null) return id;
         return userRepo.findByEmail(ud.getUsername())
                 .or(() -> userRepo.findByPhone(ud.getUsername()))
                 .map(User::getId).orElseThrow();
