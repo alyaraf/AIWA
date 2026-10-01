@@ -126,9 +126,8 @@ public class GalleryController {
         galleryRepo.findByIdAndProviderId(imageId, providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Gallery image", imageId));
         // One open case per photo is enough for the queue.
-        boolean open = moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(
-                        ModerationStatus.OPEN, ModerationTargetType.GALLERY_IMAGE).stream()
-                .anyMatch(c -> c.getTargetId().equals(imageId));
+        boolean open = moderationRepo.existsByStatusAndTargetTypeAndTargetId(
+                ModerationStatus.OPEN, ModerationTargetType.GALLERY_IMAGE, imageId);
         if (!open) {
             moderationRepo.save(ModerationCase.builder()
                     .targetType(ModerationTargetType.GALLERY_IMAGE)

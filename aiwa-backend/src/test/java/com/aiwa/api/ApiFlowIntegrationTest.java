@@ -617,9 +617,21 @@ class ApiFlowIntegrationTest {
                 .header("Authorization", bearer(finance))));
         assertThat(inbox.findValuesAsText("id")).contains(inboxId);
         JsonNode rows = data(mvc.perform(get("/admin/settlements/providers").header("Authorization", bearer(finance))));
-        JsonNode row = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+        // DR-028: a page of rows, totals summed in the database.
+        JsonNode row = java.util.stream.StreamSupport.stream(rows.get("content").spliterator(), false)
                 .filter(r -> r.get("providerId").asLong() == p.profile().getId()).findFirst().orElseThrow();
         assertThat(row.get("paymentReportedAt").isNull()).isFalse();
+        assertThat(row.get("balanceOwed").decimalValue()).isPositive();
+        assertThat(row.get("status").asText()).isIn("WITHIN_LIMIT", "OVERDUE");
+        assertThat(data(mvc.perform(get("/admin/settlements/overview").header("Authorization", bearer(finance))))
+                .get("totalOwed").decimalValue()).isPositive();
+
+        // The ledger export is streamed page by page and still contains this provider.
+        MvcResult export = mvc.perform(get("/admin/settlements/export").header("Authorization", bearer(finance)))
+                .andExpect(request().asyncStarted()).andReturn();
+        String csv = mvc.perform(asyncDispatch(export)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(csv).startsWith("id,providerId,").contains("," + p.profile().getId() + ",");
 
         mvc.perform(post("/admin/settlements/provider/{id}/confirm-payout", p.profile().getId())
                         .header("Authorization", bearer(finance)))

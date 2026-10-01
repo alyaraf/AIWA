@@ -1,22 +1,27 @@
 package com.aiwa.service.impl;
 
+import com.aiwa.entity.RevokedToken;
+import com.aiwa.repository.RevokedTokenRepository;
 import com.aiwa.security.JwtUtils;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * A Redis outage/hiccup must never make every already-logged-in user look
- * unauthorized. The blacklist is a best-effort revocation layer on top of the
- * JWT's own signature + expiry check — it fails OPEN, not closed.
+ * DR-002: the database is the record of revoked and spent tokens; Redis is a
+ * fast check in front of it. A Redis outage must neither sign everyone out nor
+ * let a logged-out or spent token back in.
  */
 class TokenBlacklistServiceTest {
 
     private final RedisRuntimeService redis = mock(RedisRuntimeService.class);
     private final JwtUtils jwtUtils = mock(JwtUtils.class);
-    private final TokenBlacklistService service = new TokenBlacklistService(redis, jwtUtils);
+    private final RevokedTokenRepository repo = mock(RevokedTokenRepository.class);
+    private final TokenBlacklistService service = new TokenBlacklistService(redis, jwtUtils, repo);
 
     @Test
     void reportsBlacklistedWhenRedisConfirmsIt() {
@@ -25,9 +30,13 @@ class TokenBlacklistServiceTest {
     }
 
     @Test
-    void treatsTokenAsNotBlacklistedWhenRedisIsUnreachable() {
+    void withRedisDownALoggedOutTokenIsStillRefusedFromTheDatabase() {
         when(redis.exists(anyString())).thenThrow(new RuntimeException("Connection refused"));
-        assertThat(service.isBlacklisted("some-token")).isFalse();
+        when(repo.existsById(TokenBlacklistService.hash("logged-out"))).thenReturn(true);
+
+        assertThat(service.isBlacklisted("logged-out")).isTrue();
+        // ...and a valid token is not treated as revoked.
+        assertThat(service.isBlacklisted("still-good")).isFalse();
     }
 
     @Test
@@ -37,12 +46,24 @@ class TokenBlacklistServiceTest {
     }
 
     @Test
-    void blacklistingDoesNotThrowWhenRedisIsUnreachable() {
+    void logoutRecordsTheTokenInTheDatabaseEvenWhenRedisIsDown() {
         when(jwtUtils.validateToken("t")).thenReturn(true);
         when(jwtUtils.getRemainingValidityMillis("t")).thenReturn(60000L);
         doThrow(new RuntimeException("down")).when(redis).set(anyString(), anyString(), any());
 
-        // Logout must still report success even if Redis can't record the revocation.
         assertThatCode(() -> service.blacklist("t")).doesNotThrowAnyException();
+        verify(repo).save(argThat(r -> r.getTokenHash().equals(TokenBlacklistService.hash("t"))));
+    }
+
+    @Test
+    void aRefreshTokenCanBeSpentOnlyOnceEvenWithRedisDown() {
+        when(jwtUtils.getRemainingValidityMillis("r")).thenReturn(60000L);
+        when(redis.exists(anyString())).thenThrow(new RuntimeException("down"));
+        when(repo.saveAndFlush(any(RevokedToken.class)))
+                .thenAnswer(inv -> inv.getArgument(0))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        assertThat(service.claimStrict("r")).isTrue();
+        assertThat(service.claimStrict("r")).isFalse();
     }
 }

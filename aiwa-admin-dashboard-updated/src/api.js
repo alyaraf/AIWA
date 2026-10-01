@@ -185,9 +185,9 @@ export const api = {
     if (!res.ok) { const e = new Error(`Document load failed (${res.status})`); e.status = res.status; throw e; }
     return URL.createObjectURL(await res.blob());
   },
-  reviewReports: () => request("/admin/reviews/moderation").then(normalizeList).then((items) => items.map(normalizeReviewReport)),
+  reviewReports: () => requestAllPages("/admin/reviews/moderation").then((items) => items.map(normalizeReviewReport)),
   resolveReviewReport: (caseId, action) => request(`/admin/reviews/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
-  chatReports: () => request("/admin/chat/moderation").then(normalizeList).then((items) => items.map(normalizeChatReport)),
+  chatReports: () => requestAllPages("/admin/chat/moderation").then((items) => items.map(normalizeChatReport)),
   resolveChatReport: (caseId, action) => request(`/admin/chat/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
   complaints: () => requestAllPages("/admin/complaints").then((items) => items.map(normalizeComplaint)),
   resolveComplaint: (id, notes) => request(`/admin/complaints/${id}/resolve?notes=${encodeURIComponent(notes)}`, { method: "POST" }).then(normalizeComplaint),
@@ -217,12 +217,13 @@ export const api = {
   userDetail: (id) => request(`/admin/users/${id}`).then(normalizeUser),
   providerDetail: (providerId) => request(`/providers/${providerId}`),
   reactivateProvider: (providerId) => request(`/admin/verification/${providerId}/reactivate`, { method: "POST" }),
-  moderation: () => request("/admin/moderation").then(normalizeList).then((items) => items.map(normalizeModeration)),
+  moderation: () => requestAllPages("/admin/moderation").then((items) => items.map(normalizeModeration)),
   moderationAction: (id, payload) => request(`/admin/moderation/${id}/action?status=${encodeURIComponent(payload.status)}&notes=${encodeURIComponent(payload.notes || "")}`, { method: "PATCH" }),
-  settlements: () => request("/admin/settlements").then(normalizeList).then((items) => items.map(normalizeSettlement)),
+  // DR-028: these lists are paged on the server; walk every page.
+  settlements: () => requestAllPages("/admin/settlements").then((items) => items.map(normalizeSettlement)),
   settle: (id) => request(`/admin/settlements/${id}/settle`, { method: "PATCH" }),
   settlementOverview: () => request("/admin/settlements/overview"),
-  settlementProviders: () => request("/admin/settlements/providers").then(normalizeList),
+  settlementProviders: () => requestAllPages("/admin/settlements/providers"),
   settlementDetail: (providerId) => request(`/admin/settlements/provider/${providerId}`),
   confirmPayout: (providerId) => request(`/admin/settlements/provider/${providerId}/confirm-payout`, { method: "POST" }),
   setSettlementPause: (providerId, paused) => request(`/admin/providers/${providerId}/settlement-pause?paused=${paused}`, { method: "PATCH" }),
@@ -946,7 +947,7 @@ async function mockRequest(path, options = {}) {
       && (!q || [u.fullName, u.email, u.phone].some((v) => String(v || "").toLowerCase().includes(q))));
     return { content: hits.slice(page * size, (page + 1) * size), totalPages: Math.max(1, Math.ceil(hits.length / size)), totalElements: hits.length, number: page };
   }
-  if (path === "/admin/moderation") return mock.moderation;
+  if (path.split("?")[0] === "/admin/moderation") return mock.moderation;
   if (path.startsWith("/admin/audit")) {
     return { content: mock.audit, totalPages: 1, number: 0, totalElements: mock.audit.length };
   }
@@ -959,13 +960,13 @@ async function mockRequest(path, options = {}) {
       { id: "dispute-2838", kind: "DISPUTE", title: "Payment dispute", body: "BK-2838 · Dalia Saad → Maadi Hammam", createdAt: new Date(Date.now() - 4*3600*1000).toISOString(), targetRoute: "bookings" }
     ];
   }
-  if (path === "/admin/reviews/moderation") return mock.reviewReports;
+  if (path.split("?")[0] === "/admin/reviews/moderation") return mock.reviewReports;
   if (path.match(/^\/admin\/reviews\/moderation\/[^/]+\/resolve/) && options.method === "POST") {
     const id = path.split("/")[4];
     mock.reviewReports = mock.reviewReports.filter((r) => String(r.moderationCaseId) !== String(id));
     return { success: true };
   }
-  if (path === "/admin/chat/moderation") return mock.chatReports;
+  if (path.split("?")[0] === "/admin/chat/moderation") return mock.chatReports;
   if (path.match(/^\/admin\/chat\/moderation\/[^/]+\/resolve/) && options.method === "POST") {
     const id = path.split("/")[4];
     mock.chatReports = mock.chatReports.filter((r) => String(r.moderationCaseId) !== String(id));
@@ -1085,7 +1086,7 @@ async function mockRequest(path, options = {}) {
       providerCount: rows.filter((r) => r.balanceOwed > 0).length
     };
   }
-  if (path === "/admin/settlements/providers") return mock.settlementRows;
+  if (path.split("?")[0] === "/admin/settlements/providers") return mock.settlementRows;
   if (path.match(/^\/admin\/settlements\/provider\/\d+$/)) {
     const id = Number(path.split("/").pop());
     const row = mock.settlementRows.find((r) => r.providerId === id) || mock.settlementRows[0];
@@ -1156,7 +1157,7 @@ async function mockRequest(path, options = {}) {
     }
     return JSON.parse(JSON.stringify(mock.supportSettings));
   }
-  if (path === "/admin/settlements") return mock.settlements;
+  if (path.split("?")[0] === "/admin/settlements") return mock.settlements;
   if (path.split("?")[0] === "/admin/bookings") return mock.bookings;
   if (path === "/admin/bookings/stats") return { today: 38, inProgress: 6, openDisputes: 1, cancelRate7d: 4.2 };
   if (path.split("?")[0] === "/admin/reviews") return mock.reviews;

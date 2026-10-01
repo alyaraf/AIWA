@@ -89,10 +89,14 @@ public class SettlementController {
 
     @GetMapping("/admin/settlements")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse.Success<List<ApiResponse.CommissionLedgerDto>>> dueEntries(
-            @RequestParam(defaultValue = "DUE") LedgerEntryStatus status) {
-        return ResponseEntity.ok(ApiResponse.Success.of(ledgerRepo.findByStatusOrderByCreatedAtAsc(status)
-                .stream().map(this::toDto).toList()));
+    public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.CommissionLedgerDto>>> dueEntries(
+            @RequestParam(defaultValue = "DUE") LedgerEntryStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size) {
+        // DR-028: paged; the admin panel walks the pages.
+        return ResponseEntity.ok(ApiResponse.Success.of(ledgerRepo
+                .findByStatusOrderByCreatedAtAsc(status, com.aiwa.util.Pages.admin(page, size))
+                .map(this::toDto)));
     }
 
     // ── Admin Settlements screen: overview cards + per-provider rows ──────────
@@ -101,11 +105,9 @@ public class SettlementController {
     @PreAuthorize("hasRole('ADMIN')")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<ApiResponse.SettlementOverviewDto>> overview() {
-        List<ApiResponse.SettlementRowDto> rows = providerRows();
-        BigDecimal totalOwed = rows.stream()
-                .map(ApiResponse.SettlementRowDto::getBalanceOwed)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        int owing = (int) rows.stream().filter(r -> r.getBalanceOwed().signum() > 0).count();
+        // DR-028: totals computed in the database, not by loading the whole ledger.
+        BigDecimal totalOwed = ledgerRepo.sumByStatusIn(OUTSTANDING);
+        int owing = (int) ledgerRepo.countDistinctProvidersByStatusIn(OUTSTANDING);
         return ResponseEntity.ok(ApiResponse.Success.of(ApiResponse.SettlementOverviewDto.builder()
                 .commissionPercent(platformSettings.getCommissionPercent())
                 .totalOwed(totalOwed)
@@ -116,8 +118,10 @@ public class SettlementController {
     @GetMapping("/admin/settlements/providers")
     @PreAuthorize("hasRole('ADMIN')")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<ApiResponse.Success<List<ApiResponse.SettlementRowDto>>> providers() {
-        return ResponseEntity.ok(ApiResponse.Success.of(providerRows()));
+    public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.SettlementRowDto>>> providers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size) {
+        return ResponseEntity.ok(ApiResponse.Success.of(providerRows(com.aiwa.util.Pages.admin(page, size))));
     }
 
     @GetMapping("/admin/settlements/provider/{providerId}")
@@ -202,23 +206,33 @@ public class SettlementController {
         return providerDetail(providerId);
     }
 
+    /** DR-028: streamed 500 rows at a time instead of building the whole ledger in memory. */
     @GetMapping(value = "/admin/settlements/export", produces = "text/csv")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<String> exportLedger() {
-        StringBuilder csv = new StringBuilder("id,providerId,bookingId,bookingAmount,commissionPercent,commissionAmount,status,createdAt,settledAt\n");
-        ledgerRepo.findAllByOrderByCreatedAtDesc().forEach(e -> csv
-                .append(e.getId()).append(',')
-                .append(e.getProvider().getId()).append(',')
-                .append(e.getBooking() != null ? e.getBooking().getId() : "").append(',')
-                .append(e.getBookingAmount()).append(',')
-                .append(e.getCommissionPercent()).append(',')
-                .append(e.getCommissionAmount()).append(',')
-                .append(e.getStatus()).append(',')
-                .append(e.getCreatedAt() != null ? e.getCreatedAt() : "").append(',')
-                .append(e.getSettledAt() != null ? e.getSettledAt() : "").append('\n'));
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> exportLedger() {
+        org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody body = out -> {
+            var w = new java.io.BufferedWriter(new java.io.OutputStreamWriter(out, java.nio.charset.StandardCharsets.UTF_8));
+            w.write("id,providerId,bookingId,bookingAmount,commissionPercent,commissionAmount,status,createdAt,settledAt\n");
+            org.springframework.data.domain.Pageable p = org.springframework.data.domain.PageRequest.of(0, 500);
+            while (true) {
+                var slice = ledgerRepo.findAllByOrderByIdDesc(p);
+                for (CommissionLedgerEntry e : slice) {
+                    w.write(e.getId() + "," + e.getProvider().getId() + ","
+                            + (e.getBooking() != null ? e.getBooking().getId() : "") + ","
+                            + e.getBookingAmount() + "," + e.getCommissionPercent() + ","
+                            + e.getCommissionAmount() + "," + e.getStatus() + ","
+                            + (e.getCreatedAt() != null ? e.getCreatedAt() : "") + ","
+                            + (e.getSettledAt() != null ? e.getSettledAt() : "") + "\n");
+                }
+                if (!slice.hasNext()) break;
+                p = slice.nextPageable();
+            }
+            w.flush();
+        };
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename=\"commission-ledger.csv\"")
-                .body(csv.toString());
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv"))
+                .body(body);
     }
 
     @PostMapping("/admin/settlements/provider/{providerId}/remind")
@@ -309,22 +323,26 @@ public class SettlementController {
 
     // ── helpers for the admin Settlements screen ────────────────────────────
 
-    private List<ApiResponse.SettlementRowDto> providerRows() {
-        java.util.Map<Long, List<CommissionLedgerEntry>> byProvider = new java.util.LinkedHashMap<>();
-        for (CommissionLedgerEntry e : ledgerRepo.findAllByOrderByCreatedAtDesc()) {
-            byProvider.computeIfAbsent(e.getProvider().getId(), k -> new java.util.ArrayList<>()).add(e);
-        }
+    /**
+     * One row per provider with ledger entries, totals summed in the database
+     * one page at a time (DR-028: this used to load the whole ledger).
+     */
+    private org.springframework.data.domain.Page<ApiResponse.SettlementRowDto> providerRows(
+            org.springframework.data.domain.Pageable pageable) {
+        var totals = ledgerRepo.providerTotals(pageable);
+        java.util.Map<Long, ProviderProfile> providers = new java.util.HashMap<>();
+        providerRepo.findAllById(totals.map(t -> (Long) t[0]).toList())
+                .forEach(p -> providers.put(p.getId(), p));
         List<ApiResponse.SettlementRowDto> rows = new java.util.ArrayList<>();
-        byProvider.forEach((providerId, entries) -> {
-            ProviderProfile p = entries.get(0).getProvider();
-            BigDecimal gross = entries.stream()
-                    .filter(e -> OUTSTANDING.contains(e.getStatus()))
-                    .map(CommissionLedgerEntry::getBookingAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal owed = entries.stream()
-                    .filter(e -> OUTSTANDING.contains(e.getStatus()))
-                    .map(CommissionLedgerEntry::getCommissionAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        for (Object[] t : totals) {
+            Long providerId = (Long) t[0];
+            ProviderProfile p = providers.get(providerId);
+            if (p == null) continue;
+            BigDecimal gross = t[1] == null ? BigDecimal.ZERO : new BigDecimal(t[1].toString());
+            BigDecimal owed = t[2] == null ? BigDecimal.ZERO : new BigDecimal(t[2].toString());
+            long overdue = t[3] == null ? 0 : ((Number) t[3]).longValue();
+            long outstanding = t[4] == null ? 0 : ((Number) t[4]).longValue();
+            LocalDateTime oldest = (LocalDateTime) t[5];
             rows.add(ApiResponse.SettlementRowDto.builder()
                     .providerId(providerId)
                     .providerName(p.getBusinessName())
@@ -333,14 +351,14 @@ public class SettlementController {
                     .platformCommissionPercent(platformSettings.getCommissionPercent())
                     .grossAmount(gross)
                     .balanceOwed(owed)
-                    .status(statusOf(entries))
+                    .status(overdue > 0 ? "OVERDUE" : outstanding > 0 ? "WITHIN_LIMIT" : "SETTLED")
                     .settlementPaused(p.isSettlementPaused())
                     .accountSuspended(p.getVerificationStatus() == com.aiwa.enums.VerificationStatus.SUSPENDED)
-                    .dueDate(dueDateOf(entries))
+                    .dueDate(oldest == null ? null : oldest.plusDays(settlementService.dueDays()))
                     .paymentReportedAt(p.getSettlementReportedAt())
                     .build());
-        });
-        return rows;
+        }
+        return new org.springframework.data.domain.PageImpl<>(rows, pageable, totals.getTotalElements());
     }
 
     private String statusOf(List<CommissionLedgerEntry> entries) {

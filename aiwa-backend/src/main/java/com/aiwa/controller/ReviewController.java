@@ -88,9 +88,13 @@ public class ReviewController {
     @GetMapping("/admin/reviews/moderation")
     @Operation(summary = "Reported reviews awaiting moderation, with the report reason (ADMIN)")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<ApiResponse.Success<java.util.List<ApiResponse.ReviewModerationDto>>> reportedReviews() {
+    public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.ReviewModerationDto>>> reportedReviews(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size) {
+        // DR-028: one page at a time (the admin panel walks the pages).
         var cases = moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(
-                com.aiwa.enums.ModerationStatus.OPEN, com.aiwa.enums.ModerationTargetType.REVIEW);
+                com.aiwa.enums.ModerationStatus.OPEN, com.aiwa.enums.ModerationTargetType.REVIEW,
+                com.aiwa.util.Pages.admin(page, size));
         var out = new java.util.ArrayList<ApiResponse.ReviewModerationDto>();
         for (var c : cases) {
             var review = reviewRepo.findById(c.getTargetId()).orElse(null);
@@ -107,7 +111,8 @@ public class ReviewController {
                     .createdAt(c.getCreatedAt())
                     .build());
         }
-        return ResponseEntity.ok(ApiResponse.Success.of(out));
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                new org.springframework.data.domain.PageImpl<>(out, cases.getPageable(), cases.getTotalElements())));
     }
 
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT)

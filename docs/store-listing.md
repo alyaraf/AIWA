@@ -17,7 +17,7 @@ starts collecting something new.
 The privacy policy is a draft. Before submitting: fill in the [bracketed] parts
 (company, SMS/email/hosting providers, minimum age, privacy email), have a lawyer
 check it against Egypt's Personal Data Protection Law (No. 151 of 2020), and
-remove the draft box. Add an Arabic version if you list in Arabic.
+remove the draft box (both the English and the Arabic section; the Arabic one is a translation of the same draft).
 
 ## Permissions the app asks for
 

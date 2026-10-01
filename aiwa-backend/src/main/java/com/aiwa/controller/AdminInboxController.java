@@ -97,8 +97,7 @@ public class AdminInboxController {
 
         // Moderation queue — reported reviews (targetType REVIEW) and reported
         // chat messages (targetType CHAT_MESSAGE). Same status enum, one query.
-        moderationRepo.findByStatusOrderByCreatedAtDesc(ModerationStatus.OPEN).stream()
-                .limit(perSource)
+        moderationRepo.findByStatusOrderByCreatedAtDesc(ModerationStatus.OPEN, PageRequest.of(0, perSource))
                 .forEach(m -> {
                     boolean isChat = m.getTargetType() == ModerationTargetType.CHAT_MESSAGE;
                     // Route notes:

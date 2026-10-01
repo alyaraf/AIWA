@@ -48,13 +48,13 @@ class ReviewControllerModerationTest {
                 .user(User.builder().id(5L).fullName("Karim").build())
                 .provider(ProviderProfile.builder().id(9L).businessName("Omar Barber").build())
                 .hidden(false).build();
-        when(moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(ModerationStatus.OPEN, ModerationTargetType.REVIEW))
-                .thenReturn(List.of(c));
+        when(moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(eq(ModerationStatus.OPEN), eq(ModerationTargetType.REVIEW), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(c)));
         when(reviewRepo.findById(3L)).thenReturn(Optional.of(review));
 
-        var body = controller.reportedReviews().getBody();
+        var body = controller.reportedReviews(0, 200).getBody();
         assertThat(body).isNotNull();
-        List<ApiResponse.ReviewModerationDto> rows = body.getData();
+        List<ApiResponse.ReviewModerationDto> rows = body.getData().getContent();
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).getModerationCaseId()).isEqualTo(1L);
         assertThat(rows.get(0).getReviewId()).isEqualTo(3L);
@@ -65,11 +65,11 @@ class ReviewControllerModerationTest {
 
     @Test
     void reportedReviewsSkipsMissingReviews() {
-        when(moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(ModerationStatus.OPEN, ModerationTargetType.REVIEW))
-                .thenReturn(List.of(openCase(1L, 404L)));
+        when(moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(eq(ModerationStatus.OPEN), eq(ModerationTargetType.REVIEW), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(openCase(1L, 404L))));
         when(reviewRepo.findById(404L)).thenReturn(Optional.empty());
 
-        assertThat(controller.reportedReviews().getBody().getData()).isEmpty();
+        assertThat(controller.reportedReviews(0, 200).getBody().getData().getContent()).isEmpty();
     }
 
     @Test

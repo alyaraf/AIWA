@@ -32,10 +32,14 @@ public class ModerationController {
 
     @GetMapping
     @Transactional(readOnly = true)
-    public ResponseEntity<ApiResponse.Success<List<ApiResponse.ModerationCaseDto>>> list(
-            @RequestParam(defaultValue = "OPEN") ModerationStatus status) {
-        return ResponseEntity.ok(ApiResponse.Success.of(moderationRepo.findByStatusOrderByCreatedAtDesc(status)
-                .stream().map(this::toDto).toList()));
+    public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.ModerationCaseDto>>> list(
+            @RequestParam(defaultValue = "OPEN") ModerationStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size) {
+        // DR-028: paged; the admin panel walks the pages.
+        return ResponseEntity.ok(ApiResponse.Success.of(moderationRepo
+                .findByStatusOrderByCreatedAtDesc(status, com.aiwa.util.Pages.admin(page, size))
+                .map(this::toDto)));
     }
 
     @PostMapping

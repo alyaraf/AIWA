@@ -3,6 +3,8 @@ package com.aiwa.repository;
 import com.aiwa.entity.ModerationCase;
 import com.aiwa.enums.ModerationStatus;
 import com.aiwa.enums.ModerationTargetType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -10,4 +12,14 @@ import java.util.List;
 public interface ModerationCaseRepository extends JpaRepository<ModerationCase, Long> {
     List<ModerationCase> findByStatusOrderByCreatedAtDesc(ModerationStatus status);
     List<ModerationCase> findByStatusAndTargetTypeOrderByCreatedAtDesc(ModerationStatus status, ModerationTargetType targetType);
+
+    // DR-028: the admin queues are paged.
+    Page<ModerationCase> findByStatusOrderByCreatedAtDesc(ModerationStatus status, Pageable pageable);
+
+    Page<ModerationCase> findByStatusAndTargetTypeOrderByCreatedAtDesc(ModerationStatus status,
+                                                                       ModerationTargetType targetType,
+                                                                       Pageable pageable);
+
+    boolean existsByStatusAndTargetTypeAndTargetId(ModerationStatus status, ModerationTargetType targetType,
+                                                   Long targetId);
 }
