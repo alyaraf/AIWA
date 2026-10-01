@@ -38,6 +38,11 @@ public class GlobalExceptionHandler {
         return keyed(HttpStatus.CONFLICT, "Conflict", ex.getMessage());
     }
 
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ApiResponse.Error> handleUnavailable(ServiceUnavailableException ex) {
+        return keyed(HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable", ex.getMessage());
+    }
+
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ApiResponse.Error> handleTooMany(TooManyRequestsException ex) {
         return keyed(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests", ex.getMessage());

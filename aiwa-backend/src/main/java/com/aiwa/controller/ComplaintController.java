@@ -26,6 +26,10 @@ public class ComplaintController {
     private final com.aiwa.service.impl.NotificationServiceImpl notificationService;
     private final com.aiwa.service.impl.AuditService auditService;
 
+    /** DR-028: per-account budget (absent in plain unit tests). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.service.impl.AccountRateLimiter limiter;
+
     @PostMapping("/complaints")
     @Operation(summary = "Submit a complaint")
     public ResponseEntity<ApiResponse.Success<ApiResponse.ComplaintDto>> submit(
@@ -35,6 +39,7 @@ public class ComplaintController {
             @RequestParam String description,
             @AuthenticationPrincipal UserDetails userDetails) {
 
+        if (limiter != null) limiter.check(resolveUserId(userDetails), "complaint", 5, java.time.Duration.ofHours(1));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.Success.of("Complaint submitted",
                         complaintService.submit(resolveUserId(userDetails),
@@ -117,8 +122,7 @@ public class ComplaintController {
     private Long resolveUserId(UserDetails ud) {
         Long id = com.aiwa.security.AiwaUserDetails.idOf(ud);
         if (id != null) return id;
-        return userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
+        return userRepo.findByLogin(ud.getUsername())
                 .map(User::getId).orElseThrow();
     }
 }

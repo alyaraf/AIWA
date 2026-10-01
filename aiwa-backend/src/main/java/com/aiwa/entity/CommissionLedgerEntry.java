@@ -16,6 +16,11 @@ public class CommissionLedgerEntry extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** R2-09: the hourly sweep and a finance settlement can no longer overwrite each other. */
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "provider_id", nullable = false)
     private ProviderProfile provider;

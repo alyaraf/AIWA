@@ -22,6 +22,7 @@ class AuthRepositoryImpl implements AuthRepository {
         identifier: identifier,
         password: password,
       );
+      _storage.markNewSession();
       await _storage.saveAccessToken(tokens['accessToken']!);
       await _storage.saveRefreshToken(tokens['refreshToken']!);
       await _storage.saveUserRole(tokens['role']!);
@@ -63,6 +64,7 @@ class AuthRepositoryImpl implements AuthRepository {
         profileImageUrl: profileImageUrl,
         preferredLanguage: preferredLanguage,
       );
+      _storage.markNewSession();
       await _storage.saveAccessToken(tokens['accessToken']!);
       await _storage.saveRefreshToken(tokens['refreshToken']!);
       await _storage.saveUserRole(tokens['role']!);
@@ -110,6 +112,7 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final tokens = await _remote.changePhone(phone: phone, code: code);
       // The backend revoked every token issued before the change.
+      _storage.markNewSession();
       await _storage.saveAccessToken(tokens['accessToken']!);
       await _storage.saveRefreshToken(tokens['refreshToken']!);
       return const Right(null);

@@ -25,17 +25,26 @@ class NotificationPushDeliveryTest {
 
     private final NotificationRepository notificationRepo = mock(NotificationRepository.class);
     private final UserRepository userRepo = mock(UserRepository.class);
-    private final RedisRuntimeService redis = mock(RedisRuntimeService.class);
     private final PushNotificationService pushService = mock(PushNotificationService.class);
+    private final PushDeviceService pushDevices = mock(PushDeviceService.class);
 
     private final NotificationServiceImpl service =
-            new NotificationServiceImpl(notificationRepo, userRepo, redis, pushService);
+            new NotificationServiceImpl(notificationRepo, userRepo, pushService, pushDevices);
+
+    private void devices(com.aiwa.entity.PushDevice... ds) {
+        when(pushDevices.devicesOf(1L)).thenReturn(java.util.List.of(ds));
+    }
+
+    private static com.aiwa.entity.PushDevice device(String token, DevicePlatform platform) {
+        return com.aiwa.entity.PushDevice.builder().token(token).platform(platform).build();
+    }
 
     @Test
     void sendsPushInArabicWhenThatsThePreferredLanguageAndATokenIsRegistered() {
         User user = User.builder().id(1L).notifyPush(true).muteAll(false)
                 .preferredLanguage(Language.AR)
-                .pushToken("device-token").pushPlatform(DevicePlatform.ANDROID).build();
+                .build();
+        devices(device("device-token", DevicePlatform.ANDROID));
         when(userRepo.findById(1L)).thenReturn(Optional.of(user));
         when(notificationRepo.save(any())).thenAnswer(inv -> {
             var n = inv.getArgument(0, com.aiwa.entity.Notification.class);
@@ -54,7 +63,8 @@ class NotificationPushDeliveryTest {
     void fallsBackToEnglishWhenNoArabicTextIsSupplied() {
         User user = User.builder().id(1L).notifyPush(true).muteAll(false)
                 .preferredLanguage(Language.AR)
-                .pushToken("device-token").build();
+                .build();
+        devices(device("device-token", null));
         when(userRepo.findById(1L)).thenReturn(Optional.of(user));
         when(notificationRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -75,8 +85,22 @@ class NotificationPushDeliveryTest {
     }
 
     @Test
+    void pushesToEveryRegisteredPhone() {
+        User user = User.builder().id(1L).notifyPush(true).muteAll(false).build();
+        devices(device("phone-a", DevicePlatform.ANDROID), device("phone-b", DevicePlatform.IOS));
+        when(userRepo.findById(1L)).thenReturn(Optional.of(user));
+        when(notificationRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.send(1L, NotificationType.BOOKING_CREATED, "t", "t", "b", "b", null, null);
+
+        verify(pushService).send(eq("phone-a"), eq(DevicePlatform.ANDROID), any(), any(), any());
+        verify(pushService).send(eq("phone-b"), eq(DevicePlatform.IOS), any(), any(), any());
+    }
+
+    @Test
     void respectsMuteAllEvenWithATokenRegistered() {
-        User user = User.builder().id(1L).notifyPush(true).muteAll(true).pushToken("device-token").build();
+        User user = User.builder().id(1L).notifyPush(true).muteAll(true).build();
+        devices(device("device-token", DevicePlatform.ANDROID));
         when(userRepo.findById(1L)).thenReturn(Optional.of(user));
         when(notificationRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

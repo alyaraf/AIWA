@@ -94,6 +94,22 @@ void main() {
     expect(await storage.getRefreshToken(), 'r2');
   });
 
+  test('signing out while a refresh is in flight does not sign back in (DR-003)', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      AppConstants.accessTokenKey: 'old',
+      AppConstants.refreshTokenKey: 'r',
+    });
+    final storage = SecureStorage(const FlutterSecureStorage());
+    final c = ApiClient(storage, adapter: _RefreshAdapter());
+    final call = c.get('/me');
+    // The refresh takes 50 ms; the user signs out meanwhile.
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await storage.clearAll();
+    await expectLater(call, throwsA(isA<UnauthorizedException>()));
+    expect(await storage.getAccessToken(), isNull);
+    expect(await storage.getRefreshToken(), isNull);
+  });
+
   test('a 5xx on refresh keeps the tokens (FE-32)', () async {
     FlutterSecureStorage.setMockInitialValues({
       AppConstants.accessTokenKey: 'old',

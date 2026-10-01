@@ -88,4 +88,22 @@ describe("api.js helpers for the 2026-09-29 backend fields", () => {
     expect(pageWindow(5, 12)).toEqual([1, "…", 4, 5, 6, "…", 12]);
     expect(pageWindow(2, 4)).toEqual([1, 2, 3, 4]);
   });
+
+  it("shows who the SOS texts reached and the oldest open alert (BE-37, DR-006)", async () => {
+    const withDeliveries = apiModule.normalizeSafety({
+      id: 42, bookingId: 1183, actorName: "Nour", actorRole: "CUSTOMER", resolved: false,
+      createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+      deliveries: [
+        { recipientKind: "ONCALL", phone: "+201000000001", status: "SENT", attempts: 1 },
+        { recipientKind: "CONTACT", phone: "+201088888888", status: "FAILED", attempts: 3, lastError: "gateway down" }
+      ]
+    });
+    vi.spyOn(apiModule.api, "safetyQueue").mockResolvedValue([SOS, withDeliveries]);
+    render(<Safety />);
+    expect(await screen.findByText("Delivered to gateway")).toBeInTheDocument();
+    expect(screen.getByText("Failed after 3 tries")).toBeInTheDocument();
+    expect(screen.getByText(/gateway down/)).toBeInTheDocument();
+    expect(screen.getByText(/Oldest open alert/)).toBeInTheDocument();
+    expect(screen.getByText(/Booking #1183, raised by Nour/)).toBeInTheDocument();
+  });
 });

@@ -63,10 +63,11 @@ abstract class BookingRepository {
     double? longitude,
   });
 
-  /// Whether an SOS on this booking is recorded and still open.
-  Future<Either<Failure, bool>> hasOpenSos(String bookingId);
+  /// The caller's open SOS on this booking and what was actually delivered
+  /// (R2-03), or null when none is open.
+  Future<Either<Failure, SosReport?>> sosReport(String bookingId);
 
-  /// "I'm safe" after an SOS. Not in the backend.
+  /// "I'm safe" after an SOS: closes the caller's open SOS.
   Future<Either<Failure, void>> resolveSos(String bookingId);
 
   /// Masked-number proxy for the call button. Not in the backend.
@@ -96,4 +97,28 @@ abstract class BookingRepository {
     required String newDate,
     required String newTime,
   });
+}
+
+/// What an SOS reached, from the backend's delivery records (R2-03). The SOS
+/// screen says only this: before, it always claimed a trusted contact had been
+/// alerted, even with no contacts, no location, or a failed text.
+class SosReport {
+  final bool supportAlerted;
+  final int contactsTexted;
+  final int contactsFailed;
+  final int contactsPending;
+
+  const SosReport({
+    this.supportAlerted = false,
+    this.contactsTexted = 0,
+    this.contactsFailed = 0,
+    this.contactsPending = 0,
+  });
+
+  factory SosReport.fromJson(Map<String, dynamic> j) => SosReport(
+    supportAlerted: j['supportAlerted'] == true,
+    contactsTexted: (j['contactsTexted'] as num?)?.toInt() ?? 0,
+    contactsFailed: (j['contactsFailed'] as num?)?.toInt() ?? 0,
+    contactsPending: (j['contactsPending'] as num?)?.toInt() ?? 0,
+  );
 }

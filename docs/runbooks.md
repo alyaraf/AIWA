@@ -7,7 +7,11 @@ One page per situation. Commands run from `deploy/` on the server unless noted.
 
 What already happens automatically: the on-call phones in `SAFETY_ONCALL_PHONES`
 get an SMS, the person's trusted contacts get an SMS, and the alert opens in the
-admin panel's **Safety** screen. With monitoring on, Prometheus also fires `SosRaised`.
+admin panel's **Safety** screen. Alertmanager sends `SosRaised` to the team, and
+`SosUnanswered` if an alert is still open after 10 minutes. Each text is tracked: the
+Safety screen shows, per phone, "Delivered to gateway", "Sending…" or "Failed after 3
+tries" with the error, and the person who raised it sees the same counts in the app.
+A failed text to a trusted contact means **you** call that contact.
 
 1. Open the admin panel → **Safety**. Open the alert: it shows both parties'
    phone numbers, the booking and a map link to the last location.
@@ -65,6 +69,12 @@ after that backup is lost, so note the time and tell affected users.
 
 Test a restore on a copy every month. A backup you've never restored is a guess.
 
+A failed backup says `BACKUP FAILED: <reason>` in `dc logs backup`, leaves no
+file behind and doesn't touch `backups/last-success`; the backup container turns
+*unhealthy* when the last good backup is more than 26 hours old (`dc ps`). Set
+`BACKUP_HEARTBEAT_URL` to a healthchecks.io / Better Stack heartbeat so a missed
+night alerts someone even when nobody looks at the server.
+
 ## Backups off the server
 
 A backup on the same disk doesn't survive losing the server. Copy `deploy/backups/`
@@ -87,13 +97,17 @@ dc restart backend
 
 Out of memory (`HeapNearlyFull` first): give the server more RAM or lower traffic
 spikes; the container restarts itself on OutOfMemoryError. Database unreachable:
-`dc logs postgres`. Nothing obvious: roll back to the previous image
-(`git checkout <previous tag> && dc up -d --build backend`).
+`dc logs postgres`. Nothing obvious: roll back to the previous release
+(`docs/release.md`, "Releasing and rolling back").
 
 ## Getting paged by alerts
 
-Prometheus shows alerts but doesn't send them. To get paged, add an Alertmanager
-service with a receiver for your team (email, Telegram bot or a WhatsApp gateway
-webhook) and point Prometheus at it (`alerting:` in `monitoring/prometheus.yml`).
+Alertmanager sends every alert in `monitoring/alerts.yml` to the receivers in
+`.env`: email (`ALERT_EMAIL_TO` + SMTP settings) and/or Telegram
+(`ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`). Critical alerts repeat every
+30 minutes until resolved. If none is set the container refuses to start (`dc ps`
+shows it restarting), and `AlertingPipelineDown` fires when it is down.
+Send a test once after setup:
+`dc exec alertmanager amtool alert add Test severity=critical --alertmanager.url=http://localhost:9093`.
 Also set up an outside uptime check (UptimeRobot, Better Stack) on
 `https://<API_DOMAIN>/api/actuator/health`: it still works when the whole server is down.

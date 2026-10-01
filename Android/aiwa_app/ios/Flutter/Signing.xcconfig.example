@@ -1,0 +1,7 @@
+// Copy to Signing.xcconfig (git-ignored) and fill in (R2-21).
+// Apple Developer -> Membership -> Team ID. The App ID com.aiwa.app needs the
+// Push Notifications and Associated Domains capabilities.
+DEVELOPMENT_TEAM = ABCDE12345
+// The public site domain that serves /.well-known/apple-app-site-association
+// (SITE_DOMAIN in deploy/.env).
+APP_LINK_DOMAIN = yourdomain.com

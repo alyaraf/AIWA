@@ -16,8 +16,8 @@ public interface AuthService {
 
     // ── Two-factor authentication (TOTP) ────────────────────────────────────
     ApiResponse.AuthResponse verifyMfa(String mfaToken, String code);
-    ApiResponse.TwoFactorSetupDto beginTotpSetup(String identifier);
+    ApiResponse.TwoFactorSetupDto beginTotpSetup(String identifier, String password, String code);
     void enableTotp(String identifier, String code);
-    void disableTotp(String identifier);
+    void disableTotp(String identifier, String password, String code);
     boolean isTotpEnabled(String identifier);
 }

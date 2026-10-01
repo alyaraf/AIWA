@@ -1,14 +1,18 @@
 # Production stack (BE-22 / OPS-2 / OPS-8). Only Caddy is reachable from the
 # internet; it terminates TLS (automatic Let's Encrypt certificates) and proxies
 # to the backend, the admin panel and the public legal site. See docs/release.md.
-#   cp .env.example .env && docker compose -f docker-compose.prod.yml up -d --build
-#   add --profile monitoring to also run Prometheus with the alert rules (OPS-5).
+#   cp .env.example .env && RELEASE_TAG=$(git rev-parse --short HEAD) docker compose -f docker-compose.prod.yml up -d --build
+# Every image is pinned to an exact version, and our own images are tagged with
+# RELEASE_TAG (the git commit), so a rollback is "RELEASE_TAG=<previous> ... up -d
+# --no-build" (R2-20, docs/release.md). Prometheus and Alertmanager always run:
+# alerts reach the team set in .env (R2-04).
 name: aiwa
 
 services:
   caddy:
-    image: caddy:2.8-alpine
+    image: caddy:2.11.4-alpine
     restart: unless-stopped
+    mem_limit: 256m
     ports:
       - "80:80"
       - "443:443"
@@ -30,7 +34,10 @@ services:
 
   backend:
     build: ../aiwa-backend
+    image: aiwa-backend:${RELEASE_TAG:-local}
     restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 2
     env_file: .env
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -56,15 +63,18 @@ services:
       context: ../aiwa-admin-dashboard-updated
       args:
         VITE_API_BASE_URL: https://${API_DOMAIN}/api
+    image: aiwa-admin:${RELEASE_TAG:-local}
     restart: unless-stopped
+    mem_limit: 128m
     environment:
       API_ORIGIN: https://${API_DOMAIN}
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine
     restart: unless-stopped
+    mem_limit: 1g
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-aiwa_db}
       POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
@@ -80,8 +90,9 @@ services:
   # OPS-2: nightly pg_dump + uploads tarball into ./backups (git-ignored), kept
   # BACKUP_KEEP_DAYS. Copy ./backups off the server as well (docs/runbooks.md).
   backup:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine
     restart: unless-stopped
+    mem_limit: 512m
     entrypoint: ["sh", "/backup.sh"]
     environment:
       PGHOST: postgres
@@ -90,27 +101,54 @@ services:
       PGPASSWORD: ${DB_PASSWORD}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      # R2-02: pinged after each verified backup; a missing ping alerts (healthchecks.io etc.).
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
     volumes:
       - ./backup/backup.sh:/backup.sh:ro
       - ./backups:/backups
       - uploads:/uploads
+    healthcheck:
+      # Unhealthy when the last verified backup is more than 26 hours old.
+      test: ["CMD-SHELL", "test -n \"$$(find /backups/last-success -mmin -1560 2>/dev/null)\""]
+      interval: 10m
+      start_period: 2h
     depends_on:
       postgres: { condition: service_healthy }
 
   prometheus:
     image: prom/prometheus:v2.54.1
-    profiles: [monitoring]
     restart: unless-stopped
+    mem_limit: 512m
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - ./secrets/metrics-token:/run/secrets/metrics-token:ro
       - prometheus_data:/prometheus
-    depends_on: [backend]
+    depends_on: [backend, alertmanager]
+
+  # R2-04: delivers the alerts (email and/or Telegram from .env). Refuses to
+  # start without a receiver, so missing alert settings are visible.
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    restart: unless-stopped
+    mem_limit: 128m
+    entrypoint: ["sh", "/alertmanager-entrypoint.sh"]
+    environment:
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      ALERT_SMTP_HOST: ${ALERT_SMTP_HOST:-}
+      ALERT_SMTP_USER: ${ALERT_SMTP_USER:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-}
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./monitoring/alertmanager-entrypoint.sh:/alertmanager-entrypoint.sh:ro
+      - alertmanager_data:/alertmanager
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine
     restart: unless-stopped
+    mem_limit: 256m
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
     volumes:
       - redisdata:/data
@@ -129,3 +167,4 @@ volumes:
   redisdata:
   uploads:
   prometheus_data:
+  alertmanager_data:

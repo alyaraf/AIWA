@@ -48,10 +48,14 @@ public class AiwaUserDetails extends User {
         return tokensValidAfter;
     }
 
-    /** JWT iat has second precision, so compare at that precision. */
+    /**
+     * Compared at millisecond precision (DR-018): tokens carry their issue time
+     * in milliseconds. Older second-precision tokens count from the start of
+     * their second, so one issued in the same second as the cut-off is refused.
+     */
     public boolean acceptsTokenIssuedAt(Instant issuedAt) {
         if (tokensValidAfter == null) return true;
         if (issuedAt == null) return false;
-        return !issuedAt.isBefore(tokensValidAfter.truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+        return !issuedAt.isBefore(tokensValidAfter);
     }
 }

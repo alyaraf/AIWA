@@ -131,7 +131,7 @@ jobs:
           # The server holds a deploy-only checkout at /srv/aiwa with its own deploy/.env.
           # $SHA is meant to expand here, on the runner.
           # shellcheck disable=SC2029
-          ssh "$USER_NAME@$HOST" "set -e; cd /srv/aiwa && git fetch --quiet origin && git checkout --quiet --detach $SHA && cd deploy && docker compose -f docker-compose.prod.yml up -d --build --remove-orphans"
+          ssh "$USER_NAME@$HOST" "set -e; cd /srv/aiwa && git fetch --quiet origin && git checkout --quiet --detach $SHA && cd deploy && RELEASE_TAG=$SHA docker compose -f docker-compose.prod.yml up -d --build --remove-orphans"
       - name: Health check
         env:
           API_DOMAIN: ${{ vars.STAGING_API_DOMAIN }}

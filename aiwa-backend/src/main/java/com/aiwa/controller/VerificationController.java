@@ -36,6 +36,10 @@ public class VerificationController {
     private final UserRepository userRepo;
     private final com.aiwa.repository.ProviderProfileRepository providerRepo;
 
+    /** DR-028: per-account upload budget (absent in plain unit tests). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.service.impl.AccountRateLimiter limiter;
+
     @GetMapping("/admin/verification/counts")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Provider counts by verification status (ADMIN)")
@@ -58,11 +62,29 @@ public class VerificationController {
             @RequestParam("selfie")          MultipartFile selfie,
             @AuthenticationPrincipal UserDetails userDetails) {
 
-        String frontPath  = fileStorageService.storePrivate(nationalIdFront, "national-id");
-        String backPath   = fileStorageService.storePrivate(nationalIdBack, "national-id");
-        String selfiePath = fileStorageService.storePrivate(selfie, "selfie");
+        Long userId = resolveUserId(userDetails);
+        if (limiter != null) limiter.check(userId, "upload", 30, java.time.Duration.ofHours(1));
+        // R2-13: check first, store second. Before, three ID images were written to
+        // disk and only then was the submission refused (already approved), and a
+        // resubmission never removed the previous set: ID scans piled up on disk.
+        verificationService.requireCanSubmit(userId);
 
-        verificationService.submitDocuments(resolveUserId(userDetails), frontPath, backPath, selfiePath);
+        java.util.List<String> stored = new java.util.ArrayList<>();
+        java.util.List<String> previous;
+        try {
+            String frontPath  = fileStorageService.storePrivate(nationalIdFront, "national-id");
+            stored.add(frontPath);
+            String backPath   = fileStorageService.storePrivate(nationalIdBack, "national-id");
+            stored.add(backPath);
+            String selfiePath = fileStorageService.storePrivate(selfie, "selfie");
+            stored.add(selfiePath);
+            previous = verificationService.submitDocuments(userId, frontPath, backPath, selfiePath);
+        } catch (RuntimeException e) {
+            stored.forEach(fileStorageService::deletePrivate);
+            throw e;
+        }
+        // The submission is committed; the replaced set is no longer needed.
+        previous.forEach(fileStorageService::deletePrivate);
         return ResponseEntity.ok(ApiResponse.Success.of("Documents submitted. Pending review.", null));
     }
 
@@ -205,8 +227,7 @@ public class VerificationController {
     private Long resolveUserId(UserDetails ud) {
         Long id = com.aiwa.security.AiwaUserDetails.idOf(ud);
         if (id != null) return id;
-        return userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
+        return userRepo.findByLogin(ud.getUsername())
                 .map(User::getId).orElseThrow();
     }
 }

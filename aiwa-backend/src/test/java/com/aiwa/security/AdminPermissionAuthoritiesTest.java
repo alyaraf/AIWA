@@ -27,7 +27,7 @@ class AdminPermissionAuthoritiesTest {
     private final UserDetailsServiceImpl service = new UserDetailsServiceImpl(userRepo);
 
     private Set<String> authoritiesFor(User user) {
-        when(userRepo.findByEmail("x@aiwa.com")).thenReturn(Optional.of(user));
+        when(userRepo.findByLogin("x@aiwa.com")).thenReturn(Optional.of(user));
         UserDetails details = service.loadUserByUsername("x@aiwa.com");
         return details.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)

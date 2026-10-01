@@ -1,5 +1,5 @@
-# OPS-5 alert rules. They show on Prometheus's Alerts page; to get paged, add an
-# Alertmanager with your email / Telegram / WhatsApp webhook (docs/runbooks.md).
+# OPS-5 alert rules, delivered by Alertmanager (email / Telegram, set in deploy/.env;
+# R2-04). An outside uptime check covers the whole server being down (docs/runbooks.md).
 # The SOS text to the on-call phones does not depend on any of this.
 groups:
   - name: aiwa
@@ -16,6 +16,20 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: "A customer or provider raised an SOS; open the admin Safety queue now"
+
+      # DR-006: an SOS nobody has picked up in 10 minutes.
+      - alert: SosUnanswered
+        expr: aiwa_sos_open_oldest_age_seconds > 600
+        labels: { severity: critical }
+        annotations:
+          summary: "An SOS has been open for more than 10 minutes; open the admin Safety queue"
+
+      - alert: AlertingPipelineDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Alertmanager is down: alerts are not being delivered"
 
       - alert: HighServerErrorRate
         expr: >

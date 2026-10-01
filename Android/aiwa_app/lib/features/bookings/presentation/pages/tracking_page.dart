@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/di/injection_container.dart';
+import '../../domain/repositories/booking_repository.dart' show SosReport;
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -285,7 +286,7 @@ class _TrackingViewState extends State<_TrackingView> {
           ],
           if (s.sos != SosStage.none) ...[
             const SizedBox(height: 10),
-            _SosBanner(stage: s.sos, onSafe: _cubit.imSafe),
+            _SosBanner(stage: s.sos, report: s.sosReport, onSafe: _cubit.imSafe),
           ],
           if (!b.homeService &&
               const {'ACCEPTED', 'ON_THE_WAY', 'ARRIVED'}.contains(st)) ...[
@@ -740,8 +741,21 @@ class _SafetyCard extends StatelessWidget {
 
 class _SosBanner extends StatelessWidget {
   final SosStage stage;
+  final SosReport? report;
   final VoidCallback onSafe;
-  const _SosBanner({required this.stage, required this.onSafe});
+  const _SosBanner({required this.stage, this.report, required this.onSafe});
+
+  /// Only what the delivery records show (R2-03).
+  static String detail(AppLocalizations l, SosReport? r) {
+    if (r == null) return '';
+    final parts = <String>[
+      if (r.contactsPending > 0) l.trackSosTexting,
+      if (r.contactsTexted > 0) l.trackSosTexted(r.contactsTexted),
+      if (r.contactsFailed > 0) l.trackSosTextFailed(r.contactsFailed),
+      if (r.contactsPending + r.contactsTexted + r.contactsFailed == 0) l.trackSosNoContacts,
+    ];
+    return parts.join(' ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -792,9 +806,11 @@ class _SosBanner extends StatelessWidget {
               SosStage.notified => Text.rich(
                 TextSpan(
                   style: style,
-                  children: spansOf(l.trackSosNotified('{bold}'), {
+                  children: spansOf(l.trackSosNotified('{bold}', detail(l, report)), {
                     'bold': TextSpan(
-                      text: l.trackSosNotifiedBold,
+                      text: report?.supportAlerted == false
+                          ? l.trackSosRecordedBold
+                          : l.trackSosNotifiedBold,
                       style: style.copyWith(fontWeight: FontWeight.w700),
                     ),
                   }),

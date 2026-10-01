@@ -21,19 +21,48 @@ public class VerificationServiceImpl {
     private final NotificationServiceImpl notificationService;
     private final WaitlistService waitlistService;
 
-    /** Provider submits identity documents (req 1) */
-    @Transactional
-    public void submitDocuments(Long userId,
-                                String nationalIdFrontPath,
-                                String nationalIdBackPath,
-                                String selfiePath) {
-
+    /**
+     * Whether this provider may (re)submit documents. Refused once approved, and
+     * while suspended (R2-15: a suspended provider could send themselves back to
+     * the review queue by resubmitting; lifting a suspension is an admin action).
+     */
+    @Transactional(readOnly = true)
+    public void requireCanSubmit(Long userId) {
         ProviderProfile profile = providerRepo.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider profile not found"));
+        requireCanSubmit(profile);
+    }
 
+    private static void requireCanSubmit(ProviderProfile profile) {
         if (profile.getVerificationStatus() == VerificationStatus.APPROVED) {
             throw new BusinessException("verification.error.already_verified");
         }
+        if (profile.getVerificationStatus() == VerificationStatus.SUSPENDED) {
+            throw new BusinessException("verification.error.suspended");
+        }
+    }
+
+    /**
+     * Provider submits identity documents (req 1).
+     *
+     * @return the stored paths of the documents this submission replaced, for the
+     * caller to delete once the change is committed (R2-13)
+     */
+    @Transactional
+    public java.util.List<String> submitDocuments(Long userId,
+                                                  String nationalIdFrontPath,
+                                                  String nationalIdBackPath,
+                                                  String selfiePath) {
+
+        ProviderProfile profile = providerRepo.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Provider profile not found"));
+        requireCanSubmit(profile);
+
+        java.util.List<String> replaced = java.util.stream.Stream.of(
+                        profile.getNationalIdFrontPath(), profile.getNationalIdBackPath(), profile.getSelfiePath())
+                .filter(java.util.Objects::nonNull)
+                .filter(p -> !p.equals(nationalIdFrontPath) && !p.equals(nationalIdBackPath) && !p.equals(selfiePath))
+                .toList();
 
         profile.setNationalIdFrontPath(nationalIdFrontPath);
         profile.setNationalIdBackPath(nationalIdBackPath);
@@ -42,6 +71,7 @@ public class VerificationServiceImpl {
         profile.setRejectionReason(null);
 
         providerRepo.save(profile);
+        return replaced;
     }
 
     /** Admin: list all providers pending verification (req 2) */

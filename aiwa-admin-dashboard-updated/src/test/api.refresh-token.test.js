@@ -60,6 +60,26 @@ describe("api.js — silent refresh on 401", () => {
     expect(auth).toBe("Bearer new-access");
   });
 
+  it("signing out while a refresh is in flight does not sign back in (DR-003)", async () => {
+    const { clearTokens } = await import("../api.js");
+    let releaseRefresh;
+    const spy = vi.spyOn(globalThis, "fetch");
+    spy.mockImplementationOnce(async () => jsonRes(401, { error: "Unauthorized" }));
+    spy.mockImplementationOnce(() => new Promise((resolve) => {
+      releaseRefresh = () => resolve(jsonRes(200, { data: { accessToken: "new-access", refreshToken: "new-refresh" } }));
+    }));
+
+    const pending = api.dashboardRaw();
+    await vi.waitFor(() => expect(releaseRefresh).toBeTypeOf("function"));
+    clearTokens();          // the admin signs out
+    releaseRefresh();       // ...and only then the refresh answers
+
+    await expect(pending).rejects.toMatchObject({ status: 401 });
+    expect(window.localStorage.getItem("aiwa_admin_access_token")).toBeNull();
+    expect(window.localStorage.getItem("aiwa_admin_refresh_token")).toBeNull();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2); // no retry under the old session
+  });
+
   it("gives up cleanly when the refresh token is also dead — throws the original 401", async () => {
     queueFetch([
       jsonRes(401, { error: "Unauthorized", message: "Authentication required" }),

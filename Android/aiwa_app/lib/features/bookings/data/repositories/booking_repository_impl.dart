@@ -162,8 +162,8 @@ class BookingRepositoryImpl implements BookingRepository {
   );
 
   @override
-  Future<Either<Failure, bool>> hasOpenSos(String bookingId) =>
-      _guard(() => _remote.hasOpenSos(bookingId));
+  Future<Either<Failure, SosReport?>> sosReport(String bookingId) =>
+      _guard(() => _remote.sosReport(bookingId));
 
   /// "I'm safe" — POST /bookings/{id}/safety/{eventId}/resolve.
   @override

@@ -1,7 +1,6 @@
 package com.aiwa.service.impl;
 
 import com.aiwa.enums.DevicePlatform;
-import com.aiwa.repository.UserRepository;
 import com.aiwa.service.PushNotificationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,7 +57,7 @@ public class FcmPushService implements PushNotificationService {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final UserRepository userRepo;
+    private final PushDeviceService pushDevices;
 
     @Value("${aiwa.push.fcm-credentials-file:}")
     private String credentialsFile;
@@ -70,13 +69,13 @@ public class FcmPushService implements PushNotificationService {
     private String cachedToken;
     private Instant cachedTokenExpiry = Instant.EPOCH;
 
-    public FcmPushService(RestTemplateBuilder builder, ObjectMapper objectMapper, UserRepository userRepo) {
+    public FcmPushService(RestTemplateBuilder builder, ObjectMapper objectMapper, PushDeviceService pushDevices) {
         this.restTemplate = builder
                 .setConnectTimeout(Duration.ofSeconds(5))
                 .setReadTimeout(Duration.ofSeconds(10))
                 .build();
         this.objectMapper = objectMapper;
-        this.userRepo = userRepo;
+        this.pushDevices = pushDevices;
     }
 
     record ServiceAccount(String projectId, String clientEmail, PrivateKey privateKey, String tokenUri) {}
@@ -130,11 +129,7 @@ public class FcmPushService implements PushNotificationService {
 
     void clearToken(String deviceToken) {
         try {
-            userRepo.findByPushToken(deviceToken).forEach(u -> {
-                u.setPushToken(null);
-                u.setPushPlatform(null);
-                userRepo.save(u);
-            });
+            pushDevices.forget(deviceToken);
         } catch (RuntimeException e) {
             log.warn("Could not clear a dead push token: {}", e.getMessage());
         }

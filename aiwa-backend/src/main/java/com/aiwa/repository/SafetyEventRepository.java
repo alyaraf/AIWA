@@ -20,4 +20,11 @@ public interface SafetyEventRepository extends JpaRepository<SafetyEvent, Long> 
     Page<SafetyEvent> findByTypeOrderByCreatedAtDesc(SafetyEventType type, Pageable pageable);
 
     long countByTypeAndResolvedFalse(SafetyEventType type);
+
+    Optional<SafetyEvent> findFirstByTypeAndResolvedFalseOrderByCreatedAtAsc(SafetyEventType type);
+
+    Optional<SafetyEvent> findFirstByBookingIdAndActorIdAndTypeAndResolvedFalseOrderByCreatedAtDesc(
+            Long bookingId, Long actorId, SafetyEventType type);
+
+    long countByActorIdAndTypeAndCreatedAtAfter(Long actorId, SafetyEventType type, java.time.LocalDateTime after);
 }

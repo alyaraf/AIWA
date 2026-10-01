@@ -34,6 +34,10 @@ public class ChatController {
     private final NotificationServiceImpl notificationService;
     private final AuditService auditService;
 
+    /** DR-028: per-account budgets (absent in plain unit tests). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.service.impl.AccountRateLimiter limiter;
+
     @GetMapping("/bookings/{bookingId}/chat")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.ChatMessageDto>>> list(
             @PathVariable Long bookingId,
@@ -49,6 +53,7 @@ public class ChatController {
             @Valid @RequestBody ChatMessageRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
         User sender = resolveUser(userDetails);
+        if (limiter != null) limiter.check(sender.getId(), "chat", 30, java.time.Duration.ofMinutes(1));
         Booking booking = loadAuthorizedBooking(bookingId, sender.getId());
         // The thread closes 48 hours after the booking ends, so a finished (or
         // cancelled) booking can't be used to keep messaging someone.
@@ -85,6 +90,7 @@ public class ChatController {
             @RequestParam(required = false) String reason,
             @AuthenticationPrincipal UserDetails userDetails) {
         User reporter = resolveUser(userDetails);
+        if (limiter != null) limiter.check(reporter.getId(), "report", 10, java.time.Duration.ofHours(1));
         loadAuthorizedBooking(bookingId, reporter.getId()); // 403s if not a party to this booking
         ChatMessage message = chatRepo.findById(messageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chat message", messageId));
@@ -178,8 +184,7 @@ public class ChatController {
     }
 
     private User resolveUser(UserDetails ud) {
-        return userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
+        return userRepo.findByLogin(ud.getUsername())
                 .orElseThrow();
     }
 
@@ -202,9 +207,14 @@ public class ChatController {
                 .build();
     }
 
+    /**
+     * The sender as the other party sees them. R2-11: phone and email were in
+     * every message in every booking state; the Call button uses
+     * GET /bookings/{id}/contact, which only answers while the booking is live.
+     */
     private ApiResponse.UserDto toUserDto(User u) {
         return ApiResponse.UserDto.builder()
-                .id(u.getId()).fullName(u.getFullName()).email(u.getEmail()).phone(u.getPhone())
+                .id(u.getId()).fullName(u.getFullName())
                 .role(u.getRole())
                 .active(u.isActive()).profileImageUrl(u.getProfileImageUrl()).build();
     }

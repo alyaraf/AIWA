@@ -155,6 +155,8 @@ class _AuthInterceptor extends Interceptor {
     // Backend picks messages_ar/en.properties from this header.
     options.headers['Accept-Language'] =
         LocaleController.locale.value.languageCode;
+    // The session this request belongs to (DR-003).
+    options.extra['session'] = SecureStorage.generation;
     final token = await _storage.getAccessToken();
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
@@ -173,6 +175,11 @@ class _AuthInterceptor extends Interceptor {
     if (err.response?.statusCode != 401 ||
         opts.path == ApiConstants.refresh ||
         opts.extra['retried'] == true) {
+      return handler.next(err);
+    }
+    // Sent under a session that has since ended (sign-out / account switch):
+    // never retry it with the next session's token.
+    if (opts.extra['session'] != SecureStorage.generation) {
       return handler.next(err);
     }
     final refreshToken = await _storage.getRefreshToken();
@@ -197,7 +204,9 @@ class _AuthInterceptor extends Interceptor {
         return handler.next(err);
       }
     }
-    if (newToken == null) return handler.next(err);
+    if (newToken == null || opts.extra['session'] != SecureStorage.generation) {
+      return handler.next(err);
+    }
     opts.headers['Authorization'] = 'Bearer $newToken';
     opts.extra['retried'] = true;
     try {
@@ -212,6 +221,7 @@ class _AuthInterceptor extends Interceptor {
   /// body keep the tokens so the next request can try again. Throws
   /// [NetworkException] when offline.
   Future<String?> _refresh(String refreshToken) async {
+    final session = SecureStorage.generation;
     String? token;
     String? rotated;
     try {
@@ -225,13 +235,17 @@ class _AuthInterceptor extends Interceptor {
     } on DioException catch (e) {
       if (e.error is NetworkException) throw e.error!;
       final status = e.response?.statusCode;
-      if (status == 401 || status == 403) {
+      // Only if it's still the same session: a stale refresh failing after an
+      // account switch must not wipe the new account's tokens.
+      if ((status == 401 || status == 403) && session == SecureStorage.generation) {
         await _storage.clearAll();
         ApiClient.authEvents.add(401);
       }
       return null;
     } catch (_) {}
     if (token == null) return null;
+    // Signed out (or into another account) while this was in flight: drop it.
+    if (session != SecureStorage.generation) return null;
     await _storage.saveAccessToken(token);
     // Refresh tokens are single-use: the backend revokes the one just sent,
     // so the next refresh must use the new one or the user is signed out.

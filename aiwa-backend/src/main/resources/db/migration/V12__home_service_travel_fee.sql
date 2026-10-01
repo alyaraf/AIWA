@@ -4,7 +4,7 @@
 -- on (total_price - travel_fee), i.e. the service portion only.
 
 ALTER TABLE provider_profiles
-    ADD COLUMN home_service_travel_fee DECIMAL(10, 2);
+    ADD COLUMN IF NOT EXISTS home_service_travel_fee DECIMAL(10, 2);
 
 ALTER TABLE bookings
-    ADD COLUMN travel_fee DECIMAL(10, 2);
+    ADD COLUMN IF NOT EXISTS travel_fee DECIMAL(10, 2);

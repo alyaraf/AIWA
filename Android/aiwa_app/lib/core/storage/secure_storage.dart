@@ -6,6 +6,17 @@ class SecureStorage {
 
   SecureStorage(this._storage);
 
+  /// Bumped when a session ends (sign-out, expiry) or a new one starts
+  /// (sign-in, account switch). A token refresh that was in flight across
+  /// such a change must not store its result (DR-003): it used to sign a
+  /// user who had just signed out straight back in, highest risk on a
+  /// shared phone.
+  static int _generation = 0;
+  static int get generation => _generation;
+
+  /// Call before storing the tokens of a new sign-in.
+  void markNewSession() => _generation++;
+
   Future<void> saveAccessToken(String token) =>
       _storage.write(key: AppConstants.accessTokenKey, value: token);
 
@@ -28,7 +39,10 @@ class SecureStorage {
 
   Future<String?> getUserId() => _storage.read(key: AppConstants.userIdKey);
 
-  Future<void> clearAll() => _storage.deleteAll();
+  Future<void> clearAll() {
+    _generation++;
+    return _storage.deleteAll();
+  }
 
   /// Sign-in "Remember me" off: the session ends at the next cold start.
   Future<void> setRemember(bool remember) => remember

@@ -395,6 +395,11 @@ public class ApiResponse {
         private String resolvedByName;
         private String resolutionNotes;
         private LocalDateTime createdAt;
+        /** R2-03: what actually happened, so the app says only what is true. */
+        private boolean supportAlerted;
+        private int contactsTexted;
+        private int contactsFailed;
+        private int contactsPending;
     }
 
     /** One SOS in the admin safety queue, with enough context to act on it. */
@@ -422,6 +427,18 @@ public class ApiResponse {
         private String resolvedByName;
         private String resolutionNotes;
         private LocalDateTime createdAt;
+        /** BE-37: per-recipient SMS delivery state. */
+        private java.util.List<SosDeliveryDto> deliveries;
+    }
+
+    @Data @Builder
+    public static class SosDeliveryDto {
+        private String recipientKind;
+        private String phone;
+        private com.aiwa.enums.SosDeliveryStatus status;
+        private int attempts;
+        private String lastError;
+        private LocalDateTime updatedAt;
     }
 
     @Data @Builder

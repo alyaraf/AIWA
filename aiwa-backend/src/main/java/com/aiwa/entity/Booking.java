@@ -122,6 +122,20 @@ public class Booking extends BaseEntity {
     /** Set when the customer checks in at an on-site/venue booking. */
     private LocalDateTime checkedInAt;
 
+    /**
+     * When the booking last went back to waiting for the provider (a customer
+     * reschedule). The expiry sweep measures the response window from the
+     * latest of creation, a proposal, or this (R2-01).
+     */
+    private LocalDateTime awaitingSince;
+
+    /** Set once the 2-hour reminder went out, so it is sent exactly once (R2-06). */
+    private LocalDateTime reminderSentAt;
+
+    /** Client-supplied Idempotency-Key the booking was created with (DR-024). */
+    @Column(length = 100)
+    private String idempotencyKey;
+
     // ── Payment ───────────────────────────────────────────────────────────────
     @Enumerated(EnumType.STRING)
     @Builder.Default

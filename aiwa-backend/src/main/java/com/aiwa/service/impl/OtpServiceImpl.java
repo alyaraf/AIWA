@@ -45,21 +45,25 @@ public class OtpServiceImpl {
 
     // ── phone (SMS) ──────────────────────────────────────────────────────────
 
+    // Codes are keyed on the normalized number (R2-19), so a code sent to
+    // 010… verifies a sign-up for +2010… and vice versa.
+
     public void sendOtp(String phone) {
-        String code = issue(phone);
-        smsService.sendOtp(phone, code, OTP_TTL_MINUTES);
+        String id = com.aiwa.util.Identifiers.normalizePhone(phone);
+        String code = issue(id);
+        smsService.sendOtp(id, code, OTP_TTL_MINUTES);
     }
 
     public void verifyOtp(String phone, String code) {
-        verify(phone, code);
+        verify(com.aiwa.util.Identifiers.normalizePhone(phone), code);
     }
 
     public boolean isPhoneVerified(String phone) {
-        return isVerified(phone);
+        return isVerified(com.aiwa.util.Identifiers.normalizePhone(phone));
     }
 
     public void consumePhoneVerification(String phone) {
-        consume(phone);
+        consume(com.aiwa.util.Identifiers.normalizePhone(phone));
     }
 
     // ── email ────────────────────────────────────────────────────────────────
@@ -117,7 +121,11 @@ public class OtpServiceImpl {
             throw new BusinessException("otp.error.incorrect");
         }
 
-        redis.delete(otpKey(identifier));
+        // Spend the code atomically (DR-016): of two parallel checks with the
+        // right code only one passes; the other sees it as already used.
+        if (!redis.compareAndDelete(otpKey(identifier), savedCode)) {
+            throw new BusinessException("otp.error.expired");
+        }
         redis.delete(attemptKey(identifier));
         redis.set(verifiedKey(identifier), "1", VERIFIED_TTL);
     }

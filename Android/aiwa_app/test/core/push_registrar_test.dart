@@ -40,6 +40,11 @@ void main() {
     expect(rec.calls, ['DELETE ${ApiConstants.mePushToken}']);
   });
 
+  test('sign-out removes only this phone (R2-12)', () async {
+    await PushRegistrar(api, tokenSource: () async => 'tok-9', platform: 'IOS').unregister();
+    expect(rec.queries.single, {'token': 'tok-9'});
+  });
+
   test('a server error never breaks sign-in or sign-out', () async {
     rec.status = 500;
     final r = PushRegistrar(api, tokenSource: () async => 't', platform: 'IOS');
@@ -52,6 +57,7 @@ void main() {
 class _Recorder implements HttpClientAdapter {
   final calls = <String>[];
   final bodies = <Object?>[];
+  final queries = <Map<String, dynamic>>[];
   int status = 200;
 
   @override
@@ -61,6 +67,7 @@ class _Recorder implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     calls.add('${o.method} ${o.path}');
+    queries.add(o.queryParameters);
     if (o.data != null) {
       bodies.add(o.data is String ? jsonDecode(o.data as String) : o.data);
     }

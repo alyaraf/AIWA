@@ -2585,19 +2585,49 @@ abstract class AppLocalizations {
   /// No description provided for @trackSosNotified.
   ///
   /// In en, this message translates to:
-  /// **'{bold} A trusted contact was alerted with your live location. Stay safe — a specialist may call shortly.'**
-  String trackSosNotified(String bold);
+  /// **'{bold} {detail} In immediate danger, call 122.'**
+  String trackSosNotified(String bold, String detail);
 
   /// No description provided for @trackSosNotifiedBold.
   ///
   /// In en, this message translates to:
-  /// **'Support has been notified.'**
+  /// **'AIWA support has been alerted.'**
   String get trackSosNotifiedBold;
+
+  /// No description provided for @trackSosRecordedBold.
+  ///
+  /// In en, this message translates to:
+  /// **'Your SOS was recorded.'**
+  String get trackSosRecordedBold;
+
+  /// No description provided for @trackSosTexting.
+  ///
+  /// In en, this message translates to:
+  /// **'Texting your trusted contacts…'**
+  String get trackSosTexting;
+
+  /// No description provided for @trackSosTexted.
+  ///
+  /// In en, this message translates to:
+  /// **'Trusted contacts texted: {count}.'**
+  String trackSosTexted(int count);
+
+  /// No description provided for @trackSosTextFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Texts that could not be sent: {count}. Call them yourself if you can.'**
+  String trackSosTextFailed(int count);
+
+  /// No description provided for @trackSosNoContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'No trusted contacts were texted.'**
+  String get trackSosNoContacts;
 
   /// No description provided for @trackSosLogged.
   ///
   /// In en, this message translates to:
-  /// **'Incident logged for admin review. Our trust & safety team will follow up within 24h.'**
+  /// **'You\'re marked safe and the SOS is closed. Support can still see it on this booking.'**
   String get trackSosLogged;
 
   /// No description provided for @trackImSafe.

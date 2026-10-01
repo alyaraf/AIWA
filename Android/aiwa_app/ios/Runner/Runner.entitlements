@@ -6,5 +6,11 @@
 	     app is exported for the App Store. -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- FE-13 / R2-21: https share links open the app. The domain comes from
+	     APP_LINK_DOMAIN in ios/Flutter/Signing.xcconfig. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:$(APP_LINK_DOMAIN)</string>
+	</array>
 </dict>
 </plist>

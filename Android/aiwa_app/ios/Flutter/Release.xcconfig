@@ -1,1 +1,5 @@
 #include "Generated.xcconfig"
+// R2-21: team ID and Universal Link domain, from the git-ignored Signing.xcconfig
+// (copy Signing.xcconfig.example). The placeholder keeps unsigned debug builds working.
+APP_LINK_DOMAIN = app-links.invalid
+#include? "Signing.xcconfig"

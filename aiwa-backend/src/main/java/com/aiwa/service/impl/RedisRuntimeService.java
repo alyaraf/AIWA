@@ -2,14 +2,13 @@ package com.aiwa.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @Slf4j
@@ -36,12 +35,25 @@ public class RedisRuntimeService {
         redis.delete(key);
     }
 
+    /** INCR and set the expiry in one step: a failure between the two used to leave a counter that never expired (R2-16). */
+    private static final RedisScript<Long> INCR_WITH_TTL = RedisScript.of(
+            "local c = redis.call('INCR', KEYS[1]) if c == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end return c",
+            Long.class);
+
+    /** Deletes the key only while it still holds the expected value (DR-016, DR-025). */
+    private static final RedisScript<Long> COMPARE_AND_DELETE = RedisScript.of(
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
+            Long.class);
+
     public long increment(String key, Duration ttl) {
-        Long count = redis.opsForValue().increment(key);
-        if (count != null && count == 1L) {
-            redis.expire(key, ttl);
-        }
+        Long count = redis.execute(INCR_WITH_TTL, List.of(key), String.valueOf(ttl.toMillis()));
         return count != null ? count : 0L;
+    }
+
+    /** True when the key held {@code expected} and this call removed it; only one caller can win. */
+    public boolean compareAndDelete(String key, String expected) {
+        Long removed = redis.execute(COMPARE_AND_DELETE, List.of(key), expected);
+        return removed != null && removed > 0;
     }
 
     public boolean setIfAbsent(String key, String value, Duration ttl) {
@@ -69,14 +81,6 @@ public class RedisRuntimeService {
         } catch (RuntimeException ex) {
             log.warn("Redis list cache read failed for {}: {}", key, ex.getMessage());
             return Optional.empty();
-        }
-    }
-
-    public void publishStream(String stream, Map<String, String> payload) {
-        try {
-            redis.opsForStream().add(MapRecord.create(stream, payload));
-        } catch (RuntimeException ex) {
-            log.warn("Redis stream publish failed for {}: {}", stream, ex.getMessage());
         }
     }
 }

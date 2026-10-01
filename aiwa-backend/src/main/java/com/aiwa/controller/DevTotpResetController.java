@@ -40,8 +40,7 @@ public class DevTotpResetController {
     @Operation(summary = "Wipe 2FA for the account with this email/phone — local dev only, does not issue any code")
     public ResponseEntity<ApiResponse.Success<java.util.Map<String, Object>>> reset(
             @RequestParam String identifier) {
-        User user = userRepo.findByEmail(identifier)
-                .or(() -> userRepo.findByPhone(identifier))
+        User user = userRepo.findByLogin(identifier)
                 .orElseThrow(() -> new BusinessException("No account for " + identifier));
         boolean was = user.isTotpEnabled();
         user.setTotpEnabled(false);

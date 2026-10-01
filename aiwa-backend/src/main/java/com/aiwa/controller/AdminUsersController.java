@@ -188,16 +188,26 @@ public class AdminUsersController {
 
     @PatchMapping("/{id}/deactivate")
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT)
-    @Operation(summary = "Deactivate (suspend) a user account (ADMIN · Support)")
+    @Operation(summary = "Deactivate (suspend) a user account (ADMIN · Support; another admin needs SUPER_ADMIN)")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<Void>> deactivate(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
+        // Serialises every change that could remove the last active super admin
+        // (DR-007): the count used to be read and then written separately, so two
+        // parallel deactivations could each see "2 left" and leave none.
+        userRepo.lockActiveSuperAdmins();
         User u = userRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", id));
         User currentAdmin = resolveUser(userDetails);
 
         if (currentAdmin.getId().equals(u.getId())) {
             throw new BusinessException("You cannot deactivate your own admin account");
+        }
+        // DR-007: a SUPPORT-only admin could suspend a super admin. Changing any
+        // admin account is a SUPER_ADMIN action, like edit, permissions and reset.
+        if (UserRole.ADMIN.equals(u.getRole())) {
+            requireSuperAdmin(currentAdmin);
         }
         if (UserRole.ADMIN.equals(u.getRole())
                 && u.isActive()
@@ -222,10 +232,15 @@ public class AdminUsersController {
 
     @PatchMapping("/{id}/reactivate")
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT)
-    @Operation(summary = "Reactivate a deactivated user account (ADMIN · Support)")
-    public ResponseEntity<ApiResponse.Success<Void>> reactivate(@PathVariable Long id) {
+    @Operation(summary = "Reactivate a deactivated user account (ADMIN · Support; another admin needs SUPER_ADMIN)")
+    public ResponseEntity<ApiResponse.Success<Void>> reactivate(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
         User u = userRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", id));
+        if (UserRole.ADMIN.equals(u.getRole())) {
+            requireSuperAdmin(resolveUser(userDetails));
+        }
         u.setActive(true);
         userRepo.save(u);
         auditService.record("USER_REACTIVATED", u.getFullName());
@@ -269,10 +284,12 @@ public class AdminUsersController {
     @PatchMapping("/{id}/permissions")
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPER_ADMIN)
     @Operation(summary = "Update an admin's permissions (SUPER_ADMIN)")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<ApiResponse.UserDto>> updatePermissions(
             @PathVariable Long id,
             @RequestParam java.util.List<String> permissions,
             @AuthenticationPrincipal UserDetails userDetails) {
+        userRepo.lockActiveSuperAdmins(); // DR-007, see deactivate()
         requireSuperAdmin(resolveUser(userDetails));
         User target = userRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", id));
@@ -427,8 +444,7 @@ public class AdminUsersController {
 
 
     private User resolveUser(UserDetails userDetails) {
-        return userRepo.findByEmail(userDetails.getUsername())
-                .or(() -> userRepo.findByPhone(userDetails.getUsername()))
+        return userRepo.findByLogin(userDetails.getUsername())
                 .orElseThrow(() -> new BusinessException("Current admin not found"));
     }
     /** "%term%" in lower case, or "%" for no search; wildcards the admin typed are dropped. */

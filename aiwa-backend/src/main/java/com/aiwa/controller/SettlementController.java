@@ -148,23 +148,52 @@ public class SettlementController {
                 .build()));
     }
 
+    /**
+     * Finance confirms the money arrived. R2-09: this settled every DUE/OVERDUE
+     * entry, including commission recorded after the provider reported paying
+     * (so those were marked paid without any money for them). Now it settles
+     * only entries up to a cut-off: {@code upTo}, else the provider's report
+     * time, else now. With {@code expectedAmount} it refuses when the total
+     * differs from what finance received. One transaction, and ledger rows are
+     * versioned, so the hourly sweep can't overwrite it halfway.
+     */
     @PostMapping("/admin/settlements/provider/{providerId}/confirm-payout")
     @PreAuthorize(Perms.FINANCE)
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<ApiResponse.SettlementDetailDto>> confirmPayout(
-            @PathVariable Long providerId) {
+            @PathVariable Long providerId,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime upTo,
+            @RequestParam(required = false) BigDecimal expectedAmount) {
         ProviderProfile provider = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
-        List<CommissionLedgerEntry> outstanding = ledgerRepo.findByProviderIdAndStatusIn(providerId, OUTSTANDING);
+        LocalDateTime cutoff = upTo != null ? upTo
+                : provider.getSettlementReportedAt() != null ? provider.getSettlementReportedAt()
+                : LocalDateTime.now();
+        List<CommissionLedgerEntry> outstanding = ledgerRepo.findByProviderIdAndStatusIn(providerId, OUTSTANDING)
+                .stream()
+                .filter(e -> e.getCreatedAt() == null || !e.getCreatedAt().isAfter(cutoff))
+                .toList();
         if (outstanding.isEmpty()) {
             throw new com.aiwa.exception.BusinessException("No outstanding balance for this provider");
+        }
+        BigDecimal total = outstanding.stream().map(CommissionLedgerEntry::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (expectedAmount != null && total.compareTo(expectedAmount) != 0) {
+            throw new com.aiwa.exception.BusinessException("settlement.error.amount_mismatch");
         }
         LocalDateTime now = LocalDateTime.now();
         outstanding.forEach(e -> { e.setStatus(LedgerEntryStatus.SETTLED); e.setSettledAt(now); });
         ledgerRepo.saveAll(outstanding);
-        provider.setSettlementPaused(false);
         provider.setSettlementReportedAt(null);
+        // Entries recorded after the cut-off stay outstanding; lift the pause only
+        // when what remains is within the rules.
+        if (settlementService.mayResumeBookings(provider)) {
+            provider.setSettlementPaused(false);
+        }
         providerRepo.save(provider);
-        auditService.record("SETTLEMENT_CONFIRMED", provider.getBusinessName() + " · " + outstanding.size() + " entries");
+        auditService.record("SETTLEMENT_CONFIRMED", provider.getBusinessName() + " · " + outstanding.size()
+                + " entries · EGP " + total + " up to " + cutoff);
         notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_CONFIRMED,
                 "Settlement confirmed", "تم تأكيد التسوية",
                 "AIWA confirmed your commission payout — your account is in good standing.",
@@ -210,9 +239,13 @@ public class SettlementController {
 
     @PatchMapping("/admin/settlements/{id}/settle")
     @PreAuthorize(Perms.FINANCE)
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<ApiResponse.CommissionLedgerDto>> settle(@PathVariable Long id) {
         CommissionLedgerEntry entry = ledgerRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ledger entry", id));
+        if (!OUTSTANDING.contains(entry.getStatus())) {
+            throw new com.aiwa.exception.BusinessException("settlement.error.not_outstanding");
+        }
         entry.setStatus(LedgerEntryStatus.SETTLED);
         entry.setSettledAt(LocalDateTime.now());
         CommissionLedgerEntry saved = ledgerRepo.save(entry);
@@ -361,8 +394,7 @@ public class SettlementController {
     private Long resolveUserId(UserDetails ud) {
         Long id = com.aiwa.security.AiwaUserDetails.idOf(ud);
         if (id != null) return id;
-        return userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
+        return userRepo.findByLogin(ud.getUsername())
                 .map(User::getId).orElseThrow();
     }
 }

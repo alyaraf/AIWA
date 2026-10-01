@@ -107,6 +107,17 @@ public class AuthRequest {
         private String code;
     }
 
+    /** Re-authentication for 2FA changes (DR-017): current password, and the current code when 2FA is on. */
+    @Data
+    public static class ConfirmIdentity {
+        @NotBlank(message = "Password is required")
+        @Size(max = 128)
+        private String password;
+
+        @Size(max = 10)
+        private String code;
+    }
+
     /** Confirms 2FA setup — proves the user's authenticator app is actually in sync. */
     @Data
     public static class EnableTotp {

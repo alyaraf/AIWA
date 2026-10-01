@@ -6,6 +6,7 @@ import com.aiwa.entity.*;
 import com.aiwa.enums.AdminPermission;
 import com.aiwa.enums.NotificationType;
 import com.aiwa.enums.SafetyEventType;
+import com.aiwa.enums.SosDeliveryStatus;
 import com.aiwa.enums.UserRole;
 import com.aiwa.exception.BusinessException;
 import com.aiwa.exception.ForbiddenException;
@@ -53,6 +54,14 @@ public class SafetyService {
     private final NotificationServiceImpl notificationService;
     private final SmsService smsService;
     private final AuditService auditService;
+    private final SosDeliveryRepository deliveryRepo;
+
+    /** DR-028: SOS texts to trusted contacts per account per day; past this, support is still alerted. */
+    static final int MAX_CONTACT_SOS_PER_DAY = 5;
+    /** An SOS can be raised during a booking and for this long after it ends. */
+    static final java.time.Duration SOS_AFTER_BOOKING = java.time.Duration.ofHours(6);
+    /** Attempts per SMS before it is marked FAILED (BE-37). */
+    static final int SMS_ATTEMPTS = 3;
 
     @Value("${aiwa.safety.oncall-phones:}")
     private String onCallPhones;
@@ -63,8 +72,38 @@ public class SafetyService {
     private Executor smsExecutor;
 
     /** aiwa_sos_alerts_total for the monitoring alert rule (OPS-5); absent in plain unit tests. */
-    @Autowired(required = false)
     private io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
+    /**
+     * Also publishes the open-SOS backlog (DR-006): how many are open and how old
+     * the oldest is, so an alert fires when one sits unanswered.
+     */
+    @Autowired(required = false)
+    void setMeterRegistry(io.micrometer.core.instrument.MeterRegistry registry) {
+        this.meterRegistry = registry;
+        io.micrometer.core.instrument.Gauge.builder("aiwa.sos.open", this, s -> s.openSosCountSafe())
+                .description("Open SOS alerts").register(registry);
+        io.micrometer.core.instrument.Gauge.builder("aiwa.sos.open.oldest.age.seconds", this, s -> s.oldestOpenAgeSeconds())
+                .description("Age of the oldest open SOS, 0 when none").register(registry);
+    }
+
+    double openSosCountSafe() {
+        try {
+            return safetyRepo.countByTypeAndResolvedFalse(SafetyEventType.SOS);
+        } catch (RuntimeException e) {
+            return Double.NaN;
+        }
+    }
+
+    double oldestOpenAgeSeconds() {
+        try {
+            return safetyRepo.findFirstByTypeAndResolvedFalseOrderByCreatedAtAsc(SafetyEventType.SOS)
+                    .map(e -> (double) java.time.Duration.between(e.getCreatedAt(), LocalDateTime.now()).getSeconds())
+                    .orElse(0.0);
+        } catch (RuntimeException e) {
+            return Double.NaN;
+        }
+    }
 
     // ── Participant side ─────────────────────────────────────────────────────
 
@@ -74,7 +113,7 @@ public class SafetyService {
         loadAuthorizedBooking(bookingId, userId);
         return safetyRepo.findByBookingIdOrderByCreatedAtAsc(bookingId).stream()
                 .filter(e -> e.getType() != SafetyEventType.SOS || e.getActor().getId().equals(userId))
-                .map(SafetyService::toDto)
+                .map(this::toDtoWithDelivery)
                 .toList();
     }
 
@@ -82,6 +121,22 @@ public class SafetyService {
     public ApiResponse.SafetyEventDto record(Long bookingId, Long actorId, SafetyEventRequest request) {
         Booking booking = loadAuthorizedBooking(bookingId, actorId);
         User actor = userRepo.findById(actorId).orElseThrow(() -> new ResourceNotFoundException("User", actorId));
+        if (request.getType() == SafetyEventType.SOS) {
+            // DR-028: only around a real meeting — during the booking or shortly after.
+            requireSosWindow(booking);
+            // Pressing SOS again while one is open re-alerts support but doesn't
+            // text everyone again (it used to send a full round of SMS each time).
+            java.util.Optional<SafetyEvent> open = safetyRepo
+                    .findFirstByBookingIdAndActorIdAndTypeAndResolvedFalseOrderByCreatedAtDesc(
+                            bookingId, actorId, SafetyEventType.SOS);
+            if (open.isPresent()) {
+                notifySupport(booking, NotificationType.SAFETY_ALERT,
+                        "SOS pressed again — booking #" + booking.getId(), "استغاثة مكررة — الحجز رقم " + booking.getId(),
+                        actor.getFullName() + " pressed SOS again" + where(open.get()) + ".",
+                        "ضغط " + actor.getFullName() + " زر الاستغاثة مرة أخرى.");
+                return toDtoWithDelivery(open.get());
+            }
+        }
         SafetyEvent event = safetyRepo.save(SafetyEvent.builder()
                 .booking(booking)
                 .actor(actor)
@@ -95,7 +150,20 @@ public class SafetyService {
             raiseSos(booking, actor, event);
             if (meterRegistry != null) meterRegistry.counter("aiwa.sos.alerts").increment();
         }
-        return toDto(event);
+        return toDtoWithDelivery(event);
+    }
+
+    private void requireSosWindow(Booking booking) {
+        switch (booking.getStatus()) {
+            case ACCEPTED, ON_THE_WAY, ARRIVED, IN_PROGRESS -> { return; }
+            case COMPLETED, NO_SHOW -> {
+                LocalDateTime ended = booking.getUpdatedAt() != null ? booking.getUpdatedAt()
+                        : LocalDateTime.of(booking.getBookingDate(), booking.getEndTime());
+                if (!LocalDateTime.now().isAfter(ended.plus(SOS_AFTER_BOOKING))) return;
+            }
+            default -> { }
+        }
+        throw new BusinessException("safety.error.sos_not_live");
     }
 
     /** "I'm safe" — only the person who raised the SOS can close it from the app. */
@@ -131,7 +199,23 @@ public class SafetyService {
             case "OPEN" -> safetyRepo.findByTypeAndResolvedOrderByCreatedAtDesc(SafetyEventType.SOS, false, pageable);
             default -> throw new BusinessException("Unknown status: " + status);
         };
-        return page.map(SafetyService::toAdminDto);
+        java.util.Map<Long, List<SosDelivery>> byEvent = page.isEmpty() ? java.util.Map.of()
+                : deliveryRepo.findByEventIdInOrderByIdAsc(page.map(SafetyEvent::getId).toList()).stream()
+                        .collect(java.util.stream.Collectors.groupingBy(d -> d.getEvent().getId()));
+        return page.map(e -> {
+            ApiResponse.AdminSafetyEventDto dto = toAdminDto(e);
+            dto.setDeliveries(byEvent.getOrDefault(e.getId(), List.of()).stream()
+                    .map(d -> ApiResponse.SosDeliveryDto.builder()
+                            .recipientKind(d.getRecipientKind())
+                            .phone(d.getPhone())
+                            .status(d.getStatus())
+                            .attempts(d.getAttempts())
+                            .lastError(d.getLastError())
+                            .updatedAt(d.getUpdatedAt())
+                            .build())
+                    .toList());
+            return dto;
+        });
     }
 
     @Transactional(readOnly = true)
@@ -165,12 +249,16 @@ public class SafetyService {
     private void raiseSos(Booking booking, User actor, SafetyEvent event) {
         auditService.record("SOS_RAISED", "booking #" + booking.getId() + " · event #" + event.getId());
 
-        // 1. The person in trouble: confirm help is coming.
+        // 1. The person in trouble: what was done, nothing more (R2-03). Whether
+        //    the texts arrived shows on the SOS screen as they are delivered.
+        boolean textingContacts = !contactsOf(actor).isEmpty()
+                && safetyRepo.countByActorIdAndTypeAndCreatedAtAfter(actor.getId(), SafetyEventType.SOS,
+                        LocalDateTime.now().minusDays(1)) <= MAX_CONTACT_SOS_PER_DAY;
         notificationService.send(actor.getId(), NotificationType.SAFETY_ALERT,
                 "SOS sent", "تم إرسال الاستغاثة",
-                "AIWA support has been alerted" + (contactsOf(actor).isEmpty() ? "" : " and your trusted contacts were texted")
+                "AIWA support has been alerted" + (textingContacts ? " and we are texting your trusted contacts" : "")
                         + ". If you are in immediate danger call 122 (police).",
-                "تم تنبيه دعم AIWA" + (contactsOf(actor).isEmpty() ? "" : " وتم إرسال رسالة لجهات الاتصال الموثوقة")
+                "تم تنبيه دعم AIWA" + (textingContacts ? " وجارٍ إرسال رسالة لجهات الاتصال الموثوقة" : "")
                         + ". إذا كنت في خطر فوري اتصل بـ 122 (الشرطة).",
                 booking.getId(), booking.getProvider().getId());
 
@@ -189,8 +277,13 @@ public class SafetyService {
         String contactText = actor.getFullName() + " triggered an SOS on AIWA during a booking" + where(event)
                 + ". AIWA support has been alerted. If you can't reach them, call 122.";
         List<String> supportPhones = onCallNumbers();
-        textAfterCommit(supportPhones, supportText);
-        textAfterCommit(contactsOf(actor).stream().map(TrustedContact::getPhone).toList(), contactText);
+        textTracked(event, "ONCALL", supportPhones, supportText);
+        if (textingContacts) {
+            textTracked(event, "CONTACT", contactsOf(actor).stream().map(TrustedContact::getPhone).toList(), contactText);
+        } else if (!contactsOf(actor).isEmpty()) {
+            log.warn("SOS on booking #{}: trusted-contact texts skipped (more than {} SOS from this account today)",
+                    booking.getId(), MAX_CONTACT_SOS_PER_DAY);
+        }
         if (supportPhones.isEmpty()) {
             log.warn("SOS on booking #{} — no on-call phone configured (aiwa.safety.oncall-phones)", booking.getId());
         }
@@ -226,6 +319,62 @@ public class SafetyService {
         return e.getLatitude() != null && e.getLongitude() != null
                 ? " at https://maps.google.com/?q=" + e.getLatitude() + "," + e.getLongitude()
                 : "";
+    }
+
+    /**
+     * BE-37: one delivery row per recipient, sent after commit with retries, its
+     * state (SENT / FAILED and the error) visible to support in the SOS queue
+     * and, as counts, to the user on the SOS screen.
+     */
+    private void textTracked(SafetyEvent event, String kind, List<String> phones, String text) {
+        List<Long> ids = phones.stream().distinct()
+                .map(p -> deliveryRepo.save(SosDelivery.builder().event(event).recipientKind(kind)
+                        .phone(p.length() > 32 ? p.substring(0, 32) : p).build()).getId())
+                .toList();
+        if (ids.isEmpty()) return;
+        Runnable fanOut = () -> ids.forEach(id -> smsExecutor.execute(() -> deliver(id, text)));
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    fanOut.run();
+                }
+            });
+        } else {
+            fanOut.run();
+        }
+    }
+
+    /** Sends one tracked SOS text, retrying with a short back-off. Runs on the push pool, outside any transaction. */
+    void deliver(Long deliveryId, String text) {
+        SosDelivery d = deliveryRepo.findById(deliveryId).orElse(null);
+        if (d == null) return;
+        for (int attempt = 1; attempt <= SMS_ATTEMPTS; attempt++) {
+            d.setAttempts(attempt);
+            try {
+                smsService.send(d.getPhone(), text);
+                d.setStatus(SosDeliveryStatus.SENT);
+                d.setLastError(null);
+                deliveryRepo.save(d);
+                return;
+            } catch (RuntimeException e) {
+                String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                d.setLastError(msg.length() > 255 ? msg.substring(0, 255) : msg);
+                log.warn("SOS SMS to {} failed (attempt {}/{}): {}", mask(d.getPhone()), attempt, SMS_ATTEMPTS, msg);
+                if (attempt < SMS_ATTEMPTS) sleepQuietly(2000L * attempt);
+            }
+        }
+        d.setStatus(SosDeliveryStatus.FAILED);
+        deliveryRepo.save(d);
+    }
+
+    /** Test seam: the retry back-off. */
+    void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -266,6 +415,27 @@ public class SafetyService {
                 || booking.getProvider().getUser().getId().equals(userId);
         if (!allowed) throw new ForbiddenException("error.access_denied");
         return booking;
+    }
+
+    /** The app's view of an SOS: plus whether support was alerted and how the texts are doing (R2-03). */
+    private ApiResponse.SafetyEventDto toDtoWithDelivery(SafetyEvent e) {
+        ApiResponse.SafetyEventDto dto = toDto(e);
+        if (e.getType() != SafetyEventType.SOS || e.getId() == null) return dto;
+        List<SosDelivery> deliveries = deliveryRepo.findByEventIdOrderByIdAsc(e.getId());
+        List<SosDelivery> contacts = deliveries.stream().filter(d -> "CONTACT".equals(d.getRecipientKind())).toList();
+        dto.setContactsTexted((int) contacts.stream().filter(d -> d.getStatus() == SosDeliveryStatus.SENT).count());
+        dto.setContactsFailed((int) contacts.stream().filter(d -> d.getStatus() == SosDeliveryStatus.FAILED).count());
+        dto.setContactsPending((int) contacts.stream().filter(d -> d.getStatus() == SosDeliveryStatus.PENDING).count());
+        // In-app alerts to support admins are written in the same transaction as the SOS.
+        dto.setSupportAlerted(supportAdmins().findAny().isPresent()
+                || deliveries.stream().anyMatch(d -> "ONCALL".equals(d.getRecipientKind())
+                        && d.getStatus() == SosDeliveryStatus.SENT));
+        return dto;
+    }
+
+    private java.util.stream.Stream<User> supportAdmins() {
+        return userRepo.findByRoleAndActive(UserRole.ADMIN, true).stream()
+                .filter(a -> a.hasPermission(AdminPermission.SUPPORT) || a.hasPermission(AdminPermission.SUPER_ADMIN));
     }
 
     static ApiResponse.SafetyEventDto toDto(SafetyEvent e) {

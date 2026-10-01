@@ -194,8 +194,7 @@ public class AccountController {
     }
 
     private User resolveUser(UserDetails ud) {
-        return userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
+        return userRepo.findByLogin(ud.getUsername())
                 .orElseThrow();
     }
 

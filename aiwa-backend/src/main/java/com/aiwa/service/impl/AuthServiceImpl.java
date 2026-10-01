@@ -10,6 +10,7 @@ import com.aiwa.repository.UserRepository;
 import com.aiwa.security.JwtUtils;
 import com.aiwa.security.TotpService;
 import com.aiwa.service.AuthService;
+import com.aiwa.util.Identifiers;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
@@ -18,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -36,9 +36,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public ApiResponse.AuthResponse register(AuthRequest.Register req) {
-        String email = blankToNull(req.getEmail());
-        String phone = blankToNull(req.getPhone());
-        if (email != null && userRepository.existsByEmail(email)) {
+        // One spelling per email and phone (R2-19): "Nour@x.com" and "nour@x.com",
+        // or 010… and +2010…, used to become two separate accounts.
+        String email = email(req.getEmail());
+        String phone = Identifiers.normalizePhone(req.getPhone());
+        requirePasswordFitsBcrypt(req.getPassword());
+        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
             throw new BusinessException("auth.error.email_taken");
         }
         if (phone != null && userRepository.existsByPhone(phone)) {
@@ -76,8 +79,7 @@ public class AuthServiceImpl implements AuthService {
         otpService.consumePhoneVerification(phone);
         if (phone == null) otpService.consumeEmailVerification(email);
 
-        String identifier = email != null ? email : phone;
-        return buildAuthResponse(user, identifier);
+        return buildAuthResponse(user);
     }
 
     @Override
@@ -86,8 +88,7 @@ public class AuthServiceImpl implements AuthService {
                 new UsernamePasswordAuthenticationToken(req.getIdentifier(), req.getPassword())
         );
 
-        User user = userRepository.findByEmail(req.getIdentifier())
-                .or(() -> userRepository.findByPhone(req.getIdentifier()))
+        User user = userRepository.findByLogin(req.getIdentifier())
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         if (user.isTotpEnabled()) {
@@ -97,39 +98,44 @@ public class AuthServiceImpl implements AuthService {
             // for a real session once the TOTP code checks out.
             return ApiResponse.AuthResponse.builder()
                     .mfaRequired(true)
-                    .mfaToken(jwtUtils.generateMfaChallengeToken(req.getIdentifier()))
+                    .mfaToken(jwtUtils.generateMfaChallengeToken(identifierOf(user), user.getId()))
                     .build();
         }
 
-        return buildAuthResponse(user, req.getIdentifier());
+        return buildAuthResponse(user);
     }
 
     @Override
     public ApiResponse.AuthResponse verifyMfa(String mfaToken, String code) {
-        if (mfaToken == null || tokenBlacklistService.isBlacklisted(mfaToken)
-                || !jwtUtils.isMfaChallengeToken(mfaToken) || !jwtUtils.validateToken(mfaToken)) {
+        if (mfaToken == null || !jwtUtils.isMfaChallengeToken(mfaToken) || !jwtUtils.validateToken(mfaToken)
+                || tokenBlacklistService.isBlacklistedStrict(mfaToken)) {
             throw new InvalidTokenException("auth.error.token_invalid");
         }
-        String identifier = jwtUtils.getSubjectFromToken(mfaToken);
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new InvalidTokenException("auth.error.token_invalid"));
+        User user = userOf(mfaToken);
         if (!user.isActive()) {
             throw new InvalidTokenException("auth.error.account_disabled");
         }
+        // DR-017: a challenge issued before a password reset or suspension is dead.
+        requireIssuedAfterCutoff(user, mfaToken);
 
         if (!user.isTotpEnabled() || !totpService.verifyCode(user.getTotpSecret(), code)) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
 
-        // The challenge token is single-use: once exchanged it can't mint a second session.
-        tokenBlacklistService.blacklist(mfaToken);
-        return buildAuthResponse(user, identifier);
+        // The challenge is single-use and spent atomically: of two parallel
+        // verifies with the same token only one gets a session (DR-017).
+        if (!tokenBlacklistService.claimStrict(mfaToken)) {
+            throw new InvalidTokenException("auth.error.token_invalid");
+        }
+        return buildAuthResponse(user);
     }
 
     @Override
-    public ApiResponse.TwoFactorSetupDto beginTotpSetup(String identifier) {
+    public ApiResponse.TwoFactorSetupDto beginTotpSetup(String identifier, String password, String code) {
         User user = findUser(identifier);
+        // DR-017: restarting setup replaces the secret and turns 2FA off until the
+        // new one is confirmed, so a signed-in session alone is not enough.
+        requireReauthentication(user, password, code);
 
         // A fresh secret every time setup is (re)started — it only becomes
         // trusted for login once enableTotp() confirms the user can actually
@@ -139,7 +145,7 @@ public class AuthServiceImpl implements AuthService {
         user.setTotpEnabled(false);
         userRepository.save(user);
 
-        String label = user.getEmail() != null ? user.getEmail() : user.getPhone();
+        String label = identifierOf(user);
         return ApiResponse.TwoFactorSetupDto.builder()
                 .secret(secret)
                 .otpAuthUri(totpService.buildOtpAuthUri(secret, label, "AIWA"))
@@ -163,8 +169,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void disableTotp(String identifier) {
+    public void disableTotp(String identifier, String password, String code) {
         User user = findUser(identifier);
+        requireReauthentication(user, password, code);
         user.setTotpEnabled(false);
         user.setTotpSecret(null);
         userRepository.save(user);
@@ -186,33 +193,27 @@ public class AuthServiceImpl implements AuthService {
         // Every failure here means the same thing to a client: drop the stored
         // tokens and show the login screen. InvalidTokenException maps to 401 so
         // that's a status-code check, not a fragile string match on the message.
-        if (tokenBlacklistService.isBlacklisted(refreshToken) || !jwtUtils.validateToken(refreshToken)
-                || !jwtUtils.isRefreshToken(refreshToken)) {
+        if (!jwtUtils.validateToken(refreshToken) || !jwtUtils.isRefreshToken(refreshToken)
+                || tokenBlacklistService.isBlacklistedStrict(refreshToken)) {
             throw new InvalidTokenException("auth.error.token_invalid");
         }
-        String identifier = jwtUtils.getSubjectFromToken(refreshToken);
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
-                .orElseThrow(() -> new InvalidTokenException("auth.error.token_invalid"));
+        User user = userOf(refreshToken);
 
         // A deactivated/suspended account must not be able to mint fresh access
         // tokens from a still-valid refresh token.
         if (!user.isActive()) {
             throw new InvalidTokenException("auth.error.account_disabled");
         }
-        if (user.getTokensValidAfter() != null) {
-            Instant issued = jwtUtils.getIssuedAt(refreshToken);
-            if (issued == null || issued.isBefore(user.getTokensValidAfter().truncatedTo(ChronoUnit.SECONDS))) {
-                throw new InvalidTokenException("auth.error.token_invalid");
-            }
-        }
+        requireIssuedAfterCutoff(user, refreshToken);
 
         // Spend the token atomically before minting new ones: of two parallel
-        // refreshes with the same token only one gets a new pair (BE-42).
-        if (!tokenBlacklistService.claim(refreshToken)) {
+        // refreshes with the same token only one gets a new pair (BE-42). With
+        // Redis down this now answers 503 instead of letting a spent or
+        // logged-out refresh token mint sessions (DR-002).
+        if (!tokenBlacklistService.claimStrict(refreshToken)) {
             throw new InvalidTokenException("auth.error.token_invalid");
         }
-        return buildAuthResponse(user, identifier);
+        return buildAuthResponse(user);
     }
 
     @Override
@@ -235,17 +236,19 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void resetPassword(AuthRequest.ResetPassword req) {
         User user;
-        String phone = blankToNull(req.getPhone());
+        requirePasswordFitsBcrypt(req.getNewPassword());
+        String phone = Identifiers.normalizePhone(req.getPhone());
+        String email = null;
         if (phone != null) {
             // Verifies the OTP (throws if invalid/expired) then sets the new password.
             otpService.verifyOtp(phone, req.getCode());
             user = userRepository.findByPhone(phone)
                     .orElseThrow(() -> new BusinessException("auth.error.phone_not_found"));
         } else {
-            String email = blankToNull(req.getEmail());
+            email = email(req.getEmail());
             if (email == null) throw new BusinessException("auth.error.email_or_phone_required");
             otpService.verifyEmailOtp(email, req.getCode());
-            user = userRepository.findByEmail(email)
+            user = userRepository.findByEmailIgnoreCase(email)
                     .orElseThrow(() -> new BusinessException("auth.error.email_not_found"));
         }
 
@@ -253,7 +256,7 @@ public class AuthServiceImpl implements AuthService {
         user.setTokensValidAfter(Instant.now());
         userRepository.save(user);
         if (phone != null) otpService.consumePhoneVerification(phone);
-        else otpService.consumeEmailVerification(req.getEmail());
+        else otpService.consumeEmailVerification(email);
     }
 
     /**
@@ -265,7 +268,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public ApiResponse.AuthResponse changePhone(String identifier, AuthRequest.ChangePhone req) {
         User user = findUser(identifier);
-        String phone = req.getPhone().trim();
+        String phone = Identifiers.normalizePhone(req.getPhone());
         if (phone.equals(user.getPhone())) {
             throw new BusinessException("auth.error.phone_unchanged");
         }
@@ -278,8 +281,7 @@ public class AuthServiceImpl implements AuthService {
         user.setPhone(phone);
         user.setTokensValidAfter(Instant.now());
         userRepository.save(user);
-        String newIdentifier = user.getEmail() != null ? user.getEmail() : phone;
-        return buildAuthResponse(user, newIdentifier);
+        return buildAuthResponse(user);
     }
 
     @Override
@@ -293,18 +295,61 @@ public class AuthServiceImpl implements AuthService {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private User findUser(String identifier) {
-        return userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByPhone(identifier))
+        return userRepository.findByLogin(identifier)
                 .orElseThrow(() -> new BusinessException("user.not_found"));
     }
 
-    private static String blankToNull(String s) {
-        return s == null || s.isBlank() ? null : s.trim();
+    /** The account a refresh or MFA token belongs to: by its userId claim, never by guessing from the subject (V-01). */
+    private User userOf(String token) {
+        Long userId = jwtUtils.getUserIdFromToken(token);
+        java.util.Optional<User> user = userId != null
+                ? userRepository.findById(userId)
+                : userRepository.findByLogin(jwtUtils.getSubjectFromToken(token)); // tokens from before the claim
+        return user.orElseThrow(() -> new InvalidTokenException("auth.error.token_invalid"));
     }
 
-    private ApiResponse.AuthResponse buildAuthResponse(User user, String identifier) {
+    /** Tokens issued before the account's session cut-off (reset, suspension, phone change) are refused. */
+    private void requireIssuedAfterCutoff(User user, String token) {
+        if (user.getTokensValidAfter() == null) return;
+        Instant issued = jwtUtils.getIssuedAt(token);
+        if (issued == null || issued.isBefore(user.getTokensValidAfter())) {
+            throw new InvalidTokenException("auth.error.token_invalid");
+        }
+    }
+
+    /** Current password, plus the current authenticator code when 2FA is on (DR-017). */
+    private void requireReauthentication(User user, String password, String code) {
+        if (password == null || !passwordEncoder.matches(password, user.getPassword())) {
+            throw new BusinessException("auth.error.wrong_password");
+        }
+        if (user.isTotpEnabled() && (code == null || !totpService.verifyCode(user.getTotpSecret(), code))) {
+            throw new BusinessException("auth.error.invalid_totp_code");
+        }
+    }
+
+    /** BCrypt reads only the first 72 bytes; a longer password would accept anything sharing that prefix. */
+    private static void requirePasswordFitsBcrypt(String password) {
+        if (password != null && password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
+            throw new BusinessException("auth.error.password_too_long");
+        }
+    }
+
+    private static String email(String raw) {
+        try {
+            return Identifiers.normalizeEmail(raw);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("auth.error.invalid_email");
+        }
+    }
+
+    private static String identifierOf(User user) {
+        return user.getEmail() != null ? user.getEmail() : user.getPhone();
+    }
+
+    private ApiResponse.AuthResponse buildAuthResponse(User user) {
+        String identifier = identifierOf(user);
         String access  = jwtUtils.generateAccessToken(identifier, user.getId(), user.getRole().name());
-        String refresh = jwtUtils.generateRefreshToken(identifier);
+        String refresh = jwtUtils.generateRefreshToken(identifier, user.getId());
 
         return ApiResponse.AuthResponse.builder()
                 .accessToken(access)

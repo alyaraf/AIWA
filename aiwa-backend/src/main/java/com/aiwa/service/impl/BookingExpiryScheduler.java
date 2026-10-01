@@ -24,7 +24,7 @@ public class BookingExpiryScheduler {
 
     @Scheduled(fixedDelay = 5 * 60 * 1000)   // every 5 min
     public void expireStaleRequests() {
-        redisLockService.withLock("booking-expiry", Duration.ofMinutes(5), () -> {
+        redisLockService.withLock("booking-expiry", Duration.ofMinutes(4), true, () -> { // idempotent: @Version on bookings
             int expired = bookingService.expireStalePendingBookings();
             if (expired > 0) {
                 log.info("Expired {} stale PENDING booking request(s)", expired);

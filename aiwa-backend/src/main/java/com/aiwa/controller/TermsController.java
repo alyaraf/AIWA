@@ -158,15 +158,13 @@ public class TermsController {
     private String publisherName() {
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getName() == null) return null;
-        return userRepo.findByEmail(auth.getName())
-                .or(() -> userRepo.findByPhone(auth.getName()))
+        return userRepo.findByLogin(auth.getName())
                 .map(User::getFullName)
                 .orElse(auth.getName());
     }
 
     private User resolveUser(UserDetails ud) {
-        return userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
+        return userRepo.findByLogin(ud.getUsername())
                 .orElseThrow();
     }
 }

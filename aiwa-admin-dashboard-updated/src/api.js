@@ -10,12 +10,24 @@ export function getAccessToken() {
   return window.localStorage.getItem(TOKEN_KEY);
 }
 
-export function setTokens(tokens) {
+// Bumped when a session ends (sign-out, expiry) or a new one starts (sign-in).
+// A refresh that was in flight across that change must not store its tokens
+// (DR-003): it used to sign an admin who had just signed out straight back in.
+let sessionGeneration = 0;
+
+function writeTokens(tokens) {
   if (tokens?.accessToken) window.localStorage.setItem(TOKEN_KEY, tokens.accessToken);
   if (tokens?.refreshToken) window.localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
 }
 
+/** Tokens of a new sign-in. */
+export function setTokens(tokens) {
+  sessionGeneration += 1;
+  writeTokens(tokens);
+}
+
 export function clearTokens() {
+  sessionGeneration += 1;
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_KEY);
 }
@@ -37,6 +49,7 @@ function refreshAccessToken() {
 
   const storedRefreshToken = window.localStorage.getItem(REFRESH_KEY);
   if (!storedRefreshToken) return Promise.resolve(false);
+  const generation = sessionGeneration;
 
   refreshInFlight = fetch(`${API_BASE_URL}/auth/refresh`, {
     method: "POST",
@@ -49,7 +62,9 @@ function refreshAccessToken() {
       if (!response.ok) return false;
       const tokens = unwrap(data);
       if (!tokens?.accessToken) return false;
-      setTokens(tokens);
+      // Signed out (or in as someone else) while this was in flight: drop it.
+      if (generation !== sessionGeneration) return false;
+      writeTokens(tokens);
       return true;
     })
     .catch(() => false)
@@ -66,6 +81,7 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
 
   const token = getAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const generation = sessionGeneration;
 
   const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   const text = await response.text();
@@ -79,9 +95,10 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
   }
 
   if (!response.ok) {
-    if (response.status === 401 && !isRetryAfterRefresh && !NO_REFRESH_RETRY_PATHS.has(path)) {
+    if (response.status === 401 && !isRetryAfterRefresh && !NO_REFRESH_RETRY_PATHS.has(path)
+        && generation === sessionGeneration) {
       const refreshed = await refreshAccessToken();
-      if (refreshed) return request(path, options, true);
+      if (refreshed && generation === sessionGeneration) return request(path, options, true);
     }
     const message = data?.message || data?.error || `Request failed with status ${response.status}`;
     const error = new Error(message);
@@ -132,12 +149,19 @@ export const api = {
    *  TOTP problems can compare their phone's time to it (>90s skew is the
    *  usual "code always rejected" cause). */
   totpServerTime: () => request("/auth/2fa/server-time"),
-  totpSetup: () => request("/auth/2fa/setup", { method: "POST" }),
+  /** DR-017: needs the current password (and current code when 2FA is already on). */
+  totpSetup: (password, code) => request("/auth/2fa/setup", {
+    method: "POST",
+    body: JSON.stringify({ password, code: code || undefined })
+  }),
   totpEnable: (code) => request("/auth/2fa/enable", {
     method: "POST",
     body: JSON.stringify({ code })
   }),
-  totpDisable: () => request("/auth/2fa/disable", { method: "POST" }),
+  totpDisable: (password, code) => request("/auth/2fa/disable", {
+    method: "POST",
+    body: JSON.stringify({ password, code: code || undefined })
+  }),
   dashboard: () => request("/admin/dashboard").then(normalizeDashboard),
   dashboardRaw: () => request("/admin/dashboard").then(unwrap),
   verifications: () => requestAllPages("/admin/verification/pending").then((items) => items.map(normalizeVerification)),
@@ -211,8 +235,10 @@ export const api = {
     return request(`/terms?${qs.toString()}`, { method: "POST" });
   },
   /** SOS queue (GET /admin/safety) — status OPEN (default) | RESOLVED | ALL. */
-  safetyQueue: (status = "OPEN") => request(`/admin/safety?status=${encodeURIComponent(status)}&size=100`)
-    .then(normalizeList).then((items) => items.map(normalizeSafety)),
+  // DR-006: walks every page. It asked for one page of 100 (the server's cap),
+  // newest first, so with more open alerts the oldest ones were never shown.
+  safetyQueue: (status = "OPEN") => requestAllPages(`/admin/safety?status=${encodeURIComponent(status)}`, 100)
+    .then((items) => items.map(normalizeSafety)),
   resolveSafety: (eventId, notes) => request(`/admin/safety/${eventId}/resolve?notes=${encodeURIComponent(notes)}`, { method: "POST" })
     .then(normalizeSafety),
   exportAudit: (query = "") => downloadFile(`/admin/audit/export${query ? `?query=${encodeURIComponent(query)}` : ""}`, "aiwa-audit-log.csv", "text/csv"),
@@ -336,7 +362,15 @@ export function normalizeSafety(item) {
     resolvedByName: item.resolvedByName || "",
     resolutionNotes: item.resolutionNotes || "",
     createdAt: item.createdAt || null,
-    when: formatWhen(item.createdAt)
+    when: formatWhen(item.createdAt),
+    // BE-37: who the SOS texts reached.
+    deliveries: (item.deliveries || []).map((d) => ({
+      kind: d.recipientKind === "ONCALL" ? "On-call" : "Trusted contact",
+      phone: d.phone || "",
+      status: d.status || "PENDING",
+      attempts: d.attempts ?? 0,
+      lastError: d.lastError || ""
+    }))
   };
 }
 

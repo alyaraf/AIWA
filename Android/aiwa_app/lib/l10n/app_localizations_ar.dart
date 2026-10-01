@@ -1424,16 +1424,35 @@ class AppLocalizationsAr extends AppLocalizations {
   String get trackSosAlerting => 'جارٍ تنبيه جهة اتصالك الموثوقة ودعم AIWA…';
 
   @override
-  String trackSosNotified(String bold) {
-    return '$bold تم تنبيه جهة اتصال موثوقة بموقعك المباشر. ابقَ بأمان — قد يتصل بك مختص قريبًا.';
+  String trackSosNotified(String bold, String detail) {
+    return '$bold $detail إذا كنت في خطر فوري اتصل بـ 122.';
   }
 
   @override
-  String get trackSosNotifiedBold => 'تم إبلاغ الدعم.';
+  String get trackSosNotifiedBold => 'تم تنبيه دعم AIWA.';
+
+  @override
+  String get trackSosRecordedBold => 'تم تسجيل الاستغاثة.';
+
+  @override
+  String get trackSosTexting => 'جارٍ إرسال رسالة لجهات الاتصال الموثوقة…';
+
+  @override
+  String trackSosTexted(int count) {
+    return 'جهات اتصال موثوقة وصلتها الرسالة: $count.';
+  }
+
+  @override
+  String trackSosTextFailed(int count) {
+    return 'رسائل تعذر إرسالها: $count. اتصل بهم بنفسك إن أمكن.';
+  }
+
+  @override
+  String get trackSosNoContacts => 'لم تُرسل رسالة لأي جهة اتصال موثوقة.';
 
   @override
   String get trackSosLogged =>
-      'تم تسجيل الحادثة لمراجعة الإدارة. سيتابع فريق الثقة والأمان خلال 24 ساعة.';
+      'تم تسجيلك بأمان وإغلاق الاستغاثة. لا يزال الدعم يراها في هذا الحجز.';
 
   @override
   String get trackImSafe => 'أنا بأمان';

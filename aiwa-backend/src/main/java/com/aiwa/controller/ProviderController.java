@@ -56,7 +56,7 @@ public class ProviderController {
 
     @GetMapping("/providers/{id}")
     @Operation(summary = "Get full provider profile with services and reviews "
-            + "(the owner's phone is included only for signed-in callers)")
+            + "(the owner phone only for the owner, admins and customers with a live booking)")
     public ResponseEntity<ApiResponse.Success<ApiResponse.ProviderDetailDto>> getById(
             @PathVariable Long id,
             @RequestParam(required = false) Double lat,
@@ -64,7 +64,9 @@ public class ProviderController {
             @AuthenticationPrincipal UserDetails userDetails) {
 
         return ResponseEntity.ok(ApiResponse.Success.of(
-                providerService.getById(id, lat, lng, userDetails != null)));
+                providerService.getById(id, lat, lng, callerId(userDetails),
+                        userDetails != null && userDetails.getAuthorities().stream()
+                                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority())))));
     }
 
     @PostMapping("/providers/waitlist")
@@ -75,8 +77,7 @@ public class ProviderController {
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @AuthenticationPrincipal UserDetails userDetails) {
-        com.aiwa.entity.User user = userRepo.findByEmail(userDetails.getUsername())
-                .or(() -> userRepo.findByPhone(userDetails.getUsername()))
+        com.aiwa.entity.User user = userRepo.findByLogin(userDetails.getUsername())
                 .orElseThrow();
         waitlistService.join(user, category, lat, lng);
         return ResponseEntity.ok(ApiResponse.Success.of("We'll let you know when someone joins", null));
@@ -120,11 +121,14 @@ public class ProviderController {
 
     // ── helper ────────────────────────────────────────────────────────────────
 
+    private Long callerId(UserDetails userDetails) {
+        return userDetails == null ? null : resolveUserId(userDetails);
+    }
+
     private Long resolveUserId(UserDetails userDetails) {
         Long id = com.aiwa.security.AiwaUserDetails.idOf(userDetails);
         if (id != null) return id;
-        return userRepo.findByEmail(userDetails.getUsername())
-                .or(() -> userRepo.findByPhone(userDetails.getUsername()))
+        return userRepo.findByLogin(userDetails.getUsername())
                 .map(User::getId)
                 .orElseThrow();
     }

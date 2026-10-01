@@ -56,7 +56,9 @@ class BookingLifecycleServiceTest {
         when(platformSettings.getCommissionPercentFor(any())).thenReturn(new BigDecimal("10"));
         when(bookingRepo.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
         // Proposals and reschedules take the provider row lock and must fit working hours.
-        when(providerRepo.findByIdForUpdate(7L)).thenAnswer(inv -> Optional.of(ProviderProfile.builder().id(7L).build()));
+        when(providerRepo.findByIdForUpdate(7L)).thenAnswer(inv -> Optional.of(ProviderProfile.builder().id(7L)
+                .verificationStatus(com.aiwa.enums.VerificationStatus.APPROVED)
+                .user(User.builder().id(PROVIDER_USER_ID).active(true).build()).build()));
         when(availabilityRepo.findByProviderIdAndStaffMemberIsNullAndDayOfWeek(eq(7L), any()))
                 .thenReturn(Optional.of(com.aiwa.entity.Availability.builder()
                         .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(22, 0))
@@ -94,9 +96,27 @@ class BookingLifecycleServiceTest {
 
     // ── Completion payment branch ────────────────────────────────────────────────
 
+    /** R2-17: a visit can only be started or completed from an hour before it begins. */
+    private static Booking startedRecently(Booking b) {
+        LocalDateTime start = com.aiwa.util.AiwaTime.now().minusMinutes(30);
+        b.setBookingDate(start.toLocalDate());
+        b.setStartTime(start.toLocalTime());
+        b.setEndTime(start.toLocalTime().plusMinutes(30));
+        return b;
+    }
+
+    @Test
+    void completingABookingThatStartsTomorrowIsRefused() {
+        Booking b = booking(BookingStatus.IN_PROGRESS);
+        when(bookingRepo.findById(55L)).thenReturn(Optional.of(b));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.complete(PROVIDER_USER_ID, 55L, true))
+                .hasMessageContaining("too_early_for_step");
+    }
+
     @Test
     void completeWithCashConfirmsAndRecordsCommission() {
-        Booking b = booking(BookingStatus.IN_PROGRESS);
+        Booking b = startedRecently(booking(BookingStatus.IN_PROGRESS));
         when(bookingRepo.findById(55L)).thenReturn(Optional.of(b));
         when(commissionLedgerRepo.existsByBookingId(55L)).thenReturn(false);
 
@@ -109,7 +129,7 @@ class BookingLifecycleServiceTest {
 
     @Test
     void completeWithoutCashFlagsDisputedAndNotifiesAdmins_noCommission() {
-        Booking b = booking(BookingStatus.IN_PROGRESS);
+        Booking b = startedRecently(booking(BookingStatus.IN_PROGRESS));
         when(bookingRepo.findById(55L)).thenReturn(Optional.of(b));
         User admin = User.builder().id(1L).role(UserRole.ADMIN).active(true).build();
         when(userRepo.findByRoleAndActive(UserRole.ADMIN, true)).thenReturn(List.of(admin));
@@ -175,7 +195,6 @@ class BookingLifecycleServiceTest {
     void providerProposesTime_thenCustomerAccepts() {
         Booking b = booking(BookingStatus.PENDING);
         when(bookingRepo.findById(55L)).thenReturn(Optional.of(b));
-        when(bookingRepo.existsConflict(anyLong(), any(), any(), any())).thenReturn(false);
 
         RescheduleRequest req = new RescheduleRequest();
         req.setBookingDate(LocalDate.now().plusDays(2));

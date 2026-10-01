@@ -45,6 +45,8 @@ class _Repo implements BookingRepository {
   /// What sendSos returns, and whether GET /safety then shows an open SOS.
   Either<Failure, void> sosResult = const Right(null);
   bool recorded = false;
+  SosReport report = const SosReport(supportAlerted: true, contactsTexted: 1);
+  Either<Failure, void> resolveResult = const Right(null);
   ({double? lat, double? lng})? sentAt;
 
   @override
@@ -58,11 +60,11 @@ class _Repo implements BookingRepository {
   }
 
   @override
-  Future<Either<Failure, bool>> hasOpenSos(String id) async => Right(recorded);
+  Future<Either<Failure, SosReport?>> sosReport(String id) async =>
+      Right(recorded || sosResult.isRight() ? report : null);
 
   @override
-  Future<Either<Failure, void>> resolveSos(String id) async =>
-      const Left(NotSupportedFailure('Closing an SOS'));
+  Future<Either<Failure, void>> resolveSos(String id) async => resolveResult;
 
   @override
   Future<Either<Failure, BookingEntity>> confirmPayment(
@@ -109,7 +111,8 @@ void main() {
 
     await c.sos();
     expect(c.state.sos, SosStage.notified);
-    await c.imSafe(); // stub fails; the incident is still logged
+    expect(c.state.sosReport?.contactsTexted, 1);
+    await c.imSafe();
     expect(c.state.sos, SosStage.logged);
 
     expect(await c.cancel('Changed my mind'), isTrue);
@@ -118,6 +121,28 @@ void main() {
     expect(await c.confirmPayment(paid: true), isFalse);
     expect(c.state.actionError, 'nope');
     expect(c.state.busy, isFalse);
+    await c.close();
+  });
+
+  test("a failed I'm-safe keeps the SOS open and says why (R2-03)", () async {
+    final b = BookingModel.fromJson(_json);
+    final repo = _Repo(b)..resolveResult = const Left(NetworkFailure('offline'));
+    final c = LiveBookingCubit(repo, '7', initial: b, locate: () async => null);
+    await c.sos();
+    await c.imSafe();
+    expect(c.state.sos, SosStage.notified);
+    expect(c.state.actionError, 'offline');
+    await c.close();
+  });
+
+  test('the SOS banner states only what was delivered (R2-03)', () async {
+    final b = BookingModel.fromJson(_json);
+    final repo = _Repo(b)
+      ..report = const SosReport(supportAlerted: true, contactsFailed: 1);
+    final c = LiveBookingCubit(repo, '7', initial: b, locate: () async => null);
+    await c.sos();
+    expect(c.state.sosReport?.contactsTexted, 0);
+    expect(c.state.sosReport?.contactsFailed, 1);
     await c.close();
   });
 

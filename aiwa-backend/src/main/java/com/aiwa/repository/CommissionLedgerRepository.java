@@ -16,6 +16,7 @@ public interface CommissionLedgerRepository extends JpaRepository<CommissionLedg
     List<CommissionLedgerEntry> findByProviderIdAndStatusIn(Long providerId, java.util.Collection<LedgerEntryStatus> statuses);
     List<CommissionLedgerEntry> findAllByOrderByCreatedAtDesc();
     boolean existsByBookingId(Long bookingId);
+    java.util.Optional<CommissionLedgerEntry> findByBookingId(Long bookingId);
 
     @Query("SELECT COALESCE(SUM(e.commissionAmount), 0) FROM CommissionLedgerEntry e WHERE e.provider.id = :providerId AND e.status = :status")
     BigDecimal sumByProviderAndStatus(@Param("providerId") Long providerId, @Param("status") LedgerEntryStatus status);

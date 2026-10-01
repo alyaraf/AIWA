@@ -35,6 +35,11 @@ public class AuthController {
     private final com.aiwa.service.impl.FileStorageServiceImpl fileStorageService;
     private final JwtUtils jwtUtils;
     private final com.aiwa.repository.TermsPolicyRepository termsRepo;
+    private final com.aiwa.service.impl.PushDeviceService pushDevices;
+
+    /** DR-028: per-account budget (absent in plain unit tests). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.service.impl.AccountRateLimiter limiter;
 
     /** Secure flag on the access-token cookie — on in prod (served over HTTPS). */
     @org.springframework.beans.factory.annotation.Value("${aiwa.auth.cookie-secure:false}")
@@ -78,10 +83,13 @@ public class AuthController {
     @Operation(summary = "Logout and blacklist current JWT tokens")
     public ResponseEntity<ApiResponse.Success<Void>> logout(
             @RequestHeader(value = "Authorization", required = false) String authorization,
+            @CookieValue(value = ACCESS_TOKEN_COOKIE, required = false) String cookieToken,
             @RequestBody(required = false) AuthRequest.Logout request) {
+        // DR-030: revoke the token from wherever JwtAuthFilter would accept it —
+        // the Authorization header first, else the accessToken cookie.
         String accessToken = authorization != null && authorization.startsWith("Bearer ")
                 ? authorization.substring(7)
-                : null;
+                : (cookieToken != null && !cookieToken.isBlank() ? cookieToken : null);
         authService.logout(accessToken, request != null ? request.getRefreshToken() : null);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, clearAccessTokenCookie().toString())
@@ -108,23 +116,38 @@ public class AuthController {
         User user = resolveUser(userDetails);
         user.setFullName(request.getFullName());
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            if (!request.getEmail().equals(user.getEmail())
-                    && userRepo.existsByEmail(request.getEmail())) {
+            // V-01: must be a real email address (it used to accept anything,
+            // including another user's phone number, which then captured that
+            // person's sign-in), stored in one spelling (R2-19).
+            String email;
+            try {
+                email = com.aiwa.util.Identifiers.normalizeEmail(request.getEmail());
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException("auth.error.invalid_email");
+            }
+            if (!email.equalsIgnoreCase(user.getEmail()) && userRepo.existsByEmailIgnoreCase(email)) {
                 throw new BusinessException("auth.error.email_taken");
             }
-            user.setEmail(request.getEmail());
+            user.setEmail(email);
         }
+        String removedAvatar = null;
         if (request.getProfileImageUrl() != null) {
             String url = request.getProfileImageUrl().trim();
-            // Only an image this server stored (POST /auth/me/avatar) — or "" to
-            // clear it. An arbitrary URL would let anyone point their avatar at a
-            // tracking pixel or offensive content shown to other users.
-            if (!url.isEmpty() && !url.startsWith(com.aiwa.service.impl.FileStorageServiceImpl.PUBLIC_URL_PREFIX)) {
+            // DR-013: the avatar is only ever set by POST /auth/me/avatar. Here the
+            // client may resend the current value or "" to clear it. Accepting any
+            // stored /files/public/ URL let a user claim someone else's image,
+            // which the next avatar upload (or account deletion) then deleted.
+            if (url.isEmpty()) {
+                removedAvatar = user.getProfileImageUrl();
+                user.setProfileImageUrl(null);
+            } else if (!url.equals(user.getProfileImageUrl())) {
                 throw new BusinessException("auth.error.avatar_url_not_allowed");
             }
-            user.setProfileImageUrl(url.isEmpty() ? null : url);
         }
         User saved = userRepo.save(user);
+        if (removedAvatar != null && removedAvatar.contains("/avatars/")) {
+            fileStorageService.deletePublic(removedAvatar);
+        }
 
         return ResponseEntity.ok(ApiResponse.Success.of("Profile updated", toUserDto(saved)));
     }
@@ -135,6 +158,7 @@ public class AuthController {
             @RequestParam("image") org.springframework.web.multipart.MultipartFile image,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = resolveUser(userDetails);
+        if (limiter != null) limiter.check(user.getId(), "upload", 30, java.time.Duration.ofHours(1));
         String previous = user.getProfileImageUrl();
         String url = fileStorageService.storePublic(image, "avatars");
         user.setProfileImageUrl(url);
@@ -250,20 +274,18 @@ public class AuthController {
             @Valid @RequestBody com.aiwa.dto.request.UpdatePushTokenRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = resolveUser(userDetails);
-        user.setPushToken(request.getToken());
-        user.setPushPlatform(request.getPlatform());
-        userRepo.save(user);
+        pushDevices.register(user, request.getToken(), request.getPlatform());
         return ResponseEntity.ok(ApiResponse.Success.of("Push token registered", null));
     }
 
     @DeleteMapping("/me/push-token")
-    @Operation(summary = "Clear this device's push token (call on logout / when push is disabled)")
+    @Operation(summary = "Stop pushes to this device (?token=…), or to all of your devices when no token is given "
+            + "(call on logout / when push is disabled)")
     public ResponseEntity<ApiResponse.Success<Void>> clearPushToken(
+            @RequestParam(value = "token", required = false) String token,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = resolveUser(userDetails);
-        user.setPushToken(null);
-        user.setPushPlatform(null);
-        userRepo.save(user);
+        pushDevices.unregister(user, token);
         return ResponseEntity.ok(ApiResponse.Success.of("Push token cleared", null));
     }
 
@@ -360,11 +382,13 @@ public class AuthController {
     }
 
     @PostMapping("/2fa/setup")
-    @Operation(summary = "Start (or restart) 2FA setup — returns a secret to add to an authenticator app")
+    @Operation(summary = "Start (or restart) 2FA setup — returns a secret to add to an authenticator app. "
+            + "Needs the current password, and the current code when 2FA is already on.")
     public ResponseEntity<ApiResponse.Success<ApiResponse.TwoFactorSetupDto>> setupTotp(
+            @Valid @RequestBody AuthRequest.ConfirmIdentity request,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                authService.beginTotpSetup(userDetails.getUsername())));
+                authService.beginTotpSetup(userDetails.getUsername(), request.getPassword(), request.getCode())));
     }
 
     @PostMapping("/2fa/enable")
@@ -377,10 +401,11 @@ public class AuthController {
     }
 
     @PostMapping("/2fa/disable")
-    @Operation(summary = "Turn off 2FA for this account")
+    @Operation(summary = "Turn off 2FA for this account (current password + current code)")
     public ResponseEntity<ApiResponse.Success<Void>> disableTotp(
+            @Valid @RequestBody AuthRequest.ConfirmIdentity request,
             @AuthenticationPrincipal UserDetails userDetails) {
-        authService.disableTotp(userDetails.getUsername());
+        authService.disableTotp(userDetails.getUsername(), request.getPassword(), request.getCode());
         return ResponseEntity.ok(ApiResponse.Success.of("Two-factor authentication disabled", null));
     }
 
@@ -395,8 +420,8 @@ public class AuthController {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private User resolveUser(UserDetails ud) {
-        return userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
+        Long id = com.aiwa.security.AiwaUserDetails.idOf(ud);
+        return (id != null ? userRepo.findById(id) : userRepo.findByLogin(ud.getUsername()))
                 .orElseThrow(() -> new BusinessException("user.not_found"));
     }
 

@@ -53,6 +53,39 @@ public class TokenBlacklistService {
     }
 
     /**
+     * Like {@link #claim} but fails closed (DR-002): with Redis unreachable a
+     * refresh or MFA token cannot be checked against logout and reuse, so the
+     * caller gets a retryable 503 instead of a fresh session.
+     */
+    public boolean claimStrict(String token) {
+        if (token == null || token.isBlank()) return false;
+        long ttlMillis = jwtUtils.getRemainingValidityMillis(token);
+        if (ttlMillis <= 0) return false;
+        try {
+            if (redis.exists(legacyKey(token))) return false;
+            return redis.setIfAbsent(key(token), "1", Duration.ofMillis(ttlMillis));
+        } catch (RuntimeException e) {
+            log.warn("Token claim unavailable (Redis down?) — refusing: {}", e.getMessage());
+            throw new com.aiwa.exception.ServiceUnavailableException("error.try_again_shortly");
+        }
+    }
+
+    /** {@link #isBlacklisted} that fails closed with a 503 (DR-002); used for refresh and MFA tokens. */
+    public boolean isBlacklistedStrict(String token) {
+        if (token == null) return false;
+        try {
+            return redis.exists(key(token)) || redis.exists(legacyKey(token));
+        } catch (RuntimeException e) {
+            log.warn("Blacklist check unavailable (Redis down?) — refusing: {}", e.getMessage());
+            throw new com.aiwa.exception.ServiceUnavailableException("error.try_again_shortly");
+        }
+    }
+
+    /**
+     * Access tokens only (checked on every request): fails open so a Redis
+     * outage doesn't sign everyone out. The exposure is bounded by the access
+     * token's lifetime (15 minutes since DR-002).
+     *
      * @return true only when Redis is reachable AND confirms this exact token was
      * explicitly logged out. A Redis outage/hiccup here must NOT be treated as
      * "blacklisted" — that would silently deauthenticate every signed-in user on

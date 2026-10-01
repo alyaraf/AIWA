@@ -1,5 +1,6 @@
 # ── Build stage ───────────────────────────────────────────────
-FROM maven:3.9.6-eclipse-temurin-17 AS build
+# Exact versions (R2-20): a rebuild produces the same image, not whatever "17" means today.
+FROM maven:3.9.16-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
 RUN mvn -q dependency:go-offline
@@ -7,7 +8,7 @@ COPY src ./src
 RUN mvn -q clean package -DskipTests
 
 # ── Runtime stage ─────────────────────────────────────────────
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17.0.20.1_1-jre-alpine
 WORKDIR /app
 
 # Run as an unprivileged user; uploads live on a mounted volume it owns.

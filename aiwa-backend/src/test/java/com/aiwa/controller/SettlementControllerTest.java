@@ -48,7 +48,7 @@ class SettlementControllerTest {
     private ProviderProfile providerFor(String username) {
         User u = User.builder().id(50L).email(username).role(UserRole.PROVIDER).build();
         ProviderProfile p = ProviderProfile.builder().id(7L).user(u).businessName("Studio").settlementPaused(true).build();
-        when(userRepo.findByEmail(username)).thenReturn(Optional.of(u));
+        when(userRepo.findByLogin(username)).thenReturn(Optional.of(u));
         when(providerRepo.findByUserId(50L)).thenReturn(Optional.of(p));
         return p;
     }

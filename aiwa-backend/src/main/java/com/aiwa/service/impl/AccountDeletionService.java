@@ -38,6 +38,7 @@ public class AccountDeletionService {
     private final NotificationServiceImpl notificationService;
     private final FileStorageServiceImpl fileStorage;
     private final GalleryImageRepository galleryRepo;
+    private final com.aiwa.repository.PushDeviceRepository pushDeviceRepo;
 
     @Transactional
     public void delete(User user) {
@@ -114,6 +115,7 @@ public class AccountDeletionService {
         user.setProfileImageUrl(null);
         user.setPushToken(null);
         user.setPushPlatform(null);
+        pushDeviceRepo.deleteByUserId(user.getId());
         user.setTotpSecret(null);
         user.setTotpEnabled(false);
         user.setSearchAreaLabel(null);

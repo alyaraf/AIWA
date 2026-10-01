@@ -25,8 +25,8 @@ public class NotificationServiceImpl {
 
     private final NotificationRepository notificationRepo;
     private final UserRepository userRepo;
-    private final RedisRuntimeService redis;
     private final PushNotificationService pushService;
+    private final PushDeviceService pushDevices;
 
     /**
      * Where device pushes run. Defaults to the calling thread (unit tests); the
@@ -98,27 +98,23 @@ public class NotificationServiceImpl {
         // — except safety alerts, which must reach support and the user regardless.
         boolean urgent = type == NotificationType.SAFETY_ALERT;
         if (urgent || pushAllowed(user)) {
-            redis.publishStream("stream:notifications", Map.of(
-                    "notificationId", String.valueOf(saved.getId()),
-                    "userId", String.valueOf(userId),
-                    "type", type.name(),
-                    "titleEn", titleEn != null ? titleEn : "",
-                    "relatedBookingId", relatedBookingId != null ? String.valueOf(relatedBookingId) : "",
-                    "relatedProviderId", relatedProviderId != null ? String.valueOf(relatedProviderId) : ""
-            ));
-
-            if (user.getPushToken() != null && !user.getPushToken().isBlank()) {
+            // (A Redis stream copy of every notification used to be written here;
+            // nothing read it and it was never trimmed, R2-16.)
+            var devices = pushDevices.devicesOf(userId);
+            if (!devices.isEmpty()) {
                 boolean arabic = user.getPreferredLanguage() == Language.AR;
                 String title = arabic && titleAr != null ? titleAr : titleEn;
                 String body = arabic && bodyAr != null ? bodyAr : bodyEn;
-                String token = user.getPushToken();
-                com.aiwa.enums.DevicePlatform platform = user.getPushPlatform();
                 Map<String, String> data = Map.of(
                         "notificationId", String.valueOf(saved.getId()),
                         "type", type.name(),
                         "relatedBookingId", relatedBookingId != null ? String.valueOf(relatedBookingId) : "",
                         "relatedProviderId", relatedProviderId != null ? String.valueOf(relatedProviderId) : "");
-                afterCommit(() -> pushService.send(token, platform, title, body, data));
+                for (var device : devices) {
+                    String token = device.getToken();
+                    com.aiwa.enums.DevicePlatform platform = device.getPlatform();
+                    afterCommit(() -> pushService.send(token, platform, title, body, data));
+                }
             } else {
                 log.debug("Push allowed for user {} but no device token is registered — nowhere to deliver it", userId);
             }

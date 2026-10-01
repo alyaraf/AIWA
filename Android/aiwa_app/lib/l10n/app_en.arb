@@ -781,16 +781,38 @@
   "trackSafetySub": "SOS alerts AIWA support and texts your trusted contacts.",
   "trackSos": "SOS — alert a trusted contact & AIWA",
   "trackSosAlerting": "Alerting your trusted contact and AIWA support…",
-  "trackSosNotified": "{bold} A trusted contact was alerted with your live location. Stay safe — a specialist may call shortly.",
+  "trackSosNotified": "{bold} {detail} In immediate danger, call 122.",
   "@trackSosNotified": {
     "placeholders": {
       "bold": {
         "type": "String"
+      },
+      "detail": {
+        "type": "String"
       }
     }
   },
-  "trackSosNotifiedBold": "Support has been notified.",
-  "trackSosLogged": "Incident logged for admin review. Our trust & safety team will follow up within 24h.",
+  "trackSosNotifiedBold": "AIWA support has been alerted.",
+  "trackSosRecordedBold": "Your SOS was recorded.",
+  "trackSosTexting": "Texting your trusted contacts…",
+  "trackSosTexted": "Trusted contacts texted: {count}.",
+  "@trackSosTexted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trackSosTextFailed": "Texts that could not be sent: {count}. Call them yourself if you can.",
+  "@trackSosTextFailed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trackSosNoContacts": "No trusted contacts were texted.",
+  "trackSosLogged": "You're marked safe and the SOS is closed. Support can still see it on this booking.",
   "trackImSafe": "I'm safe",
   "trackCheckInTitle": "On-site service — check in when you arrive",
   "trackCheckInSub": "Tap in at the venue to let {name} know you're there.",

@@ -54,8 +54,9 @@ renews TLS certificates automatically:
 | admin    | no      | nginx with a strict CSP (`aiwa-admin-dashboard-updated/deploy/`) |
 | postgres | no      | data volume; back it up (see OPS-2) |
 | redis    | no      | password required |
-| backup   | no      | nightly pg_dump + uploads tarball into `deploy/backups/`, kept 14 days |
-| prometheus | no    | only with `--profile monitoring`; scrapes the backend with `METRICS_TOKEN`, alert rules in `deploy/monitoring/alerts.yml` |
+| backup   | no      | nightly pg_dump + uploads tarball into `deploy/backups/`, kept 14 days; each one verified, `BACKUP FAILED` in the log otherwise, optional heartbeat ping |
+| prometheus | no    | scrapes the backend with `METRICS_TOKEN`, alert rules in `deploy/monitoring/alerts.yml` |
+| alertmanager | no  | sends the alerts by email and/or Telegram (`ALERT_*` in `.env`); won't start without a receiver |
 
 The public site (`deploy/site/`) serves `/privacy`, `/terms` (live from the backend) and
 `/delete-account`; use those URLs in the Play Console and App Store Connect. The privacy
@@ -69,8 +70,12 @@ cd deploy
 cp .env.example .env   # fill in every value; never commit .env
 mkdir -p secrets        # put firebase-service-account.json here (git-ignored)
 openssl rand -hex 32 | tee secrets/metrics-token   # and put the same value in .env as METRICS_TOKEN
-docker compose -f docker-compose.prod.yml --profile monitoring up -d --build
+export RELEASE_TAG=$(git rev-parse --short HEAD)
+docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+Every image is pinned to an exact version and our own images are tagged with
+`RELEASE_TAG`, so the server always knows which build it runs (R2-20).
 
 Backups, restores and alerts: see `docs/runbooks.md`. Copy `deploy/backups/` off the
 server every night; the restore script was tested end to end (database and uploads).
@@ -81,6 +86,37 @@ before the first start so Caddy can get certificates.
 A managed PostgreSQL with point-in-time recovery is still recommended over the
 bundled container (OPS-2); set `SPRING_DATASOURCE_URL` to it and drop the
 `postgres` service.
+
+## Releasing and rolling back (R2-20)
+
+1. Deploy the commit to staging first (the CI job does this on every green push to
+   `main`) and click through `docs/qa-plan.md`'s smoke list there.
+2. On production, note the running tag: `docker images aiwa-backend` (the newest is live).
+3. Take a backup right before: `dc run --rm backup once`.
+4. `git fetch && git checkout <commit>`, then `RELEASE_TAG=<commit> dc up -d --build`.
+5. Watch `dc logs -f backend` until it is healthy, then check the admin panel and one booking.
+
+**Rollback.** The previous images are still on the server:
+
+```bash
+git checkout <previous commit>
+RELEASE_TAG=<previous commit> docker compose -f docker-compose.prod.yml up -d --no-build
+```
+
+Database migrations only move forward, and every migration is written to be
+additive (new tables and columns, `IF NOT EXISTS`), so the previous backend runs
+on the newer schema. If a release ever has to change or drop existing data, ship it
+in two releases (add and copy first, remove later), never in one. When a rollback
+needs the old data back, restore the backup from step 3 (`docs/runbooks.md`); anything
+written since is lost, so prefer fixing forward when the problem is small.
+
+Remove images older than the last three releases now and then:
+`docker image prune --filter "until=720h"`.
+
+**Databases created by the old `ddl-auto` setting** (local or early test servers)
+now upgrade cleanly: V12 and V15 add their columns only if missing (R2-10). Such a
+database that had already run V12 or V15 before this change needs one
+`flyway repair` (it only updates the stored checksums); fresh databases need nothing.
 
 ## Staging (OPS-2, OPS-6)
 

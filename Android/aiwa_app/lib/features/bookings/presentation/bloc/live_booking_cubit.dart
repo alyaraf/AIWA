@@ -20,6 +20,9 @@ class LiveBookingState {
   final bool busy;
   final SosStage sos;
 
+  /// What the SOS actually reached (R2-03); null until known.
+  final SosReport? sosReport;
+
   /// Travel fee declined -> "No problem — no fee applied." screen.
   final bool declinedFee;
 
@@ -29,6 +32,7 @@ class LiveBookingState {
     this.actionError,
     this.busy = false,
     this.sos = SosStage.none,
+    this.sosReport,
     this.declinedFee = false,
   });
 
@@ -38,6 +42,7 @@ class LiveBookingState {
     String? actionError,
     bool? busy,
     SosStage? sos,
+    SosReport? sosReport,
     bool? declinedFee,
   }) => LiveBookingState(
     booking: booking ?? this.booking,
@@ -45,6 +50,7 @@ class LiveBookingState {
     actionError: actionError,
     busy: busy ?? this.busy,
     sos: sos ?? this.sos,
+    sosReport: sosReport ?? this.sosReport,
     declinedFee: declinedFee ?? this.declinedFee,
   );
 }
@@ -176,27 +182,54 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
       longitude: at?.lng,
     );
     if (isClosed) return;
-    var sent = r.isRight();
-    if (!sent && r.fold((f) => f is NetworkFailure, (_) => false)) {
-      final open = await _repo.hasOpenSos(bookingId);
-      if (isClosed) return;
-      sent = open.fold((_) => false, (o) => o);
-    }
+    // What reached whom comes from the backend's delivery records (R2-03).
+    // After a timeout the SOS may still have been recorded (FE-31).
+    final shouldCheck = r.isRight() || r.fold((f) => f is NetworkFailure, (_) => false);
+    final report = shouldCheck
+        ? (await _repo.sosReport(bookingId)).fold((_) => null, (x) => x)
+        : null;
+    if (isClosed) return;
+    final sent = r.isRight() || report != null;
     emit(
       sent
-          ? state.copyWith(sos: SosStage.notified)
+          ? state.copyWith(sos: SosStage.notified, sosReport: report ?? const SosReport())
           : state.copyWith(
               sos: SosStage.none,
               actionError: r.fold((f) => f.message, (_) => null),
             ),
     );
+    if (sent) _followSosDelivery();
   }
 
-  /// "I'm safe". The SOS event is already logged by [sos]; closing it has no
-  /// endpoint yet, so the stage advances whatever the stub returns.
+  Timer? _sosPoll;
+
+  /// Texts go out in the background; refresh the counts until none is pending.
+  void _followSosDelivery({int tries = 15, Duration every = const Duration(seconds: 4)}) {
+    _sosPoll?.cancel();
+    var left = tries;
+    _sosPoll = Timer.periodic(every, (t) async {
+      if (isClosed || state.sos != SosStage.notified || --left < 0) {
+        t.cancel();
+        return;
+      }
+      final r = await _repo.sosReport(bookingId);
+      if (isClosed) return;
+      final report = r.fold((_) => null, (x) => x);
+      if (report == null) return;
+      emit(state.copyWith(sosReport: report));
+      if (report.contactsPending == 0) t.cancel();
+    });
+  }
+
+  /// "I'm safe": closes the SOS. Only says so when it was really closed.
   Future<void> imSafe() async {
-    await _repo.resolveSos(bookingId);
-    if (!isClosed) emit(state.copyWith(sos: SosStage.logged));
+    final r = await _repo.resolveSos(bookingId);
+    if (isClosed) return;
+    emit(
+      r.isRight()
+          ? state.copyWith(sos: SosStage.logged)
+          : state.copyWith(actionError: r.fold((f) => f.message, (_) => null)),
+    );
   }
 
   /// tel: number for the call buttons, or null (error shown inline).
@@ -234,6 +267,7 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
   @override
   Future<void> close() {
     _poll?.cancel();
+    _sosPoll?.cancel();
     return super.close();
   }
 }

@@ -88,7 +88,10 @@ public class InMemoryRedisRuntimeService extends RedisRuntimeService {
     }
 
     @Override
-    public void publishStream(String stream, Map<String, String> payload) {
-        // no consumer in tests
+    public synchronized boolean compareAndDelete(String key, String expected) {
+        Entry e = live(key);
+        if (e == null || !e.value().equals(expected)) return false;
+        store.remove(key);
+        return true;
     }
 }

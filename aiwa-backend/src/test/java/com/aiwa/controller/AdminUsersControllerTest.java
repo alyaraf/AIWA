@@ -56,7 +56,7 @@ class AdminUsersControllerTest {
     void deletingACustomerErasesTheirDataInsteadOfAHardDelete() {
         User me = admin(1L, "me@x.com", true);
         User customer = User.builder().id(5L).fullName("Layla").email("l@x.com").role(UserRole.CUSTOMER).active(true).build();
-        when(userRepo.findByEmail("me@x.com")).thenReturn(Optional.of(me));
+        when(userRepo.findByLogin("me@x.com")).thenReturn(Optional.of(me));
         when(userRepo.findById(5L)).thenReturn(Optional.of(customer));
 
         controller.deleteUser(5L, principal("me@x.com"));
@@ -72,7 +72,7 @@ class AdminUsersControllerTest {
     void adminCannotDeactivateSelf() {
         User self = admin(1L, "me@x.com", true);
         when(userRepo.findById(1L)).thenReturn(Optional.of(self));
-        when(userRepo.findByEmail("me@x.com")).thenReturn(Optional.of(self));
+        when(userRepo.findByLogin("me@x.com")).thenReturn(Optional.of(self));
 
         assertThatThrownBy(() -> controller.deactivate(1L, principal("me@x.com")))
                 .isInstanceOf(BusinessException.class)
@@ -85,7 +85,7 @@ class AdminUsersControllerTest {
         User me = admin(1L, "me@x.com", true);
         User other = admin(2L, "other@x.com", true);
         when(userRepo.findById(2L)).thenReturn(Optional.of(other));
-        when(userRepo.findByEmail("me@x.com")).thenReturn(Optional.of(me));
+        when(userRepo.findByLogin("me@x.com")).thenReturn(Optional.of(me));
         when(userRepo.countByRoleAndActive(UserRole.ADMIN, true)).thenReturn(1L);
 
         assertThatThrownBy(() -> controller.deactivate(2L, principal("me@x.com")))
@@ -100,7 +100,7 @@ class AdminUsersControllerTest {
         User customer = User.builder().id(3L).email("c@x.com")
                 .role(UserRole.CUSTOMER).active(true).build();
         when(userRepo.findById(3L)).thenReturn(Optional.of(customer));
-        when(userRepo.findByEmail("me@x.com")).thenReturn(Optional.of(me));
+        when(userRepo.findByLogin("me@x.com")).thenReturn(Optional.of(me));
 
         assertThatCode(() -> controller.deactivate(3L, principal("me@x.com")))
                 .doesNotThrowAnyException();
@@ -126,7 +126,7 @@ class AdminUsersControllerTest {
     @Test
     void nonSuperAdminCannotCreateAdmin() {
         User plain = admin(1L, "support@x.com", true); // no permissions
-        when(userRepo.findByEmail("support@x.com")).thenReturn(Optional.of(plain));
+        when(userRepo.findByLogin("support@x.com")).thenReturn(Optional.of(plain));
         when(userRepo.countActiveSuperAdmins()).thenReturn(2L);
 
         assertThatThrownBy(() -> controller.createAdmin(createReq(List.of("SUPPORT")), principal("support@x.com")))
@@ -137,7 +137,7 @@ class AdminUsersControllerTest {
     @Test
     void superAdminCreatesAdminWithPermissions() {
         User boss = superAdmin(1L, "boss@x.com");
-        when(userRepo.findByEmail("boss@x.com")).thenReturn(Optional.of(boss));
+        when(userRepo.findByLogin("boss@x.com")).thenReturn(Optional.of(boss));
         when(userRepo.countActiveSuperAdmins()).thenReturn(1L);
         when(encoder.encode(anyString())).thenReturn("hash");
         when(userRepo.save(any(User.class))).thenAnswer(inv -> { User u = inv.getArgument(0); u.setId(9L); return u; });
@@ -150,7 +150,7 @@ class AdminUsersControllerTest {
     @Test
     void bootstrapAllowsFirstAdminWithoutSuperAdmin() {
         User plain = admin(1L, "first@x.com", true);
-        when(userRepo.findByEmail("first@x.com")).thenReturn(Optional.of(plain));
+        when(userRepo.findByLogin("first@x.com")).thenReturn(Optional.of(plain));
         when(userRepo.countActiveSuperAdmins()).thenReturn(0L);
         when(encoder.encode(anyString())).thenReturn("hash");
         when(userRepo.save(any(User.class))).thenAnswer(inv -> { User u = inv.getArgument(0); u.setId(2L); return u; });
@@ -164,7 +164,7 @@ class AdminUsersControllerTest {
         User me = superAdmin(1L, "me@x.com");
         User target = superAdmin(2L, "target@x.com");
         when(userRepo.findById(2L)).thenReturn(Optional.of(target));
-        when(userRepo.findByEmail("me@x.com")).thenReturn(Optional.of(me));
+        when(userRepo.findByLogin("me@x.com")).thenReturn(Optional.of(me));
         when(userRepo.countByRoleAndActive(UserRole.ADMIN, true)).thenReturn(3L); // other admins exist
         when(userRepo.countActiveSuperAdmins()).thenReturn(1L);
 
@@ -215,7 +215,7 @@ class AdminUsersControllerTest {
         User plain = admin(1L, "support@x.com", true); // no perms
         User targetAdmin = admin(2L, "other@x.com", true);
         when(userRepo.findById(2L)).thenReturn(Optional.of(targetAdmin));
-        when(userRepo.findByEmail("support@x.com")).thenReturn(Optional.of(plain));
+        when(userRepo.findByLogin("support@x.com")).thenReturn(Optional.of(plain));
         when(userRepo.countActiveSuperAdmins()).thenReturn(2L);
 
         assertThatThrownBy(() -> controller.editUser(2L, editReq("Renamed", null, null), principal("support@x.com")))

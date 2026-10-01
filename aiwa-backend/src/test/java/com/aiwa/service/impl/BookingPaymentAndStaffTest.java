@@ -66,6 +66,7 @@ class BookingPaymentAndStaffTest {
                 .id(3L).name("Haircut").durationMinutes(30).price(new BigDecimal("100")).provider(provider).build();
         return Booking.builder().id(55L).customer(customer).provider(provider).service(svc)
                 .status(BookingStatus.COMPLETED).totalPrice(new BigDecimal("100"))
+                .paymentStatus(PaymentStatus.CASH_PENDING)
                 .bookingDate(LocalDate.now()).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(10, 30))
                 .build();
     }
@@ -223,7 +224,7 @@ class BookingPaymentAndStaffTest {
                 .slotDurationMinutes(30).available(true).build();
         when(availabilityRepo.findByProviderIdAndStaffMemberIdAndDayOfWeek(eq(7L), eq(9L), any(DayOfWeek.class)))
                 .thenReturn(Optional.of(staffAvail));
-        when(bookingRepo.findByStaffMemberIdAndBookingDate(eq(9L), any(LocalDate.class)))
+        when(bookingRepo.findActiveForCalendar(eq(7L), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(List.of());
 
         // Tomorrow: slots that already started today are reported as taken.
@@ -231,7 +232,7 @@ class BookingPaymentAndStaffTest {
 
         assertThat(slots).hasSize(2);
         assertThat(slots).allSatisfy(s -> assertThat(s.isBooked()).isFalse());
-        verify(bookingRepo).findByStaffMemberIdAndBookingDate(eq(9L), any(LocalDate.class));
-        verify(bookingRepo, never()).findByProviderIdAndBookingDate(anyLong(), any());
+        // One query for the shop's calendar (staff + unassigned bookings, DR-023).
+        verify(bookingRepo).findActiveForCalendar(eq(7L), any(LocalDate.class), any(LocalDate.class));
     }
 }

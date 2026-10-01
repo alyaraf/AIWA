@@ -99,20 +99,36 @@ public class ProviderServiceImpl implements ProviderService {
     @Override
     @Transactional(readOnly = true)
     public ApiResponse.ProviderDetailDto getById(Long providerId, Double userLat, Double userLng) {
-        return getById(providerId, userLat, userLng, false);
+        return getById(providerId, userLat, userLng, null, false);
     }
 
     /**
-     * @param signedIn whether the caller is authenticated — only then does the
-     *                 owner block carry the business phone (Call / WhatsApp buttons).
+     * R2-11 / BE-29: a listing that isn't approved, or whose owner account is
+     * suspended or deleted, is visible only to its owner and admins (404 for
+     * everyone else), and the owner's phone (Call / WhatsApp buttons) goes only
+     * to the owner, admins, and customers with a live booking with this provider.
+     * Before, any status was served and every signed-in caller got the phone.
+     *
+     * @param callerId the signed-in user, or null for guests
+     * @param admin    whether the caller is an admin
      */
     @Transactional(readOnly = true)
-    public ApiResponse.ProviderDetailDto getById(Long providerId, Double userLat, Double userLng, boolean signedIn) {
+    public ApiResponse.ProviderDetailDto getById(Long providerId, Double userLat, Double userLng,
+                                                 Long callerId, boolean admin) {
         ProviderProfile profile = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
+        User owner = profile.getUser();
+        boolean isOwner = callerId != null && owner != null && callerId.equals(owner.getId());
+        boolean listed = profile.getVerificationStatus() == VerificationStatus.APPROVED
+                && owner != null && owner.isActive();
+        if (!listed && !isOwner && !admin) {
+            throw new ResourceNotFoundException("Provider", providerId);
+        }
         ApiResponse.ProviderDetailDto dto = toDetailDto(profile, userLat, userLng);
-        if (signedIn && dto.getOwner() != null) {
-            dto.getOwner().setPhone(profile.getUser().getPhone());
+        boolean liveBooking = callerId != null && bookingRepo.existsByCustomerIdAndProviderIdAndStatusIn(
+                callerId, profile.getId(), BookingServiceImpl.CONTACT_VISIBLE);
+        if ((isOwner || admin || liveBooking) && dto.getOwner() != null) {
+            dto.getOwner().setPhone(owner.getPhone());
         }
         return dto;
     }

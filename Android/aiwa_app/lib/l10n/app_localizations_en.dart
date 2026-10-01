@@ -1414,16 +1414,35 @@ class AppLocalizationsEn extends AppLocalizations {
       'Alerting your trusted contact and AIWA support…';
 
   @override
-  String trackSosNotified(String bold) {
-    return '$bold A trusted contact was alerted with your live location. Stay safe — a specialist may call shortly.';
+  String trackSosNotified(String bold, String detail) {
+    return '$bold $detail In immediate danger, call 122.';
   }
 
   @override
-  String get trackSosNotifiedBold => 'Support has been notified.';
+  String get trackSosNotifiedBold => 'AIWA support has been alerted.';
+
+  @override
+  String get trackSosRecordedBold => 'Your SOS was recorded.';
+
+  @override
+  String get trackSosTexting => 'Texting your trusted contacts…';
+
+  @override
+  String trackSosTexted(int count) {
+    return 'Trusted contacts texted: $count.';
+  }
+
+  @override
+  String trackSosTextFailed(int count) {
+    return 'Texts that could not be sent: $count. Call them yourself if you can.';
+  }
+
+  @override
+  String get trackSosNoContacts => 'No trusted contacts were texted.';
 
   @override
   String get trackSosLogged =>
-      'Incident logged for admin review. Our trust & safety team will follow up within 24h.';
+      'You\'re marked safe and the SOS is closed. Support can still see it on this booking.';
 
   @override
   String get trackImSafe => 'I\'m safe';

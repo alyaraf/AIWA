@@ -38,28 +38,45 @@ public class JwtUtils {
     static final String TYPE_REFRESH = "refresh";
     static final String TYPE_MFA = "mfa";
 
+    /**
+     * Issue time in milliseconds (DR-018). The standard iat claim has second
+     * precision, so a token issued in the same second as a password reset or
+     * suspension, but before it, used to pass the session cut-off.
+     */
+    static final String ISSUED_AT_MILLIS_CLAIM = "iatms";
+
     public String generateAccessToken(String identifier, Long userId, String role) {
+        long now = System.currentTimeMillis();
         return Jwts.builder()
                 .setSubject(identifier)
                 .claim(TYPE_CLAIM, TYPE_ACCESS)
                 .claim("userId", userId)
                 .claim("role", role)
+                .claim(ISSUED_AT_MILLIS_CLAIM, now)
                 .setId(java.util.UUID.randomUUID().toString())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .setIssuedAt(new Date(now))
+                .setExpiration(new Date(now + jwtExpiration))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
     public String generateRefreshToken(String identifier) {
+        return generateRefreshToken(identifier, null);
+    }
+
+    /** The userId claim lets a refresh resolve the account by id, never by guessing from the subject (V-01). */
+    public String generateRefreshToken(String identifier, Long userId) {
+        long now = System.currentTimeMillis();
         return Jwts.builder()
                 .setSubject(identifier)
                 .claim(TYPE_CLAIM, TYPE_REFRESH)
+                .claim("userId", userId)
+                .claim(ISSUED_AT_MILLIS_CLAIM, now)
                 // Unique id so two refreshes in the same second never produce the
                 // same string (rotation blacklists the old one).
                 .setId(java.util.UUID.randomUUID().toString())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + refreshExpiration))
+                .setIssuedAt(new Date(now))
+                .setExpiration(new Date(now + refreshExpiration))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -92,9 +109,16 @@ public class JwtUtils {
         }
     }
 
-    /** Issue time (second precision, as encoded in the JWT), or null when absent. */
+    /**
+     * Issue time in milliseconds when the token carries it, else the second-precision
+     * iat (older tokens: treated as issued at the start of that second, so a cut-off
+     * within the same second rejects them). Null when absent.
+     */
     public java.time.Instant getIssuedAt(String token) {
-        Date iat = parseClaims(token).getIssuedAt();
+        Claims c = parseClaims(token);
+        Number ms = c.get(ISSUED_AT_MILLIS_CLAIM, Number.class);
+        if (ms != null) return java.time.Instant.ofEpochMilli(ms.longValue());
+        Date iat = c.getIssuedAt();
         return iat == null ? null : iat.toInstant();
     }
 
@@ -110,13 +134,20 @@ public class JwtUtils {
      * endpoint explicitly requires the "purpose" claim below.
      */
     public String generateMfaChallengeToken(String identifier) {
+        return generateMfaChallengeToken(identifier, null);
+    }
+
+    public String generateMfaChallengeToken(String identifier, Long userId) {
+        long now = System.currentTimeMillis();
         return Jwts.builder()
                 .setSubject(identifier)
                 .claim(TYPE_CLAIM, TYPE_MFA)
                 .claim(MFA_PURPOSE_CLAIM, MFA_PURPOSE_VALUE)
+                .claim("userId", userId)
+                .claim(ISSUED_AT_MILLIS_CLAIM, now)
                 .setId(java.util.UUID.randomUUID().toString())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + MFA_CHALLENGE_TTL_MILLIS))
+                .setIssuedAt(new Date(now))
+                .setExpiration(new Date(now + MFA_CHALLENGE_TTL_MILLIS))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }

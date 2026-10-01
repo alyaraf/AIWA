@@ -50,7 +50,7 @@ class ChatControllerModerationTest {
     @Test
     void reportCreatesAnOpenModerationCase() {
         when(bookingRepo.findById(5L)).thenReturn(Optional.of(booking));
-        when(userRepo.findByEmail("nour@x.com")).thenReturn(Optional.of(customer));
+        when(userRepo.findByLogin("nour@x.com")).thenReturn(Optional.of(customer));
         when(chatRepo.findById(11L)).thenReturn(Optional.of(
                 ChatMessage.builder().id(11L).booking(booking).sender(providerUser)
                         .type(ChatMessageType.TEXT).message("give me your number off the app").build()));
@@ -67,7 +67,7 @@ class ChatControllerModerationTest {
     @Test
     void reportRejectsAMessageFromAnUnrelatedBooking() {
         when(bookingRepo.findById(5L)).thenReturn(Optional.of(booking));
-        when(userRepo.findByEmail("nour@x.com")).thenReturn(Optional.of(customer));
+        when(userRepo.findByLogin("nour@x.com")).thenReturn(Optional.of(customer));
         when(chatRepo.findById(11L)).thenReturn(Optional.of(
                 ChatMessage.builder().id(11L).booking(Booking.builder().id(999L).build())
                         .sender(providerUser).message("x").build()));
@@ -80,7 +80,7 @@ class ChatControllerModerationTest {
     void nonPartyCannotReportOrReadTheThread() {
         when(bookingRepo.findById(5L)).thenReturn(Optional.of(booking));
         User stranger = User.builder().id(999L).email("stranger@x.com").role(UserRole.CUSTOMER).build();
-        when(userRepo.findByEmail("stranger@x.com")).thenReturn(Optional.of(stranger));
+        when(userRepo.findByLogin("stranger@x.com")).thenReturn(Optional.of(stranger));
 
         assertThatThrownBy(() -> controller.list(5L, principal("stranger@x.com")))
                 .isInstanceOf(BusinessException.class)
@@ -90,7 +90,7 @@ class ChatControllerModerationTest {
     @Test
     void listRedactsRemovedMessagesForBothParties() {
         when(bookingRepo.findById(5L)).thenReturn(Optional.of(booking));
-        when(userRepo.findByEmail("nour@x.com")).thenReturn(Optional.of(customer));
+        when(userRepo.findByLogin("nour@x.com")).thenReturn(Optional.of(customer));
         when(chatRepo.findByBookingIdOrderByCreatedAtAsc(5L)).thenReturn(List.of(
                 ChatMessage.builder().id(1L).booking(booking).sender(providerUser).type(ChatMessageType.TEXT)
                         .message("hello").removed(false).build(),

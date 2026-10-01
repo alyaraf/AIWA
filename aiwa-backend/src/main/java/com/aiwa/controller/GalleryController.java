@@ -40,6 +40,10 @@ public class GalleryController {
     private final FileStorageServiceImpl fileStorageService;
     private final UserRepository userRepo;
 
+    /** DR-028: per-account budget (absent in plain unit tests). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.service.impl.AccountRateLimiter limiter;
+
     @PostMapping(value = "/provider/gallery", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('PROVIDER')")
     @Transactional
@@ -49,6 +53,7 @@ public class GalleryController {
             @AuthenticationPrincipal UserDetails userDetails) {
 
         ProviderProfile profile = getProfile(userDetails);
+        if (limiter != null) limiter.check(profile.getUser().getId(), "upload", 30, java.time.Duration.ofHours(1));
         if (galleryRepo.countByProviderId(profile.getId()) >= MAX_IMAGES) {
             throw new BusinessException("gallery.error.max_images");
         }
@@ -150,8 +155,7 @@ public class GalleryController {
     }
 
     private ProviderProfile getProfile(UserDetails ud) {
-        Long userId = userRepo.findByEmail(ud.getUsername())
-                .or(() -> userRepo.findByPhone(ud.getUsername()))
+        Long userId = userRepo.findByLogin(ud.getUsername())
                 .map(User::getId).orElseThrow();
         return providerRepo.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider profile not found"));

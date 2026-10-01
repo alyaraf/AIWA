@@ -34,7 +34,7 @@ class AccountDeletionTest {
 
     private final com.aiwa.service.impl.AccountDeletionService controller = new com.aiwa.service.impl.AccountDeletionService(
             userRepo, addressRepo, bookingRepo, trustedContactRepo, providerRepo, notificationService,
-            fileStorage, galleryRepo);
+            fileStorage, galleryRepo, mock(com.aiwa.repository.PushDeviceRepository.class));
 
     private UserDetails principal(String username) {
         return new org.springframework.security.core.userdetails.User(
@@ -50,7 +50,7 @@ class AccountDeletionTest {
     void deleteAnonymizesUserCancelsActiveBookingsAndTellsTheProvider() {
         User u = User.builder().id(9L).fullName("Real Name").email("me@x.com").phone("+2010")
                 .role(UserRole.CUSTOMER).active(true).pushToken("tok").build();
-        when(userRepo.findByEmail("me@x.com")).thenReturn(Optional.of(u));
+        when(userRepo.findByLogin("me@x.com")).thenReturn(Optional.of(u));
         User providerUser = User.builder().id(20L).build();
         ProviderProfile provider = ProviderProfile.builder().id(7L).user(providerUser).build();
 
@@ -82,7 +82,7 @@ class AccountDeletionTest {
     void deletingAProviderAccountTakesTheListingDownAndCancelsItsBookings() {
         User u = User.builder().id(9L).fullName("Studio Owner").email("pro@x.com")
                 .role(UserRole.PROVIDER).active(true).build();
-        when(userRepo.findByEmail("pro@x.com")).thenReturn(Optional.of(u));
+        when(userRepo.findByLogin("pro@x.com")).thenReturn(Optional.of(u));
         ProviderProfile profile = ProviderProfile.builder().id(7L).user(u)
                 .verificationStatus(VerificationStatus.APPROVED).build();
         when(providerRepo.findByUserId(9L)).thenReturn(Optional.of(profile));
@@ -103,7 +103,7 @@ class AccountDeletionTest {
     void deletionErasesAddressesIdDocumentsGalleryAndAvatar() {
         User u = User.builder().id(9L).fullName("Studio Owner").email("pro@x.com").role(UserRole.PROVIDER)
                 .active(true).profileImageUrl("/files/public/avatars/a.jpg").build();
-        when(userRepo.findByEmail("pro@x.com")).thenReturn(Optional.of(u));
+        when(userRepo.findByLogin("pro@x.com")).thenReturn(Optional.of(u));
         ProviderProfile profile = ProviderProfile.builder().id(7L).user(u)
                 .nationalIdFrontPath("ids/front.jpg").nationalIdBackPath("ids/back.jpg").selfiePath("ids/selfie.jpg").build();
         when(providerRepo.findByUserId(9L)).thenReturn(Optional.of(profile));

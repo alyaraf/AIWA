@@ -19,6 +19,15 @@ public class User extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Optimistic lock (DR-031): a profile, avatar or preference save that loaded
+     * the user before an admin suspended them used to write active=true and the
+     * old session cut-off back. Now that save fails with 409 instead.
+     */
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     @Column(nullable = false)
     private String fullName;
 

@@ -18,7 +18,7 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
 
     Optional<ProviderProfile> findByUserId(Long userId);
 
-    // ── Geo search (only APPROVED providers) ─────────────────────────────────
+    // ── Geo search (only APPROVED providers whose owner account is active, DR-014) ──
     // The acos argument is clamped to [-1, 1]: floating-point rounding can push it
     // a hair past 1 for a provider at (almost) the search point, and PostgreSQL
     // then fails the whole query with "input is out of range".
@@ -51,6 +51,7 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
         WHERE p.latitude BETWEEN :latMin AND :latMax
           AND p.longitude BETWEEN :lngMin AND :lngMax
           AND p.verificationStatus = com.aiwa.enums.VerificationStatus.APPROVED
+          AND p.user.active = true
           AND (6371 * acos(least(1.0, greatest(-1.0,
                 cos(radians(:lat)) * cos(radians(p.latitude))
                 * cos(radians(p.longitude) - radians(:lng))
@@ -74,6 +75,7 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
                OR EXISTS (SELECT 1 FROM Service s
                           WHERE s.provider = p AND s.active = true AND s.category = :category))
           AND p.verificationStatus = com.aiwa.enums.VerificationStatus.APPROVED
+          AND p.user.active = true
           AND p.latitude BETWEEN :latMin AND :latMax
           AND p.longitude BETWEEN :lngMin AND :lngMax
           AND (6371 * acos(least(1.0, greatest(-1.0,
@@ -89,7 +91,7 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
                                                     @Param("latMin") double latMin, @Param("latMax") double latMax,
                                                     @Param("lngMin") double lngMin, @Param("lngMax") double lngMax);
 
-    @Query("SELECT p FROM ProviderProfile p WHERE LOWER(p.businessName) LIKE LOWER(CONCAT('%', :q, '%')) AND p.verificationStatus = com.aiwa.enums.VerificationStatus.APPROVED")
+    @Query("SELECT p FROM ProviderProfile p WHERE LOWER(p.businessName) LIKE LOWER(CONCAT('%', :q, '%')) AND p.verificationStatus = com.aiwa.enums.VerificationStatus.APPROVED AND p.user.active = true")
     Page<ProviderProfile> searchByName(@Param("q") String query, Pageable pageable);
 
     // ── Verification (req 1, 2) ───────────────────────────────────────────────

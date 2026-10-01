@@ -2689,6 +2689,9 @@ export function TotpSetupCard() {
   const [setupData, setSetupData] = useState(null); // { secret, otpAuthUri } while mid-setup
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  // DR-017: changing 2FA needs the current password (and code when it's on).
+  const [password, setPassword] = useState("");
+  const [currentCode, setCurrentCode] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -2702,8 +2705,10 @@ export function TotpSetupCard() {
     setBusy(true);
     setError("");
     try {
-      const data = await api.totpSetup();
+      const data = await api.totpSetup(password, currentCode);
       setSetupData(data);
+      setPassword("");
+      setCurrentCode("");
     } catch (e) {
       toast(e.message || "Could not start setup", "error");
     } finally {
@@ -2731,8 +2736,10 @@ export function TotpSetupCard() {
       onConfirm: async () => {
         setBusy(true);
         try {
-          await runAction(() => api.totpDisable(), { success: "Two-factor authentication disabled" });
+          await runAction(() => api.totpDisable(password, currentCode), { success: "Two-factor authentication disabled" });
           setStatus(false);
+          setPassword("");
+          setCurrentCode("");
         } catch { /* toast */ } finally { setBusy(false); }
       }
     });
@@ -2751,7 +2758,12 @@ export function TotpSetupCard() {
           <p className="muted" style={{ margin: "0 0 10px" }}>
             Require a 6-digit authenticator app code, in addition to your password, when you sign in.
           </p>
-          <button className="btn btn-secondary full" disabled={busy} onClick={startSetup}>
+          <label className="stack-label" style={{ marginTop: 0, marginBottom: 10 }}>
+            Your current password
+            <input type="password" autoComplete="current-password" value={password}
+              onChange={(ev) => setPassword(ev.target.value)} />
+          </label>
+          <button className="btn btn-secondary full" disabled={busy || !password} onClick={startSetup}>
             <ShieldAlert size={15} /> Set up two-factor authentication
           </button>
         </>
@@ -2838,7 +2850,17 @@ export function TotpSetupCard() {
           <p className="muted" style={{ margin: "0 0 10px" }}>
             <Check size={13} style={{ verticalAlign: "-2px" }} /> Enabled — a code from your authenticator app is required at sign-in.
           </p>
-          <button className="btn btn-danger full" disabled={busy} onClick={disable}>
+          <label className="stack-label" style={{ marginTop: 0, marginBottom: 10 }}>
+            Your current password
+            <input type="password" autoComplete="current-password" value={password}
+              onChange={(ev) => setPassword(ev.target.value)} />
+          </label>
+          <label className="stack-label" style={{ marginTop: 0, marginBottom: 10 }}>
+            Current code from your app
+            <input inputMode="numeric" autoComplete="one-time-code" value={currentCode} placeholder="6-digit code"
+              onChange={(ev) => setCurrentCode(ev.target.value.replace(/\D/g, "").slice(0, 6))} />
+          </label>
+          <button className="btn btn-danger full" disabled={busy || !password || currentCode.length !== 6} onClick={disable}>
             Turn off two-factor authentication
           </button>
         </>
@@ -3554,6 +3576,14 @@ function SafetyQueue({ status, setStatus }) {
         title="Safety (SOS)"
         right={<Tag tone={status === "OPEN" && data.length ? "danger" : "plum"}>{status === "OPEN" ? `${data.length} open` : `${data.length} shown`}</Tag>}
       />
+      {status === "OPEN" && !loading && !error && data.length > 0 && (() => {
+        // DR-006: the oldest open alert is the one most at risk of being missed.
+        const oldest = data.reduce((a, b) => (new Date(a.createdAt) <= new Date(b.createdAt) ? a : b));
+        return (
+          <InlineBanner tone="danger" title={`Oldest open alert: ${formatRelative(oldest.createdAt) || oldest.when}`}
+            body={`Booking #${oldest.bookingId}, raised by ${oldest.actorName}. Alerts are listed newest first.`} />
+        );
+      })()}
       <ReadOnlyNote need="SUPPORT" />
       <div className="policy-tabs">{chip("OPEN", "Open")}{chip("RESOLVED", "Resolved")}{chip("ALL", "All")}</div>
 
@@ -3578,6 +3608,22 @@ function SafetyQueue({ status, setStatus }) {
                 {ev.resolved ? <Tag tone="success">Closed</Tag> : <Tag tone="danger">Open</Tag>}
               </div>
               {ev.notes && <p className="review-text">{"“" + ev.notes + "”"}</p>}
+              {ev.deliveries?.length > 0 && (
+                <div className="kv-list" style={{ marginTop: 8 }}>
+                  {ev.deliveries.map((d, i) => (
+                    <div className="kv-row" key={i}>
+                      <span className="k">SMS · {d.kind}</span>
+                      <span className="v">
+                        <span className="mono">{d.phone}</span>{" "}
+                        <Tag tone={d.status === "SENT" ? "success" : d.status === "FAILED" ? "danger" : "plum"}>
+                          {d.status === "SENT" ? "Delivered to gateway" : d.status === "FAILED" ? `Failed after ${d.attempts} tries` : "Sending…"}
+                        </Tag>
+                        {d.status === "FAILED" && d.lastError && <span className="dim"> {d.lastError}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="kv-list" style={{ marginTop: 8 }}>
                 <div className="kv-row"><span className="k">Customer</span><span className="v">{ev.customerName || "—"} {ev.customerPhone && <a href={`tel:${ev.customerPhone}`} className="mono">{ev.customerPhone}</a>}</span></div>
                 <div className="kv-row"><span className="k">Provider</span><span className="v">{ev.providerName || "—"} {ev.providerPhone && <a href={`tel:${ev.providerPhone}`} className="mono">{ev.providerPhone}</a>}</span></div>

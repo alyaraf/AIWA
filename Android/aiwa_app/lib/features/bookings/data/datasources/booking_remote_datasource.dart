@@ -4,6 +4,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_response.dart';
 import '../../domain/entities/chat_message_entity.dart';
 import '../../domain/entities/saved_address_entity.dart';
+import '../../domain/repositories/booking_repository.dart' show SosReport;
 import '../models/booking_model.dart';
 
 abstract class BookingRemoteDataSource {
@@ -47,7 +48,7 @@ abstract class BookingRemoteDataSource {
 
   /// True when the caller has an unresolved SOS on this booking — used to
   /// confirm an SOS whose request timed out.
-  Future<bool> hasOpenSos(String bookingId);
+  Future<SosReport?> sosReport(String bookingId);
 
   /// "I'm safe": closes the caller's latest open SOS on this booking.
   Future<void> resolveSos(String bookingId);
@@ -210,11 +211,13 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
   );
 
   @override
-  Future<bool> hasOpenSos(String bookingId) async {
+  Future<SosReport?> sosReport(String bookingId) async {
     final response = await _api.get(ApiConstants.bookingSafety(bookingId));
-    return (response.data['data'] as List? ?? const []).any(
-      (e) => (e as Map)['type'] == 'SOS' && e['resolved'] != true,
-    );
+    final open = [
+      for (final e in response.data['data'] as List? ?? const [])
+        if ((e as Map<String, dynamic>)['type'] == 'SOS' && e['resolved'] != true) e,
+    ];
+    return open.isEmpty ? null : SosReport.fromJson(open.last);
   }
 
   @override

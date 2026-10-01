@@ -45,7 +45,12 @@ describe("<TotpSetupCard>", () => {
     });
     render(<TotpSetupCard />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Set up two-factor authentication/i }));
+    // DR-017: the current password is required first.
+    const setUp = await screen.findByRole("button", { name: /Set up two-factor authentication/i });
+    expect(setUp).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Your current password/i), { target: { value: "pw" } });
+    fireEvent.click(setUp);
+    expect(apiModule.api.totpSetup).toHaveBeenCalledWith("pw", "");
 
     // Secret is shown so the user can paste it into their authenticator.
     expect(await screen.findByText("YNQBEGM77Y465EFSB5GN2RQQOSLUW7F5")).toBeInTheDocument();
@@ -67,7 +72,8 @@ describe("<TotpSetupCard>", () => {
       secret: "XXXX", otpAuthUri: "otpauth://x"
     });
     render(<TotpSetupCard />);
-    fireEvent.click(await screen.findByRole("button", { name: /Set up two-factor authentication/i }));
+    fireEvent.change(await screen.findByLabelText(/Your current password/i), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: /Set up two-factor authentication/i }));
 
     const codeInput = await screen.findByLabelText(/Code from your app/i);
     fireEvent.change(codeInput, { target: { value: "abc-12-def-34-ghi-56-789" } });
@@ -83,7 +89,8 @@ describe("<TotpSetupCard>", () => {
     const enableSpy = vi.spyOn(apiModule.api, "totpEnable").mockResolvedValue({});
     render(<TotpSetupCard />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Set up two-factor authentication/i }));
+    fireEvent.change(await screen.findByLabelText(/Your current password/i), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: /Set up two-factor authentication/i }));
     await screen.findByLabelText(/Code from your app/i);
 
     fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
@@ -102,7 +109,8 @@ describe("<TotpSetupCard>", () => {
     const enableSpy = vi.spyOn(apiModule.api, "totpEnable").mockResolvedValue({});
     render(<TotpSetupCard />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Set up two-factor authentication/i }));
+    fireEvent.change(await screen.findByLabelText(/Your current password/i), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: /Set up two-factor authentication/i }));
     const codeInput = await screen.findByLabelText(/Code from your app/i);
     fireEvent.change(codeInput, { target: { value: "550067" } });
     fireEvent.click(screen.getByRole("button", { name: /Confirm & enable/i }));
@@ -124,7 +132,8 @@ describe("<TotpSetupCard>", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 
     render(<TotpSetupCard />);
-    fireEvent.click(await screen.findByRole("button", { name: /Set up two-factor authentication/i }));
+    fireEvent.change(await screen.findByLabelText(/Your current password/i), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: /Set up two-factor authentication/i }));
     await screen.findByText("DY22MAYKEL4J5AP74W5CYV47VLXGQSMV");
 
     fireEvent.click(screen.getByRole("button", { name: /^Copy$/i }));

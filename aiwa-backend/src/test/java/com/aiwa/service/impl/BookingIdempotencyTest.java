@@ -68,7 +68,6 @@ class BookingIdempotencyTest {
                         .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(22, 0))
                         .slotDurationMinutes(30).available(true).build()));
         when(serviceRepo.findById(3L)).thenReturn(Optional.of(svc));
-        when(bookingRepo.existsConflict(anyLong(), any(), any(), any())).thenReturn(false);
         when(bookingRepo.save(any(Booking.class))).thenAnswer(inv -> {
             Booking b = inv.getArgument(0);
             b.setId(999L);

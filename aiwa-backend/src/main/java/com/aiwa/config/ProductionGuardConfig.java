@@ -41,6 +41,12 @@ public class ProductionGuardConfig {
     @Value("${aiwa.safety.oncall-phones:}")
     private String onCallPhones;
 
+    @Value("${aiwa.sms.api-key:}")
+    private String smsApiKey;
+
+    @Value("${aiwa.email.api-key:}")
+    private String emailApiKey;
+
     @PostConstruct
     public void validateProductionSettings() {
         if ("dev-log".equalsIgnoreCase(smsProvider)) {
@@ -48,6 +54,10 @@ public class ProductionGuardConfig {
         }
         if ("external".equalsIgnoreCase(smsProvider) && (smsApiUrl == null || smsApiUrl.isBlank())) {
             throw new IllegalStateException("SMS_API_URL must be configured when SMS_PROVIDER=external");
+        }
+        // R2-14: without the key every send fails at send time (sign-up codes, SOS).
+        if ("external".equalsIgnoreCase(smsProvider) && (smsApiKey == null || smsApiKey.isBlank())) {
+            throw new IllegalStateException("SMS_API_KEY must be configured when SMS_PROVIDER=external");
         }
         if ("dev-log".equalsIgnoreCase(pushProvider)) {
             throw new IllegalStateException("PUSH_PROVIDER must not be dev-log in prod — devices will never be notified");
@@ -61,8 +71,15 @@ public class ProductionGuardConfig {
                 throw new IllegalStateException("GOOGLE_APPLICATION_CREDENTIALS file is not readable: " + fcmCredentialsFile);
             }
         }
+        // R2-14: dev-log only writes each email, sign-up code included, to the log.
+        if ("dev-log".equalsIgnoreCase(emailProvider)) {
+            throw new IllegalStateException("EMAIL_PROVIDER must not be dev-log in prod — codes would only go to the log");
+        }
         if ("http".equalsIgnoreCase(emailProvider) && (emailApiUrl == null || emailApiUrl.isBlank())) {
             throw new IllegalStateException("EMAIL_API_URL must be configured when EMAIL_PROVIDER=http");
+        }
+        if ("http".equalsIgnoreCase(emailProvider) && (emailApiKey == null || emailApiKey.isBlank())) {
+            throw new IllegalStateException("EMAIL_API_KEY must be configured when EMAIL_PROVIDER=http");
         }
         // Without it an SOS only reaches admins in the app — nobody is texted.
         if (onCallPhones == null || onCallPhones.isBlank()) {

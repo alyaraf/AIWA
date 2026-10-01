@@ -341,6 +341,17 @@ class ApiFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.phone").value(p.user().getPhone()));
 
+        // R2-17: a visit can't be started two days early.
+        mvc.perform(patch("/bookings/" + id + "/in-progress").header("Authorization", bearer(pTok)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("booking.error.too_early_for_step"));
+        // Bring the appointment to half an hour from now, then it can start.
+        com.aiwa.entity.Booking live = bookingRepo.findById(id).orElseThrow();
+        java.time.LocalDateTime soon = com.aiwa.util.AiwaTime.now().plusMinutes(30).withSecond(0).withNano(0);
+        live.setBookingDate(soon.toLocalDate());
+        live.setStartTime(soon.toLocalTime());
+        live.setEndTime(soon.toLocalTime().plusMinutes(30));
+        bookingRepo.save(live);
         mvc.perform(patch("/bookings/" + id + "/in-progress").header("Authorization", bearer(pTok)))
                 .andExpect(status().isOk());
         mvc.perform(patch("/bookings/" + id + "/complete").header("Authorization", bearer(pTok)))
@@ -649,4 +660,246 @@ class ApiFlowIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("upload.error.invalid_type"));
     }
+
+    // ── 2026-10-01 deployment-readiness review: reproduced findings ──────────
+    // (marker: Review2Regression)
+
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired com.aiwa.service.impl.BookingServiceImpl bookingService;
+
+    /** V-01: an email set to someone's phone number used to capture that person's sign-in. */
+    @Test
+    void anEmailCannotBeSetToAnotherUsersPhoneNumber() throws Exception {
+        User victim = userRepo.save(User.builder().fullName("Victim").phone(uniquePhone())
+                .password(encoder.encode(PASSWORD)).role(UserRole.CUSTOMER).active(true).termsAccepted(true).build());
+        User attacker = user(UserRole.CUSTOMER);
+
+        mvc.perform(patch("/auth/me").header("Authorization", bearer(login(attacker)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("fullName", "A", "email", victim.getPhone()))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.invalid_email"));
+
+        // The victim's phone still signs in to the victim's own account.
+        String access = tokens(victim.getPhone()).get("accessToken").asText();
+        mvc.perform(get("/auth/me").header("Authorization", bearer(access)))
+                .andExpect(jsonPath("$.data.id").value(victim.getId()));
+    }
+
+    /** R2-19: the same number typed the local way signs in to the same account. */
+    @Test
+    void aPhoneTypedInLocalFormatSignsInToTheSameAccount() throws Exception {
+        User u = user(UserRole.CUSTOMER);                     // stored as +2010XXXXXXXX
+        String local = "0" + u.getPhone().substring(3);        // 010XXXXXXXX
+        String access = tokens(local).get("accessToken").asText();
+        mvc.perform(get("/auth/me").header("Authorization", bearer(access)))
+                .andExpect(jsonPath("$.data.id").value(u.getId()));
+    }
+
+    /** DR-013: a client can't point its avatar at another user's stored image. */
+    @Test
+    void anAvatarUrlCannotBeClaimedFromSomeoneElse() throws Exception {
+        User owner = user(UserRole.CUSTOMER);
+        owner.setProfileImageUrl("/files/public/avatars/owner.jpg");
+        userRepo.save(owner);
+        User other = user(UserRole.CUSTOMER);
+
+        mvc.perform(patch("/auth/me").header("Authorization", bearer(login(other)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("fullName", "B",
+                                "profileImageUrl", "/files/public/avatars/owner.jpg"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.avatar_url_not_allowed"));
+    }
+
+    /** DR-007: a SUPPORT-only admin used to be able to suspend a super admin (reproduced: 200). */
+    @Test
+    void aSupportAdminCannotDeactivateASuperAdmin() throws Exception {
+        User boss = user(UserRole.ADMIN, AdminPermission.SUPER_ADMIN);
+        User support = user(UserRole.ADMIN, AdminPermission.SUPPORT);
+
+        mvc.perform(patch("/admin/users/" + boss.getId() + "/deactivate").header("Authorization", bearer(login(support))))
+                .andExpect(status().isBadRequest());
+        assertThat(userRepo.findById(boss.getId()).orElseThrow().isActive()).isTrue();
+
+        // Customers stay a SUPPORT action.
+        User customer = user(UserRole.CUSTOMER);
+        mvc.perform(patch("/admin/users/" + customer.getId() + "/deactivate").header("Authorization", bearer(login(support))))
+                .andExpect(status().isOk());
+    }
+
+    /** DR-017: turning 2FA setup on or off needs the password, not just a session. */
+    @Test
+    void twoFactorSetupNeedsThePassword() throws Exception {
+        String tok = login(user(UserRole.CUSTOMER));
+        mvc.perform(post("/auth/2fa/setup").header("Authorization", bearer(tok))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"wrong\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.wrong_password"));
+        mvc.perform(post("/auth/2fa/setup").header("Authorization", bearer(tok))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("password", PASSWORD))))
+                .andExpect(status().isOk());
+    }
+
+    /** R2-07: the travel buffer applies after an existing booking too (10:00 then 11:00 both fitted). */
+    @Test
+    void theTravelBufferKeepsAGapAfterAnExistingBooking() throws Exception {
+        Provider p = approvedProvider();
+        p.profile().setTravelBufferMinutes(120);
+        providerRepo.save(p.profile());
+        LocalDate day = LocalDate.now().plusDays(4);
+        book(login(user(UserRole.CUSTOMER)), p, day, LocalTime.of(10, 0));     // 10:00–11:00
+
+        mvc.perform(post("/bookings").header("Authorization", bearer(login(user(UserRole.CUSTOMER))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("providerId", p.profile().getId(),
+                                "serviceId", p.service().getId(), "bookingType", "SCHEDULED",
+                                "bookingDate", day.toString(), "startTime", "11:00"))))
+                .andExpect(status().isConflict());
+        book(login(user(UserRole.CUSTOMER)), p, day, LocalTime.of(13, 0));    // 2 h after 11:00: fine
+    }
+
+    /** DR-014: a suspended owner account no longer receives bookings. */
+    @Test
+    void aSuspendedProviderAccountReceivesNoBookings() throws Exception {
+        Provider p = approvedProvider();
+        p.user().setActive(false);
+        userRepo.save(p.user());
+        mvc.perform(post("/bookings").header("Authorization", bearer(login(user(UserRole.CUSTOMER))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("providerId", p.profile().getId(),
+                                "serviceId", p.service().getId(), "bookingType", "SCHEDULED",
+                                "bookingDate", LocalDate.now().plusDays(2).toString(), "startTime", "10:00"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("booking.error.provider_unavailable"));
+    }
+
+    /** R2-11: the owner's phone only goes to customers with a live booking. */
+    @Test
+    void theProviderPhoneIsNotShownWithoutALiveBooking() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER));
+        mvc.perform(get("/providers/" + p.profile().getId()).header("Authorization", bearer(cTok)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.owner.phone").doesNotExist());
+
+        long id = book(cTok, p, LocalDate.now().plusDays(2), LocalTime.of(10, 0));
+        mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(login(p.user()))))
+                .andExpect(status().isOk());
+        mvc.perform(get("/providers/" + p.profile().getId()).header("Authorization", bearer(cTok)))
+                .andExpect(jsonPath("$.data.owner.phone").value(p.user().getPhone()));
+
+        // A listing that isn't approved is not served to customers at all.
+        p.profile().setVerificationStatus(VerificationStatus.SUSPENDED);
+        providerRepo.save(p.profile());
+        mvc.perform(get("/providers/" + p.profile().getId()).header("Authorization", bearer(cTok)))
+                .andExpect(status().isNotFound());
+    }
+
+    /** R2-01: rescheduling a booking accepted long ago no longer makes the next sweep expire it. */
+    @Test
+    void aRescheduledAcceptedBookingIsNotExpiredAtOnce() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER));
+        long id = book(cTok, p, LocalDate.now().plusDays(5), LocalTime.of(10, 0));
+        mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(login(p.user()))))
+                .andExpect(status().isOk());
+        // Accepted three days ago.
+        jdbc.update("UPDATE bookings SET created_at = ? WHERE id = ?",
+                java.sql.Timestamp.valueOf(java.time.LocalDateTime.now().minusDays(3)), id);
+
+        mvc.perform(patch("/bookings/" + id + "/reschedule").header("Authorization", bearer(cTok))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("bookingDate", LocalDate.now().plusDays(6).toString(),
+                                "startTime", "11:00"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        bookingService.expireStalePendingBookings();
+        assertThat(bookingRepo.findById(id).orElseThrow().getStatus()).isEqualTo(BookingStatus.PENDING);
+    }
+
+    /**
+     * R2-08 (reproduced on PostgreSQL): after an admin wrote a dispute off, the
+     * customer's "paid" re-created the commission. The ledger now follows the outcome.
+     */
+    @Test
+    void aWrittenOffDisputeKeepsNoCommission() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER)), pTok = login(p.user());
+        long id = book(cTok, p, LocalDate.now().plusDays(2), LocalTime.of(10, 0));
+        mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        com.aiwa.entity.Booking live = bookingRepo.findById(id).orElseThrow();
+        java.time.LocalDateTime soon = com.aiwa.util.AiwaTime.now().plusMinutes(30).withSecond(0).withNano(0);
+        live.setBookingDate(soon.toLocalDate());
+        live.setStartTime(soon.toLocalTime());
+        live.setEndTime(soon.toLocalTime().plusMinutes(60));
+        bookingRepo.save(live);
+        mvc.perform(patch("/bookings/" + id + "/in-progress").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        mvc.perform(patch("/bookings/" + id + "/complete").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.DUE);
+
+        // Customer says it wasn't paid: commission is held while disputed.
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isOk());
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.VOID);
+
+        String fTok = login(user(UserRole.ADMIN, AdminPermission.FINANCE));
+        mvc.perform(post("/admin/bookings/" + id + "/resolve-dispute?outcome=UNPAID").header("Authorization", bearer(fTok)))
+                .andExpect(status().isOk());
+
+        // The customer can't reopen or re-charge it.
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=true").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("booking.error.payment_already_resolved"));
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest());
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.VOID);
+    }
+
+    /** BE-37 / R2-03: each SOS text gets a delivery record; a failed send ends as FAILED, shown to the user. */
+    @Test
+    void sosTextsAreTrackedPerRecipient() throws Exception {
+        Provider p = approvedProvider();
+        User customer = user(UserRole.CUSTOMER);
+        trustedContactRepo.save(TrustedContact.builder().user(customer).name("Brother").phone("+201088888888").build());
+        doThrow(new RuntimeException("gateway down")).when(smsService).send(eq("+201088888888"), anyString());
+        String cTok = login(customer);
+        long id = book(cTok, p, LocalDate.now().plusDays(1), LocalTime.of(15, 0));
+        mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(login(p.user())))).andExpect(status().isOk());
+
+        mvc.perform(post("/bookings/" + id + "/safety").header("Authorization", bearer(cTok))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("type", "SOS"))))
+                .andExpect(status().isCreated());
+
+        // Three attempts (2 s + 4 s back-off), then FAILED; the app's view says so.
+        verify(smsService, timeout(15000).times(3)).send(eq("+201088888888"), anyString());
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(5)).untilAsserted(() ->
+                mvc.perform(get("/bookings/" + id + "/safety").header("Authorization", bearer(cTok)))
+                        .andExpect(jsonPath("$.data[0].contactsFailed").value(1))
+                        .andExpect(jsonPath("$.data[0].contactsTexted").value(0)));
+
+        // Pressing SOS again doesn't text everyone again; it returns the open alert.
+        mvc.perform(post("/bookings/" + id + "/safety").header("Authorization", bearer(cTok))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("type", "SOS"))))
+                .andExpect(status().isCreated());
+        verify(smsService, after(500).times(3)).send(eq("+201088888888"), anyString());
+    }
+
+    /** DR-028: an SOS outside a live booking (here: one never accepted) is refused. */
+    @Test
+    void sosIsOnlyAvailableAroundALiveBooking() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER));
+        long id = book(cTok, p, LocalDate.now().plusDays(3), LocalTime.of(10, 0));
+        mvc.perform(post("/bookings/" + id + "/safety").header("Authorization", bearer(cTok))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("type", "SOS"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("safety.error.sos_not_live"));
+    }
+
 }

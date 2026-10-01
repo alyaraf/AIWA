@@ -40,9 +40,18 @@ class PushRegistrar {
   }
 
   /// Call while the session is still valid, i.e. before revoking tokens.
+  /// Removes only this phone (R2-12: the backend keeps one entry per phone, so
+  /// signing out here no longer stops pushes on the user's other phones).
   Future<void> unregister() async {
     try {
-      await _api.delete(ApiConstants.mePushToken);
+      String? token;
+      try {
+        token = await _tokenSource();
+      } catch (_) {}
+      await _api.delete(
+        ApiConstants.mePushToken,
+        queryParameters: token == null || token.isEmpty ? null : {'token': token},
+      );
     } catch (_) {}
   }
 }

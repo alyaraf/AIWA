@@ -59,43 +59,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Page<Booking> findByProviderIdOrderByBookingDateDescStartTimeDesc(Long providerId, Pageable pageable);
 
-    /** Same slot check as {@link #existsConflict} but ignoring one booking (the one being moved). */
-    @Query("""
-        SELECT COUNT(b) > 0 FROM Booking b
-        WHERE b.provider.id = :providerId
-          AND b.id <> :excludeId
-          AND b.bookingDate = :date
-          AND b.status NOT IN (
-              com.aiwa.enums.BookingStatus.CANCELLED,
-              com.aiwa.enums.BookingStatus.REJECTED,
-              com.aiwa.enums.BookingStatus.EXPIRED)
-          AND b.startTime < :endTime
-          AND b.endTime > :startTime
-        """)
-    boolean existsConflictExcluding(@Param("providerId") Long providerId,
-                                    @Param("date") LocalDate date,
-                                    @Param("startTime") LocalTime startTime,
-                                    @Param("endTime") LocalTime endTime,
-                                    @Param("excludeId") Long excludeId);
-
-    @Query("""
-        SELECT COUNT(b) > 0 FROM Booking b
-        WHERE b.staffMember.id = :staffId
-          AND b.id <> :excludeId
-          AND b.bookingDate = :date
-          AND b.status NOT IN (
-              com.aiwa.enums.BookingStatus.CANCELLED,
-              com.aiwa.enums.BookingStatus.REJECTED,
-              com.aiwa.enums.BookingStatus.EXPIRED)
-          AND b.startTime < :endTime
-          AND b.endTime > :startTime
-        """)
-    boolean existsConflictForStaffExcluding(@Param("staffId") Long staffId,
-                                            @Param("date") LocalDate date,
-                                            @Param("startTime") LocalTime startTime,
-                                            @Param("endTime") LocalTime endTime,
-                                            @Param("excludeId") Long excludeId);
-
     /** Providers currently out on a visit — the "busy" flag on discovery rows. */
     @Query("""
         SELECT DISTINCT b.provider.id FROM Booking b
@@ -114,45 +77,39 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByProviderIdAndBookingDate(Long providerId, LocalDate date);
 
-    List<Booking> findByStaffMemberIdAndBookingDate(Long staffMemberId, LocalDate date);
-
-    /** Conflict check scoped to a single staff member's calendar. */
+    /**
+     * Every booking that occupies the provider's time between two dates
+     * (R2-07, DR-023). The caller compares full date-times with the travel
+     * buffer on both sides, so a booking near midnight is seen from the next day.
+     */
     @Query("""
-        SELECT COUNT(b) > 0 FROM Booking b
-        WHERE b.staffMember.id = :staffId
-          AND b.bookingDate = :date
+        SELECT b FROM Booking b
+        WHERE b.provider.id = :providerId
+          AND b.bookingDate BETWEEN :from AND :to
           AND b.status NOT IN (
               com.aiwa.enums.BookingStatus.CANCELLED,
               com.aiwa.enums.BookingStatus.REJECTED,
               com.aiwa.enums.BookingStatus.EXPIRED)
-          AND b.startTime < :endTime
-          AND b.endTime > :startTime
         """)
-    boolean existsConflictForStaff(@Param("staffId") Long staffId,
-                                   @Param("date") LocalDate date,
-                                   @Param("startTime") LocalTime startTime,
-                                   @Param("endTime") LocalTime endTime);
+    List<Booking> findActiveForCalendar(@Param("providerId") Long providerId,
+                                        @Param("from") LocalDate from,
+                                        @Param("to") LocalDate to);
+
+    /** DR-024: the booking a customer already created with this Idempotency-Key. */
+    java.util.Optional<Booking> findByCustomerIdAndIdempotencyKey(Long customerId, String idempotencyKey);
+
+    /** R2-06: accepted bookings in a date range that have not had their reminder yet. */
+    List<Booking> findByStatusInAndReminderSentAtIsNullAndBookingDateBetween(
+            java.util.Collection<BookingStatus> statuses, LocalDate from, LocalDate to);
+
+    List<Booking> findByStaffMemberIdAndBookingDate(Long staffMemberId, LocalDate date);
 
     List<Booking> findByCustomerIdAndStatus(Long customerId, BookingStatus status);
 
-    boolean existsBySavedAddressId(Long savedAddressId);
+    boolean existsByCustomerIdAndProviderIdAndStatusIn(Long customerId, Long providerId,
+                                                       java.util.Collection<BookingStatus> statuses);
 
-    /** Check for conflicting slots on the same provider/date (ignoring slot-releasing states) */
-    @Query("""
-        SELECT COUNT(b) > 0 FROM Booking b
-        WHERE b.provider.id = :providerId
-          AND b.bookingDate = :date
-          AND b.status NOT IN (
-              com.aiwa.enums.BookingStatus.CANCELLED,
-              com.aiwa.enums.BookingStatus.REJECTED,
-              com.aiwa.enums.BookingStatus.EXPIRED)
-          AND b.startTime < :endTime
-          AND b.endTime > :startTime
-        """)
-    boolean existsConflict(@Param("providerId") Long providerId,
-                           @Param("date") LocalDate date,
-                           @Param("startTime") LocalTime startTime,
-                           @Param("endTime") LocalTime endTime);
+    boolean existsBySavedAddressId(Long savedAddressId);
 
     /** Gap: PENDING requests created before the cutoff that the provider never answered. */
     List<Booking> findByStatusAndCreatedAtBefore(BookingStatus status, java.time.LocalDateTime cutoff);
@@ -191,16 +148,5 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
         """)
     List<Object[]> countByDateAndStatus(@Param("from") LocalDate from);
 
-    /** Gap 9: Find ACCEPTED bookings today whose startTime falls in the reminder window */
-    @Query("""
-        SELECT b FROM Booking b
-        WHERE b.bookingDate = :date
-          AND b.status = com.aiwa.enums.BookingStatus.ACCEPTED
-          AND b.startTime >= :from
-          AND b.startTime < :to
-        """)
-    List<Booking> findUpcomingForReminder(@Param("date") java.time.LocalDate date,
-                                           @Param("from") LocalTime from,
-                                           @Param("to") LocalTime to);
 }
 
