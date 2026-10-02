@@ -366,7 +366,8 @@ public class AuthController {
     /**
      * Server clock exposed publicly so a user whose authenticator codes keep
      * getting rejected can compare their phone's time to ours — a mismatch of
-     * more than ~90s is the single most common cause of "TOTP not working".
+     * more than the drift tolerance (taken from TotpService, 30s) is the single
+     * most common cause of "TOTP not working".
      * No auth required; returns nothing but the current server time.
      */
     @GetMapping("/2fa/server-time")
@@ -376,8 +377,8 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.Success.of(java.util.Map.of(
                 "epochMillis", millis,
                 "iso", java.time.Instant.ofEpochMilli(millis).toString(),
-                "totpStepSeconds", 30,
-                "driftToleranceSeconds", 90
+                "totpStepSeconds", com.aiwa.security.TotpService.stepSeconds(),
+                "driftToleranceSeconds", com.aiwa.security.TotpService.driftToleranceSeconds()
         )));
     }
 

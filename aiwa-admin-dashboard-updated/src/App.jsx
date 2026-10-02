@@ -2635,6 +2635,7 @@ export function ProfileView({ user: userProp, onBack, onStatusChange, onUserChan
  */
 function ServerClockHint() {
   const [offsetMs, setOffsetMs] = useState(null);
+  const [toleranceSeconds, setToleranceSeconds] = useState(30); // replaced by the server's own value
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -2645,6 +2646,7 @@ function ServerClockHint() {
         if (!alive) return;
         const rttGuess = (Date.now() - t0) / 2;
         setOffsetMs(d.epochMillis - Date.now() + rttGuess);
+        if (d.driftToleranceSeconds > 0) setToleranceSeconds(d.driftToleranceSeconds);
       })
       .catch(() => { /* silent — the hint just won't show */ });
     const tick = setInterval(() => setNow(Date.now()), 1000);
@@ -2677,7 +2679,7 @@ function ServerClockHint() {
       Server time (Cairo): <strong>{cairoTime}</strong>
       <br />
       <span style={{ fontFamily: "var(--font-body)" }}>
-        Your phone's clock must be within 90 seconds of this — otherwise every code will be rejected.
+        Your phone's clock must be within {toleranceSeconds} seconds of this — otherwise every code will be rejected.
       </span>
     </div>
   );
@@ -2777,7 +2779,7 @@ export function TotpSetupCard() {
 
           {/* Clock-skew is the #1 cause of "code rejected" for TOTP. Show the
               server's current time live so a user whose phone is more than
-              ~90s out of sync can eyeball the mismatch and fix their clock
+              ~30s out of sync can eyeball the mismatch and fix their clock
               instead of retyping codes over and over. */}
           <ServerClockHint />
 

@@ -146,7 +146,7 @@ export const api = {
   }),
   totpStatus: () => request("/auth/2fa/status"),
   /** Public — no auth. Returns the server's current clock so a user with
-   *  TOTP problems can compare their phone's time to it (>90s skew is the
+   *  TOTP problems can compare their phone's time to it (>30s skew is the
    *  usual "code always rejected" cause). */
   totpServerTime: () => request("/auth/2fa/server-time"),
   /** DR-017: needs the current password (and current code when 2FA is already on). */
@@ -861,7 +861,7 @@ async function mockRequest(path, options = {}) {
   if (path === "/auth/2fa/enable") { mock.totpEnabled = true; return { success: true }; }
   if (path === "/auth/2fa/disable") { mock.totpEnabled = false; return { success: true }; }
   if (path === "/auth/2fa/verify") return { accessToken: "mock-admin-access-token", refreshToken: "mock-refresh-token", user: mock.user };
-  if (path === "/auth/2fa/server-time") return { epochMillis: Date.now(), iso: new Date().toISOString(), totpStepSeconds: 30, driftToleranceSeconds: 90 };
+  if (path === "/auth/2fa/server-time") return { epochMillis: Date.now(), iso: new Date().toISOString(), totpStepSeconds: 30, driftToleranceSeconds: 30 };
   if (path === "/admin/dashboard") return mock.dashboard;
   if (path.startsWith("/admin/verification/counts")) return { pending: mock.verifications.length, approved: mock.verificationsByStatus.APPROVED.length, rejected: mock.verificationsByStatus.REJECTED.length, suspended: mock.verificationsByStatus.SUSPENDED.length };
   if (path.startsWith("/admin/verification?")) {

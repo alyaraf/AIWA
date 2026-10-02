@@ -20,13 +20,26 @@ public class TotpService {
     private static final int SECRET_BYTES = 20; // 160-bit, standard for TOTP
     private static final int TIME_STEP_SECONDS = 30;
     private static final int CODE_DIGITS = 6;
-    // ±3 time-steps = ±90s tolerance. Phones drift a few seconds naturally; adding
-    // a network round-trip plus the user typing time can easily eat 30s. The RFC
-    // allows this — industry-standard "tolerant" servers use 1–5 steps of drift.
-    private static final int ALLOWED_DRIFT_STEPS = 3;
+    // ±1 time-step = ±30s tolerance, the RFC 6238 recommendation: three codes are
+    // valid at any moment. It was ±3 (seven codes), which made guessing easier (CR-01).
+    private static final int ALLOWED_DRIFT_STEPS = 1;
     private static final String BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
     private final SecureRandom random = new SecureRandom();
+
+    /** Length of one time step, for clients that show a clock hint. */
+    public static int stepSeconds() {
+        return TIME_STEP_SECONDS;
+    }
+
+    /**
+     * How far a phone's clock may be off before every code is refused. Derived
+     * from the constants verification uses, so what clients are told cannot
+     * differ from the real check (it said 90 s after the drift was cut to 30 s).
+     */
+    public static int driftToleranceSeconds() {
+        return ALLOWED_DRIFT_STEPS * TIME_STEP_SECONDS;
+    }
 
     /** A fresh Base32-encoded secret — store it, show it to the user once, never log it. */
     public String generateSecret() {
@@ -44,13 +57,22 @@ public class TotpService {
 
     /** True if {@code code} matches the secret at the current time step, or one step either side. */
     public boolean verifyCode(String secret, String code) {
-        if (secret == null || code == null || !code.matches("\\d{6}")) return false;
+        return matchingStep(secret, code) != null;
+    }
+
+    /**
+     * The time step {@code code} belongs to, or null when it matches none of the
+     * allowed ones. Callers store the step of an accepted code and refuse that
+     * step (and older ones) afterwards, so a code works once (CR-01).
+     */
+    public Long matchingStep(String secret, String code) {
+        if (secret == null || code == null || !code.matches("\\d{6}")) return null;
         long currentStep = System.currentTimeMillis() / 1000 / TIME_STEP_SECONDS;
         byte[] key = base32Decode(secret);
         for (int drift = -ALLOWED_DRIFT_STEPS; drift <= ALLOWED_DRIFT_STEPS; drift++) {
-            if (generateCode(key, currentStep + drift).equals(code)) return true;
+            if (generateCode(key, currentStep + drift).equals(code)) return currentStep + drift;
         }
-        return false;
+        return null;
     }
 
     // package-private (not private) so TotpServiceTest can check against the

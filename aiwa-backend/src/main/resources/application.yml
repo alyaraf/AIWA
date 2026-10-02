@@ -127,6 +127,12 @@ aiwa:
     # Secure flag on the accessToken cookie. Must be true anywhere the API is
     # served over HTTPS (prod profile forces it on).
     cookie-secure: ${AUTH_COOKIE_SECURE:false}
+    # CR-01: sign-in attempts (wrong password or wrong 2FA code) an account gets
+    # before it refuses sign-in with 429, and for how long. Counted in the database.
+    max-failed-attempts: ${AUTH_MAX_FAILED_ATTEMPTS:5}
+    lockout-duration: ${AUTH_LOCKOUT_DURATION:15m}
+    # Wrong codes one 2FA challenge survives; after that the user signs in again.
+    mfa-max-wrong-codes: ${AUTH_MFA_MAX_WRONG_CODES:5}
   otp:
     # Per-phone send limits (SMS pumping / cost guard) on top of the per-IP limit.
     max-sends-per-10-minutes: ${OTP_MAX_SENDS_10M:3}
