@@ -42,7 +42,10 @@ public class BookingServiceImpl implements BookingService {
     private final RedisRuntimeService redis;
 
     private static final Duration IDEMPOTENCY_KEY_TTL = Duration.ofMinutes(5);
-    private static final Duration AUTO_DEDUP_WINDOW = Duration.ofSeconds(10);
+
+    /** How long an identical request without an Idempotency-Key counts as a double tap (CR-13a). */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.booking.auto-dedup-window:10s}")
+    private Duration autoDedupWindow = Duration.ofSeconds(10);
 
     /** How far ahead a customer can book. */
     static final int MAX_DAYS_AHEAD = 90;
@@ -81,22 +84,16 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public ApiResponse.BookingDto create(Long customerId, BookingRequest req, String idempotencyKey) {
         boolean explicitKey = idempotencyKey != null && !idempotencyKey.isBlank();
-        if (explicitKey) {
-            // DR-024: the key is stored with the booking, so a retry after the
-            // 5-minute Redis window (or with Redis down) still finds the original,
-            // and the same key with a different request is refused, not answered
-            // with the earlier booking.
-            String key = clipKey(idempotencyKey);
-            Optional<Booking> earlier = bookingRepo.findByCustomerIdAndIdempotencyKey(customerId, key);
-            if (earlier.isPresent()) {
-                if (!sameRequest(earlier.get(), req)) throw new ConflictException("booking.error.idempotency_key_reused");
-                return toDto(earlier.get());
-            }
-        }
+        // DR-024: the key is stored with the booking, so a retry after the
+        // 5-minute Redis window (or with Redis down) still finds the original,
+        // and the same key with a different request is refused, not answered
+        // with the earlier booking.
+        Optional<ApiResponse.BookingDto> earlier = findByIdempotencyKey(customerId, req, idempotencyKey);
+        if (earlier.isPresent()) return earlier.get();
         String dedupKey = explicitKey
                 ? "idem:booking:" + customerId + ":" + idempotencyKey.trim()
                 : "idem:booking:" + customerId + ":auto:" + autoDedupFingerprint(req);
-        Duration ttl = explicitKey ? IDEMPOTENCY_KEY_TTL : AUTO_DEDUP_WINDOW;
+        Duration ttl = explicitKey ? IDEMPOTENCY_KEY_TTL : autoDedupWindow;
 
         // The dedup guard is a convenience, not the primary correctness boundary
         // (the locked slot-conflict check below still applies) — if Redis is
@@ -123,8 +120,13 @@ public class BookingServiceImpl implements BookingService {
                 if (!original.getCustomer().getId().equals(customerId)) {
                     throw new BusinessException("booking.error.duplicate");
                 }
-                if (!sameRequest(original, req)) throw new ConflictException("booking.error.idempotency_key_reused");
-                return toDto(original);
+                // CR-13(a): a double tap is answered with the earlier booking only
+                // while that booking is live. Booking the same slot again right
+                // after cancelling used to answer 201 with the cancelled one.
+                if (explicitKey || !original.getStatus().isSlotReleasing()) {
+                    if (!sameRequest(original, req)) throw new ConflictException("booking.error.idempotency_key_reused");
+                    return toDto(original);
+                }
             } catch (NumberFormatException e) {
                 throw new BusinessException("booking.error.duplicate");
             }
@@ -135,7 +137,9 @@ public class BookingServiceImpl implements BookingService {
             // Only once the booking is committed (DR-024): written inside the
             // transaction, a rollback left the key pointing at a booking that
             // never existed.
-            afterCommit(() -> redis.set(dedupKey, String.valueOf(dto.getId()), IDEMPOTENCY_KEY_TTL));
+            // CR-13(a): kept for the window that was chosen above; the automatic
+            // guard used to be kept 5 minutes instead of its 10 seconds.
+            afterCommit(() -> redis.set(dedupKey, String.valueOf(dto.getId()), ttl));
             return dto;
         } catch (RuntimeException e) {
             // The request was rejected outright (bad input, no slot, etc.) — release
@@ -147,6 +151,22 @@ public class BookingServiceImpl implements BookingService {
             }
             throw e;
         }
+    }
+
+    /**
+     * The booking this customer already created with an Idempotency-Key, if any.
+     * CR-13(e): the controller also asks this after a retry lost the race to the
+     * unique index (ux_bookings_customer_idem) — a retried Book Now with Redis
+     * down — because that attempt's own transaction cannot be used any more.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ApiResponse.BookingDto> findByIdempotencyKey(Long customerId, BookingRequest req,
+                                                                 String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) return Optional.empty();
+        return bookingRepo.findByCustomerIdAndIdempotencyKey(customerId, clipKey(idempotencyKey)).map(earlier -> {
+            if (!sameRequest(earlier, req)) throw new ConflictException("booking.error.idempotency_key_reused");
+            return toDto(earlier);
+        });
     }
 
     private static String clipKey(String key) {
@@ -529,6 +549,9 @@ public class BookingServiceImpl implements BookingService {
 
         BookingStatus previous = booking.getStatus();
         requireStepAllowed(booking, newStatus);
+        if (newStatus == BookingStatus.ACCEPTED) {
+            requireStillBookable(booking, booking.getBookingDate(), booking.getStartTime());
+        }
         if (newStatus == BookingStatus.CANCELLED) {
             if (isCustomer) enforceCustomerCancellationCutoff(booking);
             booking.setCancelledBy(isCustomer ? "CUSTOMER" : "PROVIDER");
@@ -599,6 +622,29 @@ public class BookingServiceImpl implements BookingService {
         if (lead >= 0 && AiwaTime.now().isBefore(startsAt.minusMinutes(lead))) {
             throw new BusinessException("booking.error.too_early_for_step");
         }
+    }
+
+    /**
+     * CR-13(c)/(d): what must hold whenever a booking is confirmed at a time —
+     * the provider accepting it, the customer accepting a proposed time, or the
+     * customer moving it. The start is still ahead, and the service and the
+     * chosen staff member are still on offer. Call it last: it also drops any
+     * other time that was proposed for the booking, the question is settled.
+     */
+    private static void requireStillBookable(Booking booking, LocalDate date, LocalTime start) {
+        if (!LocalDateTime.of(date, start).isAfter(AiwaTime.now()))
+            throw new BusinessException("booking.error.start_passed");
+        if (!booking.getService().isActive())
+            throw new BusinessException("service.inactive");
+        StaffMember staff = booking.getStaffMember();
+        if (staff != null) {
+            if (!staff.isActive()) throw new BusinessException("booking.error.staff_unavailable");
+            if (!staff.performs(booking.getService()))
+                throw new BusinessException("booking.error.staff_not_offering_service");
+        }
+        booking.setProposedDate(null);
+        booking.setProposedStartTime(null);
+        booking.setProposedAt(null);
     }
 
     private static String trimReason(String reason) {
@@ -917,10 +963,10 @@ public class BookingServiceImpl implements BookingService {
      */
     @Transactional
     public int expireStalePendingBookings() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         List<Booking> stale = bookingRepo.findByStatus(BookingStatus.PENDING).stream()
                 .filter(b -> b.getCreatedAt() != null)
-                .filter(b -> waitingSince(b).isBefore(now.minusMinutes(platformSettings.getResponseWindowMinutes(b.getProvider()))))
+                .filter(b -> answerOverdue(b, platformSettings.getResponseWindowMinutes(b.getProvider()), now))
                 .toList();
 
         for (Booking booking : stale) {
@@ -963,6 +1009,21 @@ public class BookingServiceImpl implements BookingService {
         if (b.getProposedAt() != null && b.getProposedAt().isAfter(ref)) ref = b.getProposedAt();
         if (b.getAwaitingSince() != null && b.getAwaitingSince().isAfter(ref)) ref = b.getAwaitingSince();
         return ref;
+    }
+
+    /**
+     * CR-13(f): the response window is a length of real time. Compared as
+     * wall-clock times it ran an hour short on the night the clocks go forward
+     * and an hour long on the night they go back. The waiting times are written
+     * with LocalDateTime.now(), so they are read back in the JVM's zone (the
+     * business zone: AiwaApplication sets it at start-up).
+     * ponytail: a time written during the repeated hour of the autumn night is
+     * read as its first occurrence, so that request can expire up to an hour
+     * early; telling the two apart needs the columns stored as instants.
+     */
+    static boolean answerOverdue(Booking b, long windowMinutes, Instant now) {
+        return waitingSince(b).atZone(ZoneId.systemDefault()).toInstant()
+                .plus(Duration.ofMinutes(windowMinutes)).isBefore(now);
     }
 
     // ── PROVIDER PROPOSES ALTERNATIVE TIME (customer accept/decline) ───────────
@@ -1028,19 +1089,15 @@ public class BookingServiceImpl implements BookingService {
             ProviderProfile provider = providerRepo.findByIdForUpdate(booking.getProvider().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Provider", booking.getProvider().getId()));
             requireAcceptingBookings(provider);
-            if (booking.getStaffMember() != null && !booking.getStaffMember().isActive())
-                throw new BusinessException("booking.error.staff_unavailable");
             requireBookableSlot(provider, booking.getStaffMember(), booking.getService(), d, s);
             requireFreeSlot(booking, d, s);
+            requireStillBookable(booking, d, s);
 
             booking.setBookingDate(d);
             booking.setStartTime(s);
             booking.setEndTime(e);
             booking.setStatus(BookingStatus.ACCEPTED);
             booking.setCheckedInAt(null); // CR-11: a check-in belongs to the old time
-            booking.setProposedDate(null);
-            booking.setProposedStartTime(null);
-            booking.setProposedAt(null);
             bookingRepo.save(booking);
 
             sendStatusNotification(booking, BookingStatus.ACCEPTED, false);
@@ -1390,7 +1447,9 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() == BookingStatus.PENDING) return;
         LocalDateTime appointment = LocalDateTime.of(booking.getBookingDate(), booking.getStartTime());
         int cutoffHours = platformSettings.getCancellationCutoffHours(booking.getProvider());
-        if (LocalDateTime.now().isAfter(appointment.minusHours(cutoffHours))) {
+        // CR-13(f): real hours before the start, on instants in the business zone;
+        // "02:00 minus 2 hours" on the wall clock is an hour off across a clock change.
+        if (Instant.now().isAfter(appointment.atZone(AiwaTime.ZONE).minusHours(cutoffHours).toInstant())) {
             throw new BusinessException(
                 "Cancellation deadline passed. Must cancel at least "
                 + cutoffHours + " hours before the appointment.");
@@ -1458,15 +1517,14 @@ public class BookingServiceImpl implements BookingService {
         requireAcceptingBookings(provider);
         requireBookableSlot(provider, booking.getStaffMember(), booking.getService(), newDate, newStart);
         requireFreeSlot(booking, newDate, newStart);
+        // CR-13(d): the staff and service checks proposal acceptance already had.
+        requireStillBookable(booking, newDate, newStart);
 
         booking.setBookingDate(newDate);
         booking.setStartTime(newStart);
         booking.setEndTime(newEnd);
         // CR-11: a check-in belongs to the old time; kept, it blocked the no-show at the new one.
         booking.setCheckedInAt(null);
-        booking.setProposedDate(null);
-        booking.setProposedStartTime(null);
-        booking.setProposedAt(null);
         // Reset to PENDING so the provider can re-confirm the new time; their
         // response window starts now, not at the original request (R2-01).
         booking.setStatus(BookingStatus.PENDING);

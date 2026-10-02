@@ -21,6 +21,8 @@ public class ServiceRequest {
 
     @NotNull(message = "Duration is required")
     @Min(value = 5, message = "Duration must be at least 5 minutes")
+    // CR-13(b): from 24 hours the stored end time wraps and hides the booking from the overlap check.
+    @Max(value = 480, message = "{validation.duration.max}")
     private Integer durationMinutes;
 
     private ServiceCategory category;

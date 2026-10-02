@@ -124,6 +124,9 @@ aiwa:
     # CR-11: a venue customer can check in from this many minutes before the
     # start, until the slot ends.
     check-in-lead-minutes: 30
+    # CR-13: an identical booking request sent again within this time, without an
+    # Idempotency-Key, is a double tap and is answered with the first booking.
+    auto-dedup-window: 10s
   terms:
     current-version: "1.0"
   auth:

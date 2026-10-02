@@ -42,9 +42,18 @@ public class BookingController {
             @Valid @RequestBody BookingRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.Success.of("Booking created",
-                        bookingService.create(resolveUserId(userDetails), request, idempotencyKey)));
+        Long userId = resolveUserId(userDetails);
+        ApiResponse.BookingDto booking;
+        try {
+            booking = bookingService.create(userId, request, idempotencyKey);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // CR-13(e): a retry that passed the look-up by key while the original
+            // was still in flight (Book Now, Redis down) and then lost on the
+            // unique index. Its transaction is gone, so the original is read in a
+            // new one here; this used to answer 500.
+            booking = bookingService.findByIdempotencyKey(userId, request, idempotencyKey).orElseThrow(() -> e);
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.Success.of("Booking created", booking));
     }
 
     @GetMapping("/{id}")
