@@ -9,6 +9,10 @@ public interface AuthService {
     ApiResponse.AuthResponse login(AuthRequest.Login request);
     ApiResponse.AuthResponse refreshToken(String refreshToken);
     ApiResponse.AuthResponse changePhone(String identifier, AuthRequest.ChangePhone request);
+    /** CR-05: the current password, for a sensitive change. A wrong one counts toward the sign-in lock. */
+    void confirmPassword(String identifier, String password);
+    /** CR-05: moves the pending email to the account once its code checks out; ends every other session. */
+    ApiResponse.AuthResponse confirmEmail(String identifier, String code);
     void logout(String accessToken, String refreshToken);
     ApiResponse.UserDto getCurrentUser(String identifier);
     void updateLanguage(String identifier, com.aiwa.enums.Language language);

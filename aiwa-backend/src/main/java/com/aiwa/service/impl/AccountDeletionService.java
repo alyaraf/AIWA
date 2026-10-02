@@ -111,6 +111,7 @@ public class AccountDeletionService {
         // Anonymize personal data and disable the account (soft-delete + GDPR-style scrub).
         user.setFullName("Deleted user");
         user.setEmail(null);
+        user.setPendingEmail(null);
         user.setPhone(null);
         user.setProfileImageUrl(null);
         user.setPushToken(null);

@@ -108,7 +108,8 @@ public class AuthController {
     }
 
     @PatchMapping("/me")
-    @Operation(summary = "Update profile — fullName, email, profileImageUrl (GAP 3)")
+    @Operation(summary = "Update profile — fullName, email, profileImageUrl (GAP 3). A new email needs "
+            + "currentPassword and stays in pendingEmail until POST /auth/me/email/verify")
     public ResponseEntity<ApiResponse.Success<ApiResponse.UserDto>> updateProfile(
             @Valid @RequestBody UpdateProfileRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -125,10 +126,17 @@ public class AuthController {
             } catch (IllegalArgumentException e) {
                 throw new BusinessException("auth.error.invalid_email");
             }
-            if (!email.equalsIgnoreCase(user.getEmail()) && userRepo.existsByEmailIgnoreCase(email)) {
-                throw new BusinessException("auth.error.email_taken");
+            if (!email.equalsIgnoreCase(user.getEmail())) {
+                // CR-05: a session alone cannot change the email, and the new address
+                // only waits (pendingEmail) until POST /auth/me/email/verify confirms
+                // the code sent to it. Sending the same address again sends a new code.
+                authService.confirmPassword(userDetails.getUsername(), request.getCurrentPassword());
+                if (userRepo.existsByEmailIgnoreCase(email)) {
+                    throw new BusinessException("auth.error.email_taken");
+                }
+                user.setPendingEmail(email);
+                otpService.sendEmailOtp(email);
             }
-            user.setEmail(email);
         }
         String removedAvatar = null;
         if (request.getProfileImageUrl() != null) {
@@ -169,9 +177,21 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.Success.of("Avatar updated", toUserDto(saved)));
     }
 
-    @PatchMapping("/me/phone")
-    @Operation(summary = "Change your phone number — send-otp to the NEW number first, then call this with the code. "
+    @PostMapping("/me/email/verify")
+    @Operation(summary = "Confirm the email waiting in pendingEmail with the code sent to it. "
             + "Returns a fresh token pair; other sessions are signed out.")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> verifyEmail(
+            @Valid @RequestBody AuthRequest.VerifyEmail request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        ApiResponse.AuthResponse auth = authService.confirmEmail(userDetails.getUsername(), request.getCode());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString())
+                .body(ApiResponse.Success.of("Email confirmed", auth));
+    }
+
+    @PatchMapping("/me/phone")
+    @Operation(summary = "Change your phone number — send-otp to the NEW number first, then call this with the code "
+            + "and your current password. Returns a fresh token pair; other sessions are signed out.")
     public ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> changePhone(
             @Valid @RequestBody AuthRequest.ChangePhone request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -446,6 +466,7 @@ public class AuthController {
                 .id(u.getId())
                 .fullName(u.getFullName())
                 .email(u.getEmail())
+                .pendingEmail(u.getPendingEmail())
                 .phone(u.getPhone())
                 .role(u.getRole())
                 .gender(u.getGender())

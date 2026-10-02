@@ -37,6 +37,13 @@ public class User extends BaseEntity {
     @Column(unique = true)
     private String phone;
 
+    /**
+     * An email the owner has not confirmed with a code yet (CR-05). Only
+     * {@link #email} signs in, resets a password or is unique; this one moves
+     * there on POST /auth/me/email/verify.
+     */
+    private String pendingEmail;
+
     // CR-02: the one place an email or phone is written (these setters and the
     // builder below), so no caller can store a spelling sign-in does not look
     // up. Hibernate loads by field, so a row V19 left as stored is not rewritten

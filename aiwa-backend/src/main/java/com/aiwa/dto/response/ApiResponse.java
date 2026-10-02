@@ -74,6 +74,8 @@ public class ApiResponse {
         private Long id;
         private String fullName;
         private String email;
+        /** An email waiting for its confirmation code (CR-05); null when there is none. */
+        private String pendingEmail;
         private String phone;
         private UserRole role;
         private Gender gender;
