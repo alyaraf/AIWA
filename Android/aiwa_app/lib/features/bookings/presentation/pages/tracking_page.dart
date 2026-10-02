@@ -282,7 +282,21 @@ class _TrackingViewState extends State<_TrackingView> {
           ),
           if (b.homeService && onSite) ...[
             const SizedBox(height: 14),
-            _SafetyCard(onSos: s.sos == SosStage.none ? _cubit.sos : null),
+            // After "I'm safe" (logged) a second emergency can be raised.
+            _SafetyCard(
+              onSos: s.sos == SosStage.none || s.sos == SosStage.logged
+                  ? _cubit.sos
+                  : null,
+            ),
+            if (s.sosFailed) ...[
+              const SizedBox(height: 10),
+              InlineBanner(
+                tone: BannerTone.danger,
+                body: l.trackSosFailed,
+                action: l.commonRetry,
+                onAction: _cubit.sos,
+              ),
+            ],
           ],
           if (s.sos != SosStage.none) ...[
             const SizedBox(height: 10),

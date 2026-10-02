@@ -1445,6 +1445,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'You\'re marked safe and the SOS is closed. Support can still see it on this booking.';
 
   @override
+  String get trackSosFailed =>
+      'Your SOS could not be sent. Try again. In immediate danger, call 122.';
+
+  @override
   String get trackImSafe => 'I\'m safe';
 
   @override

@@ -23,6 +23,9 @@ class LiveBookingState {
   /// What the SOS actually reached (R2-03); null until known.
   final SosReport? sosReport;
 
+  /// The last SOS did not go out: Tracking offers a retry and the 122 hint.
+  final bool sosFailed;
+
   /// Travel fee declined -> "No problem — no fee applied." screen.
   final bool declinedFee;
 
@@ -33,6 +36,7 @@ class LiveBookingState {
     this.busy = false,
     this.sos = SosStage.none,
     this.sosReport,
+    this.sosFailed = false,
     this.declinedFee = false,
   });
 
@@ -43,6 +47,7 @@ class LiveBookingState {
     bool? busy,
     SosStage? sos,
     SosReport? sosReport,
+    bool? sosFailed,
     bool? declinedFee,
   }) => LiveBookingState(
     booking: booking ?? this.booking,
@@ -51,6 +56,7 @@ class LiveBookingState {
     busy: busy ?? this.busy,
     sos: sos ?? this.sos,
     sosReport: sosReport ?? this.sosReport,
+    sosFailed: sosFailed ?? this.sosFailed,
     declinedFee: declinedFee ?? this.declinedFee,
   );
 }
@@ -174,31 +180,38 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
   /// link in the support / trusted-contact SMS). A timed-out request may still
   /// have been recorded, so check before telling the user it failed (FE-31).
   Future<void> sos() async {
-    emit(state.copyWith(sos: SosStage.alerting));
-    final at = await _locate();
-    final r = await _repo.sendSos(
-      bookingId,
-      latitude: at?.lat,
-      longitude: at?.lng,
-    );
-    if (isClosed) return;
-    // What reached whom comes from the backend's delivery records (R2-03).
-    // After a timeout the SOS may still have been recorded (FE-31).
-    final shouldCheck = r.isRight() || r.fold((f) => f is NetworkFailure, (_) => false);
-    final report = shouldCheck
-        ? (await _repo.sosReport(bookingId)).fold((_) => null, (x) => x)
-        : null;
-    if (isClosed) return;
-    final sent = r.isRight() || report != null;
-    emit(
-      sent
-          ? state.copyWith(sos: SosStage.notified, sosReport: report ?? const SosReport())
-          : state.copyWith(
-              sos: SosStage.none,
-              actionError: r.fold((f) => f.message, (_) => null),
-            ),
-    );
-    if (sent) _followSosDelivery();
+    emit(state.copyWith(sos: SosStage.alerting, sosFailed: false));
+    try {
+      final at = await _locate();
+      final r = await _repo.sendSos(
+        bookingId,
+        latitude: at?.lat,
+        longitude: at?.lng,
+      );
+      if (isClosed) return;
+      // What reached whom comes from the backend's delivery records (R2-03).
+      // After a timeout the SOS may still have been recorded (FE-31).
+      final shouldCheck = r.isRight() || r.fold((f) => f is NetworkFailure, (_) => false);
+      final report = shouldCheck
+          ? (await _repo.sosReport(bookingId)).fold((_) => null, (x) => x)
+          : null;
+      if (isClosed) return;
+      final sent = r.isRight() || report != null;
+      emit(
+        sent
+            ? state.copyWith(sos: SosStage.notified, sosReport: report ?? const SosReport())
+            : state.copyWith(
+                sos: SosStage.none,
+                sosFailed: true,
+                actionError: r.fold((f) => f.message, (_) => null),
+              ),
+      );
+      if (sent) _followSosDelivery();
+    } catch (_) {
+      // Whatever went wrong, never stay on "Alerting…": the button must come
+      // back so the SOS can be raised again (CR-15).
+      if (!isClosed) emit(state.copyWith(sos: SosStage.none, sosFailed: true));
+    }
   }
 
   Timer? _sosPoll;
