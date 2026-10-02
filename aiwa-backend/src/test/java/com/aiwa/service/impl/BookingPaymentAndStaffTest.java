@@ -122,6 +122,11 @@ class BookingPaymentAndStaffTest {
         Booking b = completedBooking(provider());
         b.setStatus(BookingStatus.ACCEPTED);
         b.setHomeService(false);
+        // CR-11: check-in is open only around the start, so the booking starts in 10 minutes.
+        java.time.LocalDateTime soon = com.aiwa.util.AiwaTime.now().plusMinutes(10);
+        b.setBookingDate(soon.toLocalDate());
+        b.setStartTime(soon.toLocalTime());
+        b.setEndTime(soon.toLocalTime().plusMinutes(30));
         when(bookingRepo.findById(55L)).thenReturn(Optional.of(b));
 
         ApiResponse.BookingDto dto = service.checkIn(CUSTOMER_ID, 55L);

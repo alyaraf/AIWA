@@ -53,6 +53,10 @@ public class BookingServiceImpl implements BookingService {
     @org.springframework.beans.factory.annotation.Value("${aiwa.booking.payment-dispute-window-hours:48}")
     private long paymentDisputeWindowHours = 48;
 
+    /** Minutes before the start from which a venue customer may check in; it closes when the slot ends (CR-11). */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.booking.check-in-lead-minutes:30}")
+    private long checkInLeadMinutes = 30;
+
     /** States in which both parties may see each other's phone number. */
     static final Set<BookingStatus> CONTACT_VISIBLE = EnumSet.of(
             BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED, BookingStatus.IN_PROGRESS);
@@ -793,6 +797,13 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("booking.error.checkin_requires_accepted");
         if (booking.getCheckedInAt() != null)
             throw new BusinessException("booking.error.already_checked_in");
+        // CR-11: only around the start. A check-in made days early blocked the
+        // no-show for good, and the provider's only way out was a cancel (a strike).
+        Instant now = Instant.now();
+        if (now.isBefore(startOf(booking).atZone(AiwaTime.ZONE).toInstant().minus(Duration.ofMinutes(checkInLeadMinutes))))
+            throw new BusinessException("booking.error.checkin_too_early");
+        if (now.isAfter(endOf(booking).atZone(AiwaTime.ZONE).toInstant()))
+            throw new BusinessException("booking.error.checkin_too_late");
 
         booking.setCheckedInAt(LocalDateTime.now());
         bookingRepo.save(booking);
@@ -1026,6 +1037,7 @@ public class BookingServiceImpl implements BookingService {
             booking.setStartTime(s);
             booking.setEndTime(e);
             booking.setStatus(BookingStatus.ACCEPTED);
+            booking.setCheckedInAt(null); // CR-11: a check-in belongs to the old time
             booking.setProposedDate(null);
             booking.setProposedStartTime(null);
             booking.setProposedAt(null);
@@ -1450,6 +1462,8 @@ public class BookingServiceImpl implements BookingService {
         booking.setBookingDate(newDate);
         booking.setStartTime(newStart);
         booking.setEndTime(newEnd);
+        // CR-11: a check-in belongs to the old time; kept, it blocked the no-show at the new one.
+        booking.setCheckedInAt(null);
         booking.setProposedDate(null);
         booking.setProposedStartTime(null);
         booking.setProposedAt(null);

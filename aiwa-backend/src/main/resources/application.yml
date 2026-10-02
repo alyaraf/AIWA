@@ -121,6 +121,9 @@ aiwa:
     # CR-03: hours after a booking is completed in which the customer may report
     # "not paid" (once per booking). 0 = never.
     payment-dispute-window-hours: 48
+    # CR-11: a venue customer can check in from this many minutes before the
+    # start, until the slot ends.
+    check-in-lead-minutes: 30
   terms:
     current-version: "1.0"
   auth:
