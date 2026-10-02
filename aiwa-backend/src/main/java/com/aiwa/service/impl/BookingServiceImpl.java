@@ -242,8 +242,9 @@ public class BookingServiceImpl implements BookingService {
                 throw new BusinessException("booking.error.date_time_required");
             bookingDate = req.getBookingDate();
             startTime   = req.getStartTime();
-            requireBookableSlot(provider, staffMember, service, bookingDate, startTime);
         }
+        // CR-04: the slot Book Now picked gets the same check as a scheduled one.
+        requireBookableSlot(provider, staffMember, service, bookingDate, startTime);
 
         LocalTime endTime = startTime.plusMinutes(service.getDurationMinutes());
         requireFree(provider, staffMember, bookingDate, startTime, service.getDurationMinutes(), null);
@@ -1207,16 +1208,18 @@ public class BookingServiceImpl implements BookingService {
         // unassigned bookings, with the neighbouring days for buffers (DR-023, R2-07).
         List<Booking> existing = calendar(providerId, staffMemberId, date, null);
         List<ApiResponse.TimeSlotDto> slots = new ArrayList<>();
-        LocalTime cursor = avail.getStartTime();
         int duration = service.getDurationMinutes();
         int step = avail.getSlotDurationMinutes() != null && avail.getSlotDurationMinutes() > 0
                 ? avail.getSlotDurationMinutes() : 30;
         int buffer = bufferOf(service.getProvider());
         LocalDateTime now = AiwaTime.now();
 
-        while (!cursor.plusMinutes(duration).isAfter(avail.getEndTime())) {
-            final LocalTime slotStart = cursor;
-            final LocalTime slotEnd   = cursor.plusMinutes(duration);
+        // CR-04: minutes of the day, so a slot whose end passes midnight is not
+        // mistaken for one that ends before closing time.
+        int closing = minuteOfDay(avail.getEndTime());
+        for (int m = minuteOfDay(avail.getStartTime()); m + duration <= closing; m += step) {
+            final LocalTime slotStart = LocalTime.of(m / 60, m % 60);
+            final LocalTime slotEnd   = slotStart.plusMinutes(duration);
             LocalDateTime s = LocalDateTime.of(date, slotStart);
             boolean taken = overlaps(existing, s, s.plusMinutes(duration), buffer);
             // A slot that has already started can't be booked either.
@@ -1224,11 +1227,12 @@ public class BookingServiceImpl implements BookingService {
 
             slots.add(ApiResponse.TimeSlotDto.builder()
                     .startTime(slotStart).endTime(slotEnd).booked(taken || past).build());
-            LocalTime next = cursor.plusMinutes(step);
-            if (!next.isAfter(cursor)) break; // wrapped past midnight
-            cursor = next;
         }
         return slots;
+    }
+
+    private static int minuteOfDay(LocalTime t) {
+        return t.getHour() * 60 + t.getMinute();
     }
 
     // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -1262,32 +1266,24 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("booking.error.provider_unavailable_today");
 
         List<Booking> existing = calendar(providerId, staffId, date, null);
-        LocalTime now = AiwaTime.timeNow();
-        LocalTime cursor = now.isAfter(avail.getStartTime())
-                ? now.plusMinutes(5)
-                : avail.getStartTime();
-        if (cursor.isBefore(now)) {
-            // now + 5 min wrapped past midnight — nothing bookable today
-            throw new BusinessException("booking.error.no_book_now_slots");
-        }
-
-        // round up to next slot boundary
+        // CR-04: all in minutes of the day. Comparing clock times, a cursor plus
+        // duration that passed midnight wrapped to a small time that was never
+        // "after closing", so 23:10 against 09:00–17:00 booked 23:30.
+        int now = minuteOfDay(AiwaTime.timeNow());
+        int opening = minuteOfDay(avail.getStartTime());
+        int closing = minuteOfDay(avail.getEndTime());
         int slot = avail.getSlotDurationMinutes() != null && avail.getSlotDurationMinutes() > 0
                 ? avail.getSlotDurationMinutes() : 30;
-        int mins = cursor.getHour() * 60 + cursor.getMinute();
-        mins = ((mins + slot - 1) / slot) * slot;
-        if (mins >= 24 * 60) throw new BusinessException("booking.error.no_book_now_slots");
-        cursor = LocalTime.of(mins / 60, mins % 60);
+        // from now + 5 min (or opening time), rounded up to the next slot boundary
+        int first = now >= opening ? now + 5 : opening;
+        first = ((first + slot - 1) / slot) * slot;
 
         int duration = service.getDurationMinutes();
         int buffer = service.getProvider() != null ? bufferOf(service.getProvider()) : 0;
-        while (!cursor.plusMinutes(duration).isAfter(avail.getEndTime())) {
-            final LocalTime s = cursor;
+        for (int m = first; m + duration <= closing; m += slot) {
+            final LocalTime s = LocalTime.of(m / 60, m % 60);
             LocalDateTime startsAt = LocalDateTime.of(date, s);
             if (!overlaps(existing, startsAt, startsAt.plusMinutes(duration), buffer)) return s;
-            LocalTime next = cursor.plusMinutes(slot);
-            if (!next.isAfter(cursor)) break;
-            cursor = next;
         }
         throw new BusinessException("booking.error.no_book_now_slots");
     }
