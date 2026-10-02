@@ -49,6 +49,10 @@ public class BookingServiceImpl implements BookingService {
     /** Upper bound for a per-booking travel quote (EGP) — guards against typos like 15000. */
     static final BigDecimal MAX_TRAVEL_QUOTE = new BigDecimal("5000");
 
+    /** Hours after completion in which the customer may report "not paid" (CR-03). */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.booking.payment-dispute-window-hours:48}")
+    private long paymentDisputeWindowHours = 48;
+
     /** States in which both parties may see each other's phone number. */
     static final Set<BookingStatus> CONTACT_VISIBLE = EnumSet.of(
             BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED, BookingStatus.IN_PROGRESS);
@@ -624,6 +628,7 @@ public class BookingServiceImpl implements BookingService {
         requireStepAllowed(booking, BookingStatus.COMPLETED);
 
         booking.setStatus(BookingStatus.COMPLETED);
+        booking.setCompletedAt(AiwaTime.now());
         if (note != null && !note.isBlank()) {
             String n = note.trim();
             booking.setCompletionNote(n.length() > 500 ? n.substring(0, 500) : n);
@@ -711,12 +716,14 @@ public class BookingServiceImpl implements BookingService {
         switch (choice) {
             case "PAID" -> {
                 booking.setPaymentStatus(PaymentStatus.CASH_CONFIRMED);
+                recordResolution(booking, choice);
                 bookingRepo.save(booking);
                 recordCommissionIfNeeded(booking);
                 summaryEn = "paid";
             }
             case "UNPAID" -> {
                 booking.setPaymentStatus(PaymentStatus.UNPAID);
+                recordResolution(booking, choice);
                 bookingRepo.save(booking);
                 voidCommission(booking);
                 summaryEn = "written off (unpaid)";
@@ -725,6 +732,7 @@ public class BookingServiceImpl implements BookingService {
                 booking.setPaymentStatus(PaymentStatus.UNPAID);
                 booking.setStatus(BookingStatus.NO_SHOW);
                 booking.setPenaltyApplied(true);
+                recordResolution(booking, choice);
                 bookingRepo.save(booking);
                 voidCommission(booking);
                 summaryEn = "no-show recorded";
@@ -736,6 +744,7 @@ public class BookingServiceImpl implements BookingService {
                 booking.setCancellationReason(reason != null && !reason.isBlank()
                         ? trimReason(reason) : "Voided during dispute resolution");
                 booking.setCancelledAt(LocalDateTime.now());
+                recordResolution(booking, choice);
                 bookingRepo.save(booking);
                 voidCommission(booking);
                 summaryEn = "booking cancelled";
@@ -758,6 +767,14 @@ public class BookingServiceImpl implements BookingService {
                         + " booking (" + summaryEn + ").",
                 "قام دعم AIWA بحل مسألة الدفع لحجزك لـ " + booking.getService().getName() + ".");
         return toDto(booking);
+    }
+
+    /** CR-03: the admin's outcome is kept on the booking (outcome, when, who) and is final. */
+    private static void recordResolution(Booking booking, String outcome) {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        booking.setPaymentResolution(outcome);
+        booking.setPaymentResolvedAt(AiwaTime.now());
+        booking.setPaymentResolvedBy(auth != null && auth.getName() != null ? auth.getName() : "system");
     }
 
     /** Customer checks in at an on-site/venue booking so the provider can begin. */
@@ -810,9 +827,23 @@ public class BookingServiceImpl implements BookingService {
         // commission the admin had written off, and "not paid" reopened a
         // resolved dispute with its commission kept.
         PaymentStatus payment = booking.getPaymentStatus();
+        // CR-03: an admin's outcome is final. A PAID outcome leaves CASH_CONFIRMED,
+        // which used to accept "not paid" again: the dispute reopened, the
+        // commission was voided and every admin was notified, without limit.
+        if (booking.getPaymentResolution() != null)
+            throw new BusinessException("booking.error.payment_already_resolved");
         if (payment == PaymentStatus.CASH_CONFIRMED && paid) return toDto(booking); // already confirmed
         if (payment != PaymentStatus.CASH_PENDING && payment != PaymentStatus.CASH_CONFIRMED)
             throw new BusinessException("booking.error.payment_already_resolved");
+        if (!paid) {
+            // "Not paid" counts once per booking, and only for a while after completion.
+            if (booking.getCustomerDisputedAt() != null)
+                throw new BusinessException("booking.error.payment_dispute_already_reported");
+            // Bookings completed before completedAt existed: the scheduled end.
+            LocalDateTime completed = booking.getCompletedAt() != null ? booking.getCompletedAt() : endOf(booking);
+            if (!AiwaTime.now().isBefore(completed.plusHours(paymentDisputeWindowHours)))
+                throw new BusinessException("booking.error.payment_dispute_window_closed");
+        }
 
         if (paid) {
             booking.setPaymentStatus(PaymentStatus.CASH_CONFIRMED);
@@ -830,6 +861,7 @@ public class BookingServiceImpl implements BookingService {
             );
         } else {
             booking.setPaymentStatus(PaymentStatus.DISPUTED);
+            booking.setCustomerDisputedAt(AiwaTime.now());
             bookingRepo.save(booking);
             // No commission while the dispute is open; the admin's outcome decides.
             voidCommission(booking);

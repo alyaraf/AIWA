@@ -870,6 +870,85 @@ class ApiFlowIntegrationTest {
         assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.VOID);
     }
 
+    /** A booking the provider completed with cash collected (CASH_CONFIRMED, commission DUE). */
+    private long completedWithCash(String cTok, Provider p) throws Exception {
+        String pTok = login(p.user());
+        long id = book(cTok, p, LocalDate.now().plusDays(2), LocalTime.of(10, 0));
+        mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        com.aiwa.entity.Booking live = bookingRepo.findById(id).orElseThrow();
+        java.time.LocalDateTime soon = com.aiwa.util.AiwaTime.now().plusMinutes(30).withSecond(0).withNano(0);
+        live.setBookingDate(soon.toLocalDate());
+        live.setStartTime(soon.toLocalTime());
+        live.setEndTime(soon.toLocalTime().plusMinutes(60));
+        bookingRepo.save(live);
+        mvc.perform(patch("/bookings/" + id + "/in-progress").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        mvc.perform(patch("/bookings/" + id + "/complete").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        return id;
+    }
+
+    /**
+     * CR-03: once an admin resolved a dispute as paid, the customer's "not paid"
+     * used to reopen it and void the commission. The admin's outcome is final.
+     */
+    @Test
+    void aDisputeTheAdminResolvedAsPaidCannotBeReopened() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER));
+        long id = completedWithCash(cTok, p);
+
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentStatus").value("DISPUTED"));
+        String fTok = login(user(UserRole.ADMIN, AdminPermission.FINANCE));
+        mvc.perform(post("/admin/bookings/" + id + "/resolve-dispute?outcome=PAID").header("Authorization", bearer(fTok)))
+                .andExpect(status().isOk());
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.DUE);
+
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("booking.error.payment_already_resolved"));
+        assertThat(bookingRepo.findById(id).orElseThrow().getPaymentStatus()).isEqualTo(PaymentStatus.CASH_CONFIRMED);
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.DUE);
+
+        // The resolution is recorded on the booking: outcome, when, who.
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT payment_resolution, payment_resolved_at, payment_resolved_by FROM bookings WHERE id = ?", id);
+        assertThat(row.get("payment_resolution")).isEqualTo("PAID");
+        assertThat(row.get("payment_resolved_at")).isNotNull();
+        assertThat(row.get("payment_resolved_by")).isNotNull();
+    }
+
+    /** CR-03: the customer's "not paid" counts once per booking; repeats no longer page every admin. */
+    @Test
+    void aSecondNotPaidIsRefused() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER));
+        long id = completedWithCash(cTok, p);
+        User finance = user(UserRole.ADMIN, AdminPermission.FINANCE);
+
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/admin/bookings/" + id + "/resolve-dispute?outcome=PAID")
+                        .header("Authorization", bearer(login(finance))))
+                .andExpect(status().isOk());
+        long adminNotices = notificationRepo.count();
+
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest());
+        // A booking resolved before the resolution was recorded (pre-V21 row) is
+        // still protected by the once-per-booking rule.
+        jdbc.update("UPDATE bookings SET payment_resolution = NULL WHERE id = ?", id);
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("booking.error.payment_dispute_already_reported"));
+
+        assertThat(bookingRepo.findById(id).orElseThrow().getPaymentStatus()).isEqualTo(PaymentStatus.CASH_CONFIRMED);
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.DUE);
+        assertThat(notificationRepo.count()).isEqualTo(adminNotices);
+    }
+
     /** BE-37 / R2-03: each SOS text gets a delivery record; a failed send ends as FAILED, shown to the user. */
     @Test
     void sosTextsAreTrackedPerRecipient() throws Exception {

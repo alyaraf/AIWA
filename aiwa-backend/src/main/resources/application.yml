@@ -117,6 +117,10 @@ aiwa:
     private-path: ${STORAGE_PRIVATE_PATH:uploads/private}
   cancellation:
     cutoff-hours: 2
+  booking:
+    # CR-03: hours after a booking is completed in which the customer may report
+    # "not paid" (once per booking). 0 = never.
+    payment-dispute-window-hours: 48
   terms:
     current-version: "1.0"
   auth:
