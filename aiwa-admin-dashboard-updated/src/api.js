@@ -225,7 +225,10 @@ export const api = {
   settlementOverview: () => request("/admin/settlements/overview"),
   settlementProviders: () => requestAllPages("/admin/settlements/providers"),
   settlementDetail: (providerId) => request(`/admin/settlements/provider/${providerId}`),
-  confirmPayout: (providerId) => request(`/admin/settlements/provider/${providerId}/confirm-payout`, { method: "POST" }),
+  // CR-06: what a confirmation would settle ({ reportedAt, total, entryCount });
+  // the confirmation sends that total back and the server refuses any other.
+  payoutReport: (providerId) => request(`/admin/settlements/provider/${providerId}/payout-report`),
+  confirmPayout: (providerId, expectedAmount) => request(`/admin/settlements/provider/${providerId}/confirm-payout?expectedAmount=${encodeURIComponent(expectedAmount)}`, { method: "POST" }),
   setSettlementPause: (providerId, paused) => request(`/admin/providers/${providerId}/settlement-pause?paused=${paused}`, { method: "PATCH" }),
   latestTerms: (type = "CUSTOMER_TERMS") => request(`/terms/latest?type=${type}`),
   termsVersions: (type = "CUSTOMER_TERMS") => request(`/terms?type=${type}`).then(normalizeList),
@@ -1104,7 +1107,11 @@ async function mockRequest(path, options = {}) {
       ]
     };
   }
-  if (path.match(/\/confirm-payout$/) && options.method === "POST") {
+  if (path.match(/\/payout-report$/)) {
+    const row = mock.settlementRows.find((r) => r.providerId === Number(path.split("/")[4]));
+    return { reportedAt: null, total: row?.balanceOwed ?? 0, entryCount: 3 };
+  }
+  if (path.match(/\/confirm-payout(\?|$)/) && options.method === "POST") {
     const id = Number(path.split("/")[4]);
     const row = mock.settlementRows.find((r) => r.providerId === id);
     if (row) { row.balanceOwed = 0; row.grossAmount = 0; row.status = "SETTLED"; row.settlementPaused = false; }

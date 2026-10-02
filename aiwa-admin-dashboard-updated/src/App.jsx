@@ -4216,7 +4216,7 @@ function CommissionRateCard({ onSaved }) {
   );
 }
 
-function SettlementDetail({ providerId, onBack, onChanged }) {
+export function SettlementDetail({ providerId, onBack, onChanged }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -4236,16 +4236,31 @@ function SettlementDetail({ providerId, onBack, onChanged }) {
   const refresh = () => { setReloadKey((k) => k + 1); onChanged && onChanged(); };
   const [paidOut, setPaidOut] = useState(false);
 
-  function confirmPayout() {
+  // CR-06: the dialog states the total the provider reported (or, with no
+  // report, what is outstanding now) and the confirmation sends it back, so
+  // the server settles exactly that and nothing recorded since.
+  async function confirmPayout() {
+    let report;
+    setBusy(true);
+    try {
+      report = await api.payoutReport(providerId);
+    } catch (err) {
+      toast(err?.message || "Could not load the payout report.", "error");
+      return;
+    } finally { setBusy(false); }
+    const count = `${report.entryCount} ${report.entryCount === 1 ? "entry" : "entries"}`;
+    const amount = `EGP ${Number(report.total || 0).toFixed(2)}`;
     setConfirm({
       title: `Confirm payout from ${detail?.providerName}?`,
-      body: "All outstanding commission entries are marked settled and new bookings resume.",
+      body: report.reportedAt
+        ? `The provider reported paying ${amount} (${count}). Only those entries are marked settled; commission recorded since stays owed.`
+        : `Confirm you received ${amount} (${count}). Those entries are marked settled.`,
       confirmLabel: "Confirm payout",
       tone: "plum",
       onConfirm: async () => {
         setBusy(true);
         try {
-          await runAction(() => api.confirmPayout(providerId), { success: "Payout confirmed" });
+          await runAction(() => api.confirmPayout(providerId, report.total), { success: "Payout confirmed" });
           setPaidOut(true);
           refresh();
         } catch { /* toast */ } finally { setBusy(false); }

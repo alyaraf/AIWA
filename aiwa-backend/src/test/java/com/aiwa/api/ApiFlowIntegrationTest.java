@@ -634,7 +634,7 @@ class ApiFlowIntegrationTest {
         assertThat(csv).startsWith("id,providerId,").contains("," + p.profile().getId() + ",");
 
         mvc.perform(post("/admin/settlements/provider/{id}/confirm-payout", p.profile().getId())
-                        .header("Authorization", bearer(finance)))
+                        .param("expectedAmount", "30").header("Authorization", bearer(finance)))
                 .andExpect(status().isOk());
         inbox = data(mvc.perform(get("/admin/inbox").param("limit", "50").header("Authorization", bearer(finance))));
         assertThat(inbox.findValuesAsText("id")).doesNotContain(inboxId);
