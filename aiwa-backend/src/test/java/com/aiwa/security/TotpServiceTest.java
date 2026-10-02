@@ -55,6 +55,27 @@ class TotpServiceTest {
         assertThat(totp.verifyCode(secret, null)).isFalse();
     }
 
+    /** CR-01: three codes are valid at any moment (±1 step), not seven. */
+    @Test
+    void acceptsOneStepOfDriftButNotTwo() {
+        String secret = totp.generateSecret();
+        byte[] key = TotpService.base32Decode(secret);
+        long step;
+        boolean oneOld, twoOld, oneAhead, twoAhead;
+        do { // repeated if the clock crossed a step boundary in between
+            step = System.currentTimeMillis() / 1000 / 30;
+            oneOld = totp.verifyCode(secret, totp.generateCode(key, step - 1));
+            twoOld = totp.verifyCode(secret, totp.generateCode(key, step - 2));
+            oneAhead = totp.verifyCode(secret, totp.generateCode(key, step + 1));
+            twoAhead = totp.verifyCode(secret, totp.generateCode(key, step + 2));
+        } while (step != System.currentTimeMillis() / 1000 / 30);
+
+        assertThat(oneOld).as("1 step old").isTrue();
+        assertThat(oneAhead).as("1 step ahead").isTrue();
+        assertThat(twoOld).as("2 steps old").isFalse();
+        assertThat(twoAhead).as("2 steps ahead").isFalse();
+    }
+
     @Test
     void otpAuthUriCarriesTheExpectedFields() {
         String uri = totp.buildOtpAuthUri("ABCD1234", "admin@aiwa.com", "AIWA");

@@ -6,6 +6,7 @@ import com.aiwa.entity.User;
 import com.aiwa.enums.UserRole;
 import com.aiwa.exception.BusinessException;
 import com.aiwa.exception.InvalidTokenException;
+import com.aiwa.exception.TooManyRequestsException;
 import com.aiwa.repository.UserRepository;
 import com.aiwa.security.JwtUtils;
 import com.aiwa.security.TotpService;
@@ -32,6 +33,21 @@ public class AuthServiceImpl implements AuthService {
     private final OtpServiceImpl otpService;
     private final TokenBlacklistService tokenBlacklistService;
     private final TotpService totpService;
+
+    // CR-01 limits. Not constructor arguments: the numbers come from
+    // application.yml (aiwa.auth.*) and default to the same values.
+    /** Sign-in attempts (password or 2FA code) an account gets before it is locked. */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.auth.max-failed-attempts:5}")
+    private int maxFailedAttempts = 5;
+    /** How long a locked account refuses sign-in. */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.auth.lockout-duration:15m}")
+    private java.time.Duration lockoutDuration = java.time.Duration.ofMinutes(15);
+    /** Wrong codes one MFA challenge survives; the next sign-in needs the password again. */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.auth.mfa-max-wrong-codes:5}")
+    private int mfaMaxWrongCodes = 5;
+    /** Only counts wrong codes per MFA challenge; the per-account count is in the database. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private RedisRuntimeService redis;
 
     @Override
     @Transactional
@@ -84,14 +100,22 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public ApiResponse.AuthResponse login(AuthRequest.Login req) {
+        // CR-01: the attempt is taken from the account's budget before the password
+        // is looked at, so parallel guesses cannot outrun the count.
+        User user = userRepository.findByLogin(req.getIdentifier()).orElse(null);
+        if (user != null) claimSignInAttempt(user);
+
+        // Throws for an unknown account or a wrong password: the attempt stays spent.
         Authentication auth = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(req.getIdentifier(), req.getPassword())
         );
-
-        User user = userRepository.findByLogin(req.getIdentifier())
-                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
+        if (user == null) throw new BadCredentialsException("Invalid credentials");
 
         if (user.isTotpEnabled()) {
+            // The password was right, so this attempt is given back, but the count is
+            // not cleared: only a completed sign-in does that. Otherwise someone who
+            // knows the password could reset the 2FA guess count by signing in again.
+            userRepository.releaseLoginAttempt(user.getId());
             // Password checked out, but the account requires a second factor.
             // No access/refresh token is issued yet — only a short-lived,
             // purpose-scoped challenge token that /auth/2fa/verify will exchange
@@ -102,6 +126,7 @@ public class AuthServiceImpl implements AuthService {
                     .build();
         }
 
+        userRepository.clearLoginAttempts(user.getId());
         return buildAuthResponse(user);
     }
 
@@ -118,7 +143,11 @@ public class AuthServiceImpl implements AuthService {
         // DR-017: a challenge issued before a password reset or suspension is dead.
         requireIssuedAfterCutoff(user, mfaToken);
 
-        if (!user.isTotpEnabled() || !totpService.verifyCode(user.getTotpSecret(), code)) {
+        // CR-01: a code guess counts against the account like a password guess…
+        claimSignInAttempt(user);
+        if (!user.isTotpEnabled() || !acceptTotp(user, code)) {
+            // …and against this challenge.
+            countWrongCode(mfaToken);
             throw new BusinessException("auth.error.invalid_totp_code");
         }
 
@@ -127,6 +156,7 @@ public class AuthServiceImpl implements AuthService {
         if (!tokenBlacklistService.claimStrict(mfaToken)) {
             throw new InvalidTokenException("auth.error.token_invalid");
         }
+        userRepository.clearLoginAttempts(user.getId());
         return buildAuthResponse(user);
     }
 
@@ -142,6 +172,7 @@ public class AuthServiceImpl implements AuthService {
         // produce a matching code with it.
         String secret = totpService.generateSecret();
         user.setTotpSecret(secret);
+        user.setTotpLastUsedStep(null); // new secret: none of its codes has been used
         user.setTotpEnabled(false);
         userRepository.save(user);
 
@@ -160,7 +191,7 @@ public class AuthServiceImpl implements AuthService {
         if (user.getTotpSecret() == null) {
             throw new BusinessException("auth.error.totp_setup_not_started");
         }
-        if (!totpService.verifyCode(user.getTotpSecret(), code)) {
+        if (!acceptTotp(user, code)) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
         user.setTotpEnabled(true);
@@ -255,6 +286,7 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
         user.setTokensValidAfter(Instant.now());
         userRepository.save(user);
+        userRepository.clearLoginAttempts(user.getId()); // the owner proved themselves by OTP: lift a sign-in lock
         if (phone != null) otpService.consumePhoneVerification(phone);
         else otpService.consumeEmailVerification(email);
     }
@@ -317,14 +349,54 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    /** Current password, plus the current authenticator code when 2FA is on (DR-017). */
+    /**
+     * Current password, plus the current authenticator code when 2FA is on (DR-017).
+     * Guesses here count against the account like sign-in guesses (CR-01), so a
+     * stolen session cannot be used to try passwords or codes without limit.
+     */
     private void requireReauthentication(User user, String password, String code) {
+        claimSignInAttempt(user);
         if (password == null || !passwordEncoder.matches(password, user.getPassword())) {
             throw new BusinessException("auth.error.wrong_password");
         }
-        if (user.isTotpEnabled() && (code == null || !totpService.verifyCode(user.getTotpSecret(), code))) {
+        if (user.isTotpEnabled() && (code == null || !acceptTotp(user, code))) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
+        userRepository.clearLoginAttempts(user.getId());
+    }
+
+    /** CR-01: takes one of the account's sign-in attempts, or answers 429 while the account is locked. */
+    private void claimSignInAttempt(User user) {
+        Instant now = Instant.now();
+        if (userRepository.claimLoginAttempt(user.getId(), maxFailedAttempts, now, now.minus(lockoutDuration)) == 0) {
+            throw new TooManyRequestsException("auth.error.too_many_attempts");
+        }
+    }
+
+    /**
+     * CR-01: a code is accepted once. It must match, and its time step must be
+     * newer than the last one this account used, so a code that was just used
+     * (seen over a shoulder, replayed from a proxy) is refused inside its window.
+     */
+    private boolean acceptTotp(User user, String code) {
+        Long step = totpService.matchingStep(user.getTotpSecret(), code);
+        if (step == null || userRepository.claimTotpStep(user.getId(), step) == 0) return false;
+        user.setTotpLastUsedStep(step); // keep the loaded entity in step: a later save(user) writes this column
+        return true;
+    }
+
+    /** CR-01: a wrong code uses up one of the challenge's attempts; after the last one the challenge is spent. */
+    private void countWrongCode(String mfaToken) {
+        long wrong;
+        try {
+            wrong = redis.increment("mfa:wrong:" + TokenBlacklistService.hash(mfaToken),
+                    java.time.Duration.ofMillis(Math.max(1000, jwtUtils.getRemainingValidityMillis(mfaToken))));
+        } catch (RuntimeException e) {
+            // Redis down: the wrong codes cannot be counted, so the first one ends the
+            // challenge (never more than the cap). The per-account count is unaffected.
+            wrong = mfaMaxWrongCodes;
+        }
+        if (wrong >= mfaMaxWrongCodes) tokenBlacklistService.claimStrict(mfaToken);
     }
 
     /** BCrypt reads only the first 72 bytes; a longer password would accept anything sharing that prefix. */

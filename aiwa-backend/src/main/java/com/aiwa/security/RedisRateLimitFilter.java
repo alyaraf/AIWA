@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -46,7 +47,9 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String path = request.getRequestURI();
+        // CR-01: the decoded path, the one Spring MVC routes on. The raw request URI
+        // let "/auth/logi%6e" reach the login handler with no limit at all.
+        String path = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
         Long max = "POST".equalsIgnoreCase(request.getMethod()) ? limitFor(path) : null;
         if (max != null) {
             String ip = request.getRemoteAddr();

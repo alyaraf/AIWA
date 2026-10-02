@@ -31,6 +31,49 @@ public interface UserRepository extends JpaRepository<User, Long> {
                 ? findByEmailIgnoreCase(v)
                 : findByPhone(com.aiwa.util.Identifiers.normalizePhone(v));
     }
+
+    // ── Sign-in attempt limit (CR-01) ────────────────────────────────────────
+    // Counted here, in the database, so it holds while Redis is down. Each is one
+    // UPDATE: parallel guesses cannot pass the cap, and @Version is not bumped, so
+    // a guess never makes the account owner's own save fail with 409.
+
+    /**
+     * Takes one of the account's sign-in attempts, before the password or code is
+     * looked at. Returns 0 when there is none left: {@code max} attempts were
+     * used and the last one is newer than {@code lockStart} (now minus the lock
+     * period). Once the lock period has passed the count starts again at 1.
+     * Its own transaction: the attempt stays counted when the caller's rolls back.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    @Query("UPDATE User u SET u.lastFailedLoginAt = :now, u.failedLoginAttempts = " +
+           "CASE WHEN u.failedLoginAttempts >= :max THEN 1 ELSE u.failedLoginAttempts + 1 END " +
+           "WHERE u.id = :id AND (u.failedLoginAttempts < :max OR u.lastFailedLoginAt IS NULL " +
+           "OR u.lastFailedLoginAt <= :lockStart)")
+    int claimLoginAttempt(@Param("id") Long id, @Param("max") int max,
+                          @Param("now") java.time.Instant now, @Param("lockStart") java.time.Instant lockStart);
+
+    /** Gives one attempt back: the password was right and only the 2FA code is still due. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE User u SET u.failedLoginAttempts = u.failedLoginAttempts - 1 " +
+           "WHERE u.id = :id AND u.failedLoginAttempts > 0")
+    int releaseLoginAttempt(@Param("id") Long id);
+
+    /** A completed sign-in (or a password reset) starts the count again. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE User u SET u.failedLoginAttempts = 0 WHERE u.id = :id AND u.failedLoginAttempts > 0")
+    int clearLoginAttempts(@Param("id") Long id);
+
+    /** Marks a TOTP time step as used. Returns 0 when that step, or a later one, was already used. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE User u SET u.totpLastUsedStep = :step WHERE u.id = :id " +
+           "AND (u.totpLastUsedStep IS NULL OR u.totpLastUsedStep < :step)")
+    int claimTotpStep(@Param("id") Long id, @Param("step") long step);
+
     long countByRoleAndCreatedAtBetween(UserRole role, java.time.LocalDateTime from, java.time.LocalDateTime to);
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);

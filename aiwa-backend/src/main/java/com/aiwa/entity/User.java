@@ -109,6 +109,22 @@ public class User extends BaseEntity {
     @Builder.Default
     private boolean totpEnabled = false;
 
+    /** Time step of the last accepted code: that step and older ones are refused, so a code works once (CR-01). */
+    private Long totpLastUsedStep;
+
+    // ── Sign-in attempt limit (CR-01) ───────────────────────────────────────────
+    // Written only by the single-statement updates in UserRepository
+    // (updatable = false): a profile save that loaded the user earlier can
+    // never put an old count back and lift a lock.
+    /** Sign-in attempts (password or 2FA code) since the last successful sign-in. */
+    @Column(nullable = false, updatable = false)
+    @Builder.Default
+    private int failedLoginAttempts = 0;
+
+    /** When the last of those attempts was made; the lock period runs from here. */
+    @Column(updatable = false)
+    private java.time.Instant lastFailedLoginAt;
+
     // ── Admin permissions (only meaningful when role == ADMIN) ────────────────
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "admin_permissions", joinColumns = @JoinColumn(name = "user_id"))
