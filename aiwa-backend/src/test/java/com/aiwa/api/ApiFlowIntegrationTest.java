@@ -708,6 +708,93 @@ class ApiFlowIntegrationTest {
                 .andExpect(jsonPath("$.data.id").value(u.getId()));
     }
 
+    /** CR-02: a number support saves the local way is stored as +20…, so the user can still sign in and reset by phone. */
+    @Test
+    void aPhoneSavedBySupportInLocalFormatStillSignsInAndResets() throws Exception {
+        User u = user(UserRole.CUSTOMER);
+        String support = login(user(UserRole.ADMIN, AdminPermission.SUPPORT));
+        String e164 = uniquePhone();                           // +2010XXXXXXXX
+        String local = "0" + e164.substring(3);                // 010XXXXXXXX
+
+        mvc.perform(patch("/admin/users/" + u.getId()).header("Authorization", bearer(support))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("phone", local))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.phone").value(e164));
+        assertThat(userRepo.findById(u.getId()).orElseThrow().getPhone()).isEqualTo(e164);
+
+        // Sign-in by phone, typed either way.
+        tokens(local);
+        tokens(e164);
+
+        // Reset by phone.
+        mvc.perform(post("/auth/send-otp").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("phone", local))))
+                .andExpect(status().isOk());
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(smsService).sendOtp(eq(e164), code.capture(), anyInt());
+        mvc.perform(post("/auth/reset-password").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("phone", local,
+                                "code", code.getValue(), "newPassword", "Another456!"))))
+                .andExpect(status().isOk());
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("identifier", local, "password", "Another456!"))))
+                .andExpect(status().isOk());
+
+        // The number is taken, however the next person types it.
+        User other = user(UserRole.CUSTOMER);
+        mvc.perform(patch("/admin/users/" + other.getId()).header("Authorization", bearer(support))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("phone", local))))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** CR-02: admin email fields must hold an email, stored and compared in one spelling. */
+    @Test
+    void anAdminEmailMustBeAnEmailAndUniqueWhateverItsCase() throws Exception {
+        String boss = login(user(UserRole.ADMIN, AdminPermission.SUPER_ADMIN));
+        User customer = user(UserRole.CUSTOMER);
+        int n = SEQ.incrementAndGet();
+        String e164 = uniquePhone();
+        java.util.function.BiFunction<String, String, String> newAdmin = (email, phone) -> {
+            try {
+                return json.writeValueAsString(Map.of("fullName", "Ops " + n, "email", email, "phone", phone,
+                        "password", "AdminPassword123!", "permissions", java.util.List.of("SUPPORT")));
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+
+        mvc.perform(post("/admin/users/admins").header("Authorization", bearer(boss))
+                        .contentType(MediaType.APPLICATION_JSON).content(newAdmin.apply("not-an-email", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.invalid_email"));
+        mvc.perform(patch("/admin/users/" + customer.getId()).header("Authorization", bearer(boss))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("email", customer.getPhone()))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.invalid_email"));
+
+        mvc.perform(post("/admin/users/admins").header("Authorization", bearer(boss))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newAdmin.apply("Ops" + n + "@Test.AIWA", "0" + e164.substring(3))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.email").value("ops" + n + "@test.aiwa"))
+                .andExpect(jsonPath("$.data.phone").value(e164));
+        mvc.perform(post("/admin/users/admins").header("Authorization", bearer(boss))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newAdmin.apply("OPS" + n + "@test.aiwa", "")))
+                .andExpect(status().isBadRequest());
+        assertThat(userRepo.findByEmailIgnoreCase("ops" + n + "@test.aiwa")).isPresent();
+    }
+
+    /** CR-02: Flyway only runs the V19 Java migration because it is a bean. */
+    @Test
+    void theIdentifierMigrationIsRegisteredAsVersion19(@Autowired org.springframework.context.ApplicationContext ctx) {
+        assertThat(ctx.getBeansOfType(org.flywaydb.core.api.migration.JavaMigration.class).values())
+                .extracting(m -> m.getVersion().getVersion()).containsExactly("19");
+    }
+
     /** DR-013: a client can't point its avatar at another user's stored image. */
     @Test
     void anAvatarUrlCannotBeClaimedFromSomeoneElse() throws Exception {

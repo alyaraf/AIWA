@@ -37,6 +37,31 @@ public class User extends BaseEntity {
     @Column(unique = true)
     private String phone;
 
+    // CR-02: the one place an email or phone is written (these setters and the
+    // builder below), so no caller can store a spelling sign-in does not look
+    // up. Hibernate loads by field, so a row V19 left as stored is not rewritten
+    // on load. A non-email throws IllegalArgumentException: callers check first.
+    public void setEmail(String email) {
+        this.email = com.aiwa.util.Identifiers.normalizeEmail(email);
+    }
+
+    public void setPhone(String phone) {
+        this.phone = com.aiwa.util.Identifiers.normalizePhone(phone);
+    }
+
+    /** Lombok fills in the rest of the builder. */
+    public static class UserBuilder {
+        public UserBuilder email(String email) {
+            this.email = com.aiwa.util.Identifiers.normalizeEmail(email);
+            return this;
+        }
+
+        public UserBuilder phone(String phone) {
+            this.phone = com.aiwa.util.Identifiers.normalizePhone(phone);
+            return this;
+        }
+    }
+
     @Column(nullable = false)
     private String password;
 

@@ -238,4 +238,102 @@ class AdminUsersControllerTest {
         assertThat(customer.getPassword()).isEqualTo("newhash");
         verify(auditService).record(eq("PASSWORD_RESET"), eq("Layla"));
     }
+
+    // ── CR-02: one spelling for every stored phone and email ────────────────
+
+    @Test
+    void editUserStoresThePhoneInTheSpellingSignInLooksUp() {
+        User customer = User.builder().id(3L).fullName("Layla").phone("+201000000001")
+                .role(UserRole.CUSTOMER).active(true).build();
+        when(userRepo.findById(3L)).thenReturn(Optional.of(customer));
+        when(userRepo.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var res = controller.editUser(3L, editReq(null, null, "0101 234-5678"), principal("admin@x.com"));
+
+        assertThat(customer.getPhone()).isEqualTo("+201012345678");
+        assertThat(res.getBody().getData().getPhone()).isEqualTo("+201012345678");
+    }
+
+    @Test
+    void editUserChecksPhoneUniquenessOnTheNormalisedNumber() {
+        User customer = User.builder().id(3L).fullName("Layla").phone("+201000000001")
+                .role(UserRole.CUSTOMER).active(true).build();
+        when(userRepo.findById(3L)).thenReturn(Optional.of(customer));
+        when(userRepo.existsByPhone("+201012345678")).thenReturn(true);
+
+        assertThatThrownBy(() -> controller.editUser(3L, editReq(null, null, "01012345678"), principal("admin@x.com")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("already in use");
+        verify(userRepo, never()).save(any());
+    }
+
+    @Test
+    void editUserRejectsAnEmailThatIsNotAnEmail() {
+        User customer = User.builder().id(3L).fullName("Layla").email("layla@x.com")
+                .role(UserRole.CUSTOMER).active(true).build();
+        when(userRepo.findById(3L)).thenReturn(Optional.of(customer));
+
+        assertThatThrownBy(() -> controller.editUser(3L, editReq(null, "01012345678", null), principal("admin@x.com")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("auth.error.invalid_email");
+        verify(userRepo, never()).save(any());
+    }
+
+    private void asSuperAdmin() {
+        when(userRepo.findByLogin("boss@x.com")).thenReturn(Optional.of(superAdmin(1L, "boss@x.com")));
+        when(userRepo.countActiveSuperAdmins()).thenReturn(1L);
+        when(encoder.encode(anyString())).thenReturn("hash");
+        when(userRepo.save(any(User.class))).thenAnswer(inv -> { User u = inv.getArgument(0); u.setId(9L); return u; });
+    }
+
+    @Test
+    void createAdminStoresNormalisedEmailAndPhone() {
+        asSuperAdmin();
+        AdminUserRequest.CreateAdmin req = createReq(List.of("SUPPORT"));
+        req.setEmail("  New.Admin@AIWA.com ");
+        req.setPhone("01012345678");
+
+        var res = controller.createAdmin(req, principal("boss@x.com"));
+
+        assertThat(res.getBody().getData().getEmail()).isEqualTo("new.admin@aiwa.com");
+        assertThat(res.getBody().getData().getPhone()).isEqualTo("+201012345678");
+    }
+
+    @Test
+    void createAdminRefusesAnEmailThatDiffersOnlyByCase() {
+        asSuperAdmin();
+        when(userRepo.existsByEmailIgnoreCase("new@aiwa.com")).thenReturn(true);
+        AdminUserRequest.CreateAdmin req = createReq(List.of("SUPPORT"));
+        req.setEmail("NEW@Aiwa.com");
+
+        assertThatThrownBy(() -> controller.createAdmin(req, principal("boss@x.com")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("already in use");
+        verify(userRepo, never()).save(any());
+    }
+
+    @Test
+    void createAdminRefusesAPhoneThatExistsInAnotherSpelling() {
+        asSuperAdmin();
+        when(userRepo.existsByPhone("+201012345678")).thenReturn(true);
+        AdminUserRequest.CreateAdmin req = createReq(List.of("SUPPORT"));
+        req.setPhone("01012345678");
+
+        assertThatThrownBy(() -> controller.createAdmin(req, principal("boss@x.com")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("already in use");
+        verify(userRepo, never()).save(any());
+    }
+
+    @Test
+    void createAdminRejectsAnEmailThatIsNotAnEmail() {
+        asSuperAdmin();
+        AdminUserRequest.CreateAdmin req = createReq(List.of("SUPPORT"));
+        req.setEmail("not-an-email");
+
+        assertThatThrownBy(() -> controller.createAdmin(req, principal("boss@x.com")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("auth.error.invalid_email");
+        verify(userRepo, never()).save(any());
+    }
 }
