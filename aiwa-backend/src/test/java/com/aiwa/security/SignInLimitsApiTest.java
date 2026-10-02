@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
@@ -223,5 +224,31 @@ class SignInLimitsApiTest {
                         .header("Authorization", "Bearer " + access))
                 .andReturn().getResponse().getStatus()).isEqualTo(400);
         assertThat(userRepo.findById(u.getId()).orElseThrow().isTotpEnabled()).isTrue();
+    }
+
+    // ── the drift told to clients is the real one ────────────────────────────
+
+    /** The clock hint must not promise more drift than verifyCode allows (it said 90 s when the check was 30 s). */
+    @Test
+    void serverTimeReportsTheDriftThatIsReallyAccepted() throws Exception {
+        String body = mvc.perform(get("/auth/2fa/server-time")).andReturn().getResponse().getContentAsString();
+        int stepSeconds = json.readTree(body).get("data").get("totpStepSeconds").asInt();
+        int tolerance = json.readTree(body).get("data").get("driftToleranceSeconds").asInt();
+        System.out.println("CR-01 /auth/2fa/server-time: totpStepSeconds=" + stepSeconds
+                + ", driftToleranceSeconds=" + tolerance);
+
+        byte[] key = TotpService.base32Decode(SECRET);
+        long steps = tolerance / stepSeconds;
+        long now;
+        boolean atTolerance, oneStepPast;
+        do { // repeated if the clock crossed a step boundary in between
+            now = System.currentTimeMillis() / 1000 / stepSeconds;
+            atTolerance = totp.verifyCode(SECRET, totp.generateCode(key, now - steps));
+            oneStepPast = totp.verifyCode(SECRET, totp.generateCode(key, now - steps - 1));
+        } while (now != System.currentTimeMillis() / 1000 / stepSeconds);
+
+        assertThat(atTolerance).as("a code %d s old (the reported tolerance) is accepted", tolerance).isTrue();
+        assertThat(oneStepPast).as("a code one step past the reported tolerance is refused").isFalse();
+        assertThat(tolerance).isEqualTo(30);
     }
 }

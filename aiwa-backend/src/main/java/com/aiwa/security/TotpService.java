@@ -27,6 +27,20 @@ public class TotpService {
 
     private final SecureRandom random = new SecureRandom();
 
+    /** Length of one time step, for clients that show a clock hint. */
+    public static int stepSeconds() {
+        return TIME_STEP_SECONDS;
+    }
+
+    /**
+     * How far a phone's clock may be off before every code is refused. Derived
+     * from the constants verification uses, so what clients are told cannot
+     * differ from the real check (it said 90 s after the drift was cut to 30 s).
+     */
+    public static int driftToleranceSeconds() {
+        return ALLOWED_DRIFT_STEPS * TIME_STEP_SECONDS;
+    }
+
     /** A fresh Base32-encoded secret — store it, show it to the user once, never log it. */
     public String generateSecret() {
         byte[] bytes = new byte[SECRET_BYTES];
