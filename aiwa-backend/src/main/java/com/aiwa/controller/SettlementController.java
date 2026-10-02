@@ -240,12 +240,15 @@ public class SettlementController {
     public ResponseEntity<ApiResponse.Success<Void>> sendOverdueReminder(@PathVariable Long providerId) {
         ProviderProfile provider = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
-        BigDecimal due = ledgerRepo.sumByProviderAndStatus(providerId, LedgerEntryStatus.DUE);
+        // CR-07: DUE + OVERDUE. This summed DUE only, so a provider whose entries
+        // were all overdue was reminded of a balance of 0.
+        BigDecimal due = ledgerRepo.findByProviderIdAndStatusIn(providerId, OUTSTANDING).stream()
+                .map(CommissionLedgerEntry::getCommissionAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_OVERDUE,
                 "Settlement reminder", "تذكير بالتسوية",
-                "You have an outstanding commission balance of " + (due != null ? due : BigDecimal.ZERO)
+                "You have an outstanding commission balance of " + due
                         + ". Please settle to keep receiving bookings.",
-                "لديك رصيد عمولة مستحق قدره " + (due != null ? due : BigDecimal.ZERO)
+                "لديك رصيد عمولة مستحق قدره " + due
                         + ". يرجى التسوية للاستمرار في استقبال الحجوزات.",
                 null, provider.getId());
         return ResponseEntity.ok(ApiResponse.Success.of("Reminder sent", null));
