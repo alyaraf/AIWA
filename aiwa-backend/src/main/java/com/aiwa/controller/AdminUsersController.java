@@ -74,23 +74,24 @@ public class AdminUsersController {
         requireSuperAdmin(resolveUser(userDetails));
         java.util.Set<com.aiwa.enums.AdminPermission> permissions = parsePermissions(request.getPermissions());
 
-        if ((request.getEmail() == null || request.getEmail().isBlank())
-                && (request.getPhone() == null || request.getPhone().isBlank())) {
+        // CR-02: checked and stored in the spelling sign-in looks up; "Nour@x.com"
+        // next to "nour@x.com" used to become two admins neither of whom could sign in.
+        String email = email(request.getEmail());
+        String phone = com.aiwa.util.Identifiers.normalizePhone(request.getPhone());
+        if (email == null && phone == null) {
             throw new BusinessException("Email or phone is required");
         }
-        if (request.getEmail() != null && !request.getEmail().isBlank()
-                && userRepo.existsByEmail(request.getEmail())) {
+        if (email != null && userRepo.existsByEmailIgnoreCase(email)) {
             throw new BusinessException("Email already in use");
         }
-        if (request.getPhone() != null && !request.getPhone().isBlank()
-                && userRepo.existsByPhone(request.getPhone())) {
+        if (phone != null && userRepo.existsByPhone(phone)) {
             throw new BusinessException("Phone number already in use");
         }
 
         User admin = User.builder()
                 .fullName(request.getFullName())
-                .email(blankToNull(request.getEmail()))
-                .phone(blankToNull(request.getPhone()))
+                .email(email)
+                .phone(phone)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(UserRole.ADMIN)
                 .preferredLanguage(Language.EN)
@@ -326,15 +327,19 @@ public class AdminUsersController {
 
         java.util.List<String> changed = new java.util.ArrayList<>();
         String name = request.getFullName() == null ? null : request.getFullName().trim();
-        String email = blankToNull(request.getEmail() == null ? null : request.getEmail().trim().toLowerCase());
-        String phone = blankToNull(request.getPhone() == null ? null : request.getPhone().trim());
+        // CR-02: a number saved as 010… was never found by sign-in or reset, which look up +2010….
+        String email = email(request.getEmail());
+        String phone = com.aiwa.util.Identifiers.normalizePhone(request.getPhone());
 
         if (name != null && !name.equals(target.getFullName())) {
             target.setFullName(name);
             changed.add("name");
         }
         if (email != null && !email.equalsIgnoreCase(target.getEmail() == null ? "" : target.getEmail())) {
-            if (userRepo.existsByEmail(email)) throw new BusinessException("That email is already in use");
+            // The ignore-case check also sees a row V19 had to leave in its old spelling.
+            if (userRepo.existsByEmail(email) || userRepo.existsByEmailIgnoreCase(email)) {
+                throw new BusinessException("That email is already in use");
+            }
             target.setEmail(email);
             changed.add("email");
         }
@@ -454,7 +459,12 @@ public class AdminUsersController {
         return q.isEmpty() ? "%" : "%" + q + "%";
     }
 
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
+    /** Normalised email, null when blank; 400 when it is not an email address. */
+    private static String email(String raw) {
+        try {
+            return com.aiwa.util.Identifiers.normalizeEmail(raw);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("auth.error.invalid_email");
+        }
     }
 }

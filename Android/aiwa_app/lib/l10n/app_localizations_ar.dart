@@ -1455,6 +1455,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تم تسجيلك بأمان وإغلاق الاستغاثة. لا يزال الدعم يراها في هذا الحجز.';
 
   @override
+  String get trackSosFailed =>
+      'تعذر إرسال الاستغاثة. حاول مرة أخرى. إذا كنت في خطر فوري اتصل بـ 122.';
+
+  @override
   String get trackImSafe => 'أنا بأمان';
 
   @override

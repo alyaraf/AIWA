@@ -708,6 +708,93 @@ class ApiFlowIntegrationTest {
                 .andExpect(jsonPath("$.data.id").value(u.getId()));
     }
 
+    /** CR-02: a number support saves the local way is stored as +20…, so the user can still sign in and reset by phone. */
+    @Test
+    void aPhoneSavedBySupportInLocalFormatStillSignsInAndResets() throws Exception {
+        User u = user(UserRole.CUSTOMER);
+        String support = login(user(UserRole.ADMIN, AdminPermission.SUPPORT));
+        String e164 = uniquePhone();                           // +2010XXXXXXXX
+        String local = "0" + e164.substring(3);                // 010XXXXXXXX
+
+        mvc.perform(patch("/admin/users/" + u.getId()).header("Authorization", bearer(support))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("phone", local))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.phone").value(e164));
+        assertThat(userRepo.findById(u.getId()).orElseThrow().getPhone()).isEqualTo(e164);
+
+        // Sign-in by phone, typed either way.
+        tokens(local);
+        tokens(e164);
+
+        // Reset by phone.
+        mvc.perform(post("/auth/send-otp").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("phone", local))))
+                .andExpect(status().isOk());
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(smsService).sendOtp(eq(e164), code.capture(), anyInt());
+        mvc.perform(post("/auth/reset-password").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("phone", local,
+                                "code", code.getValue(), "newPassword", "Another456!"))))
+                .andExpect(status().isOk());
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("identifier", local, "password", "Another456!"))))
+                .andExpect(status().isOk());
+
+        // The number is taken, however the next person types it.
+        User other = user(UserRole.CUSTOMER);
+        mvc.perform(patch("/admin/users/" + other.getId()).header("Authorization", bearer(support))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("phone", local))))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** CR-02: admin email fields must hold an email, stored and compared in one spelling. */
+    @Test
+    void anAdminEmailMustBeAnEmailAndUniqueWhateverItsCase() throws Exception {
+        String boss = login(user(UserRole.ADMIN, AdminPermission.SUPER_ADMIN));
+        User customer = user(UserRole.CUSTOMER);
+        int n = SEQ.incrementAndGet();
+        String e164 = uniquePhone();
+        java.util.function.BiFunction<String, String, String> newAdmin = (email, phone) -> {
+            try {
+                return json.writeValueAsString(Map.of("fullName", "Ops " + n, "email", email, "phone", phone,
+                        "password", "AdminPassword123!", "permissions", java.util.List.of("SUPPORT")));
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+
+        mvc.perform(post("/admin/users/admins").header("Authorization", bearer(boss))
+                        .contentType(MediaType.APPLICATION_JSON).content(newAdmin.apply("not-an-email", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.invalid_email"));
+        mvc.perform(patch("/admin/users/" + customer.getId()).header("Authorization", bearer(boss))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("email", customer.getPhone()))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.invalid_email"));
+
+        mvc.perform(post("/admin/users/admins").header("Authorization", bearer(boss))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newAdmin.apply("Ops" + n + "@Test.AIWA", "0" + e164.substring(3))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.email").value("ops" + n + "@test.aiwa"))
+                .andExpect(jsonPath("$.data.phone").value(e164));
+        mvc.perform(post("/admin/users/admins").header("Authorization", bearer(boss))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newAdmin.apply("OPS" + n + "@test.aiwa", "")))
+                .andExpect(status().isBadRequest());
+        assertThat(userRepo.findByEmailIgnoreCase("ops" + n + "@test.aiwa")).isPresent();
+    }
+
+    /** CR-02: Flyway only runs the V19 Java migration because it is a bean. */
+    @Test
+    void theIdentifierMigrationIsRegisteredAsVersion19(@Autowired org.springframework.context.ApplicationContext ctx) {
+        assertThat(ctx.getBeansOfType(org.flywaydb.core.api.migration.JavaMigration.class).values())
+                .extracting(m -> m.getVersion().getVersion()).containsExactly("19");
+    }
+
     /** DR-013: a client can't point its avatar at another user's stored image. */
     @Test
     void anAvatarUrlCannotBeClaimedFromSomeoneElse() throws Exception {
@@ -868,6 +955,85 @@ class ApiFlowIntegrationTest {
         mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
                 .andExpect(status().isBadRequest());
         assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.VOID);
+    }
+
+    /** A booking the provider completed with cash collected (CASH_CONFIRMED, commission DUE). */
+    private long completedWithCash(String cTok, Provider p) throws Exception {
+        String pTok = login(p.user());
+        long id = book(cTok, p, LocalDate.now().plusDays(2), LocalTime.of(10, 0));
+        mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        com.aiwa.entity.Booking live = bookingRepo.findById(id).orElseThrow();
+        java.time.LocalDateTime soon = com.aiwa.util.AiwaTime.now().plusMinutes(30).withSecond(0).withNano(0);
+        live.setBookingDate(soon.toLocalDate());
+        live.setStartTime(soon.toLocalTime());
+        live.setEndTime(soon.toLocalTime().plusMinutes(60));
+        bookingRepo.save(live);
+        mvc.perform(patch("/bookings/" + id + "/in-progress").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        mvc.perform(patch("/bookings/" + id + "/complete").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        return id;
+    }
+
+    /**
+     * CR-03: once an admin resolved a dispute as paid, the customer's "not paid"
+     * used to reopen it and void the commission. The admin's outcome is final.
+     */
+    @Test
+    void aDisputeTheAdminResolvedAsPaidCannotBeReopened() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER));
+        long id = completedWithCash(cTok, p);
+
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentStatus").value("DISPUTED"));
+        String fTok = login(user(UserRole.ADMIN, AdminPermission.FINANCE));
+        mvc.perform(post("/admin/bookings/" + id + "/resolve-dispute?outcome=PAID").header("Authorization", bearer(fTok)))
+                .andExpect(status().isOk());
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.DUE);
+
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("booking.error.payment_already_resolved"));
+        assertThat(bookingRepo.findById(id).orElseThrow().getPaymentStatus()).isEqualTo(PaymentStatus.CASH_CONFIRMED);
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.DUE);
+
+        // The resolution is recorded on the booking: outcome, when, who.
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT payment_resolution, payment_resolved_at, payment_resolved_by FROM bookings WHERE id = ?", id);
+        assertThat(row.get("payment_resolution")).isEqualTo("PAID");
+        assertThat(row.get("payment_resolved_at")).isNotNull();
+        assertThat(row.get("payment_resolved_by")).isNotNull();
+    }
+
+    /** CR-03: the customer's "not paid" counts once per booking; repeats no longer page every admin. */
+    @Test
+    void aSecondNotPaidIsRefused() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER));
+        long id = completedWithCash(cTok, p);
+        User finance = user(UserRole.ADMIN, AdminPermission.FINANCE);
+
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/admin/bookings/" + id + "/resolve-dispute?outcome=PAID")
+                        .header("Authorization", bearer(login(finance))))
+                .andExpect(status().isOk());
+        long adminNotices = notificationRepo.count();
+
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest());
+        // A booking resolved before the resolution was recorded (pre-V21 row) is
+        // still protected by the once-per-booking rule.
+        jdbc.update("UPDATE bookings SET payment_resolution = NULL WHERE id = ?", id);
+        mvc.perform(patch("/bookings/" + id + "/confirm-payment?paid=false").header("Authorization", bearer(cTok)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("booking.error.payment_dispute_already_reported"));
+
+        assertThat(bookingRepo.findById(id).orElseThrow().getPaymentStatus()).isEqualTo(PaymentStatus.CASH_CONFIRMED);
+        assertThat(ledgerRepo.findByBookingId(id).orElseThrow().getStatus()).isEqualTo(LedgerEntryStatus.DUE);
+        assertThat(notificationRepo.count()).isEqualTo(adminNotices);
     }
 
     /** BE-37 / R2-03: each SOS text gets a delivery record; a failed send ends as FAILED, shown to the user. */

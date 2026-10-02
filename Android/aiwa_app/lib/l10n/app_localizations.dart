@@ -2630,6 +2630,12 @@ abstract class AppLocalizations {
   /// **'You\'re marked safe and the SOS is closed. Support can still see it on this booking.'**
   String get trackSosLogged;
 
+  /// No description provided for @trackSosFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your SOS could not be sent. Try again. In immediate danger, call 122.'**
+  String get trackSosFailed;
+
   /// No description provided for @trackImSafe.
   ///
   /// In en, this message translates to:

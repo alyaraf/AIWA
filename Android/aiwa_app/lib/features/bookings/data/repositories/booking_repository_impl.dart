@@ -12,6 +12,23 @@ class BookingRepositoryImpl implements BookingRepository {
   final BookingRemoteDataSource _remote;
   BookingRepositoryImpl(this._remote);
 
+  /// Every method goes through here, so a failed request reaches the screen
+  /// as a Failure and never as a throw (CR-17): a 401 the refresh could not
+  /// cure, no network, or anything unexpected (a bad payload, a bug).
+  Future<Either<Failure, T>> _guard<T>(Future<T> Function() call) async {
+    try {
+      return Right(await call());
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message, statusCode: e.statusCode));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    } on UnauthorizedException {
+      return const Left(UnauthorizedFailure());
+    } catch (_) {
+      return const Left(ServerFailure('Something went wrong'));
+    }
+  }
+
   @override
   Future<Either<Failure, BookingEntity>> createBooking({
     required String providerId,
@@ -24,90 +41,37 @@ class BookingRepositoryImpl implements BookingRepository {
     String? savedAddressId,
     String? customerNote,
     String? idempotencyKey,
-  }) async {
-    try {
-      final result = await _remote.createBooking(
-        providerId: providerId,
-        serviceId: serviceId,
-        scheduledDate: scheduledDate,
-        scheduledTime: scheduledTime,
-        staffId: staffId,
-        bookNow: bookNow,
-        homeService: homeService,
-        savedAddressId: savedAddressId,
-        customerNote: customerNote,
-        idempotencyKey: idempotencyKey,
-      );
-      return Right(result);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message, statusCode: e.statusCode));
-    } on NetworkException catch (e) {
-      return Left(NetworkFailure(e.message));
-    }
-  }
+  }) => _guard(
+    () => _remote.createBooking(
+      providerId: providerId,
+      serviceId: serviceId,
+      scheduledDate: scheduledDate,
+      scheduledTime: scheduledTime,
+      staffId: staffId,
+      bookNow: bookNow,
+      homeService: homeService,
+      savedAddressId: savedAddressId,
+      customerNote: customerNote,
+      idempotencyKey: idempotencyKey,
+    ),
+  );
 
   @override
-  Future<Either<Failure, List<SavedAddressEntity>>> getSavedAddresses() async {
-    try {
-      return Right(await _remote.getSavedAddresses());
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message, statusCode: e.statusCode));
-    } on NetworkException catch (e) {
-      return Left(NetworkFailure(e.message));
-    }
-  }
+  Future<Either<Failure, List<SavedAddressEntity>>> getSavedAddresses() =>
+      _guard(_remote.getSavedAddresses);
 
   @override
   Future<Either<Failure, PagedData<BookingEntity>>> getMyBookings({
     String? status,
     int page = 0,
     int size = 20,
-  }) async {
-    try {
-      final result = await _remote.getMyBookings(
-        status: status,
-        page: page,
-        size: size,
-      );
-      // ponytail: field-by-field copy of a PagedData the datasource already returns; `return Right(result);` works (Model extends Entity, generics are covariant)
-      return Right(
-        PagedData(
-          content: result.content,
-          totalElements: result.totalElements,
-          totalPages: result.totalPages,
-          number: result.number,
-          size: result.size,
-          last: result.last,
-        ),
-      );
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    } on NetworkException catch (e) {
-      return Left(NetworkFailure(e.message));
-    }
-  }
+  }) => _guard(
+    () => _remote.getMyBookings(status: status, page: page, size: size),
+  );
 
   @override
-  Future<Either<Failure, BookingEntity>> getBookingDetail(
-    String bookingId,
-  ) async {
-    try {
-      final result = await _remote.getBookingDetail(bookingId);
-      return Right(result);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
-
-  Future<Either<Failure, T>> _guard<T>(Future<T> Function() call) async {
-    try {
-      return Right(await call());
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message, statusCode: e.statusCode));
-    } on NetworkException catch (e) {
-      return Left(NetworkFailure(e.message));
-    }
-  }
+  Future<Either<Failure, BookingEntity>> getBookingDetail(String bookingId) =>
+      _guard(() => _remote.getBookingDetail(bookingId));
 
   @override
   Future<Either<Failure, BookingEntity>> cancelBooking(
@@ -212,16 +176,11 @@ class BookingRepositoryImpl implements BookingRepository {
     required String bookingId,
     required String newDate,
     required String newTime,
-  }) async {
-    try {
-      final result = await _remote.rescheduleBooking(
-        bookingId: bookingId,
-        newDate: newDate,
-        newTime: newTime,
-      );
-      return Right(result);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
+  }) => _guard(
+    () => _remote.rescheduleBooking(
+      bookingId: bookingId,
+      newDate: newDate,
+      newTime: newTime,
+    ),
+  );
 }

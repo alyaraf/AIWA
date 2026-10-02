@@ -813,6 +813,7 @@
   },
   "trackSosNoContacts": "No trusted contacts were texted.",
   "trackSosLogged": "You're marked safe and the SOS is closed. Support can still see it on this booking.",
+  "trackSosFailed": "Your SOS could not be sent. Try again. In immediate danger, call 122.",
   "trackImSafe": "I'm safe",
   "trackCheckInTitle": "On-site service — check in when you arrive",
   "trackCheckInSub": "Tap in at the venue to let {name} know you're there.",

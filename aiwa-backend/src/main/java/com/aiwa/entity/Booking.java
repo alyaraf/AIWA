@@ -145,6 +145,20 @@ public class Booking extends BaseEntity {
     @Builder.Default
     private String paymentMethod = "CASH";
 
+    /** When the provider marked the booking COMPLETED; the customer's "not paid" window runs from here (CR-03). */
+    private LocalDateTime completedAt;
+
+    /** When the customer reported "not paid"; accepted once per booking (CR-03). */
+    private LocalDateTime customerDisputedAt;
+
+    // ── Admin's dispute resolution: final once set (CR-03) ────────────────────
+    /** PAID | UNPAID | NO_SHOW | CANCEL */
+    @Column(length = 16)
+    private String paymentResolution;
+    private LocalDateTime paymentResolvedAt;
+    /** Sign-in name of the admin who resolved it (same form as the audit log's actor). */
+    private String paymentResolvedBy;
+
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private java.util.List<Review> reviews = new java.util.ArrayList<>();
