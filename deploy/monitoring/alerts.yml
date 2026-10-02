@@ -24,6 +24,14 @@ groups:
         annotations:
           summary: "An SOS has been open for more than 10 minutes; open the admin Safety queue"
 
+      # CR-08: the SOS text to an on-call phone failed (the backend keeps retrying
+      # until the SOS is closed; 20m spans the longest back-off between rounds).
+      - alert: SosOnCallTextFailed
+        expr: increase(aiwa_sos_oncall_text_failed_total[20m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: "An SOS text to an on-call phone was not delivered; check the SMS gateway and open the admin Safety queue"
+
       - alert: AlertingPipelineDown
         expr: up{job="alertmanager"} == 0
         for: 5m
