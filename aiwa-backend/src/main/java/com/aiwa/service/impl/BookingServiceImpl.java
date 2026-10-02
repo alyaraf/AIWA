@@ -49,6 +49,10 @@ public class BookingServiceImpl implements BookingService {
     /** Upper bound for a per-booking travel quote (EGP) — guards against typos like 15000. */
     static final BigDecimal MAX_TRAVEL_QUOTE = new BigDecimal("5000");
 
+    /** Hours after completion in which the customer may report "not paid" (CR-03). */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.booking.payment-dispute-window-hours:48}")
+    private long paymentDisputeWindowHours = 48;
+
     /** States in which both parties may see each other's phone number. */
     static final Set<BookingStatus> CONTACT_VISIBLE = EnumSet.of(
             BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED, BookingStatus.IN_PROGRESS);
@@ -238,8 +242,9 @@ public class BookingServiceImpl implements BookingService {
                 throw new BusinessException("booking.error.date_time_required");
             bookingDate = req.getBookingDate();
             startTime   = req.getStartTime();
-            requireBookableSlot(provider, staffMember, service, bookingDate, startTime);
         }
+        // CR-04: the slot Book Now picked gets the same check as a scheduled one.
+        requireBookableSlot(provider, staffMember, service, bookingDate, startTime);
 
         LocalTime endTime = startTime.plusMinutes(service.getDurationMinutes());
         requireFree(provider, staffMember, bookingDate, startTime, service.getDurationMinutes(), null);
@@ -624,6 +629,7 @@ public class BookingServiceImpl implements BookingService {
         requireStepAllowed(booking, BookingStatus.COMPLETED);
 
         booking.setStatus(BookingStatus.COMPLETED);
+        booking.setCompletedAt(AiwaTime.now());
         if (note != null && !note.isBlank()) {
             String n = note.trim();
             booking.setCompletionNote(n.length() > 500 ? n.substring(0, 500) : n);
@@ -711,12 +717,14 @@ public class BookingServiceImpl implements BookingService {
         switch (choice) {
             case "PAID" -> {
                 booking.setPaymentStatus(PaymentStatus.CASH_CONFIRMED);
+                recordResolution(booking, choice);
                 bookingRepo.save(booking);
                 recordCommissionIfNeeded(booking);
                 summaryEn = "paid";
             }
             case "UNPAID" -> {
                 booking.setPaymentStatus(PaymentStatus.UNPAID);
+                recordResolution(booking, choice);
                 bookingRepo.save(booking);
                 voidCommission(booking);
                 summaryEn = "written off (unpaid)";
@@ -725,6 +733,7 @@ public class BookingServiceImpl implements BookingService {
                 booking.setPaymentStatus(PaymentStatus.UNPAID);
                 booking.setStatus(BookingStatus.NO_SHOW);
                 booking.setPenaltyApplied(true);
+                recordResolution(booking, choice);
                 bookingRepo.save(booking);
                 voidCommission(booking);
                 summaryEn = "no-show recorded";
@@ -736,6 +745,7 @@ public class BookingServiceImpl implements BookingService {
                 booking.setCancellationReason(reason != null && !reason.isBlank()
                         ? trimReason(reason) : "Voided during dispute resolution");
                 booking.setCancelledAt(LocalDateTime.now());
+                recordResolution(booking, choice);
                 bookingRepo.save(booking);
                 voidCommission(booking);
                 summaryEn = "booking cancelled";
@@ -758,6 +768,14 @@ public class BookingServiceImpl implements BookingService {
                         + " booking (" + summaryEn + ").",
                 "قام دعم AIWA بحل مسألة الدفع لحجزك لـ " + booking.getService().getName() + ".");
         return toDto(booking);
+    }
+
+    /** CR-03: the admin's outcome is kept on the booking (outcome, when, who) and is final. */
+    private static void recordResolution(Booking booking, String outcome) {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        booking.setPaymentResolution(outcome);
+        booking.setPaymentResolvedAt(AiwaTime.now());
+        booking.setPaymentResolvedBy(auth != null && auth.getName() != null ? auth.getName() : "system");
     }
 
     /** Customer checks in at an on-site/venue booking so the provider can begin. */
@@ -810,9 +828,23 @@ public class BookingServiceImpl implements BookingService {
         // commission the admin had written off, and "not paid" reopened a
         // resolved dispute with its commission kept.
         PaymentStatus payment = booking.getPaymentStatus();
+        // CR-03: an admin's outcome is final. A PAID outcome leaves CASH_CONFIRMED,
+        // which used to accept "not paid" again: the dispute reopened, the
+        // commission was voided and every admin was notified, without limit.
+        if (booking.getPaymentResolution() != null)
+            throw new BusinessException("booking.error.payment_already_resolved");
         if (payment == PaymentStatus.CASH_CONFIRMED && paid) return toDto(booking); // already confirmed
         if (payment != PaymentStatus.CASH_PENDING && payment != PaymentStatus.CASH_CONFIRMED)
             throw new BusinessException("booking.error.payment_already_resolved");
+        if (!paid) {
+            // "Not paid" counts once per booking, and only for a while after completion.
+            if (booking.getCustomerDisputedAt() != null)
+                throw new BusinessException("booking.error.payment_dispute_already_reported");
+            // Bookings completed before completedAt existed: the scheduled end.
+            LocalDateTime completed = booking.getCompletedAt() != null ? booking.getCompletedAt() : endOf(booking);
+            if (!AiwaTime.now().isBefore(completed.plusHours(paymentDisputeWindowHours)))
+                throw new BusinessException("booking.error.payment_dispute_window_closed");
+        }
 
         if (paid) {
             booking.setPaymentStatus(PaymentStatus.CASH_CONFIRMED);
@@ -830,6 +862,7 @@ public class BookingServiceImpl implements BookingService {
             );
         } else {
             booking.setPaymentStatus(PaymentStatus.DISPUTED);
+            booking.setCustomerDisputedAt(AiwaTime.now());
             bookingRepo.save(booking);
             // No commission while the dispute is open; the admin's outcome decides.
             voidCommission(booking);
@@ -1175,16 +1208,18 @@ public class BookingServiceImpl implements BookingService {
         // unassigned bookings, with the neighbouring days for buffers (DR-023, R2-07).
         List<Booking> existing = calendar(providerId, staffMemberId, date, null);
         List<ApiResponse.TimeSlotDto> slots = new ArrayList<>();
-        LocalTime cursor = avail.getStartTime();
         int duration = service.getDurationMinutes();
         int step = avail.getSlotDurationMinutes() != null && avail.getSlotDurationMinutes() > 0
                 ? avail.getSlotDurationMinutes() : 30;
         int buffer = bufferOf(service.getProvider());
         LocalDateTime now = AiwaTime.now();
 
-        while (!cursor.plusMinutes(duration).isAfter(avail.getEndTime())) {
-            final LocalTime slotStart = cursor;
-            final LocalTime slotEnd   = cursor.plusMinutes(duration);
+        // CR-04: minutes of the day, so a slot whose end passes midnight is not
+        // mistaken for one that ends before closing time.
+        int closing = minuteOfDay(avail.getEndTime());
+        for (int m = minuteOfDay(avail.getStartTime()); m + duration <= closing; m += step) {
+            final LocalTime slotStart = LocalTime.of(m / 60, m % 60);
+            final LocalTime slotEnd   = slotStart.plusMinutes(duration);
             LocalDateTime s = LocalDateTime.of(date, slotStart);
             boolean taken = overlaps(existing, s, s.plusMinutes(duration), buffer);
             // A slot that has already started can't be booked either.
@@ -1192,11 +1227,12 @@ public class BookingServiceImpl implements BookingService {
 
             slots.add(ApiResponse.TimeSlotDto.builder()
                     .startTime(slotStart).endTime(slotEnd).booked(taken || past).build());
-            LocalTime next = cursor.plusMinutes(step);
-            if (!next.isAfter(cursor)) break; // wrapped past midnight
-            cursor = next;
         }
         return slots;
+    }
+
+    private static int minuteOfDay(LocalTime t) {
+        return t.getHour() * 60 + t.getMinute();
     }
 
     // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -1230,32 +1266,24 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("booking.error.provider_unavailable_today");
 
         List<Booking> existing = calendar(providerId, staffId, date, null);
-        LocalTime now = AiwaTime.timeNow();
-        LocalTime cursor = now.isAfter(avail.getStartTime())
-                ? now.plusMinutes(5)
-                : avail.getStartTime();
-        if (cursor.isBefore(now)) {
-            // now + 5 min wrapped past midnight — nothing bookable today
-            throw new BusinessException("booking.error.no_book_now_slots");
-        }
-
-        // round up to next slot boundary
+        // CR-04: all in minutes of the day. Comparing clock times, a cursor plus
+        // duration that passed midnight wrapped to a small time that was never
+        // "after closing", so 23:10 against 09:00–17:00 booked 23:30.
+        int now = minuteOfDay(AiwaTime.timeNow());
+        int opening = minuteOfDay(avail.getStartTime());
+        int closing = minuteOfDay(avail.getEndTime());
         int slot = avail.getSlotDurationMinutes() != null && avail.getSlotDurationMinutes() > 0
                 ? avail.getSlotDurationMinutes() : 30;
-        int mins = cursor.getHour() * 60 + cursor.getMinute();
-        mins = ((mins + slot - 1) / slot) * slot;
-        if (mins >= 24 * 60) throw new BusinessException("booking.error.no_book_now_slots");
-        cursor = LocalTime.of(mins / 60, mins % 60);
+        // from now + 5 min (or opening time), rounded up to the next slot boundary
+        int first = now >= opening ? now + 5 : opening;
+        first = ((first + slot - 1) / slot) * slot;
 
         int duration = service.getDurationMinutes();
         int buffer = service.getProvider() != null ? bufferOf(service.getProvider()) : 0;
-        while (!cursor.plusMinutes(duration).isAfter(avail.getEndTime())) {
-            final LocalTime s = cursor;
+        for (int m = first; m + duration <= closing; m += slot) {
+            final LocalTime s = LocalTime.of(m / 60, m % 60);
             LocalDateTime startsAt = LocalDateTime.of(date, s);
             if (!overlaps(existing, startsAt, startsAt.plusMinutes(duration), buffer)) return s;
-            LocalTime next = cursor.plusMinutes(slot);
-            if (!next.isAfter(cursor)) break;
-            cursor = next;
         }
         throw new BusinessException("booking.error.no_book_now_slots");
     }
