@@ -115,6 +115,11 @@ aiwa:
   storage:
     public-path: ${STORAGE_PUBLIC_PATH:uploads/public}
     private-path: ${STORAGE_PRIVATE_PATH:uploads/private}
+    # Public photos are re-encoded without EXIF/GPS; the longest side is capped at this many pixels.
+    public-max-image-side: 2048
+    # Public uploads declaring more than this many pixels (width x height) are refused with 400 before any decode:
+    # 200 million pixels still admits the largest phone sensors (200 MP modes); nothing a phone takes is bigger.
+    public-max-image-pixels: 200000000
   cancellation:
     cutoff-hours: 2
   booking:
