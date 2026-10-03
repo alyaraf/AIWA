@@ -1,5 +1,6 @@
 package com.aiwa.controller;
 
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.ChatMessage;
 import com.aiwa.repository.ChatMessageRepository;
@@ -30,8 +31,9 @@ public class AdminBookingController {
     @Operation(summary = "Force-cancel any active booking (ADMIN · Finance)")
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> forceCancel(
             @PathVariable Long id,
-            @RequestParam(required = false) String reason) {
-        ApiResponse.BookingDto dto = bookingService.adminForceCancel(id, reason);
+            @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body) {
+        ApiResponse.BookingDto dto = bookingService.adminForceCancel(id, FreeTextBody.pick(body, "reason", reason));
         auditService.record("BOOKING_FORCE_CANCELLED", "booking #" + id);
         return ResponseEntity.ok(ApiResponse.Success.of("Booking cancelled", dto));
     }
@@ -43,7 +45,9 @@ public class AdminBookingController {
             @PathVariable Long id,
             @RequestParam(required = false) String outcome,
             @RequestParam(required = false) Boolean paid,
-            @RequestParam(required = false) String reason) {
+            @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body) {
+        reason = FreeTextBody.pick(body, "reason", reason);
         String choice = outcome != null ? outcome : (Boolean.TRUE.equals(paid) ? "PAID" : "UNPAID");
         ApiResponse.BookingDto dto = bookingService.adminResolveDispute(id, choice, reason);
         auditService.record("DISPUTE_RESOLVED", "booking #" + id + " → " + choice.toLowerCase());

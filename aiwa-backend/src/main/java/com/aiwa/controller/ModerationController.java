@@ -1,6 +1,7 @@
 package com.aiwa.controller;
 
 import com.aiwa.dto.request.ModerationRequest;
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.*;
 import com.aiwa.enums.*;
@@ -72,7 +73,9 @@ public class ModerationController {
             @PathVariable Long id,
             @RequestParam ModerationStatus status,
             @RequestParam(required = false) String notes,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
+        notes = FreeTextBody.pick(body, "notes", notes);
         ModerationCase moderationCase = moderationRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Moderation case", id));
         moderationCase.setAdmin(resolveUser(userDetails));

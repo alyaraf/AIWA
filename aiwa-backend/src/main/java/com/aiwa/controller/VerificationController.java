@@ -1,5 +1,6 @@
 package com.aiwa.controller;
 
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.enums.VerificationStatus;
@@ -125,8 +126,9 @@ public class VerificationController {
     @Operation(summary = "Reject a provider with reason (ADMIN · Support)")
     public ResponseEntity<ApiResponse.Success<Void>> reject(
             @PathVariable Long providerId,
-            @RequestParam String reason) {
-        verificationService.reject(providerId, reason);
+            @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body) {
+        verificationService.reject(providerId, FreeTextBody.require(body, "reason", reason));
         auditService.record("PROVIDER_REJECTED", "provider #" + providerId);
         return ResponseEntity.ok(ApiResponse.Success.of("Provider rejected", null));
     }
@@ -136,8 +138,9 @@ public class VerificationController {
     @Operation(summary = "Request more information from a provider (ADMIN · Support)")
     public ResponseEntity<ApiResponse.Success<Void>> requestInfo(
             @PathVariable Long providerId,
-            @RequestParam String message) {
-        verificationService.requestMoreInfo(providerId, message);
+            @RequestParam(required = false) String message,
+            @RequestBody(required = false) FreeTextBody body) {
+        verificationService.requestMoreInfo(providerId, FreeTextBody.require(body, "message", message));
         auditService.record("PROVIDER_INFO_REQUESTED", "provider #" + providerId);
         return ResponseEntity.ok(ApiResponse.Success.of("Information requested from provider", null));
     }
