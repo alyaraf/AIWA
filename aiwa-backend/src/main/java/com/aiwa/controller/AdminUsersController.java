@@ -376,6 +376,7 @@ public class AdminUsersController {
         // Sessions opened with the old password (possibly by whoever locked the user out) end now.
         target.setTokensValidAfter(java.time.Instant.now());
         userRepo.save(target);
+        userRepo.clearLoginAttempts(target.getId()); // CR-01: the user is locked out of sign-in, so lift that lock too
         auditService.record("PASSWORD_RESET", target.getFullName());
         notificationService.send(target.getId(), com.aiwa.enums.NotificationType.ACCOUNT_WARNING,
                 "Your password was reset", "تمت إعادة تعيين كلمة المرور الخاصة بك",
