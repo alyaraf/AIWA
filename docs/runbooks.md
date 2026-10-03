@@ -71,9 +71,30 @@ Test a restore on a copy every month. A backup you've never restored is a guess.
 
 A failed backup says `BACKUP FAILED: <reason>` in `dc logs backup`, leaves no
 file behind and doesn't touch `backups/last-success`; the backup container turns
-*unhealthy* when the last good backup is more than 26 hours old (`dc ps`). Set
-`BACKUP_HEARTBEAT_URL` to a healthchecks.io / Better Stack heartbeat so a missed
-night alerts someone even when nobody looks at the server.
+*unhealthy* when the last good backup is more than 26 hours old (`dc ps`). No
+setting is needed for an alert: the backup container serves the time of the last
+good backup to Prometheus, and **BackupStale** (older than 26 hours) or
+**BackupMetricsMissing** (no status for an hour) reaches the team through
+Alertmanager. `BACKUP_HEARTBEAT_URL` (healthchecks.io / Better Stack) is an optional
+second signal that also works if the whole server is down.
+
+### Encrypt the backups
+
+Dumps and uploads (ID documents) are encrypted when a key file exists. Create it
+once and keep a copy somewhere safe that is NOT the server: without the key the
+backups cannot be restored.
+
+```bash
+cd deploy && openssl rand -base64 48 > secrets/backup.key && chmod 600 secrets/backup.key
+echo 'BACKUP_KEY_FILE=./secrets/backup.key' >> .env
+dc up -d backup
+```
+
+New files are then `aiwa-*.dump.enc` and `uploads-*.tar.gz.enc` (AES-256, openssl);
+`./restore.sh` handles both forms and reads the key from `BACKUP_KEY_FILE` (default
+`secrets/backup.key`). Older plain files stay until `BACKUP_KEEP_DAYS` removes them.
+Without a key the backup still runs, logs `WARNING ... NOT encrypted`, and the
+**BackupNotEncrypted** alert fires after an hour.
 
 ## Backups off the server
 
@@ -85,7 +106,7 @@ S3-compatible bucket (Backblaze B2, Cloudflare R2, Hetzner Storage Box):
 30 3 * * * rclone sync /srv/aiwa/deploy/backups remote:aiwa-backups --max-age 15d
 ```
 
-The uploads tarballs contain ID documents: use a private bucket with encryption.
+The uploads tarballs contain ID documents: encrypt the backups (above) and use a private bucket.
 
 ## Backend down / 5xx alerts
 

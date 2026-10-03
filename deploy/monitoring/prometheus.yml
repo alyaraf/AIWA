@@ -24,6 +24,12 @@ scrape_configs:
     static_configs:
       - targets: ["backend:8080"]
 
+  # CR-20: the backup container serves its last-success timestamp (backup.sh).
+  - job_name: aiwa-backup
+    metrics_path: /metrics.txt
+    static_configs:
+      - targets: ["backup:9100"]
+
   - job_name: alertmanager
     static_configs:
       - targets: ["alertmanager:9093"]
