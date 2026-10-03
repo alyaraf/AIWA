@@ -40,6 +40,10 @@ public class AccountDeletionService {
     private final GalleryImageRepository galleryRepo;
     private final com.aiwa.repository.PushDeviceRepository pushDeviceRepo;
 
+    /** CR-02: V19's {@code identifier_collisions} has no entity; it keeps raw emails and phones. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc; // null only when a unit test builds the service by hand
+
     @Transactional
     public void delete(User user) {
         LocalDateTime now = LocalDateTime.now();
@@ -125,11 +129,30 @@ public class AccountDeletionService {
         user.setActive(false);
         user.setTokensValidAfter(Instant.now());
         userRepo.save(user);
+        scrubIdentifierCollisions(user.getId());
 
         afterCommit(() -> {
             publicFiles.forEach(fileStorage::deletePublic);
             privateFiles.forEach(fileStorage::deletePrivate);
         });
+    }
+
+    /**
+     * V19 parks the raw email/phone of an account it could not normalise in {@code identifier_collisions}, for a
+     * person to resolve. Once either account of a pair is deleted those values must not outlive it. The table only
+     * exists where Flyway ran, so a database without it (dev, tests) is skipped instead of failing the deletion.
+     */
+    private void scrubIdentifierCollisions(Long userId) {
+        if (jdbc == null) return;
+        boolean exists = Boolean.TRUE.equals(jdbc.execute((java.sql.Connection c) -> {
+            try (java.sql.ResultSet rs = c.getMetaData().getTables(null, null, "%", new String[]{"TABLE"})) {
+                while (rs.next()) if ("identifier_collisions".equalsIgnoreCase(rs.getString("TABLE_NAME"))) return true;
+                return false;
+            }
+        }));
+        if (exists) {
+            jdbc.update("DELETE FROM identifier_collisions WHERE user_id = ? OR conflicts_with_user_id = ?", userId, userId);
+        }
     }
 
     private static void afterCommit(Runnable task) {
