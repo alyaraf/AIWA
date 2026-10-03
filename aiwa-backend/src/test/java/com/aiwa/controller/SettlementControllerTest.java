@@ -103,6 +103,25 @@ class SettlementControllerTest {
         assertThat(dto.getStatus()).isEqualTo("OVERDUE");
     }
 
+    /** CR-07: a provider whose entries are all OVERDUE was told the balance is 0. */
+    @Test
+    void reminderStatesDuePlusOverdue() {
+        ProviderProfile p = providerFor("prov@x.com");
+        when(providerRepo.findById(7L)).thenReturn(Optional.of(p));
+        CommissionLedgerEntry overdue = CommissionLedgerEntry.builder()
+                .id(2L).provider(p).commissionAmount(new BigDecimal("25")).status(LedgerEntryStatus.OVERDUE).build();
+        when(ledgerRepo.findByProviderIdAndStatusIn(eq(7L), anyCollection())).thenReturn(List.of(overdue));
+
+        controller.sendOverdueReminder(7L);
+
+        var en = org.mockito.ArgumentCaptor.forClass(String.class);
+        var ar = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(notificationService).send(eq(50L), eq(NotificationType.SETTLEMENT_OVERDUE), any(), any(),
+                en.capture(), ar.capture(), any(), any());
+        assertThat(en.getValue()).contains("balance of 25");
+        assertThat(ar.getValue()).contains("25");
+    }
+
     @Test
     void payingWithNoDuesFails() {
         providerFor("prov@x.com");
