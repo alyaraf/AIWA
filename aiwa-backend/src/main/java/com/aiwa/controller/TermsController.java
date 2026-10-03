@@ -98,9 +98,9 @@ public class TermsController {
             @RequestParam(required = false) String changeNote) {
         // CR-21: a full policy does not fit in a URL; the JSON body wins, the old parameters still work.
         version = FreeTextBody.require(body, "version", version);
-        contentEn = FreeTextBody.require(body, "contentEn", contentEn);
-        contentAr = FreeTextBody.pick(body, "contentAr", contentAr);
-        pdfUrl = FreeTextBody.pick(body, "pdfUrl", pdfUrl);
+        contentEn = FreeTextBody.bounded(FreeTextBody.require(body, "contentEn", contentEn), 50000); // column length
+        contentAr = FreeTextBody.bounded(FreeTextBody.pick(body, "contentAr", contentAr), 50000);
+        pdfUrl = FreeTextBody.bounded(FreeTextBody.pick(body, "pdfUrl", pdfUrl), 512);
         changeNote = FreeTextBody.pick(body, "changeNote", changeNote);
         String chosenType = FreeTextBody.pick(body, "type", type);
         String docType = validType(chosenType == null ? "CUSTOMER_TERMS" : chosenType);

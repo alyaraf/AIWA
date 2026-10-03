@@ -96,6 +96,7 @@ public class ChatController {
 
     public ResponseEntity<ApiResponse.Success<Void>> report(
             Long bookingId, Long messageId, String reason, UserDetails userDetails) {
+        FreeTextBody.bounded(reason, 1000); // ModerationCase.reason is 1000 characters
         User reporter = resolveUser(userDetails);
         if (limiter != null) limiter.check(reporter.getId(), "report", 10, java.time.Duration.ofHours(1));
         loadAuthorizedBooking(bookingId, reporter.getId()); // 403s if not a party to this booking
