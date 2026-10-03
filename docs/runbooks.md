@@ -96,6 +96,17 @@ New files are then `aiwa-*.dump.enc` and `uploads-*.tar.gz.enc` (AES-256, openss
 Without a key the backup still runs, logs `WARNING ... NOT encrypted`, and the
 **BackupNotEncrypted** alert fires after an hour.
 
+The postgres alpine image used by the backup container is not known to ship the
+`openssl` command line tool, so `backup.sh` runs `apk add openssl` the first time it
+needs it (network access to the Alpine mirror; the install is lost when the container
+is recreated). If a key is mounted and openssl cannot be installed, the backup does
+NOT fall back to plain files: it logs `BACKUP FAILED: cannot encrypt ...`, keeps the old
+last-success time, and **BackupStale** fires after 26 hours. A blank key file counts as
+no key (**BackupNotEncrypted**). `./restore.sh` decrypts and checks the dump and the
+uploads tarball into a temporary directory first (needs openssl on the server and room
+for both files); a wrong key or a corrupt file stops it before the app is stopped, the
+database is dropped or `/uploads` is emptied.
+
 ## Backups off the server
 
 A backup on the same disk doesn't survive losing the server. Copy `deploy/backups/`

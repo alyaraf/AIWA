@@ -68,9 +68,57 @@ check "no key: logs a warning" 'grep -qi "warning" "$d/log"'
 d="$tmp/dirkey"; mkdir -p "$d/k"; run_backup "$d" BACKUP_KEY_FILE="$d/k"
 check "key path is a directory: runs unencrypted" '[ $rc -eq 0 ] && [ "$(metric "$d" aiwa_backup_encrypted)" = 0 ]'
 
-# restore.sh must use the same cipher settings as backup.sh
-flags='-aes-256-cbc -pbkdf2 -iter 200000'
-check "restore.sh decrypts with backup.sh's cipher settings" 'grep -q -e "$flags" "$here/backup.sh" && grep -q -e "$flags" "$here/../restore.sh"'
+# a blank key file (only a newline) must not encrypt with an empty password
+d="$tmp/blankkey"; mkdir -p "$d"; echo > "$d/key"; run_backup "$d" BACKUP_KEY_FILE="$d/key"
+check "blank key: runs unencrypted, metric 0" '[ $rc -eq 0 ] && [ "$(metric "$d" aiwa_backup_encrypted)" = 0 ] && [ -f "$d"/out/db/*.dump ]'
+
+# ---- restore.sh against a fake docker (never the real one) ----
+# RESTORE_SCRIPT overrides the script under test, like BACKUP_SCRIPT.
+rscript="${RESTORE_SCRIPT:-$here/../restore.sh}"
+mkdir "$tmp/dstub"  # only docker is faked here: tar and openssl are the real ones
+cat > "$tmp/dstub/docker" <<'S'
+#!/bin/bash
+# fake "docker compose ...": logs the call; plays postgres (exec) and the backup container (run) on local files
+echo "$*" >> "$FAKE_LOG"
+case " $* " in
+  *" pg_restore --list "*) [ "$(head -c 5)" = PGDMP ] ;;
+  *" exec "*) cat > "$FAKE_LOG.restored" ;;
+  *" run "*) script="${!#}"; sh -c "${script//\/uploads/$FAKE_UPLOADS}" ;;
+esac
+S
+chmod +x "$tmp/dstub/docker"
+enc() { BACKUP_PASS=$(cat "$2") openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_PASS < "$1" > "$1.enc"; }
+r="$tmp/restore"; mkdir -p "$r/src"; printf 'rightkey
+' > "$r/key"; printf 'wrongkey
+' > "$r/wrong"
+printf 'PGDMPdump-bytes' > "$r/db.dump"; enc "$r/db.dump" "$r/key"
+mkdir "$r/src/new"; echo new > "$r/src/new/photo.jpg"; tar -czf "$r/up.tgz" -C "$r/src/new" .; enc "$r/up.tgz" "$r/key"
+echo 'not gzip' > "$r/bad.tgz"; printf 'garbage' > "$r/bad.dump"
+# run_restore <name> <key> <dump> <uploads> [VAR=value ...]: uploads dir starts with live.jpg; exit code in $rc
+run_restore() {
+  n="$1"; k="$2"; dp="$3"; up="$4"; shift 4
+  FAKE="$r/$n"; rm -rf "$FAKE"; mkdir -p "$FAKE/uploads"; echo live > "$FAKE/uploads/live.jpg"; : > "$FAKE/log"
+  env PATH="$tmp/dstub:$PATH" ASSUME_YES=1 BACKUP_KEY_FILE="$k" FAKE_LOG="$FAKE/log" FAKE_UPLOADS="$FAKE/uploads" "$@"     bash "$rscript" "$dp" "$up" > "$FAKE/out" 2>&1
+  rc=$?
+}
+untouched() { [ "$(cat "$FAKE/uploads/live.jpg" 2>/dev/null)" = live ] && ! grep -Eq ' (stop|exec .*--clean|run) ' "$FAKE/log"; }
+
+run_restore wrongkey "$r/wrong" "$r/db.dump" "$r/up.tgz.enc"
+check "restore, wrong key: fails and leaves uploads and database alone" '[ $rc -ne 0 ] && untouched'
+run_restore wrongdump "$r/wrong" "$r/db.dump.enc" "$r/up.tgz"
+check "restore, wrong key on the dump: fails before anything is touched" '[ $rc -ne 0 ] && untouched'
+run_restore noopenssl "$r/key" "$r/db.dump" "$r/up.tgz.enc" OPENSSL_BIN=/no/such/openssl
+check "restore, no openssl: fails and leaves uploads alone" '[ $rc -ne 0 ] && untouched'
+run_restore nokey "$r/nokey" "$r/db.dump" "$r/up.tgz.enc"
+check "restore, key file missing: fails and leaves uploads alone" '[ $rc -ne 0 ] && untouched'
+run_restore badtar "$r/key" "$r/db.dump" "$r/bad.tgz"
+check "restore, corrupt tarball: fails and leaves uploads alone" '[ $rc -ne 0 ] && untouched'
+run_restore baddump "$r/key" "$r/bad.dump" "$r/up.tgz"
+check "restore, corrupt dump: fails and leaves uploads alone" '[ $rc -ne 0 ] && untouched'
+run_restore good "$r/key" "$r/db.dump.enc" "$r/up.tgz.enc"
+check "restore, right key: replaces database and uploads" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ] && [ ! -e "$FAKE/uploads/live.jpg" ] && cmp -s "$FAKE/log.restored" "$r/db.dump"'
+run_restore plain "$r/nokey" "$r/db.dump" "$r/up.tgz"
+check "restore, plain files need no key" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ]'
 
 echo "$pass passed, $failed failed"
 [ $failed -eq 0 ]
