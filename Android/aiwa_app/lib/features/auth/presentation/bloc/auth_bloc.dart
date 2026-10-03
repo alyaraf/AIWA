@@ -198,6 +198,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await updateProfileUseCase(
       fullName: event.fullName,
       email: event.email,
+      currentPassword: event.currentPassword,
       profileImageUrl: event.profileImageUrl,
     );
     result.fold(

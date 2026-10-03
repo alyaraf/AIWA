@@ -4,6 +4,9 @@ class UserEntity extends Equatable {
   final int id;
   final String fullName;
   final String? email;
+
+  /// GET /auth/me: an email waiting for its code (CR-05); not yet the sign-in.
+  final String? pendingEmail;
   final String? phone;
   final String role;
   final String? gender;
@@ -24,6 +27,7 @@ class UserEntity extends Equatable {
     required this.id,
     required this.fullName,
     this.email,
+    this.pendingEmail,
     this.phone,
     required this.role,
     this.gender,
@@ -48,6 +52,7 @@ class UserEntity extends Equatable {
     id,
     fullName,
     email,
+    pendingEmail,
     phone,
     role,
     gender,
