@@ -23,7 +23,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
@@ -70,6 +72,10 @@ public class FileStorageServiceImpl {
     /** Longest side, in pixels, of a stored public image; larger uploads are scaled down. */
     @Value("${aiwa.storage.public-max-image-side:2048}")
     private int maxImageSide = 2048;
+
+    /** Largest declared width x height accepted for a public image; bigger ones are refused before any decode. */
+    @Value("${aiwa.storage.public-max-image-pixels:200000000}")
+    private long maxImagePixels = 200_000_000L;
 
     /** Store a public gallery image; returns its public URL path. */
     public String storePublic(MultipartFile file) {
@@ -166,17 +172,19 @@ public class FileStorageServiceImpl {
     }
 
     /**
-     * Re-encode a JPEG/PNG without metadata, upright and at most {@link #maxImageSide} px on the longest side.
-     * Returns null when ImageIO cannot decode the bytes (WebP has no JDK reader; CMYK JPEGs): the caller then
-     * stores the upload unchanged, as before, and the location data of those files is NOT removed.
+     * Re-encode a JPEG/PNG without metadata, upright and at most {@link #maxImageSide} px on the longest side;
+     * WebP has no JDK codec, so its EXIF/XMP chunks are cut out of the RIFF container instead.
+     * Returns null when the bytes cannot be processed (CMYK JPEGs, malformed files): the caller then stores the
+     * upload unchanged, as before, and the location data of those files is NOT removed.
+     * An image whose declared size is above {@link #maxImagePixels} is refused (a real photo is never that large,
+     * and decoding it would cost seconds of CPU).
      */
     private byte[] stripMetadata(MultipartFile file, String ext) {
-        if ("webp".equals(ext)) { // ponytail: no WebP codec in the JDK; add a library if WebP uploads matter
-            log.warn("Public WebP stored unchanged: metadata not stripped");
-            return null;
-        }
         try {
             byte[] data = file.getBytes();
+            if ("webp".equals(ext)) {
+                return stripWebpMetadata(data);
+            }
             try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(data))) {
                 Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
                 if (!readers.hasNext()) {
@@ -186,9 +194,13 @@ public class FileStorageServiceImpl {
                 ImageReader reader = readers.next();
                 try {
                     reader.setInput(in, true, true);
+                    int width = reader.getWidth(0), height = reader.getHeight(0); // header only, no pixel decode
+                    if ((long) width * height > maxImagePixels) {
+                        throw new BusinessException("upload.error.image_too_large");
+                    }
                     ImageReadParam param = reader.getDefaultReadParam();
                     // Decode a subsampled copy of very large images so the decode itself stays bounded.
-                    int sub = Math.max(1, Math.max(reader.getWidth(0), reader.getHeight(0)) / maxImageSide);
+                    int sub = Math.max(1, Math.max(width, height) / maxImageSide);
                     param.setSourceSubsampling(sub, sub, 0, 0);
                     BufferedImage src = reader.read(0, param);
                     boolean png = "png".equals(ext);
@@ -197,8 +209,49 @@ public class FileStorageServiceImpl {
                     reader.dispose();
                 }
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (IOException | RuntimeException e) {
             log.warn("Public image stored unchanged: could not re-encode ({})", e.toString());
+            return null;
+        }
+    }
+
+    /**
+     * Copies a WebP's RIFF container without its {@code EXIF} and {@code XMP } chunks, clears the matching flag
+     * bits in {@code VP8X} and fixes the RIFF size. Returns null (store unchanged) for anything malformed.
+     */
+    static byte[] stripWebpMetadata(byte[] webp) {
+        try {
+            ByteBuffer in = ByteBuffer.wrap(webp).order(ByteOrder.LITTLE_ENDIAN);
+            long riffEnd = 8 + (in.getInt(4) & 0xFFFFFFFFL);
+            if (webp.length < 12 || riffEnd < 12 || riffEnd > webp.length) {
+                throw new IllegalArgumentException("bad RIFF size");
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream(webp.length);
+            out.write(webp, 0, 12); // "RIFF" + size (fixed below) + "WEBP"
+            int pos = 12;
+            while (pos < riffEnd) {
+                if (pos + 8 > riffEnd) throw new IllegalArgumentException("short chunk header");
+                long size = in.getInt(pos + 4) & 0xFFFFFFFFL;
+                if (size > riffEnd - pos - 8) throw new IllegalArgumentException("chunk overruns the file");
+                int next = (int) Math.min(pos + 8 + size + (size & 1), riffEnd); // a last odd chunk may lack its pad byte
+                String id = new String(webp, pos, 4, StandardCharsets.ISO_8859_1);
+                if (!id.equals("EXIF") && !id.equals("XMP ")) {
+                    byte[] chunk = Arrays.copyOfRange(webp, pos, next);
+                    if (id.equals("VP8X")) {
+                        if (size < 10) throw new IllegalArgumentException("short VP8X");
+                        chunk[8] &= ~0x0C; // EXIF (0x08) and XMP (0x04) flags
+                    }
+                    out.write(chunk, 0, chunk.length);
+                }
+                pos = next;
+            }
+            byte[] result = out.toByteArray();
+            ByteBuffer.wrap(result).order(ByteOrder.LITTLE_ENDIAN).putInt(4, result.length - 8);
+            return result;
+        } catch (RuntimeException e) { // short, truncated or inconsistent RIFF: leave the upload as it is
+            log.warn("Public WebP stored unchanged: could not strip metadata ({})", e.toString());
             return null;
         }
     }
