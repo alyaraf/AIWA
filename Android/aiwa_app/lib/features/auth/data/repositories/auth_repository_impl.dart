@@ -108,9 +108,24 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, void>> changePhone({
     required String phone,
     required String code,
-  }) async {
+    required String currentPassword,
+  }) => _replaceTokens(
+    () => _remote.changePhone(
+      phone: phone,
+      code: code,
+      currentPassword: currentPassword,
+    ),
+  );
+
+  @override
+  Future<Either<Failure, void>> verifyEmail({required String code}) =>
+      _replaceTokens(() => _remote.verifyEmail(code: code));
+
+  Future<Either<Failure, void>> _replaceTokens(
+    Future<Map<String, String>> Function() call,
+  ) async {
     try {
-      final tokens = await _remote.changePhone(phone: phone, code: code);
+      final tokens = await call();
       // The backend revoked every token issued before the change.
       _storage.markNewSession();
       await _storage.saveAccessToken(tokens['accessToken']!);
@@ -141,12 +156,14 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, UserEntity>> updateProfile({
     String? fullName,
     String? email,
+    String? currentPassword,
     String? profileImageUrl,
   }) async {
     try {
       final user = await _remote.updateProfile(
         fullName: fullName,
         email: email,
+        currentPassword: currentPassword,
         profileImageUrl: profileImageUrl,
       );
       return Right(user);

@@ -94,8 +94,15 @@ class AccountRepository {
 
   // ── Account ────────────────────────────────────────────────────────
 
-  Future<Either<Failure, void>> deleteAccount() =>
-      _run(() => _api.delete(ApiConstants.account));
+  /// DELETE /account — the backend wants {currentPassword} (CR-05).
+  Future<Either<Failure, void>> deleteAccount({
+    required String currentPassword,
+  }) => _run(
+    () => _api.delete(
+      ApiConstants.account,
+      data: {'currentPassword': currentPassword},
+    ),
+  );
 
   /// Header stats: total bookings, saved providers and reviews written
   /// (each list's totalElements).

@@ -24,16 +24,25 @@ abstract class AuthRemoteDataSource {
   Future<void> sendOtp({required String phone});
   Future<void> verifyOtp({required String phone, required String code});
 
-  /// PATCH /auth/me/phone — the code was sent to the NEW number. Every other
-  /// session is signed out, so the returned token pair must replace ours.
+  /// PATCH /auth/me/phone — the code was sent to the NEW number and the
+  /// current password is required (CR-05). Every other session is signed
+  /// out, so the returned token pair must replace ours.
   Future<Map<String, String>> changePhone({
     required String phone,
     required String code,
+    required String currentPassword,
   });
+
+  /// POST /auth/me/email/verify — confirms the email waiting in pendingEmail
+  /// with the code sent to it; same fresh token pair as [changePhone].
+  Future<Map<String, String>> verifyEmail({required String code});
   Future<UserModel> getCurrentUser();
+
+  /// A changed [email] needs [currentPassword] and only becomes pendingEmail.
   Future<UserModel> updateProfile({
     String? fullName,
     String? email,
+    String? currentPassword,
     String? profileImageUrl,
   });
   Future<void> updateLanguage({required String language});
@@ -162,11 +171,22 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<Map<String, String>> changePhone({
     required String phone,
     required String code,
-  }) async {
-    final response = await _client.patch(
+    required String currentPassword,
+  }) async => _tokenPair(
+    await _client.patch(
       ApiConstants.mePhone,
-      data: {'phone': phone, 'code': code},
-    );
+      data: {'phone': phone, 'code': code, 'currentPassword': currentPassword},
+    ),
+  );
+
+  @override
+  Future<Map<String, String>> verifyEmail({required String code}) async =>
+      _tokenPair(await _client.post(_meEmailVerify, data: {'code': code}));
+
+  // Not in ApiConstants: that file is outside this change's scope.
+  static const _meEmailVerify = '/auth/me/email/verify';
+
+  Map<String, String> _tokenPair(Response response) {
     final data = response.data as Map<String, dynamic>;
     if (data['success'] != true) {
       throw ServerException(message: data['message'] as String? ?? 'Failed');
@@ -192,11 +212,13 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<UserModel> updateProfile({
     String? fullName,
     String? email,
+    String? currentPassword,
     String? profileImageUrl,
   }) async {
     final body = <String, dynamic>{};
     if (fullName != null) body['fullName'] = fullName;
     if (email != null) body['email'] = email;
+    if (currentPassword != null) body['currentPassword'] = currentPassword;
     if (profileImageUrl != null) body['profileImageUrl'] = profileImageUrl;
 
     final response = await _client.patch(ApiConstants.me, data: body);

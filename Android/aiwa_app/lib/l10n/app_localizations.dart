@@ -4658,6 +4658,42 @@ abstract class AppLocalizations {
   /// **'Profile updated.'**
   String get editProfileUpdated;
 
+  /// No description provided for @editConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm it\'s you'**
+  String get editConfirmTitle;
+
+  /// No description provided for @editConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your current password to continue.'**
+  String get editConfirmBody;
+
+  /// No description provided for @editCurrentPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get editCurrentPassword;
+
+  /// No description provided for @editEmailCodeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your new email'**
+  String get editEmailCodeTitle;
+
+  /// No description provided for @editEmailConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Email confirmed.'**
+  String get editEmailConfirmed;
+
+  /// No description provided for @editEmailPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for you to confirm {email}.'**
+  String editEmailPending(String email);
+
   /// No description provided for @editAccount.
   ///
   /// In en, this message translates to:
