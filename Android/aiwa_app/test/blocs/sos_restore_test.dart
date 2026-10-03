@@ -40,6 +40,7 @@ const _openSos = {
 class _Server implements HttpClientAdapter {
   Object safety = {'data': <Object>[]};
   final posted = <Map<String, dynamic>>[];
+  int safetyReads = 0;
 
   static final _json = {
     Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -69,6 +70,7 @@ class _Server implements HttpClientAdapter {
         headers: _json,
       );
     }
+    safetyReads++;
     final s = safety;
     if (s is int) return ResponseBody.fromString('{}', s, headers: _json);
     if (s == 'offline') {
@@ -173,6 +175,16 @@ void main() {
         expect(cubit.state.sos, SosStage.none);
       },
     );
+
+    test('once read, the 15 s poll does not read the SOS again; a failed read '
+        'is tried again', () async {
+      server.safety = 'offline';
+      await cubit.load();
+      server.safety = {'data': <Object>[]};
+      await cubit.load();
+      await cubit.load();
+      expect(server.safetyReads, 2);
+    });
 
     final failures = <String, Object>{
       'a 401': 401,

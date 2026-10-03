@@ -127,17 +127,23 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
       (f) => emit(state.copyWith(loadError: f.message)),
       (b) => emit(state.copyWith(booking: b)),
     );
-    if (r.isRight() && state.sos == SosStage.none) await _restoreSos();
+    if (r.isRight() && !_sosChecked && state.sos == SosStage.none) {
+      await _restoreSos();
+    }
   }
+
+  /// The SOS read succeeded once: the 15 s poll does not repeat it.
+  bool _sosChecked = false;
 
   /// An SOS raised before this screen opened (or before the app restarted)
   /// may still be open: bring back its banner and "I'm safe" (CR-16).
   /// Otherwise it could only be closed by pressing SOS again, which re-alerts
-  /// support. A failed read just leaves the page as it was.
+  /// support. A failed read just leaves the page as it was (the next load
+  /// tries again).
   Future<void> _restoreSos() async {
-    final report = (await _repo.sosReport(
-      bookingId,
-    )).fold((_) => null, (x) => x);
+    final r = await _repo.sosReport(bookingId);
+    if (r.isRight()) _sosChecked = true;
+    final report = r.fold((_) => null, (x) => x);
     if (isClosed || report == null || state.sos != SosStage.none) return;
     emit(
       state.copyWith(
