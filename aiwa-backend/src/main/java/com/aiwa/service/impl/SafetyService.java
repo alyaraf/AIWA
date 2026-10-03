@@ -62,13 +62,27 @@ public class SafetyService {
     static final java.time.Duration SOS_AFTER_BOOKING = java.time.Duration.ofHours(6);
     /** Attempts per SMS before it is marked FAILED (BE-37). */
     static final int SMS_ATTEMPTS = 3;
+    /** CR-08: rounds of tries to an on-call phone that ended FAILED (alert rule SosOnCallTextFailed). */
+    static final String ONCALL_TEXT_FAILED = "aiwa.sos.oncall.text.failed";
 
     @Value("${aiwa.safety.oncall-phones:}")
     private String onCallPhones;
 
-    /** The push pool (PushExecutorConfig): SMS latency must not hold the SOS request open. */
+    /** CR-08: a text being sent is left alone by the retry sweep for this long. */
+    @Value("${aiwa.safety.sos-retry.in-flight-grace:2m}")
+    private java.time.Duration inFlightGrace = java.time.Duration.ofMinutes(2);
+    /** CR-08: wait after a failed round of tries; doubles each round up to the maximum. */
+    @Value("${aiwa.safety.sos-retry.backoff:1m}")
+    private java.time.Duration retryBackoff = java.time.Duration.ofMinutes(1);
+    @Value("${aiwa.safety.sos-retry.backoff-max:15m}")
+    private java.time.Duration retryBackoffMax = java.time.Duration.ofMinutes(15);
+
+    /**
+     * SOS texts have their own threads (PushExecutorConfig, CR-08): SMS latency
+     * must not hold the SOS request open, and they never wait behind ordinary pushes.
+     */
     @Autowired
-    @Qualifier("pushExecutor")
+    @Qualifier("sosExecutor")
     private Executor smsExecutor;
 
     /** aiwa_sos_alerts_total for the monitoring alert rule (OPS-5); absent in plain unit tests. */
@@ -85,6 +99,8 @@ public class SafetyService {
                 .description("Open SOS alerts").register(registry);
         io.micrometer.core.instrument.Gauge.builder("aiwa.sos.open.oldest.age.seconds", this, s -> s.oldestOpenAgeSeconds())
                 .description("Age of the oldest open SOS, 0 when none").register(registry);
+        // Registered at start-up so the alert's increase() sees the first failure too.
+        registry.counter(ONCALL_TEXT_FAILED);
     }
 
     double openSosCountSafe() {
@@ -263,7 +279,7 @@ public class SafetyService {
                 booking.getId(), booking.getProvider().getId());
 
         // 2. Support admins, in-app + push (urgent: ignores quiet hours / mute).
-        String role = actor.getId().equals(booking.getCustomer().getId()) ? "customer" : "provider";
+        String role = roleOf(event);
         notifySupport(booking, NotificationType.SAFETY_ALERT,
                 "SOS — booking #" + booking.getId(), "استغاثة — الحجز رقم " + booking.getId(),
                 "The " + role + " " + actor.getFullName() + " pressed SOS" + where(event)
@@ -272,14 +288,10 @@ public class SafetyService {
 
         // 3. SMS: on-call support phones and the user's trusted contacts — after
         //    commit, so a rolled-back request never texts anyone.
-        String supportText = "AIWA SOS: booking #" + booking.getId() + ", " + role + " " + actor.getFullName()
-                + (actor.getPhone() != null ? " (" + actor.getPhone() + ")" : "") + where(event) + ".";
-        String contactText = actor.getFullName() + " triggered an SOS on AIWA during a booking" + where(event)
-                + ". AIWA support has been alerted. If you can't reach them, call 122.";
         List<String> supportPhones = onCallNumbers();
-        textTracked(event, "ONCALL", supportPhones, supportText);
+        textTracked(event, "ONCALL", supportPhones);
         if (textingContacts) {
-            textTracked(event, "CONTACT", contactsOf(actor).stream().map(TrustedContact::getPhone).toList(), contactText);
+            textTracked(event, "CONTACT", contactsOf(actor).stream().map(TrustedContact::getPhone).toList());
         } else if (!contactsOf(actor).isEmpty()) {
             log.warn("SOS on booking #{}: trusted-contact texts skipped (more than {} SOS from this account today)",
                     booking.getId(), MAX_CONTACT_SOS_PER_DAY);
@@ -315,6 +327,24 @@ public class SafetyService {
                 .map(String::trim).filter(s -> !s.isEmpty()).distinct().toList());
     }
 
+    private static String roleOf(SafetyEvent e) {
+        return e.getActor().getId().equals(e.getBooking().getCustomer().getId()) ? "customer" : "provider";
+    }
+
+    /**
+     * The SOS text for one kind of recipient. Built from the stored event alone,
+     * so the retry sweep can send it again after a restart (CR-08).
+     */
+    private static String sosText(SafetyEvent event, String kind) {
+        User actor = event.getActor();
+        if ("ONCALL".equals(kind)) {
+            return "AIWA SOS: booking #" + event.getBooking().getId() + ", " + roleOf(event) + " " + actor.getFullName()
+                    + (actor.getPhone() != null ? " (" + actor.getPhone() + ")" : "") + where(event) + ".";
+        }
+        return actor.getFullName() + " triggered an SOS on AIWA during a booking" + where(event)
+                + ". AIWA support has been alerted. If you can't reach them, call 122.";
+    }
+
     private static String where(SafetyEvent e) {
         return e.getLatitude() != null && e.getLongitude() != null
                 ? " at https://maps.google.com/?q=" + e.getLatitude() + "," + e.getLongitude()
@@ -324,12 +354,15 @@ public class SafetyService {
     /**
      * BE-37: one delivery row per recipient, sent after commit with retries, its
      * state (SENT / FAILED and the error) visible to support in the SOS queue
-     * and, as counts, to the user on the SOS screen.
+     * and, as counts, to the user on the SOS screen. A row that is not SENT is
+     * picked up again by {@link #retryDueSosTexts()} (CR-08).
      */
-    private void textTracked(SafetyEvent event, String kind, List<String> phones, String text) {
+    private void textTracked(SafetyEvent event, String kind, List<String> phones) {
+        String text = sosText(event, kind);
+        LocalDateTime lease = LocalDateTime.now().plus(inFlightGrace);
         List<Long> ids = phones.stream().distinct()
                 .map(p -> deliveryRepo.save(SosDelivery.builder().event(event).recipientKind(kind)
-                        .phone(p.length() > 32 ? p.substring(0, 32) : p).build()).getId())
+                        .phone(p.length() > 32 ? p.substring(0, 32) : p).nextAttemptAt(lease).build()).getId())
                 .toList();
         if (ids.isEmpty()) return;
         Runnable fanOut = () -> ids.forEach(id -> smsExecutor.execute(() -> deliver(id, text)));
@@ -345,16 +378,36 @@ public class SafetyService {
         }
     }
 
-    /** Sends one tracked SOS text, retrying with a short back-off. Runs on the push pool, outside any transaction. */
+    /**
+     * CR-08: re-sends every SOS text that is not SENT and is due (never tried
+     * because of a restart, or FAILED and past its back-off), for SOS alerts that
+     * are still open. Run by SosTextRetryScheduler; a closed SOS is left alone.
+     */
+    public void retryDueSosTexts() {
+        LocalDateTime now = LocalDateTime.now();
+        for (SosDelivery d : deliveryRepo.findDueForRetry(now)) {
+            String text = sosText(d.getEvent(), d.getRecipientKind());
+            // Lease first: the next sweep must not send it again while this one is in flight.
+            d.setNextAttemptAt(now.plus(inFlightGrace));
+            Long id = deliveryRepo.save(d).getId();
+            smsExecutor.execute(() -> deliver(id, text));
+        }
+    }
+
+    /**
+     * Sends one tracked SOS text: a few quick tries, then FAILED with the time of
+     * the next round. Runs on the SOS pool, outside any transaction.
+     */
     void deliver(Long deliveryId, String text) {
         SosDelivery d = deliveryRepo.findById(deliveryId).orElse(null);
-        if (d == null) return;
+        if (d == null || d.getStatus() == SosDeliveryStatus.SENT) return;
         for (int attempt = 1; attempt <= SMS_ATTEMPTS; attempt++) {
-            d.setAttempts(attempt);
+            d.setAttempts(d.getAttempts() + 1);
             try {
                 smsService.send(d.getPhone(), text);
                 d.setStatus(SosDeliveryStatus.SENT);
                 d.setLastError(null);
+                d.setNextAttemptAt(null);
                 deliveryRepo.save(d);
                 return;
             } catch (RuntimeException e) {
@@ -365,7 +418,17 @@ public class SafetyService {
             }
         }
         d.setStatus(SosDeliveryStatus.FAILED);
+        d.setNextAttemptAt(LocalDateTime.now().plus(backoffAfter(d.getAttempts() / SMS_ATTEMPTS)));
         deliveryRepo.save(d);
+        if ("ONCALL".equals(d.getRecipientKind()) && meterRegistry != null) {
+            meterRegistry.counter(ONCALL_TEXT_FAILED).increment();
+        }
+    }
+
+    /** Back-off after the given number of failed rounds: doubles each round, capped. */
+    java.time.Duration backoffAfter(int rounds) {
+        java.time.Duration wait = retryBackoff.multipliedBy(1L << Math.min(Math.max(rounds, 1) - 1, 16));
+        return wait.compareTo(retryBackoffMax) > 0 ? retryBackoffMax : wait;
     }
 
     /** Test seam: the retry back-off. */
@@ -426,16 +489,11 @@ public class SafetyService {
         dto.setContactsTexted((int) contacts.stream().filter(d -> d.getStatus() == SosDeliveryStatus.SENT).count());
         dto.setContactsFailed((int) contacts.stream().filter(d -> d.getStatus() == SosDeliveryStatus.FAILED).count());
         dto.setContactsPending((int) contacts.stream().filter(d -> d.getStatus() == SosDeliveryStatus.PENDING).count());
-        // In-app alerts to support admins are written in the same transaction as the SOS.
-        dto.setSupportAlerted(supportAdmins().findAny().isPresent()
-                || deliveries.stream().anyMatch(d -> "ONCALL".equals(d.getRecipientKind())
-                        && d.getStatus() == SosDeliveryStatus.SENT));
+        // CR-08: true only once a text to an on-call phone was accepted for sending;
+        // a support admin account existing is not an alert anyone received.
+        dto.setSupportAlerted(deliveries.stream().anyMatch(d -> "ONCALL".equals(d.getRecipientKind())
+                && d.getStatus() == SosDeliveryStatus.SENT));
         return dto;
-    }
-
-    private java.util.stream.Stream<User> supportAdmins() {
-        return userRepo.findByRoleAndActive(UserRole.ADMIN, true).stream()
-                .filter(a -> a.hasPermission(AdminPermission.SUPPORT) || a.hasPermission(AdminPermission.SUPER_ADMIN));
     }
 
     static ApiResponse.SafetyEventDto toDto(SafetyEvent e) {
