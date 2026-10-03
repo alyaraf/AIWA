@@ -1,6 +1,7 @@
 package com.aiwa.controller;
 
 import com.aiwa.dto.request.ChatMessageRequest;
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.*;
 import com.aiwa.enums.*;
@@ -88,7 +89,13 @@ public class ChatController {
             @PathVariable Long bookingId,
             @PathVariable Long messageId,
             @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
+        return report(bookingId, messageId, FreeTextBody.pick(body, "reason", reason), userDetails);
+    }
+
+    public ResponseEntity<ApiResponse.Success<Void>> report(
+            Long bookingId, Long messageId, String reason, UserDetails userDetails) {
         User reporter = resolveUser(userDetails);
         if (limiter != null) limiter.check(reporter.getId(), "report", 10, java.time.Duration.ofHours(1));
         loadAuthorizedBooking(bookingId, reporter.getId()); // 403s if not a party to this booking

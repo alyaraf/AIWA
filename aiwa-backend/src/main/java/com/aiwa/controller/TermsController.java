@@ -1,5 +1,6 @@
 package com.aiwa.controller;
 
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.TermsPolicy;
 import com.aiwa.entity.User;
@@ -88,13 +89,21 @@ public class TermsController {
     @PreAuthorize(com.aiwa.security.Perms.SUPER_ADMIN)
     @Operation(summary = "Publish a new terms version — becomes Live, older ones of the same type deactivated (ADMIN · Super admin)")
     public ResponseEntity<ApiResponse.Success<ApiResponse.TermsPolicyDto>> create(
-            @RequestParam String version,
-            @RequestParam(defaultValue = "CUSTOMER_TERMS") String type,
-            @RequestParam String contentEn,
+            @RequestBody(required = false) FreeTextBody body,
+            @RequestParam(required = false) String version,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String contentEn,
             @RequestParam(required = false) String contentAr,
             @RequestParam(required = false) String pdfUrl,
             @RequestParam(required = false) String changeNote) {
-        String docType = validType(type);
+        // CR-21: a full policy does not fit in a URL; the JSON body wins, the old parameters still work.
+        version = FreeTextBody.require(body, "version", version);
+        contentEn = FreeTextBody.require(body, "contentEn", contentEn);
+        contentAr = FreeTextBody.pick(body, "contentAr", contentAr);
+        pdfUrl = FreeTextBody.pick(body, "pdfUrl", pdfUrl);
+        changeNote = FreeTextBody.pick(body, "changeNote", changeNote);
+        String chosenType = FreeTextBody.pick(body, "type", type);
+        String docType = validType(chosenType == null ? "CUSTOMER_TERMS" : chosenType);
         if (version == null || version.isBlank() || version.length() > 32) {
             throw new BusinessException("Version must be 1–32 characters");
         }
