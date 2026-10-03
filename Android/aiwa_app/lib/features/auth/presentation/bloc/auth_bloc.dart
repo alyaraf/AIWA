@@ -75,21 +75,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// Best effort, never throws: removes this phone's push address, then
   /// revokes the tokens, each step bounded by [serverSignOutTimeout] on its
   /// own so a slow unregister cannot drop the revoke. [refreshToken] /
-  /// [accessToken] are the ones read before anything could clear them; the
-  /// revoke prefers what is still stored, as a 401 during unregister may have
-  /// rotated them (the backend revokes the old refresh token on rotation).
-  Future<void> _endOnServer({String? accessToken, String? refreshToken}) async {
+  /// [accessToken] are the ones read before anything could clear them and are
+  /// what gets revoked. [preferStored] (cold start only, storage still holds
+  /// the same session) revokes what is stored after unregister instead, as a
+  /// 401 there may have rotated them; sign-out must not, as by then storage
+  /// may hold the next user's tokens.
+  Future<void> _endOnServer({
+    String? accessToken,
+    String? refreshToken,
+    bool preferStored = false,
+  }) async {
     try {
       await pushRegistrar
           ?.unregister(accessToken: accessToken)
           .timeout(serverSignOutTimeout);
     } catch (_) {}
     try {
+      if (preferStored) {
+        accessToken = await secureStorage.getAccessToken() ?? accessToken;
+        refreshToken = await secureStorage.getRefreshToken() ?? refreshToken;
+      }
       await apiClient
-          ?.logout(
-            accessToken: await secureStorage.getAccessToken() ?? accessToken,
-            refreshToken: await secureStorage.getRefreshToken() ?? refreshToken,
-          )
+          ?.logout(accessToken: accessToken, refreshToken: refreshToken)
           .timeout(serverSignOutTimeout);
     } catch (_) {}
   }
@@ -117,7 +124,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // The refresh token is read now, before anything can clear it; the
       // access token is left to unregister, which may refresh it on a 401.
       final refreshToken = await secureStorage.getRefreshToken();
-      await _endOnServer(refreshToken: refreshToken);
+      await _endOnServer(refreshToken: refreshToken, preferStored: true);
       await secureStorage.clearAll();
       emit(AuthUnauthenticated());
       return;
