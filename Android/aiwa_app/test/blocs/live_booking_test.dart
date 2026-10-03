@@ -54,6 +54,8 @@ class _Repo implements BookingRepository {
     String id, {
     double? latitude,
     double? longitude,
+    DateTime? locationTime,
+    double? locationAccuracy,
   }) async {
     sentAt = (lat: latitude, lng: longitude);
     return sosResult;
@@ -153,7 +155,7 @@ void main() {
       repo,
       '7',
       initial: b,
-      locate: () async => (lat: 30.05, lng: 31.23),
+      locate: () async => (lat: 30.05, lng: 31.23, at: null, accuracy: null),
     );
     await c.sos();
     expect(repo.sentAt, (lat: 30.05, lng: 31.23));

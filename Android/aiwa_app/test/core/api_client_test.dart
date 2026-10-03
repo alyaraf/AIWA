@@ -110,6 +110,19 @@ void main() {
     expect(await storage.getRefreshToken(), isNull);
   });
 
+  test('a refresh finishing after sign-out does not write the rotated token (CR-18)', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      AppConstants.accessTokenKey: 'old',
+      AppConstants.refreshTokenKey: 'r',
+    });
+    final storage = _SignOutAfterAccessWrite();
+    final c = ApiClient(storage, adapter: _RefreshAdapter());
+    await expectLater(c.get('/me'), throwsA(isA<UnauthorizedException>()));
+    // 'r2' would keep the signed-out user's session alive on this phone.
+    expect(await storage.getRefreshToken(), isNull);
+    expect(await storage.getAccessToken(), isNull);
+  });
+
   test('a 5xx on refresh keeps the tokens (FE-32)', () async {
     FlutterSecureStorage.setMockInitialValues({
       AppConstants.accessTokenKey: 'old',
@@ -120,6 +133,18 @@ void main() {
     await expectLater(c.get('/me'), throwsA(isA<UnauthorizedException>()));
     expect(await storage.getRefreshToken(), 'r');
   });
+}
+
+/// The user signs out the moment the refreshed access token is stored, i.e.
+/// between the two token writes of a refresh.
+class _SignOutAfterAccessWrite extends SecureStorage {
+  _SignOutAfterAccessWrite() : super(const FlutterSecureStorage());
+
+  @override
+  Future<void> saveAccessToken(String token) async {
+    await super.saveAccessToken(token);
+    await clearAll();
+  }
 }
 
 /// 401 unless the request carries the refreshed token; refresh is slow so

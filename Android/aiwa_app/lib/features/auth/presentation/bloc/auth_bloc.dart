@@ -68,6 +68,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /// How long ending a session waits for the server before it goes ahead
+  /// on the phone anyway (CR-18).
+  static const serverSignOutTimeout = Duration(seconds: 3);
+
+  /// Best effort, never throws: removes this phone's push address, then
+  /// revokes the tokens, each step bounded by [serverSignOutTimeout] on its
+  /// own so a slow unregister cannot drop the revoke. [refreshToken] /
+  /// [accessToken] are the ones read before anything could clear them; the
+  /// revoke prefers what is still stored, as a 401 during unregister may have
+  /// rotated them (the backend revokes the old refresh token on rotation).
+  Future<void> _endOnServer({String? accessToken, String? refreshToken}) async {
+    try {
+      await pushRegistrar
+          ?.unregister(accessToken: accessToken)
+          .timeout(serverSignOutTimeout);
+    } catch (_) {}
+    try {
+      await apiClient
+          ?.logout(
+            accessToken: await secureStorage.getAccessToken() ?? accessToken,
+            refreshToken: await secureStorage.getRefreshToken() ?? refreshToken,
+          )
+          .timeout(serverSignOutTimeout);
+    } catch (_) {}
+  }
+
   /// An unexpected throw (bad payload, 2FA response without tokens…) must
   /// not leave the shared bloc stuck in [AuthLoading].
   EventHandler<E, AuthState> _safe<E extends AuthEvent>(
@@ -86,6 +112,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     if (!await secureStorage.getRemember()) {
+      // End it on the server too, or a shared phone keeps getting the last
+      // user's notifications and their refresh token stays valid (CR-18).
+      // The refresh token is read now, before anything can clear it; the
+      // access token is left to unregister, which may refresh it on a 401.
+      final refreshToken = await secureStorage.getRefreshToken();
+      await _endOnServer(refreshToken: refreshToken);
       await secureStorage.clearAll();
       emit(AuthUnauthenticated());
       return;
@@ -171,11 +203,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onLogout(AuthLogoutEvent event, Emitter<AuthState> emit) async {
-    // Clear the push address while the access token still works.
-    await pushRegistrar?.unregister();
-    await apiClient?.logout();
+    // Signed out on the phone first, even on a stalled connection; the
+    // server then gets the tokens read just before (CR-18).
+    final accessToken = await secureStorage.getAccessToken();
+    final refreshToken = await secureStorage.getRefreshToken();
     await secureStorage.clearAll();
     emit(AuthUnauthenticated());
+    await _endOnServer(accessToken: accessToken, refreshToken: refreshToken);
   }
 
   Future<void> _onGetCurrentUser(

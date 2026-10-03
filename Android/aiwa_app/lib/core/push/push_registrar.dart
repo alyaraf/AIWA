@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart' show Options;
 import 'package:flutter/foundation.dart';
 
 import '../constants/api_constants.dart';
@@ -42,7 +43,9 @@ class PushRegistrar {
   /// Call while the session is still valid, i.e. before revoking tokens.
   /// Removes only this phone (R2-12: the backend keeps one entry per phone, so
   /// signing out here no longer stops pushes on the user's other phones).
-  Future<void> unregister() async {
+  /// [accessToken]: the session's token when it was already cleared from
+  /// storage (sign-out, CR-18).
+  Future<void> unregister({String? accessToken}) async {
     try {
       String? token;
       try {
@@ -51,6 +54,12 @@ class PushRegistrar {
       await _api.delete(
         ApiConstants.mePushToken,
         queryParameters: token == null || token.isEmpty ? null : {'token': token},
+        options: accessToken == null
+            ? null
+            : Options(
+                headers: {'Authorization': 'Bearer $accessToken'},
+                extra: {'retried': true},
+              ),
       );
     } catch (_) {}
   }

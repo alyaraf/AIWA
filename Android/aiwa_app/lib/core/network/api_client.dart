@@ -110,17 +110,23 @@ class ApiClient {
   );
 
   /// Best effort: revokes the access and refresh tokens server-side. Never
-  /// throws, so sign-out still works offline.
-  Future<void> logout() async {
+  /// throws, so sign-out still works offline. Sign-out passes the tokens it
+  /// read before clearing them (CR-18); otherwise the stored ones are used.
+  Future<void> logout({String? accessToken, String? refreshToken}) async {
     try {
-      final refreshToken = await _storage.getRefreshToken();
+      refreshToken ??= await _storage.getRefreshToken();
       if (refreshToken == null) return;
       await _dio
           .post(
             ApiConstants.logout,
             data: {'refreshToken': refreshToken},
             // An expired access token must not trigger a refresh here.
-            options: Options(extra: {'retried': true}),
+            options: Options(
+              headers: accessToken == null
+                  ? null
+                  : {'Authorization': 'Bearer $accessToken'},
+              extra: {'retried': true},
+            ),
           )
           .timeout(const Duration(seconds: 5));
     } catch (_) {}
@@ -164,7 +170,11 @@ class _AuthInterceptor extends Interceptor {
     // The session this request belongs to (DR-003).
     options.extra['session'] = SecureStorage.generation;
     final token = await _storage.getAccessToken();
-    if (token != null && token.isNotEmpty) {
+    // A request that names its own token (clean-up after sign-out, CR-18)
+    // keeps it: it must never go out under the next session's token.
+    if (token != null &&
+        token.isNotEmpty &&
+        options.headers['Authorization'] == null) {
       options.headers['Authorization'] = 'Bearer $token';
     }
     handler.next(options);
@@ -255,7 +265,11 @@ class _AuthInterceptor extends Interceptor {
     await _storage.saveAccessToken(token);
     // Refresh tokens are single-use: the backend revokes the one just sent,
     // so the next refresh must use the new one or the user is signed out.
-    if (rotated != null && rotated.isNotEmpty) {
+    // Checked again: a sign-out during the write above must not get this
+    // session's refresh token written back (CR-18).
+    if (rotated != null &&
+        rotated.isNotEmpty &&
+        session == SecureStorage.generation) {
       await _storage.saveRefreshToken(rotated);
     }
     return token;

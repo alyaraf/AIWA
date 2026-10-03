@@ -121,8 +121,16 @@ class BookingRepositoryImpl implements BookingRepository {
     String bookingId, {
     double? latitude,
     double? longitude,
+    DateTime? locationTime,
+    double? locationAccuracy,
   }) => _guard(
-    () => _remote.sendSos(bookingId, latitude: latitude, longitude: longitude),
+    () => _remote.sendSos(
+      bookingId,
+      latitude: latitude,
+      longitude: longitude,
+      locationTime: locationTime,
+      locationAccuracy: locationAccuracy,
+    ),
   );
 
   @override

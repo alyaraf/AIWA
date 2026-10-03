@@ -28,6 +28,10 @@ public class SafetyEvent extends BaseEntity {
     private Double latitude;
     private Double longitude;
 
+    /** CR-16: when the fix was taken, and its accuracy in metres (both optional). */
+    private java.time.Instant locationTime;
+    private Double locationAccuracy;
+
     @Column(length = 1000)
     private String notes;
 
