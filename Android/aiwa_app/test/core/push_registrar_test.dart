@@ -52,12 +52,26 @@ void main() {
     await r.unregister();
     expect(rec.calls, hasLength(2));
   });
+
+  test('sign-out clean-up after the tokens were cleared uses the tokens read '
+      'before, never the next session token (CR-18)', () async {
+    await SecureStorage(const FlutterSecureStorage()).saveAccessToken('next');
+    await PushRegistrar(api, platform: 'IOS').unregister(accessToken: 'old');
+    await api.logout(accessToken: 'old', refreshToken: 'old-r');
+    expect(rec.calls, [
+      'DELETE ${ApiConstants.mePushToken}',
+      'POST ${ApiConstants.logout}',
+    ]);
+    expect(rec.auth, ['Bearer old', 'Bearer old']);
+    expect(rec.bodies.single, {'refreshToken': 'old-r'});
+  });
 }
 
 class _Recorder implements HttpClientAdapter {
   final calls = <String>[];
   final bodies = <Object?>[];
   final queries = <Map<String, dynamic>>[];
+  final auth = <Object?>[];
   int status = 200;
 
   @override
@@ -68,6 +82,7 @@ class _Recorder implements HttpClientAdapter {
   ) async {
     calls.add('${o.method} ${o.path}');
     queries.add(o.queryParameters);
+    auth.add(o.headers['Authorization']);
     if (o.data != null) {
       bodies.add(o.data is String ? jsonDecode(o.data as String) : o.data);
     }

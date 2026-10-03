@@ -68,6 +68,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /// How long ending a session waits for the server before it goes ahead
+  /// on the phone anyway (CR-18).
+  static const serverSignOutTimeout = Duration(seconds: 3);
+
+  /// Best effort, bounded by [serverSignOutTimeout], never throws: removes
+  /// this phone's push address, then revokes the tokens. Without tokens given
+  /// it uses the stored ones (a 401 may then refresh them first).
+  Future<void> _endOnServer({String? accessToken, String? refreshToken}) async {
+    try {
+      await () async {
+        await pushRegistrar?.unregister(accessToken: accessToken);
+        await apiClient?.logout(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+        );
+      }().timeout(serverSignOutTimeout);
+    } catch (_) {}
+  }
+
   /// An unexpected throw (bad payload, 2FA response without tokens…) must
   /// not leave the shared bloc stuck in [AuthLoading].
   EventHandler<E, AuthState> _safe<E extends AuthEvent>(
@@ -86,6 +105,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     if (!await secureStorage.getRemember()) {
+      // End it on the server too, or a shared phone keeps getting the last
+      // user's notifications and their refresh token stays valid (CR-18).
+      await _endOnServer();
       await secureStorage.clearAll();
       emit(AuthUnauthenticated());
       return;
@@ -171,11 +193,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onLogout(AuthLogoutEvent event, Emitter<AuthState> emit) async {
-    // Clear the push address while the access token still works.
-    await pushRegistrar?.unregister();
-    await apiClient?.logout();
+    // Signed out on the phone first, even on a stalled connection; the
+    // server then gets the tokens read just before (CR-18).
+    final accessToken = await secureStorage.getAccessToken();
+    final refreshToken = await secureStorage.getRefreshToken();
     await secureStorage.clearAll();
     emit(AuthUnauthenticated());
+    await _endOnServer(accessToken: accessToken, refreshToken: refreshToken);
   }
 
   Future<void> _onGetCurrentUser(
