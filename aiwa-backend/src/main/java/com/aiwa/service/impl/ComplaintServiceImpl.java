@@ -90,7 +90,7 @@ public class ComplaintServiceImpl {
         Complaint c = complaintRepo.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Complaint", complaintId));
         c.setStatus(ComplaintStatus.RESOLVED);
-        c.setAdminNotes(notes);
+        c.setAdminNotes(com.aiwa.dto.request.FreeTextBody.bounded(notes, 2000)); // Complaint.adminNotes
         c.setResolvedByAdminId(adminId);
         c.setFlagged(false);
         return toDto(complaintRepo.save(c));
@@ -116,7 +116,7 @@ public class ComplaintServiceImpl {
                 .reporter(target) // self-report placeholder
                 .targetUser(target)
                 .category("ADMIN_FLAG")
-                .description(reason)
+                .description(com.aiwa.dto.request.FreeTextBody.bounded(reason, 2000)) // Complaint.description
                 .status(ComplaintStatus.ESCALATED)
                 .flagged(true)
                 .build();

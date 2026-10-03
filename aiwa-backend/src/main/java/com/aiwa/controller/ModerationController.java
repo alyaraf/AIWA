@@ -75,7 +75,7 @@ public class ModerationController {
             @RequestParam(required = false) String notes,
             @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
-        notes = FreeTextBody.pick(body, "notes", notes);
+        notes = FreeTextBody.bounded(FreeTextBody.pick(body, "notes", notes), 1000); // ModerationCase.adminNotes
         ModerationCase moderationCase = moderationRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Moderation case", id));
         moderationCase.setAdmin(resolveUser(userDetails));

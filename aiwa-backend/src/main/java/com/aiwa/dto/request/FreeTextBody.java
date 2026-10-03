@@ -18,6 +18,15 @@ public class FreeTextBody extends HashMap<String, String> {
         return value != null ? value : param;
     }
 
+    /**
+     * {@code value} itself, or a translated 400 when it is longer than the column it is stored in: the text now
+     * arrives in a body, so it is no longer cut short by the URL length and would fail the insert with a 500.
+     */
+    public static String bounded(String value, int max) {
+        if (value != null && value.length() > max) throw new BusinessException("error.text_too_long");
+        return value;
+    }
+
     /** Like {@link #pick} for a field that used to be a required parameter. */
     public static String require(FreeTextBody body, String key, String param) {
         String value = pick(body, key, param);

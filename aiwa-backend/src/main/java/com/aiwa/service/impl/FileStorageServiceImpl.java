@@ -1,6 +1,7 @@
 package com.aiwa.service.impl;
 
 import com.aiwa.exception.BusinessException;
+import com.aiwa.exception.TooManyRequestsException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Local-disk storage for uploads.
@@ -76,6 +79,25 @@ public class FileStorageServiceImpl {
     /** Largest declared width x height accepted for a public image; bigger ones are refused before any decode. */
     @Value("${aiwa.storage.public-max-image-pixels:200000000}")
     private long maxImagePixels = 200_000_000L;
+
+    /**
+     * Largest declared width x height accepted for a progressive JPEG. libjpeg keeps every coefficient of a
+     * progressive image in native memory while it decodes (the heap limit and the subsampling do not bound that),
+     * so a ~1 MB file declaring 14142 x 14142 would pin hundreds of MB and ~40 s of CPU.
+     */
+    @Value("${aiwa.storage.public-max-progressive-pixels:50000000}")
+    private long maxProgressivePixels = 50_000_000L;
+
+    /** Public-image decodes allowed at the same time; the others wait (at most {@link #decodeWaitMillis}) for a slot. */
+    private Semaphore decodeSlots = new Semaphore(2, true);
+
+    @Value("${aiwa.storage.public-decode-wait-ms:5000}")
+    private long decodeWaitMillis = 5000L;
+
+    @Value("${aiwa.storage.public-decode-concurrency:2}")
+    void setPublicDecodeConcurrency(int permits) {
+        decodeSlots = new Semaphore(Math.max(1, permits), true);
+    }
 
     /** Store a public gallery image; returns its public URL path. */
     public String storePublic(MultipartFile file) {
@@ -177,13 +199,17 @@ public class FileStorageServiceImpl {
      * Returns null when the bytes cannot be processed (CMYK JPEGs, malformed files): the caller then stores the
      * upload unchanged, as before, and the location data of those files is NOT removed.
      * An image whose declared size is above {@link #maxImagePixels} is refused (a real photo is never that large,
-     * and decoding it would cost seconds of CPU).
+     * and decoding it would cost seconds of CPU), a progressive JPEG above {@link #maxProgressivePixels}; at most a
+     * few images are decoded at once, a request that cannot get a slot in time is answered 429.
      */
     private byte[] stripMetadata(MultipartFile file, String ext) {
         try {
             byte[] data = file.getBytes();
             if ("webp".equals(ext)) {
                 return stripWebpMetadata(data);
+            }
+            if ("jpg".equals(ext) && progressivePixels(data) > maxProgressivePixels) {
+                throw new BusinessException("upload.error.image_too_large");
             }
             try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(data))) {
                 Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
@@ -202,9 +228,11 @@ public class FileStorageServiceImpl {
                     // Decode a subsampled copy of very large images so the decode itself stays bounded.
                     int sub = Math.max(1, Math.max(width, height) / maxImageSide);
                     param.setSourceSubsampling(sub, sub, 0, 0);
-                    BufferedImage src = reader.read(0, param);
-                    boolean png = "png".equals(ext);
-                    return encode(src, png, png ? 1 : exifOrientation(data));
+                    return withDecodeSlot(() -> {
+                        BufferedImage src = reader.read(0, param);
+                        boolean png = "png".equals(ext);
+                        return encode(src, png, png ? 1 : exifOrientation(data));
+                    });
                 } finally {
                     reader.dispose();
                 }
@@ -215,6 +243,52 @@ public class FileStorageServiceImpl {
             log.warn("Public image stored unchanged: could not re-encode ({})", e.toString());
             return null;
         }
+    }
+
+    @FunctionalInterface
+    interface IoSupplier<T> {
+        T get() throws IOException;
+    }
+
+    /** Runs {@code work} holding one decode slot; answers 429 when none frees up within the wait. */
+    <T> T withDecodeSlot(IoSupplier<T> work) throws IOException {
+        boolean got;
+        try {
+            got = decodeSlots.tryAcquire(decodeWaitMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            got = false;
+        }
+        if (!got) throw new TooManyRequestsException("error.too_many_requests");
+        try {
+            return work.get();
+        } finally {
+            decodeSlots.release();
+        }
+    }
+
+    /**
+     * Declared width x height of a progressive JPEG (frame types SOF2, SOF6, SOF10, SOF14), read from the marker
+     * segments without decoding; 0 for a baseline JPEG or anything that does not parse (ImageIO then decides).
+     */
+    static long progressivePixels(byte[] jpeg) {
+        int i = 2; // after SOI
+        while (i + 4 <= jpeg.length && (jpeg[i] & 0xFF) == 0xFF) {
+            int marker = jpeg[i + 1] & 0xFF;
+            if (marker == 0xFF) { i++; continue; }                       // fill byte
+            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8)) { i += 2; continue; } // no length
+            if (marker == 0xDA) return 0;                                // scan data: the frame header was before it
+            int len = ((jpeg[i + 2] & 0xFF) << 8) | (jpeg[i + 3] & 0xFF);
+            boolean frame = marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
+            if (frame) {
+                if (marker % 4 != 2 || i + 9 > jpeg.length) return 0;    // C2, C6, CA, CE are the progressive ones
+                int height = ((jpeg[i + 5] & 0xFF) << 8) | (jpeg[i + 6] & 0xFF);
+                int width = ((jpeg[i + 7] & 0xFF) << 8) | (jpeg[i + 8] & 0xFF);
+                return (long) width * height;
+            }
+            i += 2 + len;
+        }
+        return 0;
     }
 
     /**

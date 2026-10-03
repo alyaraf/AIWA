@@ -1,0 +1,74 @@
+package com.aiwa.controller;
+
+import com.aiwa.entity.User;
+import com.aiwa.enums.UserRole;
+import com.aiwa.repository.UserRepository;
+import com.aiwa.service.impl.AccountDeletionService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * CR-02 follow-up: V19 parks the raw email/phone of a colliding account in {@code identifier_collisions}; deleting
+ * the account must take those rows with it, or the address survives the deletion.
+ */
+@SpringBootTest
+@ActiveProfiles("test")
+class AccountDeletionIdentifierCollisionsTest {
+
+    @Autowired AccountDeletionService deletion;
+    @Autowired UserRepository userRepo;
+    @Autowired JdbcTemplate jdbc;
+
+    @BeforeEach
+    void table() {
+        // Flyway is off in the test profile; this is V19's table.
+        jdbc.execute("CREATE TABLE IF NOT EXISTS identifier_collisions ("
+                + "id bigint auto_increment PRIMARY KEY, user_id bigint NOT NULL, kind varchar(8) NOT NULL, "
+                + "stored_value varchar(255) NOT NULL, normalised_value varchar(255) NOT NULL, "
+                + "conflicts_with_user_id bigint NOT NULL, found_at timestamp(6) DEFAULT now() NOT NULL)");
+        jdbc.update("DELETE FROM identifier_collisions");
+    }
+
+    private User customer(String tag) {
+        return userRepo.save(User.builder().fullName("coll " + tag).email(tag + "@collisions.aiwa")
+                .password("x").role(UserRole.CUSTOMER).active(true).termsAccepted(true).build());
+    }
+
+    private void collision(long userId, String stored, long otherId) {
+        jdbc.update("INSERT INTO identifier_collisions (user_id, kind, stored_value, normalised_value, "
+                + "conflicts_with_user_id) VALUES (?, 'EMAIL', ?, ?, ?)", userId, stored, stored.toLowerCase(), otherId);
+    }
+
+    private int rows() {
+        return jdbc.queryForObject("SELECT count(*) FROM identifier_collisions", Integer.class);
+    }
+
+    @Test
+    void deletingAnAccountRemovesTheCollisionRowsItIsPartOf() {
+        User gone = customer("gone"), twin = customer("twin"), other = customer("other"), other2 = customer("other2");
+        collision(gone.getId(), "Gone@Collisions.aiwa", twin.getId());     // gone kept its old spelling
+        collision(twin.getId(), "Twin@Collisions.aiwa", gone.getId());     // gone is the account it conflicts with
+        collision(other.getId(), "Other@Collisions.aiwa", other2.getId()); // an unrelated pair stays
+        assertThat(rows()).isEqualTo(3);
+
+        deletion.delete(gone);
+
+        assertThat(rows()).as("only the unrelated pair is left").isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT user_id FROM identifier_collisions", Long.class)).isEqualTo(other.getId());
+        assertThat(jdbc.queryForList("SELECT stored_value FROM identifier_collisions", String.class))
+                .noneMatch(v -> v.equalsIgnoreCase("gone@collisions.aiwa") || v.equalsIgnoreCase("twin@collisions.aiwa"));
+    }
+
+    @Test
+    void deletingAnAccountWithNoCollisionRowsIsUnchanged() {
+        User gone = customer("alone");
+        deletion.delete(gone);
+        assertThat(userRepo.findById(gone.getId()).orElseThrow().isActive()).isFalse();
+    }
+}

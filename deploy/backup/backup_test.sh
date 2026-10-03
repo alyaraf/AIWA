@@ -80,10 +80,12 @@ cat > "$tmp/dstub/docker" <<'S'
 #!/bin/bash
 # fake "docker compose ...": logs the call; plays postgres (exec) and the backup container (run) on local files
 echo "$*" >> "$FAKE_LOG"
+# what the restore script's temp files look like while it runs: its umask, then the mode and name of its temp dir and files
+snap() { { umask; for f in "$TMPDIR"/tmp.*/ "$TMPDIR"/tmp.*/*; do stat -c '%a %n' "$f"; done; } >> "$FAKE_LOG.modes" 2>&1; }
 case " $* " in
-  *" pg_restore --list "*) [ "$(head -c 5)" = PGDMP ] ;;
+  *" pg_restore --list "*) snap; [ "$(head -c 5)" = PGDMP ] ;;
   *" exec "*) cat > "$FAKE_LOG.restored" ;;
-  *" run "*) script="${!#}"; sh -c "${script//\/uploads/$FAKE_UPLOADS}" ;;
+  *" run "*) snap; script="${!#}"; sh -c "${script//\/uploads/$FAKE_UPLOADS}" ;;
 esac
 S
 chmod +x "$tmp/dstub/docker"
@@ -119,6 +121,26 @@ run_restore good "$r/key" "$r/db.dump.enc" "$r/up.tgz.enc"
 check "restore, right key: replaces database and uploads" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ] && [ ! -e "$FAKE/uploads/live.jpg" ] && cmp -s "$FAKE/log.restored" "$r/db.dump"'
 run_restore plain "$r/nokey" "$r/db.dump" "$r/up.tgz"
 check "restore, plain files need no key" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ]'
+
+# CR-20: the decrypted dump and tarball are plaintext, so the script runs with umask 077 and puts them under TMPDIR
+# (point it at the restore volume). The fake docker above logs the umask and the temp files' modes while they exist.
+mkdir -p "$r/rtmp"; old_umask=$(umask); umask 022   # a permissive caller: the script must tighten it itself
+run_restore tmpmodes "$r/key" "$r/db.dump.enc" "$r/up.tgz.enc" TMPDIR="$r/rtmp"
+umask "$old_umask"
+check "restore, temp files: still restores with TMPDIR set" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ]'
+check "restore, temp files: runs with umask 077 even when the caller's is 022" 'grep -qx 0077 "$FAKE/log.modes"'
+check "restore, temp files: the temp dir is made under TMPDIR" 'grep -q "$r/rtmp/tmp\." "$FAKE/log.modes"'
+probe="$r/probe"; : > "$probe"; chmod 640 "$probe"
+modes_ok() {
+  m="$FAKE/log.modes"
+  dirs=$(grep -E '^[0-7]+ .*/tmp\.[^/]+/$' "$m"); files=$(grep -E '^[0-7]+ .*/tmp\.[^/]+/[^/]+$' "$m")
+  [ -n "$dirs" ] && [ -n "$files" ] && ! echo "$dirs" | grep -qv '^700 ' && ! echo "$files" | grep -qv '^600 '
+}
+if [ "$(stat -c %a "$probe" 2>/dev/null)" = 640 ]; then
+  check "restore, temp files: the temp dir is mode 700 and the plaintext files inside are 600" modes_ok
+else
+  echo "skip restore, temp files: modes 600/700 (this file system ignores chmod, e.g. NTFS; the umask check above covers it)"
+fi
 
 echo "$pass passed, $failed failed"
 [ $failed -eq 0 ]
