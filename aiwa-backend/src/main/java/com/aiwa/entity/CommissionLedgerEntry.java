@@ -44,4 +44,10 @@ public class CommissionLedgerEntry extends BaseEntity {
     private LedgerEntryStatus status = LedgerEntryStatus.DUE;
 
     private LocalDateTime settledAt;
+
+    /**
+     * CR-06: set when the provider's "I paid" report covered this entry. While a
+     * report is waiting, finance's confirmation settles only entries carrying it.
+     */
+    private LocalDateTime payoutReportedAt;
 }

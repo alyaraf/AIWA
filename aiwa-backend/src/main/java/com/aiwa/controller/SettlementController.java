@@ -49,6 +49,10 @@ public class SettlementController {
      * debt with one call. Now it only records the claim and alerts finance; the
      * entries stay outstanding until an admin with FINANCE confirms the payout
      * (POST /admin/settlements/provider/{id}/confirm-payout).
+     *
+     * <p>CR-06: the report freezes what it covers. Every entry outstanding now is
+     * stamped with the report time, and a second report while this one waits is
+     * refused, so commission recorded later can never ride along with it.</p>
      */
     @PatchMapping("/provider/settlement/pay")
     @PreAuthorize("hasRole('PROVIDER')")
@@ -63,10 +67,16 @@ public class SettlementController {
         if (outstanding.isEmpty()) {
             throw new com.aiwa.exception.BusinessException("No outstanding balance to settle");
         }
-        BigDecimal owed = outstanding.stream().map(CommissionLedgerEntry::getCommissionAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (provider.getSettlementReportedAt() != null
+                && outstanding.stream().anyMatch(e -> e.getPayoutReportedAt() != null)) {
+            throw new com.aiwa.exception.BusinessException("settlement.error.report_pending");
+        }
+        BigDecimal owed = sum(outstanding);
 
-        provider.setSettlementReportedAt(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        // Managed entities in this transaction: the stamp is written at commit.
+        outstanding.forEach(e -> e.setPayoutReportedAt(now));
+        provider.setSettlementReportedAt(now);
         providerRepo.save(provider);
         auditService.record("SETTLEMENT_REPORTED_BY_PROVIDER", provider.getBusinessName() + " · EGP " + owed);
 
@@ -153,51 +163,71 @@ public class SettlementController {
     }
 
     /**
-     * Finance confirms the money arrived. R2-09: this settled every DUE/OVERDUE
-     * entry, including commission recorded after the provider reported paying
-     * (so those were marked paid without any money for them). Now it settles
-     * only entries up to a cut-off: {@code upTo}, else the provider's report
-     * time, else now. With {@code expectedAmount} it refuses when the total
-     * differs from what finance received. One transaction, and ledger rows are
-     * versioned, so the hourly sweep can't overwrite it halfway.
+     * What a payout confirmation would settle right now: the entries frozen by
+     * the provider's waiting "I paid" report, or every outstanding entry when
+     * the provider has not reported (finance received the money another way).
+     */
+    private List<CommissionLedgerEntry> payoutEntries(ProviderProfile provider) {
+        List<CommissionLedgerEntry> outstanding = ledgerRepo.findByProviderIdAndStatusIn(provider.getId(), OUTSTANDING);
+        if (provider.getSettlementReportedAt() == null) return outstanding;
+        return outstanding.stream().filter(e -> e.getPayoutReportedAt() != null).toList();
+    }
+
+    /** CR-06: the total the admin dialog shows and sends back as {@code expectedAmount}. */
+    @GetMapping("/admin/settlements/provider/{providerId}/payout-report")
+    @PreAuthorize(Perms.FINANCE)
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<ApiResponse.Success<java.util.Map<String, Object>>> payoutReport(@PathVariable Long providerId) {
+        ProviderProfile provider = providerRepo.findById(providerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
+        List<CommissionLedgerEntry> entries = payoutEntries(provider);
+        java.util.Map<String, Object> report = new java.util.HashMap<>();
+        report.put("reportedAt", provider.getSettlementReportedAt());
+        report.put("total", sum(entries));
+        report.put("entryCount", entries.size());
+        return ResponseEntity.ok(ApiResponse.Success.of(report));
+    }
+
+    /**
+     * Finance confirms the money arrived. CR-06: the cut-off used to default to
+     * the provider's report time, which every new report moved, and the amount
+     * check was optional and never sent, so commission the provider had not paid
+     * for could be settled. Now it settles only {@link #payoutEntries} (the
+     * frozen report) and {@code expectedAmount} is required and must equal their
+     * total. One transaction, and ledger rows are versioned, so the hourly sweep
+     * can't overwrite it halfway.
      */
     @PostMapping("/admin/settlements/provider/{providerId}/confirm-payout")
     @PreAuthorize(Perms.FINANCE)
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<ApiResponse.SettlementDetailDto>> confirmPayout(
             @PathVariable Long providerId,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(
-                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime upTo,
             @RequestParam(required = false) BigDecimal expectedAmount) {
         ProviderProfile provider = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
-        LocalDateTime cutoff = upTo != null ? upTo
-                : provider.getSettlementReportedAt() != null ? provider.getSettlementReportedAt()
-                : LocalDateTime.now();
-        List<CommissionLedgerEntry> outstanding = ledgerRepo.findByProviderIdAndStatusIn(providerId, OUTSTANDING)
-                .stream()
-                .filter(e -> e.getCreatedAt() == null || !e.getCreatedAt().isAfter(cutoff))
-                .toList();
+        if (expectedAmount == null) {
+            throw new com.aiwa.exception.BusinessException("settlement.error.amount_required");
+        }
+        List<CommissionLedgerEntry> outstanding = payoutEntries(provider);
         if (outstanding.isEmpty()) {
             throw new com.aiwa.exception.BusinessException("No outstanding balance for this provider");
         }
-        BigDecimal total = outstanding.stream().map(CommissionLedgerEntry::getCommissionAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (expectedAmount != null && total.compareTo(expectedAmount) != 0) {
+        BigDecimal total = sum(outstanding);
+        if (total.compareTo(expectedAmount) != 0) {
             throw new com.aiwa.exception.BusinessException("settlement.error.amount_mismatch");
         }
         LocalDateTime now = LocalDateTime.now();
         outstanding.forEach(e -> { e.setStatus(LedgerEntryStatus.SETTLED); e.setSettledAt(now); });
         ledgerRepo.saveAll(outstanding);
         provider.setSettlementReportedAt(null);
-        // Entries recorded after the cut-off stay outstanding; lift the pause only
+        // Entries recorded after the report stay outstanding; lift the pause only
         // when what remains is within the rules.
         if (settlementService.mayResumeBookings(provider)) {
             provider.setSettlementPaused(false);
         }
         providerRepo.save(provider);
         auditService.record("SETTLEMENT_CONFIRMED", provider.getBusinessName() + " · " + outstanding.size()
-                + " entries · EGP " + total + " up to " + cutoff);
+                + " entries · EGP " + total);
         notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_CONFIRMED,
                 "Settlement confirmed", "تم تأكيد التسوية",
                 "AIWA confirmed your commission payout — your account is in good standing.",
@@ -240,12 +270,15 @@ public class SettlementController {
     public ResponseEntity<ApiResponse.Success<Void>> sendOverdueReminder(@PathVariable Long providerId) {
         ProviderProfile provider = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
-        BigDecimal due = ledgerRepo.sumByProviderAndStatus(providerId, LedgerEntryStatus.DUE);
+        // CR-07: DUE + OVERDUE. This summed DUE only, so a provider whose entries
+        // were all overdue was reminded of a balance of 0.
+        BigDecimal due = ledgerRepo.findByProviderIdAndStatusIn(providerId, OUTSTANDING).stream()
+                .map(CommissionLedgerEntry::getCommissionAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_OVERDUE,
                 "Settlement reminder", "تذكير بالتسوية",
-                "You have an outstanding commission balance of " + (due != null ? due : BigDecimal.ZERO)
+                "You have an outstanding commission balance of " + due
                         + ". Please settle to keep receiving bookings.",
-                "لديك رصيد عمولة مستحق قدره " + (due != null ? due : BigDecimal.ZERO)
+                "لديك رصيد عمولة مستحق قدره " + due
                         + ". يرجى التسوية للاستمرار في استقبال الحجوزات.",
                 null, provider.getId());
         return ResponseEntity.ok(ApiResponse.Success.of("Reminder sent", null));
@@ -313,6 +346,11 @@ public class SettlementController {
                 .settlementPaused(provider.isSettlementPaused())
                 .entries(all.stream().map(this::toDto).toList())
                 .build();
+    }
+
+    private static BigDecimal sum(List<CommissionLedgerEntry> entries) {
+        return entries.stream().map(CommissionLedgerEntry::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static BigDecimal sum(List<CommissionLedgerEntry> entries, LedgerEntryStatus status) {
