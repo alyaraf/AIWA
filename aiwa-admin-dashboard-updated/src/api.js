@@ -32,6 +32,39 @@ export function clearTokens() {
   window.localStorage.removeItem(REFRESH_KEY);
 }
 
+// CR-18: another tab signed out, signed in, or refreshed. A refresh that this
+// tab had in flight must not write over that (it carries the old session).
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === null || event.key === TOKEN_KEY || event.key === REFRESH_KEY) sessionGeneration += 1;
+  });
+}
+
+/** localStorage key names, for the App's cross-tab listener. */
+export const TOKEN_STORAGE_KEYS = [TOKEN_KEY, REFRESH_KEY];
+
+// CR-18: how long the best-effort server sign-out may take before it is dropped.
+const SIGN_OUT_TIMEOUT_MS = 3000;
+
+/**
+ * Signs out: the local tokens go first (so a stalled connection cannot keep the
+ * admin signed in), then the server is told on a best-effort basis with the
+ * tokens read before they were cleared, giving up after a few seconds.
+ */
+function signOut() {
+  const accessToken = getAccessToken();
+  const refreshToken = window.localStorage.getItem(REFRESH_KEY);
+  clearTokens();
+  if (USE_MOCKS || !(accessToken || refreshToken)) return Promise.resolve();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SIGN_OUT_TIMEOUT_MS);
+  const headers = { "Content-Type": "application/json" };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return fetch(`${API_BASE_URL}/auth/logout`, {
+    method: "POST", headers, signal: controller.signal, body: JSON.stringify({ refreshToken })
+  }).catch(() => {}).finally(() => clearTimeout(timer));
+}
+
 // A 401 from any endpoint but these two means "this access token is no good
 // anymore" (expired is the common case — access tokens last 24h) rather than
 // "this account can't do that" — worth a silent refresh-and-retry before
@@ -136,10 +169,7 @@ export const api = {
     })
   }),
   me: () => request("/auth/me"),
-  logout: () => request("/auth/logout", {
-    method: "POST",
-    body: JSON.stringify({ refreshToken: window.localStorage.getItem(REFRESH_KEY) })
-  }),
+  logout: signOut,
   verifyMfa: (mfaToken, code) => request("/auth/2fa/verify", {
     method: "POST",
     body: JSON.stringify({ mfaToken, code })
@@ -167,7 +197,7 @@ export const api = {
   verifications: () => requestAllPages("/admin/verification/pending").then((items) => items.map(normalizeVerification)),
   verificationByStatus: (status) => requestAllPages(`/admin/verification?status=${encodeURIComponent(status)}`).then((items) => items.map(normalizeVerification)),
   approveProvider: (providerId) => request(`/admin/verification/${providerId}/approve`, { method: "POST" }),
-  rejectProvider: (providerId, reason) => request(`/admin/verification/${providerId}/reject?reason=${encodeURIComponent(reason)}`, { method: "POST" }),
+  rejectProvider: (providerId, reason) => request(`/admin/verification/${providerId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   /** Blob URL for a private verification document (caller must revokeObjectURL). */
   verificationDocUrl: async (filePath) => {
     if (USE_MOCKS) return null;
@@ -190,7 +220,7 @@ export const api = {
   chatReports: () => requestAllPages("/admin/chat/moderation").then((items) => items.map(normalizeChatReport)),
   resolveChatReport: (caseId, action) => request(`/admin/chat/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
   complaints: () => requestAllPages("/admin/complaints").then((items) => items.map(normalizeComplaint)),
-  resolveComplaint: (id, notes) => request(`/admin/complaints/${id}/resolve?notes=${encodeURIComponent(notes)}`, { method: "POST" }).then(normalizeComplaint),
+  resolveComplaint: (id, notes) => request(`/admin/complaints/${id}/resolve`, { method: "POST", body: JSON.stringify({ notes }) }).then(normalizeComplaint),
   flagComplaint: (id) => request(`/admin/complaints/${id}/flag`, { method: "POST" }),
   userActivity: (id) => request(`/admin/users/${id}/activity`).then(unwrap),
   editUser: (id, fields) => request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(fields) }).then(normalizeUser),
@@ -218,7 +248,7 @@ export const api = {
   providerDetail: (providerId) => request(`/providers/${providerId}`),
   reactivateProvider: (providerId) => request(`/admin/verification/${providerId}/reactivate`, { method: "POST" }),
   moderation: () => requestAllPages("/admin/moderation").then((items) => items.map(normalizeModeration)),
-  moderationAction: (id, payload) => request(`/admin/moderation/${id}/action?status=${encodeURIComponent(payload.status)}&notes=${encodeURIComponent(payload.notes || "")}`, { method: "PATCH" }),
+  moderationAction: (id, payload) => request(`/admin/moderation/${id}/action?status=${encodeURIComponent(payload.status)}`, { method: "PATCH", body: JSON.stringify({ notes: payload.notes || "" }) }),
   // DR-028: these lists are paged on the server; walk every page.
   settlements: () => requestAllPages("/admin/settlements").then((items) => items.map(normalizeSettlement)),
   settle: (id) => request(`/admin/settlements/${id}/settle`, { method: "PATCH" }),
@@ -232,18 +262,19 @@ export const api = {
   setSettlementPause: (providerId, paused) => request(`/admin/providers/${providerId}/settlement-pause?paused=${paused}`, { method: "PATCH" }),
   latestTerms: (type = "CUSTOMER_TERMS") => request(`/terms/latest?type=${type}`),
   termsVersions: (type = "CUSTOMER_TERMS") => request(`/terms?type=${type}`).then(normalizeList),
+  // CR-21: a full policy (Arabic especially) does not fit in a URL, so it goes in the body.
   publishTerms: (version, contentEn, type = "CUSTOMER_TERMS", contentAr = "", changeNote = "") => {
-    const qs = new URLSearchParams({ version, type, contentEn });
-    if (contentAr && contentAr.trim()) qs.set("contentAr", contentAr);
-    if (changeNote && changeNote.trim()) qs.set("changeNote", changeNote.trim());
-    return request(`/terms?${qs.toString()}`, { method: "POST" });
+    const body = { version, type, contentEn };
+    if (contentAr && contentAr.trim()) body.contentAr = contentAr;
+    if (changeNote && changeNote.trim()) body.changeNote = changeNote.trim();
+    return request("/terms", { method: "POST", body: JSON.stringify(body) });
   },
   /** SOS queue (GET /admin/safety) — status OPEN (default) | RESOLVED | ALL. */
   // DR-006: walks every page. It asked for one page of 100 (the server's cap),
   // newest first, so with more open alerts the oldest ones were never shown.
   safetyQueue: (status = "OPEN") => requestAllPages(`/admin/safety?status=${encodeURIComponent(status)}`, 100)
     .then((items) => items.map(normalizeSafety)),
-  resolveSafety: (eventId, notes) => request(`/admin/safety/${eventId}/resolve?notes=${encodeURIComponent(notes)}`, { method: "POST" })
+  resolveSafety: (eventId, notes) => request(`/admin/safety/${eventId}/resolve`, { method: "POST", body: JSON.stringify({ notes }) })
     .then(normalizeSafety),
   exportAudit: (query = "") => downloadFile(`/admin/audit/export${query ? `?query=${encodeURIComponent(query)}` : ""}`, "aiwa-audit-log.csv", "text/csv"),
   supportContact: () => request("/support/contact"),
@@ -280,8 +311,8 @@ export const api = {
   exportBookings: (days = 30) => downloadFile(`/admin/analytics/export?days=${days}`, "aiwa-bookings.csv", "text/csv"),
   analyticsBookings: (days = 14) => request(`/admin/analytics/bookings?days=${days}`).then(normalizeList).then((rows) => rows.map(normalizeAnalyticsPoint)),
   verificationCounts: () => request("/admin/verification/counts"),
-  forceCancelBooking: (id, reason) => request(`/admin/bookings/${id}/force-cancel${reason ? `?reason=${encodeURIComponent(reason)}` : ""}`, { method: "POST" }),
-  resolveDispute: (id, outcome, reason) => request(`/admin/bookings/${id}/resolve-dispute?outcome=${encodeURIComponent(outcome)}${reason ? `&reason=${encodeURIComponent(reason)}` : ""}`, { method: "POST" }),
+  forceCancelBooking: (id, reason) => request(`/admin/bookings/${id}/force-cancel`, { method: "POST", body: JSON.stringify(reason ? { reason } : {}) }),
+  resolveDispute: (id, outcome, reason) => request(`/admin/bookings/${id}/resolve-dispute?outcome=${encodeURIComponent(outcome)}`, { method: "POST", body: JSON.stringify(reason ? { reason } : {}) }),
   bookingChat: (id) => request(`/admin/bookings/${id}/chat`).then(normalizeList),
   getBookingRules: () => request("/admin/settings/booking-rules"),
   setBookingRules: (rules) => {
@@ -292,9 +323,9 @@ export const api = {
     return request(`/admin/settings/booking-rules?${qs.toString()}`, { method: "PATCH" });
   },
   saveVerificationNote: (providerId, note) => request(`/admin/verification/${providerId}/note`, { method: "PATCH", body: JSON.stringify({ note }) }),
-  requestProviderInfo: (providerId, message) => request(`/admin/verification/${providerId}/request-info?message=${encodeURIComponent(message)}`, { method: "POST" }),
+  requestProviderInfo: (providerId, message) => request(`/admin/verification/${providerId}/request-info`, { method: "POST", body: JSON.stringify({ message }) }),
   suspendProvider: (providerId) => request(`/admin/verification/${providerId}/suspend`, { method: "POST" }),
-  warnUser: (id, reason) => request(`/admin/users/${id}/warn?reason=${encodeURIComponent(reason)}`, { method: "POST" }),
+  warnUser: (id, reason) => request(`/admin/users/${id}/warn`, { method: "POST", body: JSON.stringify({ reason }) }),
   setReviewVisibility: (id, hidden) => request(`/admin/reviews/${id}/visibility?hidden=${hidden}`, { method: "PATCH" }),
   /** Unified inbox: complaints + verifications + reported content + disputes,
    *  newest first. Powers the top-bar notification bell. */
@@ -1120,9 +1151,10 @@ async function mockRequest(path, options = {}) {
   if (path.match(/\/settlement-pause/) && options.method === "PATCH") return { success: true };
   if (path.startsWith("/terms?") || path === "/terms") {
     const qs = new URLSearchParams(path.split("?")[1] || "");
-    const type = qs.get("type") || "CUSTOMER_TERMS";
+    const posted = options.method === "POST" && options.body ? JSON.parse(options.body) : {};
+    const type = posted.type || qs.get("type") || "CUSTOMER_TERMS";
     if (options.method === "POST") {
-      const v = { id: Date.now(), version: qs.get("version"), type, active: true, createdAt: new Date().toISOString(), contentEn: qs.get("contentEn"), contentAr: qs.get("contentAr") || "" };
+      const v = { id: Date.now(), version: posted.version, type, active: true, createdAt: new Date().toISOString(), contentEn: posted.contentEn, contentAr: posted.contentAr || "" };
       mock.termsVersions.forEach((t) => { if ((t.type || "CUSTOMER_TERMS") === type) t.active = false; });
       mock.termsVersions.unshift(v);
       return v;
@@ -1133,7 +1165,7 @@ async function mockRequest(path, options = {}) {
     const resolve = path.match(/^\/admin\/safety\/(\d+)\/resolve/);
     if (resolve && options.method === "POST") {
       const ev = mock.safety.find((s) => String(s.id) === resolve[1]);
-      const notes = new URLSearchParams(path.split("?")[1] || "").get("notes") || "";
+      const notes = (options.body ? JSON.parse(options.body).notes : "") || "";
       if (ev) Object.assign(ev, { resolved: true, resolvedAt: new Date().toISOString(), resolvedByName: mock.user.fullName, resolutionNotes: notes });
       return ev;
     }

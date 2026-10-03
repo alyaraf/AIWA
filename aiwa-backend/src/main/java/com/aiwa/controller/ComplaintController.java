@@ -1,5 +1,6 @@
 package com.aiwa.controller;
 
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.enums.ComplaintStatus;
@@ -36,9 +37,11 @@ public class ComplaintController {
             @RequestParam(required = false) Long targetProviderId,
             @RequestParam(required = false) Long bookingId,
             @RequestParam String category,
-            @RequestParam String description,
+            @RequestParam(required = false) String description,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
 
+        description = FreeTextBody.require(body, "description", description);
         if (limiter != null) limiter.check(resolveUserId(userDetails), "complaint", 5, java.time.Duration.ofHours(1));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.Success.of("Complaint submitted",
@@ -72,9 +75,11 @@ public class ComplaintController {
     @Operation(summary = "Resolve a complaint (ADMIN · Support)")
     public ResponseEntity<ApiResponse.Success<ApiResponse.ComplaintDto>> resolve(
             @PathVariable Long id,
-            @RequestParam String notes,
+            @RequestParam(required = false) String notes,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
-        ApiResponse.ComplaintDto dto = complaintService.resolve(id, resolveUserId(userDetails), notes);
+        ApiResponse.ComplaintDto dto = complaintService.resolve(id, resolveUserId(userDetails),
+                FreeTextBody.require(body, "notes", notes));
         auditService.record("COMPLAINT_RESOLVED", "complaint #" + id);
         return ResponseEntity.ok(ApiResponse.Success.of("Complaint resolved", dto));
     }
@@ -94,9 +99,10 @@ public class ComplaintController {
     @Operation(summary = "Flag a user for review (ADMIN · Support)")
     public ResponseEntity<ApiResponse.Success<Void>> flagUser(
             @PathVariable Long userId,
-            @RequestParam String reason) {
+            @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body) {
         // Create a system-generated complaint/flag for the user
-        complaintService.flagUser(userId, reason);
+        complaintService.flagUser(userId, FreeTextBody.require(body, "reason", reason));
         return ResponseEntity.ok(ApiResponse.Success.of("User flagged for review", null));
     }
 
@@ -106,7 +112,9 @@ public class ComplaintController {
     @Operation(summary = "Send a warning to a user (ADMIN · Support)")
     public ResponseEntity<ApiResponse.Success<Void>> warnUser(
             @PathVariable Long userId,
-            @RequestParam String reason) {
+            @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body) {
+        reason = FreeTextBody.require(body, "reason", reason);
         User target = userRepo.findById(userId)
                 .orElseThrow(() -> new com.aiwa.exception.ResourceNotFoundException("User", userId));
         notificationService.send(target.getId(),

@@ -78,11 +78,13 @@ class AuthGetCurrentUserEvent extends AuthEvent {}
 class AuthUpdateProfileEvent extends AuthEvent {
   final String? fullName;
   final String? email;
+  final String? currentPassword;
   final String? profileImageUrl;
 
   const AuthUpdateProfileEvent({
     this.fullName,
     this.email,
+    this.currentPassword,
     this.profileImageUrl,
   });
 }

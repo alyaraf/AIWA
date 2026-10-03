@@ -169,7 +169,7 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
   }) async => _booking(
     await _api.patch(
       ApiConstants.bookingCancel(bookingId),
-      queryParameters: {'reason': ?reason},
+      data: {'reason': ?reason},
     ),
   );
 
@@ -256,7 +256,8 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
         ),
       );
 
-  // POST /complaints takes request params, not a body.
+  // CR-21: the description is free text, so it goes in the body; the ids and
+  // category stay request params.
   @override
   Future<void> submitComplaint({
     required String bookingId,
@@ -269,8 +270,8 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
       'bookingId': bookingId,
       'targetProviderId': providerId,
       'category': category,
-      'description': description,
     },
+    data: {'description': description},
   );
 
   @override

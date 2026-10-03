@@ -2658,6 +2658,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editProfileUpdated => 'Profile updated.';
 
   @override
+  String get editConfirmTitle => 'Confirm it\'s you';
+
+  @override
+  String get editConfirmBody => 'Enter your current password to continue.';
+
+  @override
+  String get editCurrentPassword => 'Current password';
+
+  @override
+  String get editEmailCodeTitle => 'Confirm your new email';
+
+  @override
+  String get editEmailConfirmed => 'Email confirmed.';
+
+  @override
+  String get editEmailResend => 'Send the code again';
+
+  @override
+  String editEmailPending(String email) {
+    return 'Waiting for you to confirm $email.';
+  }
+
+  @override
   String get editAccount => 'Account';
 
   @override

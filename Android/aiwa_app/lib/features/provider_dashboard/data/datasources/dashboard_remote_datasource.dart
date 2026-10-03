@@ -97,13 +97,11 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
 
   @override
   Future<BookingModel> rejectBooking(String bookingId, String reason) async {
-    // `reason` is a required @RequestParam; the response is
+    // `reason` is required (JSON body, CR-21); the response is
     // BookingWithAlternativesDto {booking, alternativeProviders}.
     final response = await _api.patch(
       ApiConstants.bookingReject(bookingId),
-      queryParameters: {
-        'reason': reason.isEmpty ? 'Declined by provider' : reason,
-      },
+      data: {'reason': reason.isEmpty ? 'Declined by provider' : reason},
     );
     return BookingModel.fromJson(
       response.data['data']['booking'] as Map<String, dynamic>,
@@ -118,10 +116,8 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
   }) async {
     final response = await _api.patch(
       ApiConstants.bookingComplete(bookingId),
-      queryParameters: {
-        'cashCollected': cashCollected,
-        if (note != null && note.isNotEmpty) 'note': note,
-      },
+      queryParameters: {'cashCollected': cashCollected},
+      data: {if (note != null && note.isNotEmpty) 'note': note},
     );
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }

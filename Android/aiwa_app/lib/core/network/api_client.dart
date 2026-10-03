@@ -97,10 +97,16 @@ class ApiClient {
 
   Future<Response<T>> delete<T>(
     String path, {
+    dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
   }) => _send(
-    _dio.delete<T>(path, queryParameters: queryParameters, options: options),
+    _dio.delete<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+    ),
   );
 
   /// Best effort: revokes the access and refresh tokens server-side. Never
