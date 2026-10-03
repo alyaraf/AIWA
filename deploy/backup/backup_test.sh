@@ -64,6 +64,10 @@ check "no key: exits 0 and stores plain files" '[ $rc -eq 0 ] && [ -f "$d"/out/d
 check "no key: encrypted metric is 0" '[ "$(metric "$d" aiwa_backup_encrypted)" = 0 ]'
 check "no key: logs a warning" 'grep -qi "warning" "$d/log"'
 
+# a key path that is a directory (Docker's bind mount of a missing host file) counts as no key
+d="$tmp/dirkey"; mkdir -p "$d/k"; run_backup "$d" BACKUP_KEY_FILE="$d/k"
+check "key path is a directory: runs unencrypted" '[ $rc -eq 0 ] && [ "$(metric "$d" aiwa_backup_encrypted)" = 0 ]'
+
 # restore.sh must use the same cipher settings as backup.sh
 flags='-aes-256-cbc -pbkdf2 -iter 200000'
 check "restore.sh decrypts with backup.sh's cipher settings" 'grep -q -e "$flags" "$here/backup.sh" && grep -q -e "$flags" "$here/../restore.sh"'

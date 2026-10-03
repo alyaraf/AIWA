@@ -50,7 +50,7 @@ run_backup() {
   dump="$OUT/db/aiwa-$stamp.dump"
   tarball="$OUT/uploads/uploads-$stamp.tar.gz"
   encrypted=0; ext=""
-  if [ -n "$KEY" ] && [ -s "$KEY" ]; then
+  if [ -f "$KEY" ] && [ -s "$KEY" ]; then  # -f: Docker makes a directory of a bind-mounted file that does not exist
     encrypted=1; ext=".enc"
   else
     echo "$(date -u +%FT%TZ) WARNING: no backup key at '${KEY:-BACKUP_KEY_FILE unset}': this backup is NOT encrypted (docs/runbooks.md)" >&2
