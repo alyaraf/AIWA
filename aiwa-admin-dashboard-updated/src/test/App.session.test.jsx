@@ -3,6 +3,11 @@ import { render, screen, fireEvent, waitFor, act, within } from "@testing-librar
 import App from "../App.jsx";
 import * as apiModule from "../api.js";
 
+// These tests render the whole <App> (5000+ lines); the first render in a file
+// costs seconds of cold JIT when vitest runs every file in parallel. A real
+// hang still fails, just at 20 s instead of 5 s.
+vi.setConfig({ testTimeout: 20_000 });
+
 /**
  * CR-22: after a reload the panel used to start as the mock super admin, and
  * any failure of /auth/me (a 5xx, a network blip) cleared the tokens. It now

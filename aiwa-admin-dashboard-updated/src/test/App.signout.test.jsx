@@ -2,6 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import App from "../App.jsx";
 
+// These tests render the whole <App> (5000+ lines); the first render in a file
+// costs seconds of cold JIT when vitest runs every file in parallel. A real
+// hang still fails, just at 20 s instead of 5 s.
+vi.setConfig({ testTimeout: 20_000 });
+
 /**
  * CR-18 (admin half): sign-out used to wait for the network before clearing
  * the tokens, so on a stalled connection the admin stayed signed in, and a tab
