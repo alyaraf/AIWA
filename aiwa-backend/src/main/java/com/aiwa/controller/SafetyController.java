@@ -1,6 +1,7 @@
 package com.aiwa.controller;
 
 import com.aiwa.dto.request.SafetyEventRequest;
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.repository.UserRepository;
@@ -54,9 +55,11 @@ public class SafetyController {
             @PathVariable Long bookingId,
             @PathVariable Long eventId,
             @RequestParam(required = false) String notes,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of("Marked safe",
-                safetyService.resolveOwn(bookingId, eventId, resolveUserId(userDetails), notes)));
+                safetyService.resolveOwn(bookingId, eventId, resolveUserId(userDetails),
+                        FreeTextBody.pick(body, "notes", notes))));
     }
 
     // ── Admin SOS queue ───────────────────────────────────────────────────────
@@ -77,10 +80,12 @@ public class SafetyController {
     @Operation(summary = "Close an SOS with a note of what was done (ADMIN · Support)")
     public ResponseEntity<ApiResponse.Success<ApiResponse.AdminSafetyEventDto>> adminResolve(
             @PathVariable Long eventId,
-            @RequestParam String notes,
+            @RequestParam(required = false) String notes,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of("SOS closed",
-                safetyService.adminResolve(eventId, resolveUserId(userDetails), notes)));
+                safetyService.adminResolve(eventId, resolveUserId(userDetails),
+                        FreeTextBody.require(body, "notes", notes))));
     }
 
     private Long resolveUserId(UserDetails ud) {
