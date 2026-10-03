@@ -1080,4 +1080,37 @@ class ApiFlowIntegrationTest {
                 .andExpect(jsonPath("$.code").value("safety.error.sos_not_live"));
     }
 
+    /** CR-16: the SOS keeps when its fix was taken and how accurate it is; an app that sends neither still works. */
+    @Test
+    void sosKeepsTheFixTimeAndAccuracyAndStillAcceptsRequestsWithoutThem() throws Exception {
+        Provider p = approvedProvider();
+        String cTok = login(user(UserRole.CUSTOMER)), pTok = login(p.user());
+        long withFix = book(cTok, p, LocalDate.now().plusDays(1), LocalTime.of(11, 0));
+        long without = book(cTok, p, LocalDate.now().plusDays(1), LocalTime.of(14, 0));
+        for (long id : new long[] {withFix, without}) {
+            mvc.perform(patch("/bookings/" + id + "/accept").header("Authorization", bearer(pTok))).andExpect(status().isOk());
+        }
+
+        mvc.perform(post("/bookings/" + withFix + "/safety").header("Authorization", bearer(cTok))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("type", "SOS", "latitude", 30.05, "longitude", 31.23,
+                                "locationTime", "2026-05-19T12:31:00.000Z", "locationAccuracy", 12.5))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.locationTime").value("2026-05-19T12:31:00Z"))
+                .andExpect(jsonPath("$.data.locationAccuracy").value(12.5));
+        // Stored: the app reads it back when Tracking is reopened.
+        mvc.perform(get("/bookings/" + withFix + "/safety").header("Authorization", bearer(cTok)))
+                .andExpect(jsonPath("$.data[0].locationTime").value("2026-05-19T12:31:00Z"))
+                .andExpect(jsonPath("$.data[0].locationAccuracy").value(12.5));
+
+        // An older app sends only the coordinates.
+        mvc.perform(post("/bookings/" + without + "/safety").header("Authorization", bearer(cTok))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("type", "SOS", "latitude", 30.05, "longitude", 31.23))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.latitude").value(30.05))
+                .andExpect(jsonPath("$.data.locationTime").doesNotExist())
+                .andExpect(jsonPath("$.data.locationAccuracy").doesNotExist());
+    }
+
 }

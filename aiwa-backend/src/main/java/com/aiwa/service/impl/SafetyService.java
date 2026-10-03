@@ -159,6 +159,8 @@ public class SafetyService {
                 .type(request.getType())
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
+                .locationTime(request.getLocationTime())
+                .locationAccuracy(request.getLocationAccuracy())
                 .notes(request.getNotes())
                 .build());
 
@@ -504,6 +506,8 @@ public class SafetyService {
                 .type(e.getType())
                 .latitude(e.getLatitude())
                 .longitude(e.getLongitude())
+                .locationTime(e.getLocationTime())
+                .locationAccuracy(e.getLocationAccuracy())
                 .notes(e.getNotes())
                 .resolved(e.isResolved())
                 .resolvedAt(e.getResolvedAt())
@@ -534,6 +538,8 @@ public class SafetyService {
                 .providerPhone(b.getProvider().getUser().getPhone())
                 .latitude(e.getLatitude())
                 .longitude(e.getLongitude())
+                .locationTime(e.getLocationTime())
+                .locationAccuracy(e.getLocationAccuracy())
                 .notes(e.getNotes())
                 .resolved(e.isResolved())
                 .resolvedAt(e.getResolvedAt())

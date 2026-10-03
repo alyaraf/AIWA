@@ -32,6 +32,8 @@ final _booking = BookingModel.fromJson({
 class _Remote implements BookingRemoteDataSource {
   Object? fail;
   int sosCalls = 0;
+  // No SOS is open until one is raised (load() now shows an open one: CR-16).
+  bool open = false;
 
   @override
   Future<BookingModel> getBookingDetail(String bookingId) async => _booking;
@@ -42,14 +44,18 @@ class _Remote implements BookingRemoteDataSource {
     String? notes,
     double? latitude,
     double? longitude,
+    DateTime? locationTime,
+    double? locationAccuracy,
   }) async {
     sosCalls++;
     if (fail != null) throw fail!;
+    open = true;
   }
 
   @override
   Future<SosReport?> sosReport(String bookingId) async {
     if (fail != null) throw fail!;
+    if (!open) return null;
     return const SosReport(supportAlerted: true, contactsTexted: 1);
   }
 

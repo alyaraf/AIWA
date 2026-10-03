@@ -56,11 +56,15 @@ abstract class BookingRepository {
     String? reason,
   });
 
-  /// [latitude]/[longitude]: where the user is, when a fix was available.
+  /// [latitude]/[longitude]: where the user is, when a fix was available;
+  /// [locationTime]/[locationAccuracy] (metres): how old and how precise
+  /// that fix is (CR-16).
   Future<Either<Failure, void>> sendSos(
     String bookingId, {
     double? latitude,
     double? longitude,
+    DateTime? locationTime,
+    double? locationAccuracy,
   });
 
   /// The caller's open SOS on this booking and what was actually delivered
