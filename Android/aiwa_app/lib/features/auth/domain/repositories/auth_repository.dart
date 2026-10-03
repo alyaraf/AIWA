@@ -45,16 +45,25 @@ abstract class AuthRepository {
   });
 
   /// Verify [code] (sent to the new [phone]) and switch the account to it.
+  /// [currentPassword] is required by the backend (CR-05).
   Future<Either<Failure, void>> changePhone({
     required String phone,
     required String code,
+    required String currentPassword,
   });
+
+  /// Confirm the email waiting in pendingEmail with [code]; stores the fresh
+  /// tokens (other sessions are signed out).
+  Future<Either<Failure, void>> verifyEmail({required String code});
 
   Future<Either<Failure, UserEntity>> getCurrentUser();
 
+  /// A changed [email] needs [currentPassword]; it stays pendingEmail until
+  /// [verifyEmail].
   Future<Either<Failure, UserEntity>> updateProfile({
     String? fullName,
     String? email,
+    String? currentPassword,
     String? profileImageUrl,
   });
 

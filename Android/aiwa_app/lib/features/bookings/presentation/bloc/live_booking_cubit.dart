@@ -11,6 +11,10 @@ import '../../domain/repositories/booking_repository.dart';
 /// SOS banner stages on Tracking (flow-screens.jsx:357-376).
 enum SosStage { none, alerting, notified, logged }
 
+/// Where the user is for an SOS: when the fix was taken ([at]) and its
+/// accuracy in metres travel with it, so support can judge it (CR-16).
+typedef SosFix = ({double lat, double lng, DateTime? at, double? accuracy});
+
 class LiveBookingState {
   final BookingEntity? booking;
   final String? loadError;
@@ -69,31 +73,40 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
   Timer? _poll;
 
   /// Where the user is for an SOS, or null. Injectable for tests.
-  final Future<({double lat, double lng})?> Function() _locate;
+  final Future<SosFix?> Function() _locate;
 
   LiveBookingCubit(
     this._repo,
     this.bookingId, {
     BookingEntity? initial,
-    Future<({double lat, double lng})?> Function()? locate,
+    Future<SosFix?> Function()? locate,
   }) : _locate = locate ?? _deviceLocation,
        super(LiveBookingState(booking: initial));
 
-  /// Last known fix, else a fresh one within 4 s. Never prompts for
+  /// A fresh fix within 4 s, else the last known one (which can be hours old
+  /// and far away, so it is only the fallback: CR-16). Never prompts for
   /// permission mid-emergency; any failure just means "no location".
-  static Future<({double lat, double lng})?> _deviceLocation() async {
+  static Future<SosFix?> _deviceLocation() async {
     try {
       final perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied ||
           perm == LocationPermission.deniedForever) {
         return null;
       }
-      final p =
-          await Geolocator.getLastKnownPosition() ??
-          await Geolocator.getCurrentPosition(
-            timeLimit: const Duration(seconds: 4),
-          );
-      return (lat: p.latitude, lng: p.longitude);
+      Position? p;
+      try {
+        p = await Geolocator.getCurrentPosition(
+          timeLimit: const Duration(seconds: 4),
+        );
+      } catch (_) {}
+      p ??= await Geolocator.getLastKnownPosition();
+      if (p == null) return null;
+      return (
+        lat: p.latitude,
+        lng: p.longitude,
+        at: p.timestamp,
+        accuracy: p.accuracy,
+      );
     } catch (_) {
       return null;
     }
@@ -114,6 +127,32 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
       (f) => emit(state.copyWith(loadError: f.message)),
       (b) => emit(state.copyWith(booking: b)),
     );
+    if (r.isRight() && !_sosChecked && state.sos == SosStage.none) {
+      await _restoreSos();
+    }
+  }
+
+  /// The SOS read succeeded once: the 15 s poll does not repeat it.
+  bool _sosChecked = false;
+
+  /// An SOS raised before this screen opened (or before the app restarted)
+  /// may still be open: bring back its banner and "I'm safe" (CR-16).
+  /// Otherwise it could only be closed by pressing SOS again, which re-alerts
+  /// support. A failed read just leaves the page as it was (the next load
+  /// tries again).
+  Future<void> _restoreSos() async {
+    final r = await _repo.sosReport(bookingId);
+    if (r.isRight()) _sosChecked = true;
+    final report = r.fold((_) => null, (x) => x);
+    if (isClosed || report == null || state.sos != SosStage.none) return;
+    emit(
+      state.copyWith(
+        sos: SosStage.notified,
+        sosReport: report,
+        sosFailed: false,
+      ),
+    );
+    if (report.contactsPending > 0) _followSosDelivery();
   }
 
   /// Status is provider-driven.
@@ -187,6 +226,8 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
         bookingId,
         latitude: at?.lat,
         longitude: at?.lng,
+        locationTime: at?.at,
+        locationAccuracy: at?.accuracy,
       );
       if (isClosed) return;
       // What reached whom comes from the backend's delivery records (R2-03).

@@ -10,10 +10,12 @@ class UpdateProfileUseCase {
   Future<Either<Failure, UserEntity>> call({
     String? fullName,
     String? email,
+    String? currentPassword,
     String? profileImageUrl,
   }) => _repository.updateProfile(
     fullName: fullName,
     email: email,
+    currentPassword: currentPassword,
     profileImageUrl: profileImageUrl,
   );
 }

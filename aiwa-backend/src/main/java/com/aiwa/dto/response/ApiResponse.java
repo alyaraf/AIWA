@@ -391,6 +391,9 @@ public class ApiResponse {
         private SafetyEventType type;
         private Double latitude;
         private Double longitude;
+        /** CR-16: when the fix was taken and its accuracy in metres (null when not sent). */
+        private java.time.Instant locationTime;
+        private Double locationAccuracy;
         private String notes;
         private boolean resolved;
         private LocalDateTime resolvedAt;
@@ -423,6 +426,8 @@ public class ApiResponse {
         private String providerPhone;
         private Double latitude;
         private Double longitude;
+        private java.time.Instant locationTime;
+        private Double locationAccuracy;
         private String notes;
         private boolean resolved;
         private LocalDateTime resolvedAt;

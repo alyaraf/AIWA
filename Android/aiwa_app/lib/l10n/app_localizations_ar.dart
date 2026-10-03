@@ -2712,6 +2712,29 @@ class AppLocalizationsAr extends AppLocalizations {
   String get editProfileUpdated => 'تم تحديث الملف الشخصي.';
 
   @override
+  String get editConfirmTitle => 'تأكيد هويتك';
+
+  @override
+  String get editConfirmBody => 'أدخل كلمة المرور الحالية للمتابعة.';
+
+  @override
+  String get editCurrentPassword => 'كلمة المرور الحالية';
+
+  @override
+  String get editEmailCodeTitle => 'تأكيد بريدك الإلكتروني الجديد';
+
+  @override
+  String get editEmailConfirmed => 'تم تأكيد البريد الإلكتروني.';
+
+  @override
+  String get editEmailResend => 'أرسل الرمز مرة أخرى';
+
+  @override
+  String editEmailPending(String email) {
+    return 'بانتظار تأكيدك لـ $email.';
+  }
+
+  @override
   String get editAccount => 'الحساب';
 
   @override

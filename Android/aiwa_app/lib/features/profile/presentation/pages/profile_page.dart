@@ -16,6 +16,7 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../data/account_repository.dart';
+import '../widgets/secure_action_sheet.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -30,7 +31,6 @@ class _ProfilePageState extends State<ProfilePage> {
   final _repo = sl<AccountRepository>();
   ({int bookings, int favorites, int reviews})? _stats;
   int? _trusted;
-  String? _error;
 
   @override
   void initState() {
@@ -116,10 +116,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 child: Column(
                   children: [
-                    if (_error != null) ...[
-                      InlineBanner(tone: BannerTone.danger, body: _error),
-                      const SizedBox(height: 8),
-                    ],
                     for (final (icon, label, value, route) in rows)
                       SettingsRow(
                         icon: icon,
@@ -167,18 +163,23 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _deleteAccount() async {
     if (!await showDeleteAccountSheet(context) || !mounted) return;
-    final r = await _repo.deleteAccount();
-    if (!mounted) return;
-    r.fold(
-      (f) => setState(
-        () => _error = AppLocalizations.of(context).error(f.message),
-      ),
-      (_) {
-        showAiwaToast(context, AppLocalizations.of(context).profAccountDeleted);
-        context.read<AuthBloc>().add(AuthLogoutEvent());
-        context.go(AppRoutes.splash);
-      },
+    final l = AppLocalizations.of(context);
+    // The backend wants the current password (CR-05); a wrong one is shown in
+    // the sheet, which stays open.
+    final deleted = await showSecureActionSheet(
+      context,
+      title: l.delTitle,
+      body: l.editConfirmBody,
+      confirmLabel: l.profDeleteAccount,
+      danger: true,
+      onSubmit: (password, _) async => (await _repo.deleteAccount(
+        currentPassword: password,
+      )).fold((f) => f, (_) => null),
     );
+    if (!deleted || !mounted) return;
+    showAiwaToast(context, l.profAccountDeleted);
+    context.read<AuthBloc>().add(AuthLogoutEvent());
+    context.go(AppRoutes.splash);
   }
 }
 
@@ -241,6 +242,19 @@ class _Header extends StatelessWidget {
                               contact,
                               // Phone/email: keep '+20…' intact in Arabic.
                               textDirection: TextDirection.ltr,
+                              style: AppTextStyles.meta.copyWith(
+                                color: AppColors.rose300,
+                              ),
+                            ),
+                          ],
+                          // CR-05: an added email is not the sign-in until
+                          // its code is confirmed.
+                          if (user.pendingEmail != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              AppLocalizations.of(
+                                context,
+                              ).editEmailPending(user.pendingEmail!),
                               style: AppTextStyles.meta.copyWith(
                                 color: AppColors.rose300,
                               ),

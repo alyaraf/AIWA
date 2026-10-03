@@ -44,6 +44,8 @@ abstract class BookingRemoteDataSource {
     String? notes,
     double? latitude,
     double? longitude,
+    DateTime? locationTime,
+    double? locationAccuracy,
   });
 
   /// True when the caller has an unresolved SOS on this booking — used to
@@ -199,14 +201,19 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
     String? notes,
     double? latitude,
     double? longitude,
+    DateTime? locationTime,
+    double? locationAccuracy,
   }) => _api.post(
     ApiConstants.bookingSafety(bookingId),
-    // The location goes into the support and trusted-contact SMS as a maps link.
+    // The location goes into the support and trusted-contact SMS as a maps link;
+    // its time and accuracy tell support how far to trust it (CR-16).
     data: {
       'type': 'SOS',
       'notes': ?notes,
       'latitude': ?latitude,
       'longitude': ?longitude,
+      'locationTime': ?locationTime?.toUtc().toIso8601String(),
+      'locationAccuracy': ?locationAccuracy,
     },
   );
 

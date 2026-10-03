@@ -1470,6 +1470,20 @@
   "editPhoneError": "Enter a valid Egyptian mobile number.",
   "editEmailError": "That email doesn’t look right.",
   "editProfileUpdated": "Profile updated.",
+  "editConfirmTitle": "Confirm it's you",
+  "editConfirmBody": "Enter your current password to continue.",
+  "editCurrentPassword": "Current password",
+  "editEmailCodeTitle": "Confirm your new email",
+  "editEmailConfirmed": "Email confirmed.",
+  "editEmailResend": "Send the code again",
+  "editEmailPending": "Waiting for you to confirm {email}.",
+  "@editEmailPending": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
   "editAccount": "Account",
   "editChangePhoto": "Change photo",
   "editPhotoHint": "JPG or PNG · max 5 MB",

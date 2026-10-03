@@ -10,7 +10,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
-import '../../../../shared/widgets/aiwa_sheet.dart';
 import '../../../../shared/widgets/aiwa_text_field.dart';
 import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
@@ -19,6 +18,7 @@ import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../widgets/secure_action_sheet.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -41,6 +41,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
   bool _dirty = false;
   bool _saving = false;
   String? _error;
+
+  /// The number once its change went through (the page keeps the old user).
+  String? _savedPhone;
+
+  /// The address once its code was confirmed (the page keeps the old user).
+  String? _savedEmail;
+
+  /// An email still waiting for its code (CR-05).
+  late String? _pendingEmail = _user?.pendingEmail;
 
   @override
   void initState() {
@@ -94,32 +103,114 @@ class _EditProfilePageState extends State<EditProfilePage> {
   bool get _wasArabic => _user?.preferredLanguage.toUpperCase() == 'AR';
 
   Future<Failure?> _persist() async {
-    // A new number is confirmed by a code sent to it (PATCH /auth/me/phone);
-    // other sessions are signed out and the repository stores the new tokens.
+    // A new number is confirmed by a code sent to it and the current password
+    // (PATCH /auth/me/phone); other sessions are signed out and the repository
+    // stores the new tokens.
     final phone = _phone.text.trim();
-    if (phone != (_user?.phone ?? '')) {
+    if (phone != (_savedPhone ?? _user?.phone ?? '')) {
       final sent = await _repo.sendOtp(phone: phone);
       if (sent.isLeft()) return sent.fold((f) => f, (_) => null);
       if (!mounted) return null;
       final l = AppLocalizations.of(context);
-      final code = await showAiwaSheet<String>(
+      final done = await showSecureActionSheet(
         context,
-        builder: (_) => _PhoneCodeSheet(phone: phone),
+        title: l.authEnterCode,
+        body: l.authCodeSentTo(phone),
+        askCode: true,
+        confirmLabel: l.authVerify,
+        onSubmit: (password, code) async => (await _repo.changePhone(
+          phone: phone,
+          code: code,
+          currentPassword: password,
+        )).fold((f) => f, (_) => null),
       );
-      if (code == null) return ServerFailure(l.authEnterCode);
-      final changed = await _repo.changePhone(phone: phone, code: code);
-      if (changed.isLeft()) return changed.fold((f) => f, (_) => null);
+      if (!done) return ServerFailure(l.authEnterCode);
+      _savedPhone = phone;
     }
     final email = _email.text.trim();
-    final profile = await _repo.updateProfile(
-      fullName: _name.text.trim(),
-      email: email.isEmpty ? null : email,
-    );
-    if (profile.isLeft() || _arabic == _wasArabic) {
-      return profile.fold((f) => f, (_) => null);
+    // A different address needs the current password and a code sent to it.
+    final emailChanged =
+        email.isNotEmpty &&
+        email.toLowerCase() !=
+            (_savedEmail ?? _user?.email ?? '').toLowerCase();
+    final Failure? failure;
+    if (emailChanged) {
+      failure = await _changeEmail(email);
+    } else {
+      final profile = await _repo.updateProfile(
+        fullName: _name.text.trim(),
+        email: email.isEmpty ? null : email,
+      );
+      failure = profile.fold((f) => f, (_) => null);
     }
+    if (failure != null || _arabic == _wasArabic) return failure;
     final lang = await _repo.updateLanguage(language: _arabic ? 'AR' : 'EN');
     return lang.fold((f) => f, (_) => null);
+  }
+
+  /// PATCH /auth/me with the password, then the code step. Closing the code
+  /// step is not a failure: the address stays pending until confirmed.
+  Future<Failure?> _changeEmail(String email) async {
+    final l = AppLocalizations.of(context);
+    final saved = await showSecureActionSheet(
+      context,
+      title: l.editConfirmTitle,
+      body: l.editConfirmBody,
+      confirmLabel: l.commonConfirm,
+      onSubmit: (password, _) async => (await _repo.updateProfile(
+        fullName: _name.text.trim(),
+        email: email,
+        currentPassword: password,
+      )).fold((f) => f, (_) => null),
+    );
+    if (!saved) return ServerFailure(l.editConfirmBody);
+    _pendingEmail = email;
+    if (!mounted) return null;
+    await _enterEmailCode(email);
+    return null;
+  }
+
+  /// Code step for the pending [email]; true once it is confirmed.
+  Future<bool> _enterEmailCode(String email) async {
+    final l = AppLocalizations.of(context);
+    final ok = await showSecureActionSheet(
+      context,
+      title: l.editEmailCodeTitle,
+      body: l.authCodeSentTo(email),
+      askPassword: false,
+      askCode: true,
+      confirmLabel: l.authVerify,
+      onSubmit: (_, code) async =>
+          (await _repo.verifyEmail(code: code)).fold((f) => f, (_) => null),
+    );
+    if (ok) {
+      // The confirmed address is now the unchanged value: a later Save of other
+      // fields sends no email change and asks for no password.
+      _pendingEmail = null;
+      _savedEmail = email;
+      _email.text = email;
+    }
+    return ok;
+  }
+
+  Future<void> _confirmPendingEmail() async {
+    final ok = await _enterEmailCode(_pendingEmail!);
+    if (!ok || !mounted) return;
+    context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
+    showAiwaToast(context, AppLocalizations.of(context).editEmailConfirmed);
+    setState(() {});
+  }
+
+  /// Asks for a new code: the backend resends on PATCH /auth/me with the
+  /// pending address and the current password.
+  Future<void> _resendEmailCode() async {
+    await _changeEmail(_pendingEmail!);
+    if (!mounted) return;
+    if (_pendingEmail == null) {
+      context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
+      showAiwaToast(context, AppLocalizations.of(context).editEmailConfirmed);
+    }
+    setState(() {});
   }
 
   Future<void> _save() async {
@@ -204,6 +295,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 if (_error != null) ...[
                   InlineBanner(tone: BannerTone.danger, body: _error),
                   const SizedBox(height: 14),
+                ],
+                if (_pendingEmail != null) ...[
+                  InlineBanner(
+                    body: l.editEmailPending(_pendingEmail!),
+                    action: l.authEnterCode,
+                    onAction: _confirmPendingEmail,
+                  ),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton(
+                      onPressed: _resendEmailCode,
+                      child: Text(l.editEmailResend),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                 ],
                 ValidatedField(
                   error: _nameErr,
@@ -323,71 +429,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Code entry for a phone-number change; pops the 6-digit code (null: closed).
-class _PhoneCodeSheet extends StatefulWidget {
-  final String phone;
-  const _PhoneCodeSheet({required this.phone});
-
-  @override
-  State<_PhoneCodeSheet> createState() => _PhoneCodeSheetState();
-}
-
-class _PhoneCodeSheetState extends State<_PhoneCodeSheet> {
-  final _code = TextEditingController();
-
-  @override
-  void dispose() {
-    _code.dispose();
-    super.dispose();
-  }
-
-  bool get _complete => RegExp(r'^[0-9]{6}$').hasMatch(_code.text.trim());
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l.authEnterCode,
-            style: AppTextStyles.h3.copyWith(fontSize: 22, height: 1.1),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            l.authCodeSentTo(widget.phone),
-            style: AppTextStyles.micro.copyWith(
-              fontSize: AppTextStyles.fsLabelSmPlus,
-              color: AppColors.ink3,
-            ),
-          ),
-          const SizedBox(height: 16),
-          AiwaTextField(
-            controller: _code,
-            placeholder: l.authCodePlaceholder,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            autoFocus: true,
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 16),
-          AiwaButton(
-            label: l.authVerify,
-            size: AiwaButtonSize.lg,
-            fullWidth: true,
-            onPressed: _complete
-                ? () => Navigator.of(context).pop(_code.text.trim())
-                : null,
           ),
         ],
       ),

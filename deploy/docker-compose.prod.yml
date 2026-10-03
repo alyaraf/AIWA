@@ -103,8 +103,12 @@ services:
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       # R2-02: pinged after each verified backup; a missing ping alerts (healthchecks.io etc.).
       BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
+      # CR-20: encrypts the dump and the uploads tarball when the host file below is a real key
+      # (BACKUP_KEY_FILE in .env, docs/runbooks.md); /dev/null means "no key", visible as aiwa_backup_encrypted 0.
+      BACKUP_KEY_FILE: /run/secrets/backup.key
     volumes:
       - ./backup/backup.sh:/backup.sh:ro
+      - ${BACKUP_KEY_FILE:-/dev/null}:/run/secrets/backup.key:ro
       - ./backups:/backups
       - uploads:/uploads
     healthcheck:
