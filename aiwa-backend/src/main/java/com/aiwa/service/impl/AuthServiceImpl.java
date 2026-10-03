@@ -78,9 +78,14 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("auth.error.email_not_verified");
         }
 
+        // CR-05: only an address proved with a code becomes the account's email.
+        // A phone sign-up proved the phone, not the email, so that one waits.
+        boolean emailProved = phone == null;
+
         User user = User.builder()
                 .fullName(req.getFullName().trim())
-                .email(email)
+                .email(emailProved ? email : null)
+                .pendingEmail(emailProved ? null : email)
                 .phone(phone)
                 .password(passwordEncoder.encode(req.getPassword()))
                 .role(req.getRole())
@@ -93,7 +98,16 @@ public class AuthServiceImpl implements AuthService {
 
         userRepository.save(user);
         otpService.consumePhoneVerification(phone);
-        if (phone == null) otpService.consumeEmailVerification(email);
+        if (emailProved) {
+            otpService.consumeEmailVerification(email);
+        } else if (email != null) {
+            try {
+                otpService.sendEmailOtp(email);
+            } catch (RuntimeException e) {
+                // The sign-up stands (the phone is proved). PATCH /auth/me with the
+                // same email sends the code again.
+            }
+        }
 
         return buildAuthResponse(user);
     }
@@ -300,6 +314,8 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public ApiResponse.AuthResponse changePhone(String identifier, AuthRequest.ChangePhone req) {
         User user = findUser(identifier);
+        // CR-05: before the code is looked at, so a refused request does not spend it.
+        requireCurrentPassword(user, req.getCurrentPassword());
         String phone = Identifiers.normalizePhone(req.getPhone());
         if (phone.equals(user.getPhone())) {
             throw new BusinessException("auth.error.phone_unchanged");
@@ -311,7 +327,36 @@ public class AuthServiceImpl implements AuthService {
         otpService.consumePhoneVerification(phone);
 
         user.setPhone(phone);
-        user.setTokensValidAfter(Instant.now());
+        user.setTokensValidAfter(sessionCutoff());
+        userRepository.save(user);
+        return buildAuthResponse(user);
+    }
+
+    @Override
+    public void confirmPassword(String identifier, String password) {
+        requireCurrentPassword(findUser(identifier), password);
+    }
+
+    /**
+     * CR-05: the address waiting in pendingEmail becomes the account's email once
+     * the code sent to it checks out. Like a phone change, every other session is
+     * ended and the caller gets a fresh token pair.
+     */
+    @Override
+    @Transactional
+    public ApiResponse.AuthResponse confirmEmail(String identifier, String code) {
+        User user = findUser(identifier);
+        String email = user.getPendingEmail();
+        if (email == null) throw new BusinessException("auth.error.no_pending_email");
+        otpService.verifyEmailOtp(email, code);
+        otpService.consumeEmailVerification(email);
+        // Someone else may have registered the address while it waited here.
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new BusinessException("auth.error.email_taken");
+        }
+        user.setEmail(email);
+        user.setPendingEmail(null);
+        user.setTokensValidAfter(sessionCutoff());
         userRepository.save(user);
         return buildAuthResponse(user);
     }
@@ -355,14 +400,35 @@ public class AuthServiceImpl implements AuthService {
      * stolen session cannot be used to try passwords or codes without limit.
      */
     private void requireReauthentication(User user, String password, String code) {
-        claimSignInAttempt(user);
-        if (password == null || !passwordEncoder.matches(password, user.getPassword())) {
-            throw new BusinessException("auth.error.wrong_password");
-        }
+        requirePasswordGuess(user, password);
         if (user.isTotpEnabled() && (code == null || !acceptTotp(user, code))) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
         userRepository.clearLoginAttempts(user.getId());
+    }
+
+    /**
+     * Session cut-off for a change that hands the caller new tokens straight away.
+     * Whole milliseconds, because tokens carry their issue time in milliseconds: with
+     * the microseconds kept, the new tokens (issued in the same millisecond) were
+     * refused as older than the cut-off.
+     */
+    private static Instant sessionCutoff() {
+        return Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+    }
+
+    /** CR-05: the current password alone, for email change, phone change and account deletion. */
+    private void requireCurrentPassword(User user, String password) {
+        requirePasswordGuess(user, password);
+        userRepository.clearLoginAttempts(user.getId());
+    }
+
+    /** One counted guess at the current password (CR-01): a missing or wrong one is refused. */
+    private void requirePasswordGuess(User user, String password) {
+        claimSignInAttempt(user);
+        if (password == null || !passwordEncoder.matches(password, user.getPassword())) {
+            throw new BusinessException("auth.error.wrong_password");
+        }
     }
 
     /** CR-01: takes one of the account's sign-in attempts, or answers 429 while the account is locked. */
@@ -442,6 +508,7 @@ public class AuthServiceImpl implements AuthService {
                 .id(u.getId())
                 .fullName(u.getFullName())
                 .email(u.getEmail())
+                .pendingEmail(u.getPendingEmail())
                 .phone(u.getPhone())
                 .role(u.getRole())
                 .gender(u.getGender())

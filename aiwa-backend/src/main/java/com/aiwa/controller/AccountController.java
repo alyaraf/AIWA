@@ -40,6 +40,7 @@ public class AccountController {
     private final ProviderProfileRepository providerRepo;
     private final NotificationServiceImpl notificationService;
     private final com.aiwa.service.impl.AccountDeletionService accountDeletion;
+    private final com.aiwa.service.AuthService authService;
 
     // ── Saved addresses ──────────────────────────────────────────────────────
 
@@ -187,8 +188,14 @@ public class AccountController {
      * Anonymise and disable the account; see {@link com.aiwa.service.impl.AccountDeletionService}.
      */
     @DeleteMapping
+    @Operation(summary = "Close your account — needs {currentPassword} in the body")
     public ResponseEntity<ApiResponse.Success<Void>> deleteAccount(
+            @RequestBody(required = false) com.aiwa.dto.request.AuthRequest.CurrentPassword request,
             @AuthenticationPrincipal UserDetails userDetails) {
+        // CR-05: a session alone (a borrowed phone, a stolen token) cannot close the
+        // account. Here and not in AccountDeletionService: support's deletion
+        // (DELETE /admin/users/{id}) goes through that too and has no user password.
+        authService.confirmPassword(userDetails.getUsername(), request == null ? null : request.getCurrentPassword());
         accountDeletion.delete(resolveUser(userDetails));
         return ResponseEntity.ok(ApiResponse.Success.of("Account deleted", null));
     }

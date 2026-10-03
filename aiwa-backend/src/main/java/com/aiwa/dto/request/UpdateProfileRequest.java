@@ -11,5 +11,9 @@ public class UpdateProfileRequest {
 
     private String email;
 
+    /** Needed when the email changes (CR-05). */
+    @jakarta.validation.constraints.Size(max = 128)
+    private String currentPassword;
+
     private String profileImageUrl;
 }
