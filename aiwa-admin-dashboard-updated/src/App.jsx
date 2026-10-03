@@ -48,7 +48,7 @@ import {
   X,
   XCircle
 } from "lucide-react";
-import { api, clearTokens, getAccessToken, mock, setTokens, USE_MOCKS } from "./api";
+import { api, clearTokens, getAccessToken, mock, setTokens, TOKEN_STORAGE_KEYS, USE_MOCKS } from "./api";
 
 /* String → component map for icons that arrive as strings from the API/mock. */
 const iconMap = {
@@ -405,6 +405,17 @@ export default function App() {
     return () => { alive = false; };
   }, [profileTry]);
 
+  // CR-18: another tab signed out (this tab follows) or signed in / refreshed
+  // (this tab re-reads who is signed in). Storage events only reach other tabs.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (USE_MOCKS || !(event.key === null || TOKEN_STORAGE_KEYS.includes(event.key))) return;
+      if (!getAccessToken()) { setSession(null); setRoute("dashboard"); } else setProfileTry((n) => n + 1);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // Publish the signed-in admin's permissions for the module-level `can()` helper.
   // Set while rendering, not in an effect: the screens below read it during this
   // same render, so permissions that arrive with /auth/me show up at once (CR-22).
@@ -432,14 +443,10 @@ export default function App() {
           setRoute(nextRoute);
           setSidebarOpen(false);
         }}
-        onLogout={async () => {
-          try {
-            await api.logout();
-          } finally {
-            clearTokens();
-            setSession(null);
-            setRoute("dashboard"); // next login starts fresh, not on the page you left
-          }
+        onLogout={() => {
+          api.logout(); // CR-18: clears the tokens first; the server call is best-effort
+          setSession(null);
+          setRoute("dashboard"); // next login starts fresh, not on the page you left
         }}
       />
       <main className="main-panel">

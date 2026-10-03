@@ -32,6 +32,39 @@ export function clearTokens() {
   window.localStorage.removeItem(REFRESH_KEY);
 }
 
+// CR-18: another tab signed out, signed in, or refreshed. A refresh that this
+// tab had in flight must not write over that (it carries the old session).
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === null || event.key === TOKEN_KEY || event.key === REFRESH_KEY) sessionGeneration += 1;
+  });
+}
+
+/** localStorage key names, for the App's cross-tab listener. */
+export const TOKEN_STORAGE_KEYS = [TOKEN_KEY, REFRESH_KEY];
+
+// CR-18: how long the best-effort server sign-out may take before it is dropped.
+const SIGN_OUT_TIMEOUT_MS = 3000;
+
+/**
+ * Signs out: the local tokens go first (so a stalled connection cannot keep the
+ * admin signed in), then the server is told on a best-effort basis with the
+ * tokens read before they were cleared, giving up after a few seconds.
+ */
+function signOut() {
+  const accessToken = getAccessToken();
+  const refreshToken = window.localStorage.getItem(REFRESH_KEY);
+  clearTokens();
+  if (USE_MOCKS || !(accessToken || refreshToken)) return Promise.resolve();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SIGN_OUT_TIMEOUT_MS);
+  const headers = { "Content-Type": "application/json" };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return fetch(`${API_BASE_URL}/auth/logout`, {
+    method: "POST", headers, signal: controller.signal, body: JSON.stringify({ refreshToken })
+  }).catch(() => {}).finally(() => clearTimeout(timer));
+}
+
 // A 401 from any endpoint but these two means "this access token is no good
 // anymore" (expired is the common case — access tokens last 24h) rather than
 // "this account can't do that" — worth a silent refresh-and-retry before
@@ -136,10 +169,7 @@ export const api = {
     })
   }),
   me: () => request("/auth/me"),
-  logout: () => request("/auth/logout", {
-    method: "POST",
-    body: JSON.stringify({ refreshToken: window.localStorage.getItem(REFRESH_KEY) })
-  }),
+  logout: signOut,
   verifyMfa: (mfaToken, code) => request("/auth/2fa/verify", {
     method: "POST",
     body: JSON.stringify({ mfaToken, code })
