@@ -85,7 +85,7 @@ once and keep a copy somewhere safe that is NOT the server: without the key the
 backups cannot be restored.
 
 ```bash
-cd deploy && openssl rand -base64 48 > secrets/backup.key && chmod 600 secrets/backup.key
+cd deploy && (umask 077; openssl rand -base64 48 > secrets/backup.key)
 echo 'BACKUP_KEY_FILE=./secrets/backup.key' >> .env
 dc up -d backup
 ```
@@ -104,8 +104,11 @@ NOT fall back to plain files: it logs `BACKUP FAILED: cannot encrypt ...`, keeps
 last-success time, and **BackupStale** fires after 26 hours. A blank key file counts as
 no key (**BackupNotEncrypted**). `./restore.sh` decrypts and checks the dump and the
 uploads tarball into a temporary directory first (needs openssl on the server and room
-for both files); a wrong key or a corrupt file stops it before the app is stopped, the
-database is dropped or `/uploads` is emptied.
+for both files; the directory and the plaintext files in it are private to the user that
+runs the script, and are removed when it ends). It is created under `/tmp`; for a large
+backup, or when `/tmp` is not on the encrypted disk, point it at the restore volume with
+`TMPDIR=/path/on/that/volume ./restore.sh ...`. A wrong key or a corrupt file stops it
+before the app is stopped, the database is dropped or `/uploads` is emptied.
 
 ## Backups off the server
 

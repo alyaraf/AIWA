@@ -6,7 +6,14 @@
 #
 # CR-20: files ending in .enc were encrypted by backup.sh; they need the key file
 # (BACKUP_KEY_FILE, default secrets/backup.key) and openssl on this machine.
+#
+# CR-20: the decrypted dump and uploads tarball are written as plaintext to a temporary
+# directory (mode 700, files 600: umask 077 below) and removed on exit. They need room for
+# both files: set TMPDIR to a directory on the restore volume (e.g. TMPDIR=/srv/aiwa-restore)
+# when /tmp is small or is not on the encrypted disk. Delete it if the script is ever killed
+# with SIGKILL (the exit trap cannot run then).
 set -euo pipefail
+umask 077 # everything created below (temp dir, plaintext dump and tarball) is private to this user
 cd "$(dirname "$0")"
 
 dump="${1:?usage: ./restore.sh <db dump> [uploads tarball]}"
