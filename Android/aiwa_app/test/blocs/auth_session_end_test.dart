@@ -47,9 +47,14 @@ class _Push implements PushRegistrar {
   _Push(this.calls);
   final List<String> calls;
 
+  /// Answers only after this long when set (a slow FCM token / network).
+  Duration? delay;
+
   @override
-  Future<void> unregister({String? accessToken}) async =>
-      calls.add('unregister');
+  Future<void> unregister({String? accessToken}) async {
+    calls.add('unregister');
+    if (delay != null) await Future<void>.delayed(delay!);
+  }
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
@@ -59,6 +64,7 @@ void main() {
   late SecureStorage storage;
   late List<String> calls;
   late _Api api;
+  late _Push push;
   late AuthBloc bloc;
 
   setUp(() {
@@ -69,6 +75,7 @@ void main() {
     storage = SecureStorage(const FlutterSecureStorage());
     calls = [];
     api = _Api(calls);
+    push = _Push(calls);
     final repo = AuthRepositoryImpl(_Remote(), storage);
     bloc = AuthBloc(
       loginUseCase: LoginUseCase(repo),
@@ -79,7 +86,7 @@ void main() {
       updateProfileUseCase: UpdateProfileUseCase(repo),
       secureStorage: storage,
       apiClient: api,
-      pushRegistrar: _Push(calls),
+      pushRegistrar: push,
     );
   });
 
@@ -107,6 +114,25 @@ void main() {
     expect(calls, contains('logout'));
     expect(await storage.getAccessToken(), isNull);
     expect(await storage.getRefreshToken(), isNull);
+  });
+
+  test('Remember me off: an unregister that overruns the cap still revokes '
+      'the refresh token, and clearing is not blocked', () async {
+    await storage.setRemember(false);
+    push.delay = AuthBloc.serverSignOutTimeout + const Duration(seconds: 1);
+    api.hang = true;
+    bloc.add(AuthCheckSessionEvent());
+    await signedOut().timeout(
+      AuthBloc.serverSignOutTimeout * 2 + const Duration(seconds: 1),
+    );
+    expect(await storage.getAccessToken(), isNull);
+    expect(await storage.getRefreshToken(), isNull);
+    // The revoke may only start once unregister answers; give it that long.
+    for (var i = 0; i < 40 && !calls.contains('logout'); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    expect(calls, ['unregister', 'logout']);
+    expect(api.sentRefreshToken, 'r');
   });
 
   test('sign-out clears the tokens first; a stalled network never keeps the '

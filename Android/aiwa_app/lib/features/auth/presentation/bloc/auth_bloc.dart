@@ -72,18 +72,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// on the phone anyway (CR-18).
   static const serverSignOutTimeout = Duration(seconds: 3);
 
-  /// Best effort, bounded by [serverSignOutTimeout], never throws: removes
-  /// this phone's push address, then revokes the tokens. Without tokens given
-  /// it uses the stored ones (a 401 may then refresh them first).
+  /// Best effort, never throws: removes this phone's push address, then
+  /// revokes the tokens, each step bounded by [serverSignOutTimeout] on its
+  /// own so a slow unregister cannot drop the revoke. [refreshToken] /
+  /// [accessToken] are the ones read before anything could clear them; the
+  /// revoke prefers what is still stored, as a 401 during unregister may have
+  /// rotated them (the backend revokes the old refresh token on rotation).
   Future<void> _endOnServer({String? accessToken, String? refreshToken}) async {
     try {
-      await () async {
-        await pushRegistrar?.unregister(accessToken: accessToken);
-        await apiClient?.logout(
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-        );
-      }().timeout(serverSignOutTimeout);
+      await pushRegistrar
+          ?.unregister(accessToken: accessToken)
+          .timeout(serverSignOutTimeout);
+    } catch (_) {}
+    try {
+      await apiClient
+          ?.logout(
+            accessToken: await secureStorage.getAccessToken() ?? accessToken,
+            refreshToken: await secureStorage.getRefreshToken() ?? refreshToken,
+          )
+          .timeout(serverSignOutTimeout);
     } catch (_) {}
   }
 
@@ -107,7 +114,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (!await secureStorage.getRemember()) {
       // End it on the server too, or a shared phone keeps getting the last
       // user's notifications and their refresh token stays valid (CR-18).
-      await _endOnServer();
+      // The refresh token is read now, before anything can clear it; the
+      // access token is left to unregister, which may refresh it on a 401.
+      final refreshToken = await secureStorage.getRefreshToken();
+      await _endOnServer(refreshToken: refreshToken);
       await secureStorage.clearAll();
       emit(AuthUnauthenticated());
       return;
