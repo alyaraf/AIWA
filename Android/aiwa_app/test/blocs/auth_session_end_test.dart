@@ -147,4 +147,21 @@ void main() {
     expect(calls, ['unregister', 'logout']);
     expect(api.sentRefreshToken, 'r');
   });
+
+  test('sign-out with a slow unregister revokes the tokens it read, never '
+      "the next user's", () async {
+    push.delay = const Duration(milliseconds: 300);
+    bloc.add(AuthLogoutEvent());
+    await signedOut();
+    // A different user signs in while unregister is still pending.
+    await storage.saveAccessToken('a2');
+    await storage.saveRefreshToken('r2');
+    for (var i = 0; i < 40 && !calls.contains('logout'); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    expect(calls, ['unregister', 'logout']);
+    expect(api.sentRefreshToken, 'r');
+    expect(await storage.getAccessToken(), 'a2');
+    expect(await storage.getRefreshToken(), 'r2');
+  });
 }
