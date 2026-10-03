@@ -32,11 +32,22 @@ export function clearTokens() {
   window.localStorage.removeItem(REFRESH_KEY);
 }
 
-// CR-18: another tab signed out, signed in, or refreshed. A refresh that this
-// tab had in flight must not write over that (it carries the old session).
+// CR-18: another tab ended the session this tab holds (signed out, or signed in
+// as someone else): a refresh this tab had in flight carries the old session and
+// must not write over that. A mere refresh by the other tab (same user, new
+// tokens) is not that: this tab adopts the tokens from storage and carries on.
+function subjectOf(jwt) {
+  try { return JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub ?? null; } catch { return null; }
+}
+
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
-    if (event.key === null || event.key === TOKEN_KEY || event.key === REFRESH_KEY) sessionGeneration += 1;
+    if (event.key !== null && event.key !== TOKEN_KEY && event.key !== REFRESH_KEY) return;
+    const removed = event.key === null || event.newValue === null;
+    // ponytail: opaque (non-JWT) tokens give no subject, so only a removal ends the session then.
+    const userChanged = event.key === TOKEN_KEY && !removed
+      && subjectOf(event.oldValue ?? "") !== null && subjectOf(event.oldValue) !== subjectOf(event.newValue);
+    if (removed || userChanged) sessionGeneration += 1;
   });
 }
 
@@ -83,6 +94,10 @@ function refreshAccessToken() {
   const storedRefreshToken = window.localStorage.getItem(REFRESH_KEY);
   if (!storedRefreshToken) return Promise.resolve(false);
   const generation = sessionGeneration;
+  // Another tab refreshed first (it rotated the refresh token, so ours is
+  // rejected): its tokens in storage are the answer, not a sign-out.
+  const adoptedFromOtherTab = () => generation === sessionGeneration
+    && window.localStorage.getItem(REFRESH_KEY) !== storedRefreshToken && !!getAccessToken();
 
   refreshInFlight = fetch(`${API_BASE_URL}/auth/refresh`, {
     method: "POST",
@@ -92,15 +107,15 @@ function refreshAccessToken() {
     .then(async (response) => {
       const text = await response.text();
       const data = text ? JSON.parse(text) : null;
-      if (!response.ok) return false;
+      if (!response.ok) return adoptedFromOtherTab();
       const tokens = unwrap(data);
-      if (!tokens?.accessToken) return false;
+      if (!tokens?.accessToken) return adoptedFromOtherTab();
       // Signed out (or in as someone else) while this was in flight: drop it.
       if (generation !== sessionGeneration) return false;
       writeTokens(tokens);
       return true;
     })
-    .catch(() => false)
+    .catch(adoptedFromOtherTab)
     .finally(() => { refreshInFlight = null; });
 
   return refreshInFlight;
@@ -130,7 +145,9 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
   if (!response.ok) {
     if (response.status === 401 && !isRetryAfterRefresh && !NO_REFRESH_RETRY_PATHS.has(path)
         && generation === sessionGeneration) {
-      const refreshed = await refreshAccessToken();
+      // Another tab already refreshed: the stored token is newer than the one sent.
+      const stored = getAccessToken();
+      const refreshed = (stored && stored !== token) || await refreshAccessToken();
       if (refreshed && generation === sessionGeneration) return request(path, options, true);
     }
     const message = data?.message || data?.error || `Request failed with status ${response.status}`;
