@@ -573,13 +573,21 @@ export function LoginScreen({ onLogin }) {
 /** Per-screen counts of what still needs handling, from the admin inbox
  *  (GET /admin/inbox groups items by targetRoute). The inbox caps each source
  *  at 20, so a full source shows "20+". */
-function useNavBadges() {
+// CR-19: screens that must follow a badge (the SOS queue) subscribe here; the
+// badge poll tells them when that screen's count changed.
+const badgeChangeListeners = new Set();
+
+export function useNavBadges() {
   const [badges, setBadges] = useState({});
   useEffect(() => {
+    let lastSafety = null;
     const load = () => api.inbox(100)
       .then((rows) => {
         const counts = {};
         for (const row of rows || []) counts[row.targetRoute] = (counts[row.targetRoute] || 0) + 1;
+        const safety = counts.safety || 0;
+        if (lastSafety !== null && lastSafety !== safety) badgeChangeListeners.forEach((fn) => { try { fn("safety"); } catch {} });
+        lastSafety = safety;
         setBadges(Object.fromEntries(Object.entries(counts).map(([k, n]) => [k, n >= 20 ? "20+" : n])));
       })
       .catch(() => { /* badges are a hint; the screens show the real lists */ });
@@ -3552,8 +3560,24 @@ export function Safety() {
   return <SafetyQueue key={status} status={status} setStatus={setStatus} />;
 }
 
+// CR-19: how often the open SOS list reloads by itself.
+const SAFETY_REFRESH_MS = 15_000;
+
 function SafetyQueue({ status, setStatus }) {
   const { data, setData, error, loading, reload } = useLoad(() => api.safetyQueue(status), mock.safety);
+  // While the Open filter is shown, reload quietly (no skeleton, typed notes
+  // stay) every 15 s and whenever the sidebar badge count changes.
+  useEffect(() => {
+    if (status !== "OPEN") return undefined;
+    let alive = true;
+    const refresh = () => api.safetyQueue("OPEN")
+      .then((rows) => { if (alive && rows) setData(rows); })
+      .catch((err) => { if (alive && err?.status === 401) onAuthExpired(); });
+    const timer = setInterval(refresh, SAFETY_REFRESH_MS);
+    const onBadge = (route) => { if (route === "safety") refresh(); };
+    badgeChangeListeners.add(onBadge);
+    return () => { alive = false; clearInterval(timer); badgeChangeListeners.delete(onBadge); };
+  }, [status, setData]);
   const [notes, setNotes] = useState({});
   const [busyId, setBusyId] = useState(null);
 
