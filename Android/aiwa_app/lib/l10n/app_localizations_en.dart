@@ -2673,6 +2673,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editEmailConfirmed => 'Email confirmed.';
 
   @override
+  String get editEmailResend => 'Send the code again';
+
+  @override
   String editEmailPending(String email) {
     return 'Waiting for you to confirm $email.';
   }

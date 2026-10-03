@@ -1475,6 +1475,7 @@
   "editCurrentPassword": "Current password",
   "editEmailCodeTitle": "Confirm your new email",
   "editEmailConfirmed": "Email confirmed.",
+  "editEmailResend": "Send the code again",
   "editEmailPending": "Waiting for you to confirm {email}.",
   "@editEmailPending": {
     "placeholders": {

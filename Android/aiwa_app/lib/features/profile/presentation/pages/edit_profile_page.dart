@@ -45,6 +45,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
   /// The number once its change went through (the page keeps the old user).
   String? _savedPhone;
 
+  /// The address once its code was confirmed (the page keeps the old user).
+  String? _savedEmail;
+
   /// An email still waiting for its code (CR-05).
   late String? _pendingEmail = _user?.pendingEmail;
 
@@ -128,7 +131,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     // A different address needs the current password and a code sent to it.
     final emailChanged =
         email.isNotEmpty &&
-        email.toLowerCase() != (_user?.email ?? '').toLowerCase();
+        email.toLowerCase() !=
+            (_savedEmail ?? _user?.email ?? '').toLowerCase();
     final Failure? failure;
     if (emailChanged) {
       failure = await _changeEmail(email);
@@ -179,7 +183,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
       onSubmit: (_, code) async =>
           (await _repo.verifyEmail(code: code)).fold((f) => f, (_) => null),
     );
-    if (ok) _pendingEmail = null;
+    if (ok) {
+      // The confirmed address is now the unchanged value: a later Save of other
+      // fields sends no email change and asks for no password.
+      _pendingEmail = null;
+      _savedEmail = email;
+      _email.text = email;
+    }
     return ok;
   }
 
@@ -188,6 +198,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (!ok || !mounted) return;
     context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
     showAiwaToast(context, AppLocalizations.of(context).editEmailConfirmed);
+    setState(() {});
+  }
+
+  /// Asks for a new code: the backend resends on PATCH /auth/me with the
+  /// pending address and the current password.
+  Future<void> _resendEmailCode() async {
+    await _changeEmail(_pendingEmail!);
+    if (!mounted) return;
+    if (_pendingEmail == null) {
+      context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
+      showAiwaToast(context, AppLocalizations.of(context).editEmailConfirmed);
+    }
     setState(() {});
   }
 
@@ -280,7 +302,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     action: l.authEnterCode,
                     onAction: _confirmPendingEmail,
                   ),
-                  const SizedBox(height: 14),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton(
+                      onPressed: _resendEmailCode,
+                      child: Text(l.editEmailResend),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                 ],
                 ValidatedField(
                   error: _nameErr,

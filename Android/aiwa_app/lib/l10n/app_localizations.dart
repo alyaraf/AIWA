@@ -4688,6 +4688,12 @@ abstract class AppLocalizations {
   /// **'Email confirmed.'**
   String get editEmailConfirmed;
 
+  /// No description provided for @editEmailResend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the code again'**
+  String get editEmailResend;
+
   /// No description provided for @editEmailPending.
   ///
   /// In en, this message translates to:

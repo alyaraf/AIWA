@@ -764,6 +764,7 @@
   "editCurrentPassword": "كلمة المرور الحالية",
   "editEmailCodeTitle": "تأكيد بريدك الإلكتروني الجديد",
   "editEmailConfirmed": "تم تأكيد البريد الإلكتروني.",
+  "editEmailResend": "أرسل الرمز مرة أخرى",
   "editEmailPending": "بانتظار تأكيدك لـ {email}.",
   "editProfileUpdated": "تم تحديث الملف الشخصي.",
   "editAccount": "الحساب",
