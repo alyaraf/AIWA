@@ -2,6 +2,7 @@ package com.aiwa.controller;
 
 import com.aiwa.dto.request.BookingRequest;
 import com.aiwa.dto.request.RescheduleRequest;
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.enums.BookingStatus;
@@ -118,19 +119,23 @@ public class BookingController {
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> cancel(
             @PathVariable Long id,
             @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of("Booking cancelled",
-                bookingService.updateStatus(resolveUserId(userDetails), id, BookingStatus.CANCELLED, reason)));
+                bookingService.updateStatus(resolveUserId(userDetails), id, BookingStatus.CANCELLED,
+                        FreeTextBody.pick(body, "reason", reason))));
     }
 
     @PatchMapping("/{id}/reject")
     @Operation(summary = "Provider rejects booking with reason + returns alternative providers")
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingWithAlternativesDto>> reject(
             @PathVariable Long id,
-            @RequestParam String reason,
+            @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of("Booking rejected",
-                bookingService.rejectWithAlternatives(resolveUserId(userDetails), id, reason)));
+                bookingService.rejectWithAlternatives(resolveUserId(userDetails), id,
+                        FreeTextBody.require(body, "reason", reason))));
     }
 
     @PatchMapping("/{id}/on-the-way")
@@ -167,9 +172,11 @@ public class BookingController {
             @PathVariable Long id,
             @RequestParam(defaultValue = "true") boolean cashCollected,
             @RequestParam(required = false) String note,
+            @RequestBody(required = false) FreeTextBody body,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of("Booking completed",
-                bookingService.complete(resolveUserId(userDetails), id, cashCollected, note)));
+                bookingService.complete(resolveUserId(userDetails), id, cashCollected,
+                        FreeTextBody.pick(body, "note", note))));
     }
 
     @PatchMapping("/{id}/no-show")

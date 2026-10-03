@@ -71,9 +71,41 @@ Test a restore on a copy every month. A backup you've never restored is a guess.
 
 A failed backup says `BACKUP FAILED: <reason>` in `dc logs backup`, leaves no
 file behind and doesn't touch `backups/last-success`; the backup container turns
-*unhealthy* when the last good backup is more than 26 hours old (`dc ps`). Set
-`BACKUP_HEARTBEAT_URL` to a healthchecks.io / Better Stack heartbeat so a missed
-night alerts someone even when nobody looks at the server.
+*unhealthy* when the last good backup is more than 26 hours old (`dc ps`). No
+setting is needed for an alert: the backup container serves the time of the last
+good backup to Prometheus, and **BackupStale** (older than 26 hours) or
+**BackupMetricsMissing** (no status for an hour) reaches the team through
+Alertmanager. `BACKUP_HEARTBEAT_URL` (healthchecks.io / Better Stack) is an optional
+second signal that also works if the whole server is down.
+
+### Encrypt the backups
+
+Dumps and uploads (ID documents) are encrypted when a key file exists. Create it
+once and keep a copy somewhere safe that is NOT the server: without the key the
+backups cannot be restored.
+
+```bash
+cd deploy && openssl rand -base64 48 > secrets/backup.key && chmod 600 secrets/backup.key
+echo 'BACKUP_KEY_FILE=./secrets/backup.key' >> .env
+dc up -d backup
+```
+
+New files are then `aiwa-*.dump.enc` and `uploads-*.tar.gz.enc` (AES-256, openssl);
+`./restore.sh` handles both forms and reads the key from `BACKUP_KEY_FILE` (default
+`secrets/backup.key`). Older plain files stay until `BACKUP_KEEP_DAYS` removes them.
+Without a key the backup still runs, logs `WARNING ... NOT encrypted`, and the
+**BackupNotEncrypted** alert fires after an hour.
+
+The postgres alpine image used by the backup container is not known to ship the
+`openssl` command line tool, so `backup.sh` runs `apk add openssl` the first time it
+needs it (network access to the Alpine mirror; the install is lost when the container
+is recreated). If a key is mounted and openssl cannot be installed, the backup does
+NOT fall back to plain files: it logs `BACKUP FAILED: cannot encrypt ...`, keeps the old
+last-success time, and **BackupStale** fires after 26 hours. A blank key file counts as
+no key (**BackupNotEncrypted**). `./restore.sh` decrypts and checks the dump and the
+uploads tarball into a temporary directory first (needs openssl on the server and room
+for both files); a wrong key or a corrupt file stops it before the app is stopped, the
+database is dropped or `/uploads` is emptied.
 
 ## Backups off the server
 
@@ -85,7 +117,7 @@ S3-compatible bucket (Backblaze B2, Cloudflare R2, Hetzner Storage Box):
 30 3 * * * rclone sync /srv/aiwa/deploy/backups remote:aiwa-backups --max-age 15d
 ```
 
-The uploads tarballs contain ID documents: use a private bucket with encryption.
+The uploads tarballs contain ID documents: encrypt the backups (above) and use a private bucket.
 
 ## Backend down / 5xx alerts
 

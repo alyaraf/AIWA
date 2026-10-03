@@ -1,5 +1,6 @@
 package com.aiwa.controller;
 
+import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.GalleryImage;
 import com.aiwa.entity.ModerationCase;
@@ -122,7 +123,9 @@ public class GalleryController {
     public ResponseEntity<ApiResponse.Success<Void>> report(
             @PathVariable Long providerId,
             @PathVariable Long imageId,
-            @RequestParam(required = false) String reason) {
+            @RequestParam(required = false) String reason,
+            @RequestBody(required = false) FreeTextBody body) {
+        reason = FreeTextBody.pick(body, "reason", reason);
         galleryRepo.findByIdAndProviderId(imageId, providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Gallery image", imageId));
         // One open case per photo is enough for the queue.

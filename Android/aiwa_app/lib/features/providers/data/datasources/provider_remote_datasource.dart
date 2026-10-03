@@ -115,11 +115,12 @@ class ProviderRemoteDataSourceImpl implements ProviderRemoteDataSource {
   ) async {
     await _api.post(
       ApiConstants.providerGalleryReport(providerId, imageId),
-      queryParameters: {'reason': reason},
+      data: {'reason': reason},
     );
   }
 
-  /// POST /complaints takes query params, not a body (ComplaintController).
+  /// POST /complaints: ids and category are request params, the note (free
+  /// text) goes in the body (CR-21).
   @override
   Future<void> flagProvider(
     String providerId,
@@ -128,11 +129,8 @@ class ProviderRemoteDataSourceImpl implements ProviderRemoteDataSource {
   ) async {
     await _api.post(
       ApiConstants.complaints,
-      queryParameters: {
-        'targetProviderId': providerId,
-        'category': reason,
-        'description': note.trim().isEmpty ? reason : note.trim(),
-      },
+      queryParameters: {'targetProviderId': providerId, 'category': reason},
+      data: {'description': note.trim().isEmpty ? reason : note.trim()},
     );
   }
 }

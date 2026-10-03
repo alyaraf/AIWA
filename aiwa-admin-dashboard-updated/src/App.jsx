@@ -48,7 +48,7 @@ import {
   X,
   XCircle
 } from "lucide-react";
-import { api, clearTokens, getAccessToken, mock, setTokens, USE_MOCKS } from "./api";
+import { api, clearTokens, getAccessToken, mock, setTokens, TOKEN_STORAGE_KEYS, USE_MOCKS } from "./api";
 
 /* String → component map for icons that arrive as strings from the API/mock. */
 const iconMap = {
@@ -353,8 +353,14 @@ export function InlineBanner({ tone = "info", title, body }) {
   );
 }
 
+// CR-22: until /auth/me answers, the signed-in admin is nobody (no permissions)
+// rather than the mock super admin.
+const LOADING_SESSION = { user: { permissions: [] }, loading: true };
+
 export default function App() {
-  const [session, setSession] = useState(() => (getAccessToken() || USE_MOCKS ? { user: mock.user } : null));
+  const [session, setSession] = useState(() => (USE_MOCKS ? { user: mock.user } : getAccessToken() ? LOADING_SESSION : null));
+  const [profileError, setProfileError] = useState(false);
+  const [profileTry, setProfileTry] = useState(0);
   const [route, setRoute] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -379,23 +385,42 @@ export default function App() {
     return () => { onAuthExpired = () => {}; };
   }, []);
 
-  // On reload the session starts as a placeholder; hydrate the real signed-in
-  // user (correct id + permissions) from the token. A failure means the token
-  // is no longer good — drop to login.
+  // On reload the session starts empty and loading; hydrate the real signed-in
+  // user (correct id + permissions) from the token. Only a 401 means the token
+  // is no longer good (drop to login); a 5xx or a network blip keeps the
+  // session and shows a retry (CR-22).
   useEffect(() => {
     if (USE_MOCKS || !getAccessToken()) return;
     let alive = true;
+    setProfileError(false);
     api.me()
-      .then((me) => { if (alive && me?.id != null) setSession({ user: me }); })
-      .catch(() => { if (alive) { clearTokens(); setSession(null); setRoute("dashboard"); } });
+      .then((me) => {
+        if (!alive) return;
+        if (me?.id != null) setSession({ user: me }); else setProfileError(true);
+      })
+      .catch((err) => {
+        if (!alive) return;
+        if (err?.status === 401) { clearTokens(); setSession(null); setRoute("dashboard"); } else setProfileError(true);
+      });
     return () => { alive = false; };
+  }, [profileTry]);
+
+  // CR-18: another tab signed out (this tab follows) or signed in / refreshed
+  // (this tab re-reads who is signed in). Storage events only reach other tabs.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (USE_MOCKS || !(event.key === null || TOKEN_STORAGE_KEYS.includes(event.key))) return;
+      if (!getAccessToken()) { setSession(null); setRoute("dashboard"); } else setProfileTry((n) => n + 1);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   // Publish the signed-in admin's permissions for the module-level `can()` helper.
-  useEffect(() => {
-    currentPermissions = Array.isArray(session?.user?.permissions) ? session.user.permissions : [];
-    return () => { currentPermissions = []; };
-  }, [session]);
+  // Set while rendering, not in an effect: the screens below read it during this
+  // same render, so permissions that arrive with /auth/me show up at once (CR-22).
+  currentPermissions = Array.isArray(session?.user?.permissions) ? session.user.permissions : [];
+  useEffect(() => () => { currentPermissions = []; }, []);
 
   if (!session) {
     return (
@@ -418,19 +443,22 @@ export default function App() {
           setRoute(nextRoute);
           setSidebarOpen(false);
         }}
-        onLogout={async () => {
-          try {
-            await api.logout();
-          } finally {
-            clearTokens();
-            setSession(null);
-            setRoute("dashboard"); // next login starts fresh, not on the page you left
-          }
+        onLogout={() => {
+          api.logout(); // CR-18: clears the tokens first; the server call is best-effort
+          setSession(null);
+          setRoute("dashboard"); // next login starts fresh, not on the page you left
         }}
       />
       <main className="main-panel">
         <MobileBar onMenu={() => setSidebarOpen(true)} />
         <TopBar />
+        {profileError && session.loading && (
+          <div className="inline-banner danger" role="alert">
+            <strong>Could not load your profile</strong>
+            <span>Actions stay hidden until it loads. Check your connection and try again.</span>
+            <button className="btn btn-secondary sm" onClick={() => setProfileTry((n) => n + 1)}>Retry</button>
+          </div>
+        )}
         {route === "dashboard" && <Dashboard onRoute={setRoute} />}
         {route === "safety" && <Safety />}
         {route === "verifications" && <Verifications />}
@@ -479,7 +507,7 @@ export function LoginScreen({ onLogin }) {
         setMfaToken(result.mfaToken);
       } else {
         setTokens(result);
-        onLogin({ user: result.user || mock.user });
+        onLogin({ user: result.user || LOADING_SESSION.user });
       }
     } catch (err) {
       setError(err.message);
@@ -495,7 +523,7 @@ export function LoginScreen({ onLogin }) {
     try {
       const result = await api.verifyMfa(mfaToken, code);
       setTokens(result);
-      onLogin({ user: result.user || mock.user });
+      onLogin({ user: result.user || LOADING_SESSION.user });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -573,13 +601,21 @@ export function LoginScreen({ onLogin }) {
 /** Per-screen counts of what still needs handling, from the admin inbox
  *  (GET /admin/inbox groups items by targetRoute). The inbox caps each source
  *  at 20, so a full source shows "20+". */
-function useNavBadges() {
+// CR-19: screens that must follow a badge (the SOS queue) subscribe here; the
+// badge poll tells them when that screen's count changed.
+const badgeChangeListeners = new Set();
+
+export function useNavBadges() {
   const [badges, setBadges] = useState({});
   useEffect(() => {
+    let lastSafety = null;
     const load = () => api.inbox(100)
       .then((rows) => {
         const counts = {};
         for (const row of rows || []) counts[row.targetRoute] = (counts[row.targetRoute] || 0) + 1;
+        const safety = counts.safety || 0;
+        if (lastSafety !== null && lastSafety !== safety) badgeChangeListeners.forEach((fn) => { try { fn("safety"); } catch {} });
+        lastSafety = safety;
         setBadges(Object.fromEntries(Object.entries(counts).map(([k, n]) => [k, n >= 20 ? "20+" : n])));
       })
       .catch(() => { /* badges are a hint; the screens show the real lists */ });
@@ -621,7 +657,7 @@ function Sidebar({ route, user, open, onClose, onRoute, onLogout, onProfile }) {
         >
           <Avatar name={user?.fullName || "Admin"} palette="rose" size={32} />
           <div>
-            <strong>Admin · {user?.fullName || "S. Mahmoud"}</strong>
+            <strong>Admin · {user?.fullName || "…"}</strong>
             <span>{user?.location || user?.email || "Signed in"}</span>
           </div>
           <ChevronRight className="admin-card-chevron" size={15} />
@@ -3552,8 +3588,24 @@ export function Safety() {
   return <SafetyQueue key={status} status={status} setStatus={setStatus} />;
 }
 
+// CR-19: how often the open SOS list reloads by itself.
+const SAFETY_REFRESH_MS = 15_000;
+
 function SafetyQueue({ status, setStatus }) {
   const { data, setData, error, loading, reload } = useLoad(() => api.safetyQueue(status), mock.safety);
+  // While the Open filter is shown, reload quietly (no skeleton, typed notes
+  // stay) every 15 s and whenever the sidebar badge count changes.
+  useEffect(() => {
+    if (status !== "OPEN") return undefined;
+    let alive = true;
+    const refresh = () => api.safetyQueue("OPEN")
+      .then((rows) => { if (alive && rows) setData(rows); })
+      .catch((err) => { if (alive && err?.status === 401) onAuthExpired(); });
+    const timer = setInterval(refresh, SAFETY_REFRESH_MS);
+    const onBadge = (route) => { if (route === "safety") refresh(); };
+    badgeChangeListeners.add(onBadge);
+    return () => { alive = false; clearInterval(timer); badgeChangeListeners.delete(onBadge); };
+  }, [status, setData]);
   const [notes, setNotes] = useState({});
   const [busyId, setBusyId] = useState(null);
 
@@ -4178,15 +4230,26 @@ function CommissionRateCard({ onSaved }) {
       setValue(String(percent ?? ""));
       return;
     }
-    setSaving(true);
-    try {
-      const r = await api.setCommission(num);
-      const next = r?.commissionPercent ?? num;
-      setPercent(next); setValue(String(next)); setEditing(false);
-      toast("Commission rate updated", "ok");
-      onSaved && onSaved();
-    } catch (err) { toast(err.message || "Could not save", "error"); }
-    finally { setSaving(false); }
+    // CR-22: the platform-wide rate changes what every provider owes, so it asks first.
+    setConfirm({
+      title: `Change the commission rate to ${num}%?`,
+      body: `The platform rate is ${percent != null ? `${percent}%` : "not set"} now. Providers without their own rate are charged the new one on completed cash bookings.`,
+      confirmLabel: "Change rate",
+      tone: "plum",
+      onConfirm: apply
+    });
+
+    async function apply() {
+      setSaving(true);
+      try {
+        const r = await api.setCommission(num);
+        const next = r?.commissionPercent ?? num;
+        setPercent(next); setValue(String(next)); setEditing(false);
+        toast("Commission rate updated", "ok");
+        onSaved && onSaved();
+      } catch (err) { toast(err.message || "Could not save", "error"); }
+      finally { setSaving(false); }
+    }
   }
 
   return (
