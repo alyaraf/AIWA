@@ -38,4 +38,10 @@ public class SosDelivery extends BaseEntity {
 
     @Column(length = 255)
     private String lastError;
+
+    /**
+     * CR-08: when the retry sweep may send this text (again); null = now. While
+     * a text is being sent it is a short lease, so the sweep leaves it alone.
+     */
+    private java.time.LocalDateTime nextAttemptAt;
 }

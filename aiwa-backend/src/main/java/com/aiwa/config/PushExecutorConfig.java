@@ -7,7 +7,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
-/** Small pool for device-push delivery so FCM latency never blocks a request. */
+/** Small pools for device-push delivery and SOS texts, so gateway latency never blocks a request. */
 @Configuration
 public class PushExecutorConfig {
 
@@ -22,6 +22,25 @@ public class PushExecutorConfig {
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(10);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * CR-08: SOS texts get their own threads, so they never wait behind ordinary
+     * pushes. A text still unsent at shutdown stays PENDING in sos_deliveries and
+     * is sent by the retry sweep after the restart.
+     */
+    @Bean(name = "sosExecutor")
+    public Executor sosExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("sos-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(20);
         executor.initialize();
         return executor;
     }

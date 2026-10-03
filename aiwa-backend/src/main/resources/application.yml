@@ -145,6 +145,15 @@ aiwa:
   safety:
     # Comma-separated on-call support numbers texted on every SOS.
     oncall-phones: ${SAFETY_ONCALL_PHONES:}
+    # CR-08: an SOS text that was not delivered is re-sent until the SOS is closed.
+    sos-retry:
+      # How often undelivered texts are looked for.
+      sweep-interval-ms: ${SOS_RETRY_SWEEP_INTERVAL_MS:30000}
+      # A text being sent right now is left alone by the sweep for this long.
+      in-flight-grace: ${SOS_RETRY_IN_FLIGHT_GRACE:2m}
+      # Wait after a failed round of 3 tries; doubles each round up to backoff-max.
+      backoff: ${SOS_RETRY_BACKOFF:1m}
+      backoff-max: ${SOS_RETRY_BACKOFF_MAX:15m}
   sms:
     provider: ${SMS_PROVIDER:dev-log}
     api-url: ${SMS_API_URL:}
