@@ -95,6 +95,25 @@ public class AuthRequest {
         @NotBlank(message = "Code is required")
         @Pattern(regexp = "^[0-9]{6}$", message = "The code is 6 digits")
         private String code;
+
+        /** CR-05: a session alone cannot move the account to another number. */
+        @Size(max = 128)
+        private String currentPassword;
+    }
+
+    /** CR-05: the current password, for DELETE /account. Checked in the service so a missing one gets the translated message. */
+    @Data
+    public static class CurrentPassword {
+        @Size(max = 128)
+        private String currentPassword;
+    }
+
+    /** CR-05: confirms the email waiting in pendingEmail with the code sent to it. */
+    @Data
+    public static class VerifyEmail {
+        @NotBlank(message = "Code is required")
+        @Pattern(regexp = "^[0-9]{6}$", message = "The code is 6 digits")
+        private String code;
     }
 
     /** Step 2 of the login flow when the account has 2FA enabled. */
