@@ -37,6 +37,9 @@ abstract class BookingRemoteDataSource {
 
   Future<BookingModel> checkIn(String bookingId);
 
+  /// AU-03: the customer says a no-show was wrong; opens a payment dispute.
+  Future<BookingModel> contestNoShow(String bookingId);
+
   Future<BookingModel> confirmPayment(String bookingId, bool paid);
 
   Future<void> sendSos(
@@ -191,6 +194,11 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
   @override
   Future<BookingModel> checkIn(String bookingId) async =>
       _booking(await _api.patch(ApiConstants.bookingCheckIn(bookingId)));
+
+  @override
+  Future<BookingModel> contestNoShow(String bookingId) async => _booking(
+    await _api.patch(ApiConstants.bookingContestNoShow(bookingId)),
+  );
 
   @override
   Future<BookingModel> confirmPayment(String bookingId, bool paid) async =>

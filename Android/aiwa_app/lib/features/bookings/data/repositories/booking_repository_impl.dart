@@ -101,6 +101,10 @@ class BookingRepositoryImpl implements BookingRepository {
       _guard(() => _remote.checkIn(bookingId));
 
   @override
+  Future<Either<Failure, BookingEntity>> contestNoShow(String bookingId) =>
+      _guard(() => _remote.contestNoShow(bookingId));
+
+  @override
   Future<Either<Failure, BookingEntity>> confirmPayment(
     String bookingId, {
     required bool paid,

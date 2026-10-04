@@ -6121,6 +6121,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saved to favourites'**
   String get a11ySaved;
+
+  /// No description provided for @bookingsContestNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'This wasn’t a no-show'**
+  String get bookingsContestNoShow;
+
+  /// No description provided for @bookingsNoShowContested.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent. AIWA support will review it.'**
+  String get bookingsNoShowContested;
+
+  /// No description provided for @bookingsNoShowContestOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Contest sent, waiting for AIWA support'**
+  String get bookingsNoShowContestOpen;
 }
 
 class _AppLocalizationsDelegate

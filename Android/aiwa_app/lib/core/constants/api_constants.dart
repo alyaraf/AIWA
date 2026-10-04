@@ -94,6 +94,7 @@ class ApiConstants {
   static String bookingCheckIn(String id) => '/bookings/$id/check-in';
   static String bookingConfirmPayment(String id) =>
       '/bookings/$id/confirm-payment';
+  static String bookingContestNoShow(String id) => '/bookings/$id/contest-no-show';
   static String bookingChat(String id) => '/bookings/$id/chat';
   static String bookingChatReport(String id, String messageId) =>
       '/bookings/$id/chat/$messageId/report';

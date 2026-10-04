@@ -1821,5 +1821,8 @@
   "a11yEdit": "Edit",
   "a11yShare": "Share",
   "a11ySave": "Save to favourites",
-  "a11ySaved": "Saved to favourites"
+  "a11ySaved": "Saved to favourites",
+  "bookingsContestNoShow": "This wasn’t a no-show",
+  "bookingsNoShowContested": "Sent. AIWA support will review it.",
+  "bookingsNoShowContestOpen": "Contest sent, waiting for AIWA support"
 }

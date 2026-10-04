@@ -247,7 +247,7 @@ public class ProviderServiceImpl implements ProviderService {
     static final double LOCATION_GRID_DEG = 0.005;
 
     static Double coarse(Double v) {
-        return v == null ? null : Math.round(v / LOCATION_GRID_DEG) * LOCATION_GRID_DEG;
+        return v == null ? null : Math.round(Math.round(v / LOCATION_GRID_DEG) * LOCATION_GRID_DEG * 1000.0) / 1000.0;
     }
 
     /**

@@ -3455,4 +3455,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get a11ySaved => 'Saved to favourites';
+
+  @override
+  String get bookingsContestNoShow => 'This wasn’t a no-show';
+
+  @override
+  String get bookingsNoShowContested => 'Sent. AIWA support will review it.';
+
+  @override
+  String get bookingsNoShowContestOpen =>
+      'Contest sent, waiting for AIWA support';
 }

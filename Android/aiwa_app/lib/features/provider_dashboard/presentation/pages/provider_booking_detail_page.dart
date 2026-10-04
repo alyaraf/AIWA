@@ -22,6 +22,8 @@ import '../../../../shared/widgets/reason_sheet.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../../shared/widgets/status_pill.dart';
 import '../../../bookings/domain/entities/booking_entity.dart';
+import '../../../bookings/presentation/pages/tracking_page.dart' show SosSection;
+import '../../../bookings/presentation/bloc/live_booking_cubit.dart' show LiveBookingScope;
 import '../../../bookings/domain/repositories/booking_repository.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
@@ -289,6 +291,12 @@ class _ProviderBookingDetailPageState extends State<ProviderBookingDetailPage> {
                 labels: [for (final s in steps) s.$2],
                 index: stepIdx,
               ),
+            ),
+          // AU-17 (owner rule 2026-10-04): providers can raise an SOS during a live visit.
+          if (const {'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'}.contains(b.status))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppTheme.gutter, 14, AppTheme.gutter, 0),
+              child: LiveBookingScope(bookingId: _id, booking: b, child: const SosSection()),
             ),
           card(
             child: Row(

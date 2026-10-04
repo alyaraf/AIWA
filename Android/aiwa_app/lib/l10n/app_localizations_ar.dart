@@ -3516,4 +3516,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get a11ySaved => 'محفوظ في المفضلة';
+
+  @override
+  String get bookingsContestNoShow => 'لم يكن ذلك عدم حضور';
+
+  @override
+  String get bookingsNoShowContested => 'تم الإرسال. سيراجعه دعم AIWA.';
+
+  @override
+  String get bookingsNoShowContestOpen => 'تم إرسال الاعتراض، بانتظار دعم AIWA';
 }

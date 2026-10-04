@@ -280,7 +280,8 @@ class _TrackingViewState extends State<_TrackingView> {
             onCall: _call,
             onChat: () => _push('/booking/${b.id}/chat', b),
           ),
-          if (b.homeService && onSite) ...[
+          // CR-09 / AU-17 (owner rule 2026-10-04): venue visits get SOS too, once started.
+          if ((b.homeService && onSite) || (!b.homeService && st == 'IN_PROGRESS')) ...[
             const SizedBox(height: 14),
             // After "I'm safe" (logged) a second emergency can be raised.
             _SafetyCard(
@@ -694,6 +695,43 @@ BoxDecoration get _card => BoxDecoration(
   borderRadius: BorderRadius.circular(AppTheme.radius16),
   border: Border.all(color: AppColors.divider),
 );
+
+/// SOS for either side of a live booking (AU-17: providers get it too). Needs a
+/// [LiveBookingScope] above it; shows the button, a retry banner and the delivery report.
+class SosSection extends StatelessWidget {
+  const SosSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return BlocBuilder<LiveBookingCubit, LiveBookingState>(
+      builder: (context, s) {
+        final cubit = context.read<LiveBookingCubit>();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SafetyCard(
+              onSos: s.sos == SosStage.none || s.sos == SosStage.logged ? cubit.sos : null,
+            ),
+            if (s.sosFailed) ...[
+              const SizedBox(height: 10),
+              InlineBanner(
+                tone: BannerTone.danger,
+                body: l.trackSosFailed,
+                action: l.commonRetry,
+                onAction: cubit.sos,
+              ),
+            ],
+            if (s.sos != SosStage.none) ...[
+              const SizedBox(height: 10),
+              _SosBanner(stage: s.sos, report: s.sosReport, onSafe: cubit.imSafe),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
 
 class _SafetyCard extends StatelessWidget {
   final VoidCallback? onSos;

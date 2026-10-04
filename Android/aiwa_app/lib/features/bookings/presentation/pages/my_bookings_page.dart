@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../shared/widgets/open_external.dart';
 import '../../../../core/di/injection_container.dart';
+import '../../domain/repositories/booking_repository.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -97,6 +98,17 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
   Future<void> _open(BookingEntity b, String screen) async {
     await context.push('/booking/${b.id}/$screen', extra: b);
     if (mounted) _load();
+  }
+
+  /// AU-03: tells the backend the no-show was wrong; it opens a dispute for support.
+  Future<void> _contestNoShow(BookingEntity b) async {
+    final r = await sl<BookingRepository>().contestNoShow(b.id);
+    if (!mounted) return;
+    final l = AppLocalizations.of(context);
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(r.fold((f) => AppLocalizations.of(context).error(f.message), (_) => l.bookingsNoShowContested))),
+    );
+    if (r.isRight()) _load();
   }
 
   Future<void> _directions(BookingEntity b) async {
@@ -218,6 +230,7 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
               onDirections: () => _directions(b),
               onReview: () => context.push('/review/${b.id}', extra: b),
               onRebook: () => context.push('/provider/${b.providerId}'),
+              onContest: () => _contestNoShow(b),
             ),
           );
         }, childCount: bookings.length + 1),
@@ -292,6 +305,7 @@ class _BookingCard extends StatelessWidget {
   final VoidCallback onDirections;
   final VoidCallback onReview;
   final VoidCallback onRebook;
+  final VoidCallback onContest;
 
   const _BookingCard({
     required this.booking,
@@ -301,6 +315,7 @@ class _BookingCard extends StatelessWidget {
     required this.onDirections,
     required this.onReview,
     required this.onRebook,
+    required this.onContest,
   });
 
   @override
@@ -474,6 +489,20 @@ class _BookingCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ],
+            // AU-03 (owner rule 2026-10-04): a no-show can be contested within 48 h.
+            if (b.status == 'NO_SHOW') ...[
+              const SizedBox(height: 14),
+              if (b.paymentStatus == 'DISPUTED')
+                Text(l.bookingsNoShowContestOpen, style: metaStyle)
+              else
+                AiwaButton(
+                  label: l.bookingsContestNoShow,
+                  variant: AiwaButtonVariant.secondary,
+                  size: AiwaButtonSize.sm,
+                  fullWidth: true,
+                  onPressed: onContest,
+                ),
             ],
             if (b.status == 'REJECTED') ...[
               const SizedBox(height: 14),

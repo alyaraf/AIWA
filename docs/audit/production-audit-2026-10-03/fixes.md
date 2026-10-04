@@ -48,6 +48,22 @@ waiting for an owner rule are listed at the end.
 | CR-14 (rest) | fixed | JPEGs the JDK can't decode (CMYK) have their EXIF/XMP/IPTC/comment segments removed; ICC and Adobe segments kept. | `FileStorageMetadataTest` (+2) |
 | CR-13(f) | fixed | V27 adds `bookings.waiting_since_instant` (timestamptz); the response window uses it, so the repeated autumn hour can't expire a request early. Older rows keep the previous rule. | `BookingDstNightTest` (+1) |
 
+### Third round: the owner’s product rules (2026-10-04, branch fix/owner-rules-2026-10-04)
+
+| ID | Status | Rule and what changed | Covering tests |
+|---|---|---|---|
+| CR-09 / AU-17 | fixed | SOS for everyone: allowed up to 6 h after a booking is cancelled (as after completion); providers get the SOS section on their booking page; customers at a venue get it once the visit is in progress. | `OwnerRulesApiTest`, app analyze |
+| CR-12 | fixed | A travel fee can get a first quote after acceptance but never a re-quote; accepting a quote needs the amount the customer saw (409 `quote_changed` otherwise); the app sends it. | `OwnerRulesApiTest` |
+| CR-10 / M-4 | fixed | Self-service deletion is refused (409) while the user has a live booking or unpaid commission, with a message saying what to finish. Support’s admin delete is unchanged. | `OwnerRulesApiTest` |
+| AU-05 | fixed | Only customer accounts create bookings (403 for providers and admins; the app routes providers to its forbidden page). | `OwnerRulesApiTest` |
+| AU-07 | fixed | A provider who cancels an accepted booking is charged the penalty percent of the service price as a ledger entry; 3 penalised cancellations in 30 days pause new bookings and alert admins. | `OwnerRulesApiTest` (2) |
+| AU-03 | fixed | The scheduler completes IN_PROGRESS bookings a day after the slot as cash pending with commission, and flags accepted / on-the-way / arrived ones once into the admin inbox ("Booking needs closing"). A customer can contest a no-show within 48 h (once); it opens a payment dispute and a PAID resolution completes the booking and charges commission. App: "This wasn’t a no-show" button. V28. | `OwnerRulesApiTest` (4) |
+| E-1 / AU-09 | fixed | In prod, Super admin and Finance admins get 403 `auth.error.admin_2fa_required` on every `/admin/**` call until two-factor is on; the admin panel shows the setup card instead. `REQUIRE_ADMIN_2FA=false` turns it off. | `AdminTwoFactorApiTest` (3) |
+| AU-18 / M-5 | fixed | Home-based (INDIVIDUAL) providers’ public pin is rounded to about 500 m, with no street address and the distance rounded to 0.5 km; the owner, admins and customers with a live booking see the exact place. Shops stay exact. | `OwnerRulesApiTest` (2) |
+| AU-19 / L-22 | fixed | Terms acceptance is stored per document type (V29, existing acceptances carried over); `/auth/me` `termsUpToDate` uses the role’s main document; bookings are refused while it is out of date (`terms.error.not_accepted`). | `OwnerRulesApiTest` |
+
+Test edits: none to existing assertions. `application-test.yml` sets `aiwa.terms.enforce-on-booking=false` (shared test contexts); `OwnerRulesApiTest` turns it on.
+
 ## Test edits
 
 - `BookingLifecycleServiceTest`: the booking fixture's provider is now APPROVED and active (data only; the H-1 guard refuses an unapproved one).
@@ -59,11 +75,10 @@ waiting for an owner rule are listed at the end.
 
 ## Not changed: needs an owner rule or a device
 
-CR-09 / M-6 (who may raise SOS), CR-10 / M-4 (deletion with debt or live bookings), CR-12 (travel re-quote),
-E-1 (enforce admin TOTP), H-2 closure sweep and no-show contest, M-5 (round home-based providers' location),
-M-7 (penalties and strikes), L-22 (per-type terms acceptance), M-1 (bookings by customers only). L-17 (dates
-with an offset) changes every DTO and both clients. H-5 and M-13 need real phones. M-8 load test, M-12 off-site backups and a restore drill
-need infrastructure.
+Settled by the owner on 2026-10-04 and implemented in the third round: CR-09, CR-10, CR-12, AU-03, AU-05,
+AU-07, AU-17, AU-18, AU-19, E-1. Still open: L-17 (dates with an offset: every DTO and both clients), H-5 and M-13
+(real phones), M-8 load test, M-12 off-site backups and a restore drill (infrastructure), M-3 leftovers (temporary
+password shown to the admin, ID documents unencrypted on disk), OTP sent off the request thread.
 
 ## Test runs
 
@@ -72,3 +87,4 @@ need infrastructure.
 | Baseline `7cf09c3` | 303 passed | 166 passed, analyze clean | 102 passed, build ok |
 | First round `029195f` | 328 passed | 168 passed, analyze clean | 104 passed, build ok |
 | Second round | 343 passed | 172 passed, analyze clean | 104 passed, build ok |
+| Third round | 359 passed | 172 passed, analyze clean | 104 passed, build ok |

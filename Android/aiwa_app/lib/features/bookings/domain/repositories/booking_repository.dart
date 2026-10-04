@@ -49,6 +49,9 @@ abstract class BookingRepository {
 
   Future<Either<Failure, BookingEntity>> checkIn(String bookingId);
 
+  /// Contest a no-show within 48 h of the booking (AU-03); opens a dispute.
+  Future<Either<Failure, BookingEntity>> contestNoShow(String bookingId);
+
   /// paid=false reports unpaid; [reason] is filed as a complaint because
   /// confirm-payment takes no text.
   Future<Either<Failure, BookingEntity>> confirmPayment(

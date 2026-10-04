@@ -1003,5 +1003,8 @@
   "a11yEdit": "تعديل",
   "a11yShare": "مشاركة",
   "a11ySave": "حفظ في المفضلة",
-  "a11ySaved": "محفوظ في المفضلة"
+  "a11ySaved": "محفوظ في المفضلة",
+  "bookingsContestNoShow": "لم يكن ذلك عدم حضور",
+  "bookingsNoShowContested": "تم الإرسال. سيراجعه دعم AIWA.",
+  "bookingsNoShowContestOpen": "تم إرسال الاعتراض، بانتظار دعم AIWA"
 }
