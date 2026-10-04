@@ -23,16 +23,25 @@ E-1 closes when every box is ticked.
   token (password reset, phone change, suspension).
 - Refresh rotates: the used token is spent with a database INSERT
   (`revoked_tokens`), so reuse fails even with Redis down. Logout records the
-  access and refresh token there too (header or cookie). Redis is only a fast
-  check in front of the table.
-- [ ] Confirm the lifetimes. [ ] Confirm the cookie flags (`aiwa.auth.cookie-secure=true` in prod).
+  access and refresh token there too. A revocation written while Redis was down is
+  rechecked in the table until that token would have expired anyway (AU-14). Redis
+  is only a fast check in front of the table.
+- Only the `Authorization: Bearer` header authenticates a request; the old
+  `accessToken` cookie is no longer accepted (AU-14). The cookie is still set on
+  login and cleared on logout but nothing reads it.
+- [ ] Confirm the lifetimes.
 
 ## 3. Second factor (DR-017)
 
 - TOTP for admins; setup and disable need the password and, when on, a current code.
 - The MFA challenge is single-use, checked against the session cut-off.
-- [ ] Decide whether 2FA is **required** for every admin account (recommended for
-  SUPER_ADMIN and FINANCE) and enforce it at login.
+- **Decided 2026-10-04 and enforced:** in prod a SUPER_ADMIN or FINANCE admin without
+  2FA gets 403 `auth.error.admin_2fa_required` on every `/admin/**` call and the panel
+  shows the setup card (`AdminTwoFactorInterceptor`, `REQUIRE_ADMIN_2FA`, default on in
+  prod). SUPPORT admins are not forced.
+- TOTP secrets are encrypted at rest once `TOTP_ENCRYPTION_KEY` is set (AU-08).
+- [ ] Confirm SUPPORT stays optional, or require it for every admin too.
+- [ ] Set `TOTP_ENCRYPTION_KEY` in `deploy/.env` and keep a copy with the other secrets.
 
 ## 4. Admin accounts (DR-007, DR-031)
 
@@ -49,6 +58,8 @@ E-1 closes when every box is ticked.
 
 - Per IP: sign-in, register, OTP, reset, refresh, 2FA (`RedisRateLimitFilter`, 429).
 - Per phone/email: 3 OTPs per 10 min, 10 per day; 5 guesses per code; codes spent atomically.
+- Across everyone: OTP texts only to +20 numbers, at most 1,000 an hour and 10,000 a day
+  (`OTP_ALLOWED_COUNTRY_CODES`, `OTP_MAX_GLOBAL_SENDS_HOUR/DAY`), with an alert (H-4).
 - Per account: chat 30/min, reports 10/h, complaints 5/h, uploads 30/h; SOS texts
   to contacts at most 5 SOS a day (support always alerted).
 - [ ] Confirm the numbers fit the expected traffic.
@@ -63,4 +74,5 @@ E-1 closes when every box is ticked.
 
 | Date | Decision | By |
 |------|----------|----|
+| 2026-10-04 | 2FA is required for SUPER_ADMIN and FINANCE admins and enforced at the API (not just the panel). | Owner |
 | | | |
