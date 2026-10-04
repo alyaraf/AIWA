@@ -3433,4 +3433,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get staffDeactivated => 'Staff member deactivated.';
+
+  @override
+  String get linkOpenFailed =>
+      'No app on this phone could open that. Please try another way.';
 }

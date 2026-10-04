@@ -77,7 +77,7 @@ function signOut() {
 }
 
 // A 401 from any endpoint but these two means "this access token is no good
-// anymore" (expired is the common case — access tokens last 24h) rather than
+// anymore" (expired is the common case — access tokens last 15 minutes) rather than
 // "this account can't do that" — worth a silent refresh-and-retry before
 // giving up and forcing a full re-login. Refreshing itself, or a login
 // attempt, failing with 401 is the real "you're signed out" signal.

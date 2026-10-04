@@ -313,7 +313,8 @@ class _ErrorInterceptor extends Interceptor {
         // ("not your booking", "account suspended") carries its own code and
         // is shown inline by the screen, not as the Forbidden page (M-9).
         if (statusCode == 423 ||
-            (statusCode == 403 && (code == null || code == roleForbiddenCode))) {
+            (statusCode == 403 &&
+                (code == null || code == ApiClient.roleForbiddenCode))) {
           ApiClient.authEvents.add(statusCode!);
         }
         return ServerException(

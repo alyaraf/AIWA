@@ -32,6 +32,7 @@ import java.util.List;
 public class AccountController {
 
     static final int MAX_TRUSTED_CONTACTS = 5;
+    static final int MAX_ADDRESSES = 20;
 
     private final UserRepository userRepo;
     private final SavedAddressRepository addressRepo;
@@ -60,7 +61,11 @@ public class AccountController {
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = resolveUser(userDetails);
         // The first address becomes the default automatically.
-        boolean first = addressRepo.findByUserIdAndArchivedFalseOrderByDefaultAddressDescCreatedAtDesc(user.getId()).isEmpty();
+        int existing = addressRepo.findByUserIdAndArchivedFalseOrderByDefaultAddressDescCreatedAtDesc(user.getId()).size();
+        if (existing >= MAX_ADDRESSES) { // L-13: the list was unbounded
+            throw new BusinessException("account.error.addresses_limit");
+        }
+        boolean first = existing == 0;
         SavedAddress address = addressRepo.save(SavedAddress.builder()
                 .user(user)
                 .label(request.getLabel().trim())
@@ -154,7 +159,8 @@ public class AccountController {
         if (trustedContactRepo.countByUserId(user.getId()) >= MAX_TRUSTED_CONTACTS) {
             throw new BusinessException("account.error.trusted_contacts_limit");
         }
-        String phone = request.getPhone().replaceAll("[ \\-]", "");
+        // L-13: stored in E.164 like account phones, so the SOS text reaches the gateway in a form it accepts.
+        String phone = com.aiwa.util.Identifiers.normalizePhone(request.getPhone());
         if (phone.equals(user.getPhone())) {
             throw new BusinessException("account.error.trusted_contact_self");
         }

@@ -6079,6 +6079,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Staff member deactivated.'**
   String get staffDeactivated;
+
+  /// No description provided for @linkOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'No app on this phone could open that. Please try another way.'**
+  String get linkOpenFailed;
 }
 
 class _AppLocalizationsDelegate

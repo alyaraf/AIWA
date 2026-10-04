@@ -25,6 +25,7 @@ import java.util.Locale;
  */
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class OtpServiceImpl {
 
     private static final Duration OTP_TTL = Duration.ofMinutes(10);
@@ -43,6 +44,27 @@ public class OtpServiceImpl {
     @Value("${aiwa.otp.max-sends-per-day:10}")
     private int maxSendsPerDay = 10;
 
+    static final String OTP_SENT_METRIC = "aiwa.otp.sent";
+    static final String OTP_BUDGET_METRIC = "aiwa.otp.global_budget_exhausted";
+    private static final String GLOBAL_HOUR_KEY = "otp:global:hour";
+    private static final String GLOBAL_DAY_KEY = "otp:global:day";
+
+    @Value("${aiwa.otp.allowed-country-codes:20}")
+    private java.util.List<String> allowedCountryCodes = java.util.List.of("20");
+
+    @Value("${aiwa.otp.max-global-sends-per-hour:1000}")
+    private long maxGlobalSendsPerHour = 1000;
+
+    @Value("${aiwa.otp.max-global-sends-per-day:10000}")
+    private long maxGlobalSendsPerDay = 10000;
+
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMeterRegistry(io.micrometer.core.instrument.MeterRegistry registry) {
+        this.meterRegistry = registry;
+    }
+
     // ── phone (SMS) ──────────────────────────────────────────────────────────
 
     // Codes are keyed on the normalized number (R2-19), so a code sent to
@@ -50,8 +72,41 @@ public class OtpServiceImpl {
 
     public void sendOtp(String phone) {
         String id = com.aiwa.util.Identifiers.normalizePhone(phone);
+        requireAllowedCountry(id);
+        requireGlobalBudget();
         String code = issue(id);
         smsService.sendOtp(id, code, OTP_TTL_MINUTES);
+        if (meterRegistry != null) meterRegistry.counter(OTP_SENT_METRIC, "channel", "sms").increment();
+    }
+
+    /**
+     * H-4: only numbers in the allowed country codes are texted (default Egypt, +20).
+     * SMS pumping sends codes to premium-rate ranges abroad; an empty list allows all.
+     */
+    void requireAllowedCountry(String e164) {
+        if (allowedCountryCodes.isEmpty()) return;
+        if (e164 != null && e164.startsWith("+")) {
+            for (String cc : allowedCountryCodes) {
+                if (e164.startsWith("+" + cc)) return;
+            }
+        }
+        throw new BusinessException("otp.error.country_not_supported");
+    }
+
+    /**
+     * H-4: a ceiling on all OTP texts per hour and per day, across every number and
+     * IP, so a distributed attack can't run up an unbounded SMS bill. Hitting it is
+     * counted (alert OtpGlobalBudgetExhausted) and answered 429.
+     */
+    void requireGlobalBudget() {
+        long hour = redis.increment(GLOBAL_HOUR_KEY, Duration.ofHours(1));
+        long day = redis.increment(GLOBAL_DAY_KEY, Duration.ofDays(1));
+        if ((maxGlobalSendsPerHour > 0 && hour > maxGlobalSendsPerHour)
+                || (maxGlobalSendsPerDay > 0 && day > maxGlobalSendsPerDay)) {
+            if (meterRegistry != null) meterRegistry.counter(OTP_BUDGET_METRIC).increment();
+            log.warn("OTP global budget exhausted ({} this hour, {} today)", hour, day);
+            throw new TooManyRequestsException("otp.error.busy");
+        }
     }
 
     public void verifyOtp(String phone, String code) {

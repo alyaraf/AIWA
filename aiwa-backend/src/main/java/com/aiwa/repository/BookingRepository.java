@@ -107,6 +107,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByCustomerIdAndStatus(Long customerId, BookingStatus status);
 
+    long countByCustomerIdAndStatus(Long customerId, BookingStatus status);
+
     List<Booking> findByProviderIdAndStatusIn(Long providerId, Collection<BookingStatus> statuses);
 
     boolean existsByCustomerIdAndProviderIdAndStatusIn(Long customerId, Long providerId,

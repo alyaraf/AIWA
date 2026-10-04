@@ -11,12 +11,17 @@ import java.math.BigDecimal;
 public class ServiceRequest {
 
     @NotBlank(message = "Service name is required")
+    @Size(max = 255, message = "{validation.text.too_long}")
     private String name;
 
+    @Size(max = 255, message = "{validation.text.too_long}")
     private String description;
 
     @NotNull(message = "Price is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Price must be positive")
+    // L-9: numeric(10,2) overflowed with a 500.
+    @DecimalMax(value = "1000000", message = "{validation.price.max}")
+    @Digits(integer = 8, fraction = 2, message = "{validation.price.max}")
     private BigDecimal price;
 
     @NotNull(message = "Duration is required")

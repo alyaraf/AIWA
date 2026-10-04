@@ -113,7 +113,8 @@ let onAuthExpired = () => {};
    FINANCE  — settlements, payouts, commission rate, booking disputes.
    SUPER_ADMIN — other admins & permissions, booking rules, policies,
               support settings, permanent deletion. Implies SUPPORT+FINANCE.
-   Every admin can view every screen; these gate the actions.            */
+   Every admin can view every screen; these gate the actions. Exceptions
+   (M-3): identity documents need SUPPORT; booking chats SUPPORT or FINANCE. */
 let currentPermissions = [];
 function can(permission) {
   if (USE_MOCKS) return true;
@@ -1328,7 +1329,7 @@ function DocumentLightbox({ src, label, onClose }) {
   );
 }
 
-function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestInfo, onSuspend, onReactivate }) {
+export function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestInfo, onSuspend, onReactivate }) {
   const [decision, setDecision] = useState(null);
   const [note, setNote] = useState(provider.verificationNote || "");
   const [savedNote, setSavedNote] = useState(provider.verificationNote || "");
@@ -1464,11 +1465,17 @@ function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestIn
           floating above bare document cards. */}
       <article className="detail-block">
         <p className="eyebrow" style={{ margin: "0 0 14px" }}>Identity documents</p>
-        <div className="document-grid">
-          {docs.map((doc) => (
-            <DocumentCard key={doc.label} label={doc.label} icon={doc.icon} path={doc.path} onOpen={setLightbox} />
-          ))}
-        </div>
+        {can("SUPPORT") ? (
+          <div className="document-grid">
+            {docs.map((doc) => (
+              <DocumentCard key={doc.label} label={doc.label} icon={doc.icon} path={doc.path} onOpen={setLightbox} />
+            ))}
+          </div>
+        ) : (
+          /* M-3: the backend serves ID documents to Support only. */
+          <InlineBanner tone="info" title="Support only"
+            body="Viewing national ID and selfie images needs the Support permission. Every view is recorded in the audit log." />
+        )}
       </article>
       {lightbox && <DocumentLightbox src={lightbox.src} label={lightbox.label} onClose={() => setLightbox(null)} />}
 
@@ -3248,9 +3255,12 @@ function Bookings() {
                   {booking.dispute && !resolved[booking.id] && <InlineBanner tone="danger" title="Payment disputed" body="Customer reports the cash payment was not made. Commission is withheld until resolved." />}
                   {resolved[booking.id] && <InlineBanner tone="success" title={`Resolved · ${resolved[booking.id]}`} body="Both parties were notified and the audit log was updated." />}
                   <div className="detail-actions">
-                    <button className="btn btn-secondary sm" disabled={busyId === booking.id || chat.loading} onClick={() => viewChat(booking)}>
-                      <MessageSquareWarning size={14} /> View chat
-                    </button>
+                    {/* M-3: private chats are for Support (moderation) and Finance (disputes). */}
+                    {(can("SUPPORT") || can("FINANCE")) && (
+                      <button className="btn btn-secondary sm" disabled={busyId === booking.id || chat.loading} onClick={() => viewChat(booking)}>
+                        <MessageSquareWarning size={14} /> View chat
+                      </button>
+                    )}
                     {can("FINANCE") && booking.dispute && !resolved[booking.id] && (
                       <button className="btn btn-primary sm" disabled={busyId === booking.id} onClick={() => setDisputeFor(booking)}>
                         <AlertTriangle size={14} /> Resolve dispute
@@ -3319,7 +3329,10 @@ function DisputeResolutionSheet({ booking, busy, onClose, onResolve }) {
   useEffect(() => {
     let alive = true;
     if (tab === "chat" && chat === null) {
-      api.bookingChat(booking.id).then((messages) => { if (alive) setChat(messages || []); }).catch(() => { if (alive) setChat([]); });
+      // A failed load is shown as such, not as "No messages" (that hid 403s and outages).
+      api.bookingChat(booking.id)
+        .then((messages) => { if (alive) setChat(messages || []); })
+        .catch((err) => { if (alive) setChat({ error: err?.message || "Could not load the chat." }); });
     }
     return () => { alive = false; };
   }, [tab, chat, booking.id]);
@@ -3350,8 +3363,9 @@ function DisputeResolutionSheet({ booking, busy, onClose, onResolve }) {
         {tab === "chat" && (
           <div className="dispute-panel chat">
             {chat === null && <span className="dim">Loading chat…</span>}
-            {chat && chat.length === 0 && <span className="dim">No messages in this booking.</span>}
-            {chat && chat.map((message) => (
+            {chat?.error && <span className="dim">{chat.error}</span>}
+            {Array.isArray(chat) && chat.length === 0 && <span className="dim">No messages in this booking.</span>}
+            {Array.isArray(chat) && chat.map((message) => (
               <div className={`dispute-msg ${String(message.sender?.role || "").toLowerCase() === "provider" ? "right" : "left"}`} key={message.id}>
                 <span className="who">{message.sender?.role || message.sender?.fullName || "User"}</span>
                 {message.message}

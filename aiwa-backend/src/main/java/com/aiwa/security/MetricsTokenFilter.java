@@ -29,7 +29,11 @@ public class MetricsTokenFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().equals(request.getContextPath() + "/actuator/prometheus");
+        // L-24: the decoded path, the one the actuator is routed on. The raw URI let
+        // "/actuator/promethe%75s" through without the token. Anything under the
+        // endpoint (a trailing slash, a sub-path) is guarded too.
+        String path = org.springframework.web.util.UrlPathHelper.defaultInstance.getPathWithinApplication(request);
+        return !(path.equals("/actuator/prometheus") || path.startsWith("/actuator/prometheus/"));
     }
 
     @Override

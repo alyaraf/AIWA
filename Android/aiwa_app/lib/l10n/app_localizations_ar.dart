@@ -3494,4 +3494,8 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get staffDeactivated => 'تم إيقاف الموظف.';
+
+  @override
+  String get linkOpenFailed =>
+      'لا يوجد تطبيق على هذا الهاتف يمكنه فتح ذلك. يرجى المحاولة بطريقة أخرى.';
 }

@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ComplaintServiceImpl {
 
+    static final String ADMIN_FLAG = "ADMIN_FLAG";
+
     private final ComplaintRepository complaintRepo;
     private final UserRepository userRepo;
     private final BookingRepository bookingRepo;
@@ -66,7 +68,8 @@ public class ComplaintServiceImpl {
 
     @Transactional(readOnly = true)
     public Page<ApiResponse.ComplaintDto> getMyComplaints(Long userId, Pageable pageable) {
-        return complaintRepo.findByReporterIdOrderByCreatedAtDesc(userId, pageable).map(this::toDto);
+        // Admin flags are internal; older ones were stored with the flagged user as reporter (M-2).
+        return complaintRepo.findOwnReports(userId, ADMIN_FLAG, pageable).map(this::toDto);
     }
 
     /** Admin: view all by status */
@@ -106,16 +109,22 @@ public class ComplaintServiceImpl {
         complaintRepo.save(c);
     }
 
-    /** Gap 5: admin directly flags a user */
+    /**
+     * Gap 5: admin directly flags a user. M-2: the acting admin is the reporter.
+     * It used to be the flagged user, so the flag and its private reason showed
+     * up in that user's own "My reports".
+     */
     @Transactional
-    public void flagUser(Long targetUserId, String reason) {
+    public void flagUser(Long adminUserId, Long targetUserId, String reason) {
         User target = userRepo.findById(targetUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", targetUserId));
+        User admin = userRepo.findById(adminUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", adminUserId));
 
         Complaint complaint = Complaint.builder()
-                .reporter(target) // self-report placeholder
+                .reporter(admin)
                 .targetUser(target)
-                .category("ADMIN_FLAG")
+                .category(ADMIN_FLAG)
                 .description(com.aiwa.dto.request.FreeTextBody.bounded(reason, 2000)) // Complaint.description
                 .status(ComplaintStatus.ESCALATED)
                 .flagged(true)

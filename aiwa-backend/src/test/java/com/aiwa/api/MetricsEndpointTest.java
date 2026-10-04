@@ -33,6 +33,12 @@ class MetricsEndpointTest {
     }
 
     @Test
+    void anEncodedPathDoesNotSkipTheToken() throws Exception {
+        // L-24: the filter compared the raw URI; MVC routes on the decoded one.
+        mvc.perform(get(new java.net.URI("/actuator/promethe%75s"))).andExpect(status().isNotFound());
+    }
+
+    @Test
     void theScraperGetsPrometheusText() throws Exception {
         mvc.perform(get("/actuator/prometheus").header("Authorization", "Bearer test-scrape-token"))
                 .andExpect(status().isOk())

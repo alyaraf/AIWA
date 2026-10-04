@@ -55,9 +55,14 @@ public class AdminBookingController {
     }
 
     @GetMapping("/{id}/chat")
+    // M-3: private messages are for moderation (Support) and dispute evidence (Finance),
+    // not every admin; every read is audited.
+    @org.springframework.security.access.prepost.PreAuthorize(
+            "hasAuthority('PERM_SUPPORT') or hasAuthority('PERM_FINANCE')")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    @Operation(summary = "Read the chat thread for a booking (ADMIN, read-only)")
+    @Operation(summary = "Read the chat thread for a booking (ADMIN · Support or Finance, read-only, audited)")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.ChatMessageDto>>> chat(@PathVariable Long id) {
+        auditService.record("BOOKING_CHAT_VIEWED", "booking #" + id);
         return ResponseEntity.ok(ApiResponse.Success.of(
                 chatRepo.findByBookingIdOrderByCreatedAtAsc(id).stream().map(this::toDto).toList()));
     }

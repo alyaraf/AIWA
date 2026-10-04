@@ -107,7 +107,7 @@ public class AdminController {
             @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
+        Pageable pageable = com.aiwa.util.Pages.admin(page, Math.min(size, 200)); // L-10: page=-1 was a 500
         Page<Booking> bookings = bookingRepo.adminSearch(status, disputed, searchPattern(query), pageable);
         // Materialise DTOs inside the transaction — open-in-view is off.
         List<ApiResponse.BookingDto> dtos = bookings.getContent().stream().map(this::toBookingDto).toList();

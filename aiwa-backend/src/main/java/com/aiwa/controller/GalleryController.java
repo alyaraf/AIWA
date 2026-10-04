@@ -86,8 +86,22 @@ public class GalleryController {
     @GetMapping("/provider/gallery/{providerId}")
     @Transactional(readOnly = true)
     @Operation(summary = "Get the public gallery of a provider (hidden images excluded)")
-    public ResponseEntity<ApiResponse.Success<List<String>>> getGallery(@PathVariable Long providerId) {
-        if (!providerRepo.existsById(providerId)) throw new ResourceNotFoundException("Provider", providerId);
+    public ResponseEntity<ApiResponse.Success<List<String>>> getGallery(
+            @PathVariable Long providerId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        ProviderProfile profile = providerRepo.findById(providerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
+        // L-26: same rule as GET /providers/{id}: a suspended or unlisted provider's
+        // photos are not public; the owner and admins still see them.
+        boolean listed = profile.getVerificationStatus() == com.aiwa.enums.VerificationStatus.APPROVED
+                && profile.getUser() != null && profile.getUser().isActive();
+        if (!listed) {
+            Long callerId = userDetails == null ? null : com.aiwa.security.AiwaUserDetails.idOf(userDetails);
+            boolean owner = callerId != null && profile.getUser() != null && callerId.equals(profile.getUser().getId());
+            boolean admin = userDetails != null && userDetails.getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+            if (!owner && !admin) throw new ResourceNotFoundException("Provider", providerId);
+        }
         return ResponseEntity.ok(ApiResponse.Success.of(galleryRepo.findByProviderIdOrderByIdAsc(providerId).stream()
                 .filter(g -> !g.isHidden()).map(GalleryImage::getUrl).toList()));
     }

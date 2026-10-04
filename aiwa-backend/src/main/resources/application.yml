@@ -26,6 +26,12 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # open-in-view holds a connection for the whole request, and audit writes take a
+      # second one (REQUIRES_NEW), so the default 10 is tight at peak. Keep it well under
+      # PostgreSQL max_connections (100 by default).
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      connection-timeout: ${DB_POOL_TIMEOUT_MS:10000}
 
   data:
     redis:
@@ -136,6 +142,8 @@ aiwa:
     # CR-11: a venue customer can check in from this many minutes before the
     # start, until the slot ends.
     check-in-lead-minutes: 30
+    # M-1: pending requests one customer may hold at once (each blocks a provider's slot); 0 = no limit.
+    max-open-requests-per-customer: ${BOOKING_MAX_OPEN_REQUESTS:5}
     # CR-13: an identical booking request sent again within this time, without an
     # Idempotency-Key, is a double tap and is answered with the first booking.
     auto-dedup-window: 10s
@@ -155,6 +163,11 @@ aiwa:
     # Per-phone send limits (SMS pumping / cost guard) on top of the per-IP limit.
     max-sends-per-10-minutes: ${OTP_MAX_SENDS_10M:3}
     max-sends-per-day: ${OTP_MAX_SENDS_DAY:10}
+    # H-4: only these country codes get OTP texts (comma-separated, no "+"; empty = any country).
+    allowed-country-codes: ${OTP_ALLOWED_COUNTRY_CODES:20}
+    # H-4: ceiling on OTP texts across all numbers (0 = off); hitting it fires OtpGlobalBudgetExhausted.
+    max-global-sends-per-hour: ${OTP_MAX_GLOBAL_SENDS_HOUR:1000}
+    max-global-sends-per-day: ${OTP_MAX_GLOBAL_SENDS_DAY:10000}
   settlement:
     # Owed commission (EGP) at which a provider's new bookings pause until settled.
     balance-limit: ${SETTLEMENT_BALANCE_LIMIT:1000}

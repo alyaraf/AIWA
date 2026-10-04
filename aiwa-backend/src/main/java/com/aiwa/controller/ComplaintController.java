@@ -100,9 +100,10 @@ public class ComplaintController {
     public ResponseEntity<ApiResponse.Success<Void>> flagUser(
             @PathVariable Long userId,
             @RequestParam(required = false) String reason,
-            @RequestBody(required = false) FreeTextBody body) {
-        // Create a system-generated complaint/flag for the user
-        complaintService.flagUser(userId, FreeTextBody.require(body, "reason", reason));
+            @RequestBody(required = false) FreeTextBody body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        // A flag is filed by the acting admin (M-2: never shown to the flagged user)
+        complaintService.flagUser(resolveUserId(userDetails), userId, FreeTextBody.require(body, "reason", reason));
         return ResponseEntity.ok(ApiResponse.Success.of("User flagged for review", null));
     }
 

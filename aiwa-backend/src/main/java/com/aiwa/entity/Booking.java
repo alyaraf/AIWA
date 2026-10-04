@@ -162,4 +162,20 @@ public class Booking extends BaseEntity {
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private java.util.List<Review> reviews = new java.util.ArrayList<>();
+
+    /**
+     * When a closed booking ended, for the chat and SOS grace windows (L-11): the
+     * completion or cancellation time, the end of the slot for a no-show. Only a
+     * rejected or expired request falls back to updatedAt. updatedAt alone moved on
+     * every later admin edit (a dispute resolution) and reopened the chat and SOS.
+     */
+    public LocalDateTime endedAt() {
+        if (status == com.aiwa.enums.BookingStatus.COMPLETED && completedAt != null) return completedAt;
+        if (status == com.aiwa.enums.BookingStatus.CANCELLED && cancelledAt != null) return cancelledAt;
+        if (status == com.aiwa.enums.BookingStatus.NO_SHOW && bookingDate != null && endTime != null)
+            return LocalDateTime.of(bookingDate, endTime);
+        if (getUpdatedAt() != null) return getUpdatedAt();
+        if (cancelledAt != null) return cancelledAt;
+        return getCreatedAt();
+    }
 }

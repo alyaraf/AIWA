@@ -1,3 +1,5 @@
+> **Outdated (2026-10-04).** The production stack is `deploy/docker-compose.prod.yml` (Caddy, backend, admin, PostgreSQL, Redis with a password, backups, monitoring), released as described in `docs/release.md` and run with `docs/runbooks.md`. The `aiwa-backend/docker-compose.prod.yml` this guide refers to was removed (audit L-25: Redis without a password, unpinned images). Use this file only for background on the backend's settings.
+
 # AIWA Backend Production Environment Guide
 
 This guide explains how to prepare, configure, run, and maintain the AIWA backend in a stable production environment.

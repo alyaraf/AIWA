@@ -106,6 +106,9 @@ public class AdminProviderSettingsController {
             if (amount.signum() < 0) {
                 throw new BusinessException("provider.travel_fee.must_be_non_negative");
             }
+            if (amount.compareTo(com.aiwa.service.impl.BookingServiceImpl.MAX_TRAVEL_QUOTE) > 0) {
+                throw new com.aiwa.exception.BusinessException("provider.travel_fee.too_large");
+            }
             provider.setHomeServiceTravelFee(amount);
         }
         providerRepo.save(provider);

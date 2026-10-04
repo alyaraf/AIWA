@@ -51,9 +51,13 @@ class PushRegistrar {
       try {
         token = await _tokenSource();
       } catch (_) {}
+      // L-15: no token means this phone never registered one, so there is
+      // nothing to remove. A DELETE without ?token= removes every phone of the
+      // user, which stopped pushes on their other devices.
+      if (token == null || token.isEmpty) return;
       await _api.delete(
         ApiConstants.mePushToken,
-        queryParameters: token == null || token.isEmpty ? null : {'token': token},
+        queryParameters: {'token': token},
         options: accessToken == null
             ? null
             : Options(

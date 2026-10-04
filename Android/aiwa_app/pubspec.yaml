@@ -18,7 +18,6 @@ dependencies:
 
   # Network
   dio: ^5.4.3+1
-  # ponytail: unused (0 imports in lib/), delete once no native plugin config needs it
 
   # Dependency injection
   get_it: ^7.7.0
@@ -58,7 +57,6 @@ dependencies:
   intl: ^0.20.2
 
   # Local notifications
-  # ponytail: unused (0 imports in lib/), delete once no native plugin config needs it
   # Kept for FE-3: shows push notifications while the app is in the foreground.
   flutter_local_notifications: ^17.2.3
 
@@ -69,7 +67,6 @@ dependencies:
   pinput: ^5.0.0
 
   # Cupertino icons
-  # ponytail: unused (0 imports in lib/), delete once no native plugin config needs it
 
   # Crash reporting + funnel breadcrumbs (off unless SENTRY_DSN is set)
   sentry_flutter: ^8.14.2
@@ -83,7 +80,6 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  # ponytail: unused (no @GenerateMocks in test/), delete or start using it
   flutter_launcher_icons: ^0.14.4
 
 # Regenerate with: dart run flutter_launcher_icons

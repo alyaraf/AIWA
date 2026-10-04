@@ -66,8 +66,9 @@ class BookingLifecycleServiceTest {
     }
 
     private Booking booking(BookingStatus status) {
-        User provUser = User.builder().id(PROVIDER_USER_ID).fullName("Prov").role(UserRole.PROVIDER).build();
-        ProviderProfile provider = ProviderProfile.builder().id(7L).user(provUser).build();
+        User provUser = User.builder().id(PROVIDER_USER_ID).fullName("Prov").role(UserRole.PROVIDER).active(true).build();
+        ProviderProfile provider = ProviderProfile.builder().id(7L).user(provUser)
+                .verificationStatus(com.aiwa.enums.VerificationStatus.APPROVED).build();
         User customer = User.builder().id(CUSTOMER_ID).fullName("Cust").role(UserRole.CUSTOMER).build();
         com.aiwa.entity.Service svc = com.aiwa.entity.Service.builder()
                 .id(3L).name("Haircut").durationMinutes(30).price(new BigDecimal("100")).provider(provider).build();

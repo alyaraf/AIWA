@@ -181,8 +181,7 @@ public class ChatController {
         boolean ended = s == com.aiwa.enums.BookingStatus.COMPLETED || s == com.aiwa.enums.BookingStatus.NO_SHOW
                 || s.isSlotReleasing();
         if (!ended) return false;
-        java.time.LocalDateTime endedAt = b.getUpdatedAt() != null ? b.getUpdatedAt()
-                : (b.getCancelledAt() != null ? b.getCancelledAt() : b.getCreatedAt());
+        java.time.LocalDateTime endedAt = b.endedAt();
         return endedAt != null && endedAt.plus(CHAT_GRACE).isBefore(java.time.LocalDateTime.now());
     }
 

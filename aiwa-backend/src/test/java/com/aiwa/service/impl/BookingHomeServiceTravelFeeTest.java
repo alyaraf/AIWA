@@ -69,6 +69,8 @@ class BookingHomeServiceTravelFeeTest {
                         .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(22, 0))
                         .slotDurationMinutes(30).available(true).build()));
         when(serviceRepo.findById(3L)).thenReturn(Optional.of(svc));
+        when(savedAddressRepo.findById(9L)).thenReturn(Optional.of(com.aiwa.entity.SavedAddress.builder()
+                .id(9L).user(customer).label("Home").addressLine("Zamalek, Cairo").build()));
         when(bookingRepo.save(any(Booking.class))).thenAnswer(inv -> {
             Booking b = inv.getArgument(0);
             if (b.getId() == null) b.setId(999L);
@@ -86,6 +88,7 @@ class BookingHomeServiceTravelFeeTest {
         req.setBookingDate(LocalDate.now().plusDays(1));
         req.setStartTime(LocalTime.of(10, 0));
         req.setHomeService(home);
+        if (home) req.setSavedAddressId(9L); // M-1: a home visit needs an address
         return req;
     }
 
@@ -195,5 +198,37 @@ class BookingHomeServiceTravelFeeTest {
         ArgumentCaptor<CommissionLedgerEntry> captor = ArgumentCaptor.forClass(CommissionLedgerEntry.class);
         verify(commissionLedgerRepo).save(captor.capture());
         assertThat(captor.getValue().getCommissionAmount()).isEqualByComparingTo("10.00"); // 10% of 100
+    }
+
+    // ── M-1 (audit 2026-10-03) ────────────────────────────────────────────────
+
+    @Test
+    void aHomeVisitWithoutAnAddressIsRefused() {
+        BookingRequest req = homeRequest(true);
+        req.setSavedAddressId(null);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(CUSTOMER_ID, req, "k-no-addr"))
+                .isInstanceOf(com.aiwa.exception.BusinessException.class)
+                .hasMessage("booking.error.address_required");
+    }
+
+    @Test
+    void aHomeVisitOutsideTheProvidersRadiusIsRefused() {
+        provider.setLatitude(30.06);          // Zamalek, Cairo
+        provider.setLongitude(31.22);
+        provider.setServiceRadiusKm(10.0);
+        when(savedAddressRepo.findById(9L)).thenReturn(Optional.of(com.aiwa.entity.SavedAddress.builder()
+                .id(9L).user(User.builder().id(CUSTOMER_ID).build()).label("Home").addressLine("Alexandria")
+                .latitude(31.20).longitude(29.92).build()));   // ~180 km away
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(CUSTOMER_ID, homeRequest(true), "k-far"))
+                .isInstanceOf(com.aiwa.exception.BusinessException.class)
+                .hasMessage("booking.error.outside_service_radius");
+    }
+
+    @Test
+    void aCustomerWithTooManyOpenRequestsIsTurnedAway() {
+        when(bookingRepo.countByCustomerIdAndStatus(CUSTOMER_ID, BookingStatus.PENDING)).thenReturn(5L);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(CUSTOMER_ID, homeRequest(false), "k-many"))
+                .isInstanceOf(com.aiwa.exception.TooManyRequestsException.class)
+                .hasMessage("booking.error.too_many_pending");
     }
 }

@@ -175,8 +175,7 @@ public class SafetyService {
         switch (booking.getStatus()) {
             case ACCEPTED, ON_THE_WAY, ARRIVED, IN_PROGRESS -> { return; }
             case COMPLETED, NO_SHOW -> {
-                LocalDateTime ended = booking.getUpdatedAt() != null ? booking.getUpdatedAt()
-                        : LocalDateTime.of(booking.getBookingDate(), booking.getEndTime());
+                LocalDateTime ended = booking.endedAt(); // L-11: not moved by later admin edits
                 if (!LocalDateTime.now().isAfter(ended.plus(SOS_AFTER_BOOKING))) return;
             }
             default -> { }
@@ -201,7 +200,7 @@ public class SafetyService {
                 user.getFullName() + " marked themselves safe on booking #" + event.getBooking().getId() + ".",
                 user.getFullName() + " أكد أنه بأمان في الحجز رقم " + event.getBooking().getId() + ".");
         String text = user.getFullName() + " marked themselves safe on AIWA. Thank you for standing by.";
-        textAfterCommit(contactsOf(user).stream().map(TrustedContact::getPhone).toList(), text);
+        textAfterCommit(contactPhones(user), text);
         return toDto(event);
     }
 
@@ -293,7 +292,7 @@ public class SafetyService {
         List<String> supportPhones = onCallNumbers();
         textTracked(event, "ONCALL", supportPhones);
         if (textingContacts) {
-            textTracked(event, "CONTACT", contactsOf(actor).stream().map(TrustedContact::getPhone).toList());
+            textTracked(event, "CONTACT", contactPhones(actor));
         } else if (!contactsOf(actor).isEmpty()) {
             log.warn("SOS on booking #{}: trusted-contact texts skipped (more than {} SOS from this account today)",
                     booking.getId(), MAX_CONTACT_SOS_PER_DAY);
@@ -317,6 +316,16 @@ public class SafetyService {
                 .filter(a -> a.hasPermission(AdminPermission.SUPPORT) || a.hasPermission(AdminPermission.SUPER_ADMIN))
                 .forEach(a -> notificationService.send(a.getId(), type, titleEn, titleAr, bodyEn, bodyAr,
                         booking.getId(), booking.getProvider().getId()));
+    }
+
+    /**
+     * Trusted contacts' numbers in E.164 (L-13): contacts saved before numbers were
+     * normalized can still be in the local 01… form, which the gateway may refuse.
+     */
+    private List<String> contactPhones(User user) {
+        return contactsOf(user).stream().map(TrustedContact::getPhone)
+                .map(com.aiwa.util.Identifiers::normalizePhone)
+                .filter(java.util.Objects::nonNull).distinct().toList();
     }
 
     private List<TrustedContact> contactsOf(User user) {

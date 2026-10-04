@@ -179,7 +179,7 @@ public class VerificationController {
      * Never exposed via public URL.
      */
     @GetMapping("/admin/verification/document")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.SUPPORT) // M-3: identity documents are for verification (Support), not every admin
     @Operation(summary = "Download a private verification document by its stored path (ADMIN only). "
             + "Only paths recorded on a provider profile are served; prefer /admin/verification/{providerId}/documents/{kind}.")
     public ResponseEntity<org.springframework.core.io.Resource> getDocument(
@@ -195,7 +195,7 @@ public class VerificationController {
     }
 
     @GetMapping("/admin/verification/{providerId}/documents/{kind}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.SUPPORT) // M-3
     @Operation(summary = "Stream one verification document of a provider — kind: id-front | id-back | selfie (ADMIN only)")
     public ResponseEntity<org.springframework.core.io.Resource> getDocumentByKind(
             @PathVariable Long providerId,

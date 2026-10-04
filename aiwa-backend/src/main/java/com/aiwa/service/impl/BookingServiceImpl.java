@@ -9,6 +9,7 @@ import com.aiwa.exception.BusinessException;
 import com.aiwa.exception.ConflictException;
 import com.aiwa.exception.ForbiddenException;
 import com.aiwa.exception.ResourceNotFoundException;
+import com.aiwa.exception.TooManyRequestsException;
 import com.aiwa.repository.*;
 import com.aiwa.service.BookingService;
 import com.aiwa.util.AiwaTime;
@@ -49,8 +50,8 @@ public class BookingServiceImpl implements BookingService {
 
     /** How far ahead a customer can book. */
     static final int MAX_DAYS_AHEAD = 90;
-    /** Upper bound for a per-booking travel quote (EGP) — guards against typos like 15000. */
-    static final BigDecimal MAX_TRAVEL_QUOTE = new BigDecimal("5000");
+    /** Largest travel fee, quoted or flat (H-2: an uncapped flat fee overflowed numeric(10,2) with a 500). */
+    public static final BigDecimal MAX_TRAVEL_QUOTE = new BigDecimal("5000");
 
     /** Hours after completion in which the customer may report "not paid" (CR-03). */
     @org.springframework.beans.factory.annotation.Value("${aiwa.booking.payment-dispute-window-hours:48}")
@@ -59,6 +60,10 @@ public class BookingServiceImpl implements BookingService {
     /** Minutes before the start from which a venue customer may check in; it closes when the slot ends (CR-11). */
     @org.springframework.beans.factory.annotation.Value("${aiwa.booking.check-in-lead-minutes:30}")
     private long checkInLeadMinutes = 30;
+
+    /** M-1: open (pending) requests one customer may hold at once; 0 = no limit. */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.booking.max-open-requests-per-customer:5}")
+    private long maxOpenRequests = 5;
 
     /** States in which both parties may see each other's phone number. */
     static final Set<BookingStatus> CONTACT_VISIBLE = EnumSet.of(
@@ -252,6 +257,22 @@ public class BookingServiceImpl implements BookingService {
             if (!savedAddress.getUser().getId().equals(customerId)) {
                 throw new BusinessException("booking.error.address_wrong_customer");
             }
+        }
+        // M-1: a home visit needs somewhere to go (the app always sends one), and
+        // must be inside the radius the provider said they travel, when they set one.
+        if (Boolean.TRUE.equals(req.getHomeService())) {
+            if (savedAddress == null) throw new BusinessException("booking.error.address_required");
+            if (provider.getServiceRadiusKm() != null && provider.getLatitude() != null && provider.getLongitude() != null
+                    && savedAddress.getLatitude() != null && savedAddress.getLongitude() != null
+                    && GeoUtils.distanceKm(provider.getLatitude(), provider.getLongitude(),
+                            savedAddress.getLatitude(), savedAddress.getLongitude()) > provider.getServiceRadiusKm()) {
+                throw new BusinessException("booking.error.outside_service_radius");
+            }
+        }
+        // M-1: one account can't hold a provider calendar after another with open requests.
+        if (maxOpenRequests > 0
+                && bookingRepo.countByCustomerIdAndStatus(customerId, BookingStatus.PENDING) >= maxOpenRequests) {
+            throw new TooManyRequestsException("booking.error.too_many_pending");
         }
 
         // ── BOOK_NOW — today + next available slot ────────────────────────────

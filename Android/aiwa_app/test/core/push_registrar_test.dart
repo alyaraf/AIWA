@@ -35,9 +35,10 @@ void main() {
     expect(rec.calls, isEmpty);
   });
 
-  test('sign-out clears the token', () async {
+  test('sign-out with no token on this phone removes nothing (L-15)', () async {
+    // A DELETE without ?token= would remove the user's other phones too.
     await PushRegistrar(api, platform: 'IOS').unregister();
-    expect(rec.calls, ['DELETE ${ApiConstants.mePushToken}']);
+    expect(rec.calls, isEmpty);
   });
 
   test('sign-out removes only this phone (R2-12)', () async {
@@ -56,7 +57,8 @@ void main() {
   test('sign-out clean-up after the tokens were cleared uses the tokens read '
       'before, never the next session token (CR-18)', () async {
     await SecureStorage(const FlutterSecureStorage()).saveAccessToken('next');
-    await PushRegistrar(api, platform: 'IOS').unregister(accessToken: 'old');
+    await PushRegistrar(api, tokenSource: () async => 'tok-1', platform: 'IOS')
+        .unregister(accessToken: 'old');
     await api.logout(accessToken: 'old', refreshToken: 'old-r');
     expect(rec.calls, [
       'DELETE ${ApiConstants.mePushToken}',
