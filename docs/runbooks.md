@@ -146,3 +146,13 @@ Send a test once after setup:
 `dc exec alertmanager amtool alert add Test severity=critical --alertmanager.url=http://localhost:9093`.
 Also set up an outside uptime check (UptimeRobot, Better Stack) on
 `https://<API_DOMAIN>/api/actuator/health`: it still works when the whole server is down.
+
+## Load smoke test before launch
+
+`deploy/loadtest/smoke.js` is a k6 script for the public read paths (health, nearby, search). Run it against staging only:
+
+```bash
+k6 run -e BASE_URL=https://staging.example.com deploy/loadtest/smoke.js
+```
+
+It ramps to 50 users for two minutes and exits non-zero if more than 1% of requests fail or p95 passes 800 ms. While it runs, watch `hikaricp_connections_active` in Prometheus: if it sits at the pool size (`DB_POOL_SIZE`, default 20), raise the pool before launch (keep it under PostgreSQL `max_connections`).
