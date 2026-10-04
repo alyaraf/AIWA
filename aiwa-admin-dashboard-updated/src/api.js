@@ -153,6 +153,9 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
     const message = data?.message || data?.error || `Request failed with status ${response.status}`;
     const error = new Error(message);
     error.status = response.status;
+    error.code = data?.code;
+    // E-1: the backend refuses Super admin / Finance until two-factor is on.
+    if (response.status === 403 && data?.code === ADMIN_2FA_REQUIRED) onAdminTwoFactorRequired();
     throw error;
   }
 
@@ -176,6 +179,12 @@ export async function requestAllPages(path, size = 200) {
   }
   return all;
 }
+
+/** E-1 (AdminTwoFactorInterceptor): the code of a 403 that means "turn on two-factor first". */
+export const ADMIN_2FA_REQUIRED = "auth.error.admin_2fa_required";
+let onAdminTwoFactorRequired = () => {};
+/** App registers the handler that shows the two-factor setup gate. */
+export function setAdminTwoFactorHandler(fn) { onAdminTwoFactorRequired = typeof fn === "function" ? fn : () => {}; }
 
 export const api = {
   login: (payload) => request("/auth/login", {

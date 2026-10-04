@@ -16,3 +16,9 @@ spring:
       port: 6379
       repositories:
         enabled: false
+
+aiwa:
+  terms:
+    # Test contexts are shared, and some tests publish terms; a dedicated test turns
+    # the AU-19 booking check on (OwnerRulesApiTest).
+    enforce-on-booking: false

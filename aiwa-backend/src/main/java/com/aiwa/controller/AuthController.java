@@ -36,6 +36,7 @@ public class AuthController {
     private final JwtUtils jwtUtils;
     private final com.aiwa.repository.TermsPolicyRepository termsRepo;
     private final com.aiwa.service.impl.PushDeviceService pushDevices;
+    private final com.aiwa.service.impl.TermsAcceptanceService termsAcceptance;
 
     /** DR-028: per-account budget (absent in plain unit tests). */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -128,7 +129,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse.Success<ApiResponse.UserDto>> me(
             @AuthenticationPrincipal UserDetails userDetails) {
         ApiResponse.UserDto me = authService.getCurrentUser(userDetails.getUsername());
-        me.setTermsUpToDate(termsUpToDate(me.getRole(), me.getAcceptedTermsVersion()));
+        me.setTermsUpToDate(termsAcceptance.isUpToDate(me.getId(), me.getRole())); // AU-19: per document type
         return ResponseEntity.ok(ApiResponse.Success.of(me));
     }
 
@@ -471,14 +472,6 @@ public class AuthController {
                 .orElseThrow(() -> new BusinessException("user.not_found"));
     }
 
-    /** Accepted version vs. the live policy for the user's role (admins: always current). */
-    private boolean termsUpToDate(com.aiwa.enums.UserRole role, String acceptedVersion) {
-        if (role == com.aiwa.enums.UserRole.ADMIN) return true;
-        String type = role == com.aiwa.enums.UserRole.PROVIDER ? "PROVIDER_TERMS" : "CUSTOMER_TERMS";
-        return termsRepo.findFirstByTypeAndActiveTrueOrderByCreatedAtDescIdDesc(type)
-                .map(live -> live.getVersion().equals(acceptedVersion))
-                .orElse(true);
-    }
 
     private ApiResponse.UserDto toUserDto(User u) {
         // Lets the app gate unapproved providers on the pending screen.
@@ -500,7 +493,7 @@ public class AuthController {
                 .termsAccepted(u.isTermsAccepted())
                 .acceptedTermsVersion(u.getAcceptedTermsVersion())
                 .termsAcceptedAt(u.getTermsAcceptedAt())
-                .termsUpToDate(termsUpToDate(u.getRole(), u.getAcceptedTermsVersion()))
+                .termsUpToDate(termsAcceptance.isUpToDate(u))
                 .searchAreaLabel(u.getSearchAreaLabel())
                 .searchAreaLatitude(u.getSearchAreaLatitude())
                 .searchAreaLongitude(u.getSearchAreaLongitude())

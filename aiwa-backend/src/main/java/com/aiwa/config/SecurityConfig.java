@@ -109,6 +109,8 @@ public class SecurityConfig {
                         .requestMatchers("/users/me/**").authenticated()
                         .requestMatchers("/providers/*/manage/**").hasRole("PROVIDER")
                         .requestMatchers("/provider/**").hasAnyRole("PROVIDER", "ADMIN")
+                        // AU-05 (owner rule 2026-10-04): only customer accounts create bookings.
+                        .requestMatchers(HttpMethod.POST, "/bookings", "/bookings/").hasRole("CUSTOMER")
                         .requestMatchers("/bookings/**").hasAnyRole("CUSTOMER", "PROVIDER", "ADMIN")
                         .anyRequest().authenticated()
                 )

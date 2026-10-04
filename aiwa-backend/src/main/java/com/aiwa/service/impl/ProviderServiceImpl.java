@@ -130,6 +130,16 @@ public class ProviderServiceImpl implements ProviderService {
         if ((isOwner || admin || liveBooking) && dto.getOwner() != null) {
             dto.getOwner().setPhone(owner.getPhone());
         }
+        // AU-18: the exact home location only for the owner, admins and a customer
+        // with a live (accepted) booking; everyone else gets the rounded area.
+        if (!(isOwner || admin || liveBooking) && profile.getProviderType() == ProviderType.INDIVIDUAL) {
+            dto.setLatitude(coarse(dto.getLatitude()));
+            dto.setLongitude(coarse(dto.getLongitude()));
+            dto.setAddress(null);
+            if (dto.getDistanceKm() != null && dto.getDistanceKm() >= 0) {
+                dto.setDistanceKm(Math.round(dto.getDistanceKm() * 2) / 2.0);
+            }
+        }
         return dto;
     }
 
@@ -163,6 +173,7 @@ public class ProviderServiceImpl implements ProviderService {
                 });
 
         List<ApiResponse.ProviderSummaryDto> dtos = new ArrayList<>(toSummaryDtos(all, lat, lng));
+        dtos.forEach(ProviderServiceImpl::hideHomeLocation); // AU-18
         if (maxPrice != null) {
             dtos.removeIf(d -> d.getStartingPrice() == null || d.getStartingPrice().compareTo(maxPrice) > 0);
         }
@@ -189,6 +200,7 @@ public class ProviderServiceImpl implements ProviderService {
         String escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
         Page<ProviderProfile> page = providerRepo.searchByName(escaped, clamp(pageable));
         List<ApiResponse.ProviderSummaryDto> dtos = toSummaryDtos(page.getContent(), null, null);
+        dtos.forEach(ProviderServiceImpl::hideHomeLocation); // AU-18
         return new PageImpl<>(dtos, page.getPageable(), page.getTotalElements());
     }
 
@@ -227,6 +239,28 @@ public class ProviderServiceImpl implements ProviderService {
                         .map(b -> b.getCustomer().getId()).distinct().count())
                 .todayBookings(todayDtos)
                 .build();
+    }
+
+    // ── AU-18: public location of home-based providers (owner rule 2026-10-04) ──
+
+    /** About 550 m of latitude; longitude steps are a little shorter in Egypt. */
+    static final double LOCATION_GRID_DEG = 0.005;
+
+    static Double coarse(Double v) {
+        return v == null ? null : Math.round(v / LOCATION_GRID_DEG) * LOCATION_GRID_DEG;
+    }
+
+    /**
+     * AU-18: an individual (home-based) provider's pin is rounded to about 500 m, the
+     * street address is left out and the distance is rounded to half a kilometre, so a
+     * list can't be used to find where they live. Salons and venues stay exact.
+     */
+    public static void hideHomeLocation(ApiResponse.ProviderSummaryDto d) {
+        if (d.getProviderType() != ProviderType.INDIVIDUAL) return;
+        d.setLatitude(coarse(d.getLatitude()));
+        d.setLongitude(coarse(d.getLongitude()));
+        d.setAddress(null);
+        if (d.getDistanceKm() != null && d.getDistanceKm() >= 0) d.setDistanceKm(Math.round(d.getDistanceKm() * 2) / 2.0);
     }
 
     // ── summary enrichment (one query per field for the whole list) ──────────

@@ -39,11 +39,13 @@ abstract class BookingRepository {
     bool accept,
   );
 
-  /// Customer answer to a provider's travel-fee quote. Not in the backend.
+  /// Customer answer to a provider's travel-fee quote; [amount] is the quote
+  /// the customer saw and is needed to accept (CR-12).
   Future<Either<Failure, BookingEntity>> respondToTravelFee(
     String bookingId,
-    bool accept,
-  );
+    bool accept, {
+    double? amount,
+  });
 
   Future<Either<Failure, BookingEntity>> checkIn(String bookingId);
 

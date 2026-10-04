@@ -35,6 +35,7 @@ public class TermsController {
     private final TermsPolicyRepository termsRepo;
     private final UserRepository userRepo;
     private final com.aiwa.service.impl.AuditService auditService;
+    private final com.aiwa.service.impl.TermsAcceptanceService termsAcceptance;
 
     // ── Public ────────────────────────────────────────────────────────────────
 
@@ -66,8 +67,13 @@ public class TermsController {
             throw new BusinessException("terms.error.version_superseded");
         }
 
-        user.setAcceptedTermsVersion(version);
-        user.setTermsAcceptedAt(LocalDateTime.now());
+        // AU-19: recorded per document type; the single field below only mirrors the
+        // user's main document, for older readers (admin views, the app's profile).
+        termsAcceptance.accept(user, docType, version);
+        if (docType.equals(com.aiwa.service.impl.TermsAcceptanceService.mainDocumentOf(user.getRole()))) {
+            user.setAcceptedTermsVersion(version);
+            user.setTermsAcceptedAt(LocalDateTime.now());
+        }
         user.setTermsAccepted(true);
         userRepo.save(user);
         return ResponseEntity.ok(ApiResponse.Success.of("Terms accepted", null));

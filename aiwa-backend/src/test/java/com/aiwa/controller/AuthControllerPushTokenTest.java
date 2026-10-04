@@ -36,7 +36,8 @@ class AuthControllerPushTokenTest {
 
     private final AuthController controller = new AuthController(mock(AuthService.class), mock(OtpServiceImpl.class),
             userRepo, mock(com.aiwa.repository.ProviderProfileRepository.class), mock(FileStorageServiceImpl.class),
-            mock(JwtUtils.class), mock(com.aiwa.repository.TermsPolicyRepository.class), pushDevices);
+            mock(JwtUtils.class), mock(com.aiwa.repository.TermsPolicyRepository.class), pushDevices,
+            mock(com.aiwa.service.impl.TermsAcceptanceService.class));
 
     private final User nour = User.builder().id(1L).email("nour@x.com").role(UserRole.CUSTOMER).build();
 

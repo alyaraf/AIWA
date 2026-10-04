@@ -234,10 +234,22 @@ public class BookingController {
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> travelFeeResponse(
             @PathVariable Long id,
             @RequestParam boolean accept,
+            @RequestParam(required = false) BigDecimal amount,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.Success.of(
                 accept ? "Travel fee accepted" : "Travel fee declined",
-                bookingService.respondToTravelFeeQuote(resolveUserId(userDetails), id, accept)));
+                bookingService.respondToTravelFeeQuote(resolveUserId(userDetails), id, accept, amount)));
+    }
+
+    @PatchMapping("/{id}/contest-no-show")
+    @Operation(summary = "Customer contests a no-show within 48 h of the booking; opens a payment dispute (AU-03)")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> contestNoShow(
+            @PathVariable Long id,
+            @RequestBody(required = false) FreeTextBody body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of("No-show contested",
+                bookingService.contestNoShow(resolveUserId(userDetails), id,
+                        FreeTextBody.bounded(FreeTextBody.pick(body, "reason", null), 255))));
     }
 
     @PatchMapping("/{id}/check-in")

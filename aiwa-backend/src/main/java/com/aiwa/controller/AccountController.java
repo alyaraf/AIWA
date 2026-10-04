@@ -202,7 +202,9 @@ public class AccountController {
         // account. Here and not in AccountDeletionService: support's deletion
         // (DELETE /admin/users/{id}) goes through that too and has no user password.
         authService.confirmPassword(userDetails.getUsername(), request == null ? null : request.getCurrentPassword());
-        accountDeletion.delete(resolveUser(userDetails));
+        User me = resolveUser(userDetails);
+        accountDeletion.requireSelfDeletable(me); // CR-10
+        accountDeletion.delete(me);
         return ResponseEntity.ok(ApiResponse.Success.of("Account deleted", null));
     }
 

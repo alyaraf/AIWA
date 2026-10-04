@@ -201,7 +201,11 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
       _act(() => _repo.respondToProposal(bookingId, accept));
 
   Future<bool> respondToTravelFee(bool accept) async {
-    final ok = await _act(() => _repo.respondToTravelFee(bookingId, accept));
+    // CR-12: accepting sends the amount shown, so a quote changed meanwhile is refused.
+    final shown = state.booking?.travelFeeQuote;
+    final ok = await _act(
+      () => _repo.respondToTravelFee(bookingId, accept, amount: shown),
+    );
     if (ok && !accept) emit(state.copyWith(declinedFee: true));
     return ok;
   }

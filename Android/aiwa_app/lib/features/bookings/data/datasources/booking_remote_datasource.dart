@@ -59,7 +59,12 @@ abstract class BookingRemoteDataSource {
   Future<String> contactPhone(String bookingId);
 
   /// Customer answer to a provider's travel-fee quote.
-  Future<BookingModel> respondToTravelFee(String bookingId, bool accept);
+  /// [amount]: the quote the customer saw; required to accept (CR-12).
+  Future<BookingModel> respondToTravelFee(
+    String bookingId,
+    bool accept, {
+    double? amount,
+  });
 
   Future<void> submitComplaint({
     required String bookingId,
@@ -249,11 +254,15 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
   }
 
   @override
-  Future<BookingModel> respondToTravelFee(String bookingId, bool accept) async =>
+  Future<BookingModel> respondToTravelFee(
+    String bookingId,
+    bool accept, {
+    double? amount,
+  }) async =>
       _booking(
         await _api.patch(
           ApiConstants.bookingTravelFeeResponse(bookingId),
-          queryParameters: {'accept': accept},
+          queryParameters: {'accept': accept, 'amount': ?amount},
         ),
       );
 

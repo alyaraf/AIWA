@@ -44,6 +44,32 @@ public class AccountDeletionService {
     @org.springframework.beans.factory.annotation.Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbc; // null only when a unit test builds the service by hand
 
+    /**
+     * CR-10 / M-4 (owner rule 2026-10-04): a user can't close their own account while a
+     * booking is live (accepted through in progress, as customer or provider) or while
+     * commission is still owed. The message says what to finish first. Support's
+     * deletion (DELETE /admin/users/{id}) is a deliberate override and doesn't call this.
+     */
+    @Transactional(readOnly = true)
+    public void requireSelfDeletable(User user) {
+        java.util.Set<BookingStatus> live = BookingServiceImpl.CONTACT_VISIBLE;
+        boolean liveAsCustomer = live.stream()
+                .anyMatch(st -> !bookingRepo.findByCustomerIdAndStatus(user.getId(), st).isEmpty());
+        var profile = providerRepo.findByUserId(user.getId());
+        boolean liveAsProvider = profile.isPresent()
+                && !bookingRepo.findByProviderIdAndStatusIn(profile.get().getId(), live).isEmpty();
+        if (liveAsCustomer || liveAsProvider) {
+            throw new com.aiwa.exception.ConflictException("account.error.delete_live_bookings");
+        }
+        if (profile.isPresent() && ledgerRepo != null && !ledgerRepo.findByProviderIdAndStatusIn(profile.get().getId(),
+                List.of(com.aiwa.enums.LedgerEntryStatus.DUE, com.aiwa.enums.LedgerEntryStatus.OVERDUE)).isEmpty()) {
+            throw new com.aiwa.exception.ConflictException("account.error.delete_commission_owed");
+        }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.repository.CommissionLedgerRepository ledgerRepo;
+
     @Transactional
     public void delete(User user) {
         LocalDateTime now = LocalDateTime.now();

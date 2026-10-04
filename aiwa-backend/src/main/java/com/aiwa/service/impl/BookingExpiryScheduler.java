@@ -29,6 +29,11 @@ public class BookingExpiryScheduler {
             if (expired > 0) {
                 log.info("Expired {} stale PENDING booking request(s)", expired);
             }
+            // AU-03: live bookings a day past their slot are completed or flagged.
+            int closed = bookingService.closeStaleBookings();
+            if (closed > 0) {
+                log.info("Closed or flagged {} stale live booking(s)", closed);
+            }
         });
     }
 }

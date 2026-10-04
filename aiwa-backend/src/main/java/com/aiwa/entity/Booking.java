@@ -135,6 +135,12 @@ public class Booking extends BaseEntity {
      */
     private java.time.Instant waitingSinceInstant;
 
+    /** AU-03: when the closure sweep flagged this stale live booking to the admins (V28). */
+    private LocalDateTime closureFlaggedAt;
+
+    /** AU-03: when the customer contested a no-show; it opened a payment dispute (V28). */
+    private LocalDateTime noShowContestedAt;
+
     /** Set once the 2-hour reminder went out, so it is sent exactly once (R2-06). */
     private LocalDateTime reminderSentAt;
 

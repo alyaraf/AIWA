@@ -174,7 +174,9 @@ public class SafetyService {
     private void requireSosWindow(Booking booking) {
         switch (booking.getStatus()) {
             case ACCEPTED, ON_THE_WAY, ARRIVED, IN_PROGRESS -> { return; }
-            case COMPLETED, NO_SHOW -> {
+            // CR-09 (owner rule 2026-10-04): a cancelled booking keeps the same window, since
+            // a cancellation at the door or mid-visit is when someone may need help most.
+            case COMPLETED, NO_SHOW, CANCELLED -> {
                 LocalDateTime ended = booking.endedAt(); // L-11: not moved by later admin edits
                 if (!LocalDateTime.now().isAfter(ended.plus(SOS_AFTER_BOOKING))) return;
             }

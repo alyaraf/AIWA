@@ -65,6 +65,13 @@ public class BookingServiceImpl implements BookingService {
     @org.springframework.beans.factory.annotation.Value("${aiwa.booking.max-open-requests-per-customer:5}")
     private long maxOpenRequests = 5;
 
+    /** AU-19: refuse bookings while the customer's terms are out of date (off in tests, see application-test.yml). */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.terms.enforce-on-booking:true}")
+    private boolean enforceTermsOnBooking = true;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TermsAcceptanceService termsAcceptance;
+
     /** States in which both parties may see each other's phone number. */
     static final Set<BookingStatus> CONTACT_VISIBLE = EnumSet.of(
             BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED, BookingStatus.IN_PROGRESS);
@@ -268,6 +275,11 @@ public class BookingServiceImpl implements BookingService {
                             savedAddress.getLatitude(), savedAddress.getLongitude()) > provider.getServiceRadiusKm()) {
                 throw new BusinessException("booking.error.outside_service_radius");
             }
+        }
+        // AU-19 (owner rule 2026-10-04): no new booking on out-of-date terms; the app
+        // answers this code with its re-accept screen.
+        if (enforceTermsOnBooking && termsAcceptance != null && !termsAcceptance.isUpToDate(customer)) {
+            throw new BusinessException("terms.error.not_accepted");
         }
         // M-1: one account can't hold a provider calendar after another with open requests.
         if (maxOpenRequests > 0
@@ -590,6 +602,11 @@ public class BookingServiceImpl implements BookingService {
                 provider.setCancellationStrikes(provider.getCancellationStrikes() + 1);
                 providerRepo.save(provider);
                 booking.setPenaltyApplied(true);
+                bookingRepo.save(booking);
+                // AU-07 (owner rule 2026-10-04): the penalty is charged, and repeated
+                // cancellations pause new bookings until an admin reviews them.
+                chargeCancellationPenalty(booking);
+                pauseAfterRepeatedCancellations(provider);
             }
         }
 
@@ -836,6 +853,12 @@ public class BookingServiceImpl implements BookingService {
         String summaryEn;
         switch (choice) {
             case "PAID" -> {
+                // AU-03: a contested no-show judged paid means the visit happened.
+                if (booking.getStatus() == BookingStatus.NO_SHOW) {
+                    booking.setStatus(BookingStatus.COMPLETED);
+                    booking.setCompletedAt(AiwaTime.now());
+                    booking.setPenaltyApplied(false);
+                }
                 booking.setPaymentStatus(PaymentStatus.CASH_CONFIRMED);
                 recordResolution(booking, choice);
                 bookingRepo.save(booking);
@@ -1006,6 +1029,162 @@ public class BookingServiceImpl implements BookingService {
             );
         }
         return toDto(booking);
+    }
+
+    // ── AU-03: stale live bookings and no-show contests (owner rules 2026-10-04) ──
+
+    /** How long after a slot ends a live booking is left alone before the sweep acts. */
+    static final Duration CLOSURE_GRACE = Duration.ofHours(24);
+    /** How long after the slot a customer may contest a no-show. */
+    static final Duration NO_SHOW_CONTEST_WINDOW = Duration.ofHours(48);
+
+    /**
+     * AU-03: a day after a booking's slot ended it can't still be "live".
+     * IN_PROGRESS: the visit happened, so it is completed as cash pending and the
+     * commission recorded (the customer can still report "not paid").
+     * ACCEPTED / ON_THE_WAY / ARRIVED: nobody knows, so the admins are told once and
+     * close it from Bookings. Runs with the expiry sweep.
+     *
+     * @return how many bookings were completed or flagged
+     */
+    @Transactional
+    public int closeStaleBookings() {
+        LocalDateTime now = AiwaTime.now();
+        List<Booking> candidates = bookingRepo.findByStatusInAndBookingDateLessThanEqual(
+                List.of(BookingStatus.IN_PROGRESS, BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED),
+                now.toLocalDate());
+        int acted = 0;
+        for (Booking b : candidates) {
+            if (b.getBookingDate() == null || b.getEndTime() == null) continue;
+            LocalDateTime end = LocalDateTime.of(b.getBookingDate(), b.getEndTime());
+            if (b.getEndTime().isBefore(b.getStartTime())) end = end.plusDays(1); // ends after midnight
+            if (end.plus(CLOSURE_GRACE).isAfter(now)) continue;
+            if (b.getStatus() == BookingStatus.IN_PROGRESS) {
+                b.setStatus(BookingStatus.COMPLETED);
+                b.setCompletedAt(now);
+                b.setPaymentStatus(PaymentStatus.CASH_PENDING);
+                b.setCompletionNote("Closed automatically a day after the slot ended");
+                bookingRepo.save(b);
+                recordCommissionIfNeeded(b);
+                notifyCustomer(b, NotificationType.BOOKING_COMPLETED, "Booking completed", "اكتمل الحجز",
+                        "Your " + b.getService().getName() + " booking was closed as completed. If you didn't pay "
+                                + "or the visit didn't happen, report it from the booking.",
+                        "تم إغلاق حجزك لـ " + b.getService().getName() + " كمكتمل. إذا لم تدفع أو لم تتم الزيارة، أبلغ عن ذلك من صفحة الحجز.");
+                notificationService.send(b.getProvider().getUser().getId(), NotificationType.BOOKING_COMPLETED,
+                        "Booking closed automatically", "تم إغلاق الحجز تلقائياً",
+                        "Booking #" + b.getId() + " was still in progress a day after its slot, so it was closed as "
+                                + "completed and the commission was added.",
+                        "كان الحجز رقم " + b.getId() + " لا يزال جارياً بعد يوم من موعده، فتم إغلاقه كمكتمل وإضافة العمولة.",
+                        b.getId(), b.getProvider().getId());
+                acted++;
+            } else if (b.getClosureFlaggedAt() == null) {
+                b.setClosureFlaggedAt(now);
+                bookingRepo.save(b);
+                userRepo.findByRoleAndActive(UserRole.ADMIN, true).forEach(admin -> notificationService.send(
+                        admin.getId(), NotificationType.ACCOUNT_WARNING,
+                        "Booking needs closing", "حجز يحتاج إلى إغلاق",
+                        "Booking #" + b.getId() + " (" + b.getProvider().getBusinessName() + ") is still "
+                                + b.getStatus().name().toLowerCase().replace('_', ' ')
+                                + " a day after its slot. Check with both sides and close it from Bookings.",
+                        "الحجز رقم " + b.getId() + " لا يزال مفتوحاً بعد يوم من موعده. تواصل مع الطرفين وأغلقه من صفحة الحجوزات.",
+                        b.getId(), b.getProvider().getId()));
+                acted++;
+            }
+        }
+        return acted;
+    }
+
+    /**
+     * AU-03: the customer says the no-show was wrong (they were there, or the provider
+     * never came). Within 48 h of the slot, once: it opens a payment dispute that
+     * finance resolves (PAID completes the booking and charges the commission).
+     */
+    @Transactional
+    public ApiResponse.BookingDto contestNoShow(Long customerId, Long bookingId, String reason) {
+        Booking booking = bookingRepo.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
+        if (!booking.getCustomer().getId().equals(customerId)) throw new ForbiddenException("error.not_authorized");
+        if (booking.getStatus() != BookingStatus.NO_SHOW) throw new BusinessException("booking.error.not_no_show");
+        if (booking.getNoShowContestedAt() != null || booking.getPaymentResolution() != null)
+            throw new BusinessException("booking.error.no_show_already_contested");
+        if (LocalDateTime.now().isAfter(booking.endedAt().plus(NO_SHOW_CONTEST_WINDOW)))
+            throw new BusinessException("booking.error.no_show_contest_closed");
+        booking.setNoShowContestedAt(LocalDateTime.now());
+        booking.setPaymentStatus(PaymentStatus.DISPUTED);
+        String why = trimReason(reason);
+        if (why != null) booking.setCompletionNote("Customer contested the no-show: " + why);
+        bookingRepo.save(booking);
+        userRepo.findByRoleAndActive(UserRole.ADMIN, true).forEach(admin -> notificationService.send(
+                admin.getId(), NotificationType.PAYMENT_DISPUTED,
+                "No-show contested", "اعتراض على عدم الحضور",
+                "The customer of booking #" + booking.getId() + " says the no-show was wrong"
+                        + (why != null ? ": " + why : ".") + " Resolve it as a payment dispute.",
+                "يعترض عميل الحجز رقم " + booking.getId() + " على تسجيل عدم الحضور.",
+                booking.getId(), booking.getProvider().getId()));
+        notificationService.send(booking.getProvider().getUser().getId(), NotificationType.PAYMENT_DISPUTED,
+                "No-show contested", "اعتراض على عدم الحضور",
+                "The customer contested the no-show on booking #" + booking.getId() + ". AIWA support will review it.",
+                "اعترض العميل على تسجيل عدم الحضور في الحجز رقم " + booking.getId() + ". سيراجعه دعم AIWA.",
+                booking.getId(), booking.getProvider().getId());
+        return toDto(booking);
+    }
+
+    /** Penalised provider cancellations within this window that pause new bookings (AU-07). */
+    static final int STRIKES_TO_PAUSE = 3;
+    static final Duration STRIKE_WINDOW = Duration.ofDays(30);
+
+    /**
+     * AU-07: a provider who cancels an accepted booking owes the platform penalty
+     * percent of the service price (travel excluded, like commission). It is that
+     * booking's ledger entry, settled like any commission. Zero percent charges nothing.
+     */
+    void chargeCancellationPenalty(Booking booking) {
+        BigDecimal pct = platformSettings.getProviderCancelPenaltyPercent(booking.getProvider());
+        if (pct == null || pct.signum() <= 0 || commissionLedgerRepo.existsByBookingId(booking.getId())) return;
+        BigDecimal base = booking.getTotalPrice()
+                .subtract(booking.getTravelFee() != null ? booking.getTravelFee() : BigDecimal.ZERO);
+        BigDecimal amount = base.multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        if (amount.signum() <= 0) return;
+        commissionLedgerRepo.save(CommissionLedgerEntry.builder()
+                .provider(booking.getProvider())
+                .booking(booking)
+                .bookingAmount(booking.getTotalPrice())
+                .commissionPercent(pct)
+                .commissionAmount(amount)
+                .status(LedgerEntryStatus.DUE)
+                .build());
+        booking.setCommissionAmount(amount);
+        bookingRepo.save(booking);
+        notificationService.send(booking.getProvider().getUser().getId(), NotificationType.COMMISSION_DUE,
+                "Cancellation penalty", "غرامة إلغاء",
+                "You cancelled confirmed booking #" + booking.getId() + ", so a penalty of EGP " + amount
+                        + " (" + pct.stripTrailingZeros().toPlainString() + "%) was added to your dues.",
+                "ألغيت الحجز المؤكد رقم " + booking.getId() + "، لذلك أضيفت غرامة قدرها " + amount
+                        + " جنيه إلى مستحقاتك.",
+                booking.getId(), booking.getProvider().getId());
+    }
+
+    /** AU-07: three penalised cancellations in 30 days pause new bookings until an admin lifts it. */
+    void pauseAfterRepeatedCancellations(ProviderProfile provider) {
+        long recent = bookingRepo.countByProviderIdAndCancelledByAndPenaltyAppliedTrueAndCancelledAtAfter(
+                provider.getId(), "PROVIDER", LocalDateTime.now().minus(STRIKE_WINDOW));
+        if (recent < STRIKES_TO_PAUSE || provider.isSettlementPaused()) return;
+        provider.setSettlementPaused(true);
+        providerRepo.save(provider);
+        notificationService.send(provider.getUser().getId(), NotificationType.ACCOUNT_WARNING,
+                "New bookings paused", "تم إيقاف الحجوزات الجديدة مؤقتاً",
+                "You cancelled " + recent + " confirmed bookings in the last 30 days, so new bookings are paused "
+                        + "until AIWA support reviews your account.",
+                "ألغيت " + recent + " حجوزات مؤكدة خلال آخر 30 يوماً، لذلك تم إيقاف الحجوزات الجديدة مؤقتاً "
+                        + "حتى يراجع دعم AIWA حسابك.",
+                null, provider.getId());
+        userRepo.findByRoleAndActive(UserRole.ADMIN, true).forEach(admin -> notificationService.send(
+                admin.getId(), NotificationType.ACCOUNT_WARNING,
+                "Provider paused for cancellations", "إيقاف مقدم خدمة بسبب الإلغاءات",
+                provider.getBusinessName() + " cancelled " + recent + " confirmed bookings in 30 days; new bookings "
+                        + "are paused. Review and lift it from their profile (Pause new bookings).",
+                provider.getBusinessName() + " ألغى " + recent + " حجوزات مؤكدة خلال 30 يوماً؛ تم إيقاف الحجوزات الجديدة.",
+                null, provider.getId()));
     }
 
     private void notifyAdminsOfDispute(Booking booking) {
@@ -1232,6 +1411,10 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("booking.error.quote_home_service_only");
         if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.ACCEPTED)
             throw new BusinessException("booking.error.quote_not_allowed_now");
+        // CR-12 (owner rule 2026-10-04): once accepted, a booking can get a first quote
+        // but never a new one, so the price a customer agreed to can't be raised later.
+        if (booking.getStatus() == BookingStatus.ACCEPTED && booking.getTravelFeeQuoteStatus() != null)
+            throw new BusinessException("booking.error.quote_locked");
         if (amount == null || amount.signum() < 0 || amount.compareTo(MAX_TRAVEL_QUOTE) > 0)
             throw new BusinessException("booking.error.quote_invalid_amount");
 
@@ -1255,6 +1438,16 @@ public class BookingServiceImpl implements BookingService {
      */
     @Transactional
     public ApiResponse.BookingDto respondToTravelFeeQuote(Long customerId, Long bookingId, boolean accept) {
+        return respondToTravelFeeQuote(customerId, bookingId, accept, null);
+    }
+
+    /**
+     * @param seenAmount CR-12: the quote the customer saw. Accepting needs it and it
+     *                   must match, so a quote changed meanwhile is never accepted blind.
+     */
+    @Transactional
+    public ApiResponse.BookingDto respondToTravelFeeQuote(Long customerId, Long bookingId, boolean accept,
+                                                         BigDecimal seenAmount) {
         Booking booking = bookingRepo.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
         if (!booking.getCustomer().getId().equals(customerId))
@@ -1263,6 +1456,8 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("booking.error.no_pending_quote");
         if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.ACCEPTED)
             throw new BusinessException("booking.error.quote_not_allowed_now");
+        if (accept && (seenAmount == null || seenAmount.compareTo(booking.getTravelFeeQuote()) != 0))
+            throw new ConflictException("booking.error.quote_changed");
 
         if (accept) {
             BigDecimal servicePortion = booking.getTotalPrice()

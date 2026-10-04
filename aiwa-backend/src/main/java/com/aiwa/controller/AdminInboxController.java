@@ -2,6 +2,7 @@ package com.aiwa.controller;
 
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.*;
+import com.aiwa.enums.BookingStatus;
 import com.aiwa.enums.ComplaintStatus;
 import com.aiwa.enums.ModerationStatus;
 import com.aiwa.enums.ModerationTargetType;
@@ -134,6 +135,20 @@ public class AdminInboxController {
                                 + (b.getCustomer() != null ? " · " + b.getCustomer().getFullName() : "")
                                 + (b.getProvider() != null ? " → " + b.getProvider().getBusinessName() : ""))
                         .createdAt(b.getCreatedAt())
+                        .targetRoute("bookings")
+                        .build()));
+
+        // AU-03: live bookings a day past their slot that the sweep flagged.
+        bookingRepo.findByClosureFlaggedAtIsNotNullAndStatusInOrderByClosureFlaggedAtDesc(
+                        List.of(BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED),
+                        PageRequest.of(0, perSource))
+                .forEach(b -> items.add(ApiResponse.InboxItemDto.builder()
+                        .id("closure-" + b.getId())
+                        .kind("NEEDS_CLOSURE")
+                        .title("Booking needs closing")
+                        .body("BK-" + b.getId() + " · still " + b.getStatus().name().toLowerCase().replace('_', ' ')
+                                + (b.getProvider() != null ? " · " + b.getProvider().getBusinessName() : ""))
+                        .createdAt(b.getClosureFlaggedAt())
                         .targetRoute("bookings")
                         .build()));
 

@@ -90,8 +90,11 @@ class BookingRepositoryImpl implements BookingRepository {
   @override
   Future<Either<Failure, BookingEntity>> respondToTravelFee(
     String bookingId,
-    bool accept,
-  ) => _guard(() => _remote.respondToTravelFee(bookingId, accept));
+    bool accept, {
+    double? amount,
+  }) => _guard(
+    () => _remote.respondToTravelFee(bookingId, accept, amount: amount),
+  );
 
   @override
   Future<Either<Failure, BookingEntity>> checkIn(String bookingId) =>

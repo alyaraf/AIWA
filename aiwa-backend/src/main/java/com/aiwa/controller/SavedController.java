@@ -43,6 +43,7 @@ public class SavedController {
                 .map(com.aiwa.entity.SavedProvider::getProvider)
                 .collect(Collectors.toList());
         List<ApiResponse.ProviderSummaryDto> dtos = providerServiceImpl.toSummaryDtos(providers, lat, lng);
+        dtos.forEach(com.aiwa.service.impl.ProviderServiceImpl::hideHomeLocation); // AU-18
 
         return ResponseEntity.ok(ApiResponse.Success.of(dtos));
     }

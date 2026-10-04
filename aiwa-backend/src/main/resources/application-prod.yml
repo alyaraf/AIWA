@@ -31,3 +31,6 @@ management:
 aiwa:
   auth:
     cookie-secure: true
+    # E-1 / AU-09 (owner rule 2026-10-04): Super admin and Finance admins must turn on
+    # two-factor sign-in before the admin API answers them (AdminTwoFactorInterceptor).
+    require-admin-2fa: ${REQUIRE_ADMIN_2FA:true}

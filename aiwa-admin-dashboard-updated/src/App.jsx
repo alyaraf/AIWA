@@ -48,7 +48,7 @@ import {
   X,
   XCircle
 } from "lucide-react";
-import { api, clearTokens, getAccessToken, mock, setTokens, TOKEN_STORAGE_KEYS, USE_MOCKS } from "./api";
+import { api, clearTokens, getAccessToken, mock, setAdminTwoFactorHandler, setTokens, TOKEN_STORAGE_KEYS, USE_MOCKS } from "./api";
 
 /* String → component map for icons that arrive as strings from the API/mock. */
 const iconMap = {
@@ -363,6 +363,13 @@ export default function App() {
   const [profileError, setProfileError] = useState(false);
   const [profileTry, setProfileTry] = useState(0);
   const [route, setRoute] = useState("dashboard");
+  // E-1: set when the backend answers auth.error.admin_2fa_required.
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+  useEffect(() => {
+    setAdminTwoFactorHandler(() => setNeedsTwoFactor(true));
+    return () => setAdminTwoFactorHandler(null);
+  }, []);
+  useEffect(() => { if (!session) setNeedsTwoFactor(false); }, [session]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -460,20 +467,28 @@ export default function App() {
             <button className="btn btn-secondary sm" onClick={() => setProfileTry((n) => n + 1)}>Retry</button>
           </div>
         )}
-        {route === "dashboard" && <Dashboard onRoute={setRoute} />}
-        {route === "safety" && <Safety />}
-        {route === "verifications" && <Verifications />}
-        {route === "complaints" && <Complaints />}
-        {route === "flags" && <Flags />}
-        {route === "users" && <UsersPage currentUser={session.user} />}
-        {route === "bookings" && <Bookings />}
-        {route === "reviews" && <Reviews />}
-        {route === "moderation" && <Moderation />}
-        {route === "chat-reports" && <ChatReports />}
-        {route === "settlements" && <Settlements />}
-        {route === "audit" && <AuditLog />}
-        {route === "settings" && <Policies />}
-        {route === "me" && (
+        {needsTwoFactor && (
+          /* E-1: the backend answers nothing else until two-factor is on. */
+          <section className="page">
+            <InlineBanner tone="warn" title="Turn on two-factor sign-in"
+              body="Super admin and Finance accounts must use two-factor sign-in. Set it up below; the panel opens as soon as it is on." />
+            <TotpSetupCard onEnabled={() => { setNeedsTwoFactor(false); refreshApp(); }} />
+          </section>
+        )}
+        {!needsTwoFactor && route === "dashboard" && <Dashboard onRoute={setRoute} />}
+        {!needsTwoFactor && route === "safety" && <Safety />}
+        {!needsTwoFactor && route === "verifications" && <Verifications />}
+        {!needsTwoFactor && route === "complaints" && <Complaints />}
+        {!needsTwoFactor && route === "flags" && <Flags />}
+        {!needsTwoFactor && route === "users" && <UsersPage currentUser={session.user} />}
+        {!needsTwoFactor && route === "bookings" && <Bookings />}
+        {!needsTwoFactor && route === "reviews" && <Reviews />}
+        {!needsTwoFactor && route === "moderation" && <Moderation />}
+        {!needsTwoFactor && route === "chat-reports" && <ChatReports />}
+        {!needsTwoFactor && route === "settlements" && <Settlements />}
+        {!needsTwoFactor && route === "audit" && <AuditLog />}
+        {!needsTwoFactor && route === "settings" && <Policies />}
+        {!needsTwoFactor && route === "me" && (
           <MyProfile
             currentUser={session.user}
             onBack={() => setRoute("dashboard")}
@@ -798,6 +813,7 @@ function kindDotClass(kind) {
     case "REPORTED_CHAT":   return "plum";
     case "REPORTED_PHOTO":  return "plum";
     case "DISPUTE":         return "danger";
+    case "NEEDS_CLOSURE":   return "gold";   // AU-03: a live booking a day past its slot
     default:                return "plum";
   }
 }
@@ -2731,7 +2747,7 @@ function ServerClockHint() {
   );
 }
 
-export function TotpSetupCard() {
+export function TotpSetupCard({ onEnabled } = {}) {
   const [status, setStatus] = useState(null); // null = loading
   const [error, setError] = useState("");
   const [setupData, setSetupData] = useState(null); // { secret, otpAuthUri } while mid-setup
@@ -2770,6 +2786,7 @@ export function TotpSetupCard() {
     try {
       await runAction(() => api.totpEnable(code), { success: "Two-factor authentication enabled" });
       setStatus(true);
+      if (onEnabled) onEnabled();
       setSetupData(null);
       setCode("");
     } catch { /* toast */ } finally { setBusy(false); }

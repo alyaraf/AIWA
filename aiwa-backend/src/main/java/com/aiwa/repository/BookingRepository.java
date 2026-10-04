@@ -109,6 +109,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     long countByCustomerIdAndStatus(Long customerId, BookingStatus status);
 
+    /** AU-07: penalised provider cancellations since a time. */
+    long countByProviderIdAndCancelledByAndPenaltyAppliedTrueAndCancelledAtAfter(
+            Long providerId, String cancelledBy, java.time.LocalDateTime since);
+
     List<Booking> findByProviderIdAndStatusIn(Long providerId, Collection<BookingStatus> statuses);
 
     boolean existsByCustomerIdAndProviderIdAndStatusIn(Long customerId, Long providerId,
@@ -121,6 +125,13 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     /** All bookings in one status — used by the expiry sweep, which applies a per-provider window. */
     List<Booking> findByStatus(BookingStatus status);
+
+    /** AU-03: live bookings whose day is at least the given one ago (the sweep checks the end time). */
+    List<Booking> findByStatusInAndBookingDateLessThanEqual(java.util.Collection<BookingStatus> statuses, LocalDate date);
+
+    /** AU-03: flagged stale bookings still open, for the admin inbox. */
+    List<Booking> findByClosureFlaggedAtIsNotNullAndStatusInOrderByClosureFlaggedAtDesc(
+            java.util.Collection<BookingStatus> statuses, Pageable pageable);
 
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.provider.id = :providerId AND b.status = :status")
     long countByProviderAndStatus(@Param("providerId") Long providerId, @Param("status") BookingStatus status);

@@ -209,6 +209,13 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>(
 /// Provider routes need a PROVIDER whose verification is approved; the
 /// rest wait on the pending screen (PROV-02-F1).
 Future<String?> _providerGate(BuildContext context, GoRouterState state) async {
+  // AU-05: only customer accounts book; the backend refuses everyone else.
+  if (state.matchedLocation.startsWith('/booking/')) {
+    final auth = context.read<AuthBloc>().state;
+    return auth is AuthAuthenticated && auth.user.isProvider
+        ? AppRoutes.forbidden
+        : null;
+  }
   if (!state.matchedLocation.startsWith('/pro/')) return null;
   final auth = context.read<AuthBloc>().state;
   if (auth is AuthAuthenticated) {
