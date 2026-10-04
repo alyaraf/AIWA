@@ -323,6 +323,7 @@ public class BookingServiceImpl implements BookingService {
                 .estimatedArrivalMinutes(eta)
                 .homeService(isHomeService)
                 .status(BookingStatus.PENDING)
+                .waitingSinceInstant(Instant.now())
                 .totalPrice(total)
                 .travelFee(travelFee)
                 .notes(req.getNotes())
@@ -447,7 +448,7 @@ public class BookingServiceImpl implements BookingService {
         boolean isOwner = booking.getCustomer().getId().equals(requesterId)
                 || booking.getProvider().getUser().getId().equals(requesterId);
         if (!isOwner) throw new ForbiddenException("error.access_denied");
-        ApiResponse.BookingDto dto = toDto(booking);
+        ApiResponse.BookingDto dto = toDtoFor(booking, requesterId);
         // The provider's booking detail shows "N bookings" for the customer.
         if (dto.getCustomer() != null) {
             dto.getCustomer().setBookingCount(bookingRepo.countByCustomerId(booking.getCustomer().getId()));
@@ -498,7 +499,7 @@ public class BookingServiceImpl implements BookingService {
                     ? bookingRepo.findByProviderIdAndStatusInOrderByBookingDateAscStartTimeAsc(pid, statuses, pageable)
                     : bookingRepo.findByProviderIdOrderByBookingDateAscStartTimeAsc(pid, pageable);
         }
-        return page.map(this::toDto);
+        return page.map(this::toProviderDto);
     }
 
     /**
@@ -606,7 +607,7 @@ public class BookingServiceImpl implements BookingService {
         bookingRepo.save(booking);
 
         sendStatusNotification(booking, newStatus, isCustomer);
-        return toDto(booking);
+        return toDtoFor(booking, userId);
     }
 
     /**
@@ -765,7 +766,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         sendStatusNotification(booking, BookingStatus.COMPLETED, false);
-        return toDto(booking);
+        return toProviderDto(booking);
     }
 
     /** Admin override: force-cancel any non-terminal booking. */
@@ -1091,8 +1092,11 @@ public class BookingServiceImpl implements BookingService {
      * early; telling the two apart needs the columns stored as instants.
      */
     static boolean answerOverdue(Booking b, long windowMinutes, Instant now) {
-        return waitingSince(b).atZone(ZoneId.systemDefault()).toInstant()
-                .plus(Duration.ofMinutes(windowMinutes)).isBefore(now);
+        // V27: rows written since carry the instant itself, so the repeated autumn
+        // hour can no longer be read as its first occurrence.
+        Instant since = b.getWaitingSinceInstant() != null ? b.getWaitingSinceInstant()
+                : waitingSince(b).atZone(ZoneId.systemDefault()).toInstant();
+        return since.plus(Duration.ofMinutes(windowMinutes)).isBefore(now);
     }
 
     // ── PROVIDER PROPOSES ALTERNATIVE TIME (customer accept/decline) ───────────
@@ -1118,6 +1122,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setProposedDate(req.getBookingDate());
         booking.setProposedStartTime(req.getStartTime());
         booking.setProposedAt(LocalDateTime.now());
+        booking.setWaitingSinceInstant(Instant.now());
         bookingRepo.save(booking);
 
         notificationService.send(
@@ -1131,7 +1136,7 @@ public class BookingServiceImpl implements BookingService {
                         + " لـ " + booking.getService().getName() + ". اقبل أو ارفض.",
                 booking.getId(), booking.getProvider().getId()
         );
-        return toDto(booking);
+        return toProviderDto(booking);
     }
 
     @Override
@@ -1240,7 +1245,7 @@ public class BookingServiceImpl implements BookingService {
                         + " travel for your " + booking.getService().getName() + " booking. Accept or decline.",
                 booking.getProvider().getBusinessName() + " حدد رسوم انتقال " + booking.getTravelFeeQuote()
                         + " جنيه لحجزك. اقبل أو ارفض.");
-        return toDto(booking);
+        return toProviderDto(booking);
     }
 
     /**
@@ -1299,7 +1304,7 @@ public class BookingServiceImpl implements BookingService {
         if (!booking.getProvider().getUser().getId().equals(userId))
             throw new ForbiddenException("error.not_authorized");
         if (!booking.getStatus().canTransitionTo(BookingStatus.REJECTED))
-            throw new BusinessException("Cannot reject booking in status: " + booking.getStatus());
+            throw new BusinessException("booking.error.invalid_transition");
         String why = trimReason(reason);
         if (why == null) throw new BusinessException("booking.error.reason_required");
 
@@ -1323,7 +1328,7 @@ public class BookingServiceImpl implements BookingService {
                 findAlternativeProviders(booking.getProvider(), booking.getService());
 
         return ApiResponse.BookingWithAlternativesDto.builder()
-                .booking(toDto(booking))
+                .booking(toProviderDto(booking))
                 .alternativeProviders(alternatives)
                 .build();
     }
@@ -1600,6 +1605,7 @@ public class BookingServiceImpl implements BookingService {
         // response window starts now, not at the original request (R2-01).
         booking.setStatus(BookingStatus.PENDING);
         booking.setAwaitingSince(LocalDateTime.now());
+        booking.setWaitingSinceInstant(Instant.now());
         booking.setReminderSentAt(null);
         bookingRepo.save(booking);
 
@@ -1775,6 +1781,28 @@ public class BookingServiceImpl implements BookingService {
                 .title(s.getTitle())
                 .active(s.isActive())
                 .build();
+    }
+
+    /**
+     * The booking as its provider sees it (AU-20 / L-23): the customer's saved
+     * address only while the request is open or the visit is live. Once it was
+     * rejected, expired, cancelled, completed or a no-show the provider no longer
+     * needs where the customer lives, the same rule as the phone number.
+     */
+    private ApiResponse.BookingDto toProviderDto(Booking b) {
+        ApiResponse.BookingDto dto = toDto(b);
+        if (b.getStatus() != BookingStatus.PENDING && !CONTACT_VISIBLE.contains(b.getStatus())) {
+            dto.setSavedAddress(null);
+        }
+        return dto;
+    }
+
+    /** {@link #toDto} for the customer, {@link #toProviderDto} for the provider. */
+    private ApiResponse.BookingDto toDtoFor(Booking b, Long viewerId) {
+        boolean provider = b.getProvider() != null && b.getProvider().getUser() != null
+                && b.getProvider().getUser().getId().equals(viewerId)
+                && !b.getCustomer().getId().equals(viewerId);
+        return provider ? toProviderDto(b) : toDto(b);
     }
 
     private ApiResponse.SavedAddressDto toAddressDto(SavedAddress a) {

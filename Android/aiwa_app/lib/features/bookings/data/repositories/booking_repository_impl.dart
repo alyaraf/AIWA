@@ -164,8 +164,11 @@ class BookingRepositoryImpl implements BookingRepository {
   );
 
   @override
-  Future<Either<Failure, List<ChatMessageEntity>>> getChat(String bookingId) =>
-      _guard(() => _remote.getChat(bookingId));
+  Future<Either<Failure, List<ChatMessageEntity>>> getChat(
+    String bookingId, {
+    String? afterId,
+  }) =>
+      _guard(() => _remote.getChat(bookingId, afterId: afterId));
 
   @override
   Future<Either<Failure, ChatMessageEntity>> sendChat(

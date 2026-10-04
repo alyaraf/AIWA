@@ -83,6 +83,8 @@ jobs:
           cache: npm
           cache-dependency-path: aiwa-admin-dashboard-updated/package-lock.json
       - run: npm ci
+      # AU-11: known high/critical advisories in what ships to the browser fail the build.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: npm run build
         env:

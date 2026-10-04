@@ -136,6 +136,7 @@ public class User extends BaseEntity {
     // ── Two-factor authentication (TOTP) ────────────────────────────────────────
     /** Base32 secret. Set as soon as setup starts; only trusted for login once
      *  totpEnabled is true (setup isn't "on" until the first code is confirmed). */
+    @jakarta.persistence.Convert(converter = com.aiwa.util.TotpSecretConverter.class) // AU-08: encrypted at rest
     private String totpSecret;
 
     @Builder.Default

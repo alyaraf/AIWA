@@ -3498,4 +3498,22 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get linkOpenFailed =>
       'لا يوجد تطبيق على هذا الهاتف يمكنه فتح ذلك. يرجى المحاولة بطريقة أخرى.';
+
+  @override
+  String get a11yChat => 'فتح المحادثة';
+
+  @override
+  String get a11ySend => 'إرسال الرسالة';
+
+  @override
+  String get a11yEdit => 'تعديل';
+
+  @override
+  String get a11yShare => 'مشاركة';
+
+  @override
+  String get a11ySave => 'حفظ في المفضلة';
+
+  @override
+  String get a11ySaved => 'محفوظ في المفضلة';
 }

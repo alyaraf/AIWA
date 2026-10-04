@@ -290,4 +290,58 @@ class FileStorageMetadataTest {
         }
         return false;
     }
+
+    // ── CR-14: JPEGs the JDK can't decode (CMYK) ────────────────────────────────
+
+    private static byte[] segment(int marker, String payload) {
+        byte[] p = payload.getBytes(StandardCharsets.ISO_8859_1);
+        return ByteBuffer.allocate(4 + p.length).put((byte) 0xFF).put((byte) marker)
+                .putShort((short) (p.length + 2)).put(p).array();
+    }
+
+    @Test
+    void anUndecodableJpegLosesItsLocationSegmentsButKeepsColourAndImageData() throws IOException {
+        BufferedImage img = new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(img, "jpeg", out);
+        byte[] plain = out.toByteArray();
+        // SOI, then EXIF (GPS), XMP, ICC, IPTC, Adobe and a comment, then the rest of the file.
+        ByteArrayOutputStream tagged = new ByteArrayOutputStream();
+        tagged.write(plain, 0, 2);
+        tagged.write(segment(0xE1, "Exif\0\0GPSLatitude=30.0444"));
+        tagged.write(segment(0xE1, "http://ns.adobe.com/xap/1.0/\0<exif:GPSLongitude>31.2357"));
+        tagged.write(segment(0xE2, "ICC_PROFILE\0colour"));
+        tagged.write(segment(0xED, "Photoshop 3.0\0IPTC-City=Cairo"));
+        tagged.write(segment(0xEE, "Adobe\0transform"));
+        tagged.write(segment(0xFE, "taken at home"));
+        tagged.write(plain, 2, plain.length - 2);
+        byte[] in = tagged.toByteArray();
+
+        byte[] stripped = FileStorageServiceImpl.stripJpegMetadata(in);
+
+        String s = new String(stripped, StandardCharsets.ISO_8859_1);
+        assertThat(s).doesNotContain("GPSLatitude").doesNotContain("GPSLongitude")
+                .doesNotContain("IPTC-City").doesNotContain("taken at home");
+        assertThat(s).contains("ICC_PROFILE").contains("Adobe");
+        // Only the personal segments went: SOI + ICC + Adobe + the original file after SOI, byte for byte.
+        int kept = segment(0xE2, "ICC_PROFILE\0colour").length + segment(0xEE, "Adobe\0transform").length;
+        assertThat(stripped.length).isEqualTo(2 + kept + plain.length - 2);
+        assertThat(java.util.Arrays.copyOfRange(stripped, 2 + kept, stripped.length))
+                .isEqualTo(java.util.Arrays.copyOfRange(plain, 2, plain.length));
+        // Without the fake colour segments the result still decodes.
+        ByteArrayOutputStream gpsOnly = new ByteArrayOutputStream();
+        gpsOnly.write(plain, 0, 2);
+        gpsOnly.write(segment(0xE1, "Exif\0\0GPSLatitude=30.0444"));
+        gpsOnly.write(plain, 2, plain.length - 2);
+        BufferedImage back = ImageIO.read(new ByteArrayInputStream(
+                FileStorageServiceImpl.stripJpegMetadata(gpsOnly.toByteArray())));
+        assertThat(back.getWidth()).isEqualTo(8);
+    }
+
+    @Test
+    void aMalformedJpegIsNotStripped() {
+        assertThat(FileStorageServiceImpl.stripJpegMetadata(new byte[]{(byte) 0xFF, (byte) 0xD8, 0x00, 0x01, 0x02}))
+                .isNull();
+        assertThat(FileStorageServiceImpl.stripJpegMetadata("not a jpeg".getBytes(StandardCharsets.UTF_8))).isNull();
+    }
 }

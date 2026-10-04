@@ -24,7 +24,7 @@ class ChatState {
 }
 
 /// Booking chat (ChatController).
-// ponytail: polls every 5s; no realtime channel in the backend or pubspec.
+// Polls every 5 s for new messages only (AU-10); no realtime channel yet.
 class ChatCubit extends Cubit<ChatState> {
   final BookingRepository _repo;
   final String bookingId;
@@ -32,16 +32,57 @@ class ChatCubit extends Cubit<ChatState> {
 
   ChatCubit(this._repo, this.bookingId) : super(const ChatState()) {
     load();
-    _poll = Timer.periodic(const Duration(seconds: 5), (_) => load());
+    _poll = Timer.periodic(const Duration(seconds: 5), (_) => _tick());
+  }
+
+  /// AU-10: one request at a time (a slow answer used to let polls pile up).
+  bool _inFlight = false;
+  int _ticks = 0;
+
+  /// Every 5 s: only messages newer than the last one; every 12th tick (about
+  /// a minute) the whole thread, so a message moderation hid disappears too.
+  void _tick() {
+    _ticks++;
+    final last = state.messages?.isNotEmpty == true ? state.messages!.last.id : null;
+    if (_ticks % 12 == 0 || last == null) {
+      load();
+    } else {
+      _loadNewer(last);
+    }
   }
 
   Future<void> load() async {
-    final r = await _repo.getChat(bookingId);
-    if (isClosed) return;
-    r.fold(
-      (f) => emit(state.copyWith(error: f.message)),
-      (m) => emit(state.copyWith(messages: m)),
-    );
+    if (_inFlight) return;
+    _inFlight = true;
+    try {
+      final r = await _repo.getChat(bookingId);
+      if (isClosed) return;
+      r.fold(
+        (f) => emit(state.copyWith(error: f.message)),
+        (m) => emit(state.copyWith(messages: m)),
+      );
+    } finally {
+      _inFlight = false;
+    }
+  }
+
+  Future<void> _loadNewer(String afterId) async {
+    if (_inFlight) return;
+    _inFlight = true;
+    try {
+      final r = await _repo.getChat(bookingId, afterId: afterId);
+      if (isClosed) return;
+      r.fold((f) => emit(state.copyWith(error: f.message)), (m) {
+        if (m.isEmpty) return;
+        final known = {for (final e in state.messages ?? const []) e.id};
+        final fresh = [for (final e in m) if (!known.contains(e.id)) e];
+        if (fresh.isNotEmpty) {
+          emit(state.copyWith(messages: [...?state.messages, ...fresh]));
+        }
+      });
+    } finally {
+      _inFlight = false;
+    }
   }
 
   /// Returns false (and keeps the draft) when sending fails.

@@ -1,6 +1,8 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../l10n/l10n.dart';
 import 'press_scale.dart';
 
 enum AiwaIconButtonVariant { paper, plum, rose, glass }
@@ -14,6 +16,9 @@ class AiwaIconButton extends StatelessWidget {
   final bool dot;
   final Color? iconColor;
 
+  /// What a screen reader says (AU-12). Defaults to a label for the icon.
+  final String? semanticLabel;
+
   const AiwaIconButton({
     super.key,
     required this.icon,
@@ -22,7 +27,26 @@ class AiwaIconButton extends StatelessWidget {
     this.variant = AiwaIconButtonVariant.paper,
     this.dot = false,
     this.iconColor,
+    this.semanticLabel,
   });
+
+  /// The label for the icons this button is used with, in the app's language.
+  String? _defaultLabel(BuildContext context) {
+    final m = MaterialLocalizations.of(context);
+    final l = AppLocalizations.of(context);
+    if (icon == LucideIcons.arrowLeftDir || icon == LucideIcons.arrowLeft) return m.backButtonTooltip;
+    if (icon == LucideIcons.x) return m.closeButtonTooltip;
+    if (icon == LucideIcons.phone) return l.providerCall;
+    if (icon == LucideIcons.messageCircle) return l.a11yChat;
+    if (icon == LucideIcons.send) return l.a11ySend;
+    if (icon == LucideIcons.pencil) return l.a11yEdit;
+    if (icon == LucideIcons.trash || icon == LucideIcons.trash2) return l.commonDelete;
+    if (icon == LucideIcons.share || icon == LucideIcons.share2) return l.a11yShare;
+    if (icon == LucideIcons.bell) return l.ppNotifications;
+    if (icon == LucideIcons.heart) return l.a11ySave;
+    if (icon == Icons.favorite_rounded) return l.a11ySaved;
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,10 +128,16 @@ class AiwaIconButton extends StatelessWidget {
         ),
       );
     }
-    return PressScale(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: button,
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: semanticLabel ?? _defaultLabel(context),
+      excludeSemantics: true,
+      child: PressScale(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: button,
+      ),
     );
   }
 }

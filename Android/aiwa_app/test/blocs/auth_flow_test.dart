@@ -1,6 +1,7 @@
 import 'package:aiwa_app/core/errors/exceptions.dart';
 import 'package:aiwa_app/core/storage/secure_storage.dart';
 import 'package:aiwa_app/features/auth/data/datasources/auth_remote_datasource.dart';
+import 'package:aiwa_app/features/auth/data/models/user_model.dart';
 import 'package:aiwa_app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:aiwa_app/features/auth/domain/usecases/get_current_user_usecase.dart';
 import 'package:aiwa_app/features/auth/domain/usecases/login_usecase.dart';
@@ -17,6 +18,28 @@ import 'package:flutter_test/flutter_test.dart';
 /// Login throws [loginError]; records reset-password calls.
 class _Remote implements AuthRemoteDataSource {
   Object loginError = const UnauthorizedException();
+
+  /// Null: the API answers with [user]; otherwise getCurrentUser throws it.
+  Object? meError;
+  UserModel user = const UserModel(
+    id: 7,
+    fullName: 'Nadia',
+    role: 'PROVIDER',
+    active: true,
+    preferredLanguage: 'EN',
+    termsAccepted: true,
+    providerProfile: ProviderProfileSummaryModel(
+      id: 11,
+      businessName: 'Nadia Studio',
+      verificationStatus: 'APPROVED',
+    ),
+  );
+
+  @override
+  Future<UserModel> getCurrentUser() async {
+    if (meError != null) throw meError!;
+    return user;
+  }
   final resets = <String>[];
 
   @override
@@ -111,5 +134,52 @@ void main() {
     expect(await storage.getAccessToken(), isNull);
     expect(await storage.getRemember(), isTrue);
     await bloc.close();
+  });
+
+  AuthBloc newBloc() => AuthBloc(
+    loginUseCase: LoginUseCase(repo),
+    registerUseCase: RegisterUseCase(repo),
+    sendOtpUseCase: SendOtpUseCase(repo),
+    verifyOtpUseCase: VerifyOtpUseCase(repo),
+    getCurrentUserUseCase: GetCurrentUserUseCase(repo),
+    updateProfileUseCase: UpdateProfileUseCase(repo),
+    secureStorage: storage,
+  );
+
+  test('L-14: a cold start without a network opens the last known account', () async {
+    await storage.clearAll();
+    await storage.saveAccessToken('t');
+    // A first, online start caches the account…
+    final online = newBloc()..add(AuthCheckSessionEvent());
+    await expectLater(online.stream, emits(isA<AuthAuthenticated>()));
+    await online.close();
+
+    // …so the next start with no network still opens signed in, as the same provider.
+    remote.meError = const NetworkException();
+    final offline = newBloc()..add(AuthCheckSessionEvent());
+    final state = await offline.stream.first;
+    expect(state, isA<AuthAuthenticated>());
+    final user = (state as AuthAuthenticated).user;
+    expect(user.id, 7);
+    expect(user.role, 'PROVIDER');
+    expect(user.providerProfile?.verificationStatus, 'APPROVED');
+    expect(await storage.getAccessToken(), 't');
+    await offline.close();
+  });
+
+  test('L-14: offline with nothing cached, or a rejected session, is signed out', () async {
+    await storage.clearAll();
+    await storage.saveAccessToken('t');
+    remote.meError = const NetworkException();
+    final noCache = newBloc()..add(AuthCheckSessionEvent());
+    await expectLater(noCache.stream, emits(isA<AuthUnauthenticated>()));
+    await noCache.close();
+
+    remote.meError = null;
+    await repo.getCurrentUser(); // cache it
+    remote.meError = const UnauthorizedException();
+    final rejected = newBloc()..add(AuthCheckSessionEvent());
+    await expectLater(rejected.stream, emits(isA<AuthUnauthenticated>()));
+    await rejected.close();
   });
 }

@@ -3437,4 +3437,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get linkOpenFailed =>
       'No app on this phone could open that. Please try another way.';
+
+  @override
+  String get a11yChat => 'Open chat';
+
+  @override
+  String get a11ySend => 'Send message';
+
+  @override
+  String get a11yEdit => 'Edit';
+
+  @override
+  String get a11yShare => 'Share';
+
+  @override
+  String get a11ySave => 'Save to favourites';
+
+  @override
+  String get a11ySaved => 'Saved to favourites';
 }

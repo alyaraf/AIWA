@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/push/push_registrar.dart';
+import '../../../../core/errors/failures.dart';
 import '../../../../core/storage/secure_storage.dart';
+import '../../data/models/user_model.dart';
+import '../../domain/entities/user_entity.dart';
 import '../../domain/usecases/get_current_user_usecase.dart';
 import '../../domain/usecases/login_usecase.dart';
 import '../../domain/usecases/register_usecase.dart';
@@ -132,12 +137,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final hasSession = await secureStorage.hasValidSession();
     if (hasSession) {
       final result = await getCurrentUserUseCase();
-      result.fold(
-        (_) => emit(AuthUnauthenticated()),
-        (user) => emit(AuthAuthenticated(user)),
-      );
+      final failure = result.fold((f) => f, (_) => null);
+      if (failure == null) {
+        result.fold((_) {}, (user) => emit(AuthAuthenticated(user)));
+        return;
+      }
+      // L-14: no network at cold start is not a signed-out session. The tokens
+      // are kept either way; show the last known account until the API answers.
+      if (failure is NetworkFailure) {
+        final cached = await _cachedUser();
+        if (cached != null) {
+          emit(AuthAuthenticated(cached));
+          return;
+        }
+      }
+      emit(AuthUnauthenticated());
     } else {
       emit(AuthUnauthenticated());
+    }
+  }
+
+  /// The account cached by the last successful profile fetch, or null.
+  Future<UserEntity?> _cachedUser() async {
+    try {
+      final raw = await secureStorage.getCachedUser();
+      if (raw == null || raw.isEmpty) return null;
+      return UserModel.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
     }
   }
 

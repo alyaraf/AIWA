@@ -24,8 +24,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse.Error> handleNotFound(ResourceNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(buildError(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage()));
+        // AU-13: "Booking not found with id: 5" reached Arabic users in English. The
+        // detail stays in the log; the client gets the translated message and a code.
+        log.debug("Not found: {}", ex.getMessage());
+        return keyed(HttpStatus.NOT_FOUND, "Not Found", "error.not_found");
     }
 
     @ExceptionHandler(ForbiddenException.class)

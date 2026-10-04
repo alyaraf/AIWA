@@ -40,6 +40,20 @@ groups:
         annotations:
           summary: "More than 5 SMS sends failed in 15 minutes; check the SMS gateway (credit, key, sender ID)"
 
+      # AU-11: pushes failing (credentials, FCM errors); "unregistered" is normal churn and excluded.
+      - alert: PushSendFailures
+        expr: sum(increase(aiwa_push_sent_total{result=~"error|rejected|credentials"}[30m])) > 20
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 20 push notifications failed in 30 minutes; check the Firebase credentials and FCM status"
+
+      # AU-11: many wrong passwords across accounts (credential stuffing) or a broken sign-in.
+      - alert: SignInFailureSpike
+        expr: sum(increase(aiwa_auth_login_total{result=~"bad_credentials|locked_out"}[15m])) > 100
+        labels: { severity: warning }
+        annotations:
+          summary: "Over 100 failed sign-ins in 15 minutes; check for credential stuffing (audit log, rate-limit hits)"
+
       # H-4: the global OTP budget was hit; sign-up and password reset codes are refused
       # until the hour rolls over. Either real growth (raise OTP_MAX_GLOBAL_SENDS_*) or SMS pumping.
       - alert: OtpGlobalBudgetExhausted

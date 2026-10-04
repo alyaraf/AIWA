@@ -243,6 +243,39 @@ class AdminUsersControllerTest {
     // ── CR-02: one spelling for every stored phone and email ────────────────
 
     @Test
+    void changingSignInContactsTellsTheUserAndTheOldContacts() {
+        // AU-08 / M-3: a silent contact change was half of an insider takeover.
+        com.aiwa.service.SmsService sms = mock(com.aiwa.service.SmsService.class);
+        com.aiwa.service.EmailService mail = mock(com.aiwa.service.EmailService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "smsService", sms);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "emailService", mail);
+        User customer = User.builder().id(3L).fullName("Layla").email("layla@x.com").phone("+201000000001")
+                .role(UserRole.CUSTOMER).active(true).build();
+        when(userRepo.findById(3L)).thenReturn(Optional.of(customer));
+        when(userRepo.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        controller.editUser(3L, editReq(null, "new@x.com", "01012345678"), principal("admin@x.com"));
+
+        verify(sms).send(eq("+201000000001"), contains("support changed"));
+        verify(mail).send(eq("layla@x.com"), anyString(), contains("support changed"));
+        verify(notificationService).send(eq(3L), eq(com.aiwa.enums.NotificationType.ACCOUNT_WARNING),
+                anyString(), anyString(), anyString(), anyString(), isNull(), isNull());
+    }
+
+    @Test
+    void aNameOnlyEditSendsNoContactNotice() {
+        com.aiwa.service.SmsService sms = mock(com.aiwa.service.SmsService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "smsService", sms);
+        User customer = User.builder().id(3L).fullName("Layla").phone("+201000000001")
+                .role(UserRole.CUSTOMER).active(true).build();
+        when(userRepo.findById(3L)).thenReturn(Optional.of(customer));
+        when(userRepo.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        controller.editUser(3L, editReq("Layla H", null, null), principal("admin@x.com"));
+        verifyNoInteractions(sms);
+    }
+
+    @Test
     void editUserStoresThePhoneInTheSpellingSignInLooksUp() {
         User customer = User.builder().id(3L).fullName("Layla").phone("+201000000001")
                 .role(UserRole.CUSTOMER).active(true).build();

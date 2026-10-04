@@ -128,6 +128,6 @@ class SettlementControllerTest {
         when(ledgerRepo.findByProviderIdAndStatusIn(eq(7L), anyCollection())).thenReturn(List.of());
 
         assertThatThrownBy(() -> controller.payDues(principal("prov@x.com")))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("No outstanding");
+                .isInstanceOf(BusinessException.class).hasMessage("settlement.error.nothing_to_settle");
     }
 }

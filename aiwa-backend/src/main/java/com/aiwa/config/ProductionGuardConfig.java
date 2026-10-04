@@ -85,5 +85,11 @@ public class ProductionGuardConfig {
         if (onCallPhones == null || onCallPhones.isBlank()) {
             throw new IllegalStateException("SAFETY_ONCALL_PHONES must list at least one on-call number in prod");
         }
+        // AU-08: a warning, not a refusal, so a deploy without it still starts.
+        String totpKey = System.getenv("TOTP_ENCRYPTION_KEY");
+        if (totpKey == null || totpKey.isBlank()) {
+            org.slf4j.LoggerFactory.getLogger(ProductionGuardConfig.class).warn(
+                    "TOTP_ENCRYPTION_KEY is not set: admin 2FA secrets are stored unencrypted (see deploy/.env.example)");
+        }
     }
 }

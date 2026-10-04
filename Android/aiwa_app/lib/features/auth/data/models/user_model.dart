@@ -57,11 +57,14 @@ class UserModel extends UserEntity {
     );
   }
 
+  /// Round-trips through [UserModel.fromJson] (the offline cache relies on it:
+  /// the router reads the provider status and the terms flags).
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'fullName': fullName,
       'email': email,
+      'pendingEmail': pendingEmail,
       'phone': phone,
       'role': role,
       'gender': gender,
@@ -69,6 +72,18 @@ class UserModel extends UserEntity {
       'active': active,
       'preferredLanguage': preferredLanguage,
       'termsAccepted': termsAccepted,
+      'acceptedTermsVersion': acceptedTermsVersion,
+      'termsAcceptedAt': termsAcceptedAt?.toIso8601String(),
+      'termsUpToDate': termsUpToDate,
+      'searchRadiusMinKm': searchRadiusMinKm,
+      'searchRadiusMaxKm': searchRadiusMaxKm,
+      if (providerProfile != null)
+        'providerProfile': {
+          'id': providerProfile!.id,
+          'businessName': providerProfile!.businessName,
+          'verificationStatus': providerProfile!.verificationStatus,
+          'rejectionReason': providerProfile!.note,
+        },
     };
   }
 }

@@ -6085,6 +6085,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No app on this phone could open that. Please try another way.'**
   String get linkOpenFailed;
+
+  /// No description provided for @a11yChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Open chat'**
+  String get a11yChat;
+
+  /// No description provided for @a11ySend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send message'**
+  String get a11ySend;
+
+  /// No description provided for @a11yEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get a11yEdit;
+
+  /// No description provided for @a11yShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get a11yShare;
+
+  /// No description provided for @a11ySave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to favourites'**
+  String get a11ySave;
+
+  /// No description provided for @a11ySaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to favourites'**
+  String get a11ySaved;
 }
 
 class _AppLocalizationsDelegate

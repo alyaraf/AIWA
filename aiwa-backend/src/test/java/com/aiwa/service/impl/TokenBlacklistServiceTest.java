@@ -56,6 +56,27 @@ class TokenBlacklistServiceTest {
     }
 
     @Test
+    void aLogoutDuringARedisOutageStillHoldsAfterRedisComesBack() {
+        // AU-14 / L-7: Redis came back without the entry; the database copy must still count.
+        when(jwtUtils.validateToken("t")).thenReturn(true);
+        when(jwtUtils.getRemainingValidityMillis("t")).thenReturn(60000L);
+        doThrow(new RuntimeException("down")).when(redis).set(anyString(), anyString(), any());
+        service.blacklist("t");
+
+        when(redis.exists(anyString())).thenReturn(false); // Redis is back, entry missing
+        when(repo.existsById(TokenBlacklistService.hash("t"))).thenReturn(true);
+        assertThat(service.isBlacklisted("t")).isTrue();
+        assertThat(service.isBlacklisted("other")).isFalse();
+    }
+
+    @Test
+    void withRedisHealthyARedisMissDoesNotHitTheDatabase() {
+        when(redis.exists(anyString())).thenReturn(false);
+        assertThat(service.isBlacklisted("t")).isFalse();
+        verify(repo, never()).existsById(anyString());
+    }
+
+    @Test
     void aRefreshTokenCanBeSpentOnlyOnceEvenWithRedisDown() {
         when(jwtUtils.getRemainingValidityMillis("r")).thenReturn(60000L);
         when(redis.exists(anyString())).thenThrow(new RuntimeException("down"));

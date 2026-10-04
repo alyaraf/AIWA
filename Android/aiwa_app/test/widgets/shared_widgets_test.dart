@@ -2,6 +2,7 @@ import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:aiwa_app/core/theme/app_colors.dart';
 import 'package:aiwa_app/shared/widgets/aiwa_button.dart';
 import 'package:aiwa_app/shared/widgets/aiwa_chip.dart';
+import 'package:aiwa_app/shared/widgets/aiwa_icon_button.dart';
 import 'package:aiwa_app/shared/widgets/confirm_sheet.dart';
 import 'package:aiwa_app/shared/widgets/empty_state.dart';
 import 'package:aiwa_app/shared/widgets/eyebrow_label.dart';
@@ -292,6 +293,21 @@ void main() {
 
     testWidgets('keep returns false', (tester) async {
       expect(await openAndPick(tester, 'Keep it'), isFalse);
+    });
+  });
+
+  group('AiwaIconButton semantics (AU-12)', () {
+    testWidgets('icon-only buttons are announced with a label', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(host(Row(children: [
+        AiwaIconButton(icon: LucideIcons.arrowLeftDir, onTap: () {}),
+        AiwaIconButton(icon: LucideIcons.phone, onTap: () {}),
+        AiwaIconButton(icon: LucideIcons.send, onTap: () {}, semanticLabel: 'Send it'),
+      ])));
+      expect(find.bySemanticsLabel('Back'), findsOneWidget);
+      expect(find.bySemanticsLabel('Call'), findsOneWidget);
+      expect(find.bySemanticsLabel('Send it'), findsOneWidget);
+      handle.dispose();
     });
   });
 }

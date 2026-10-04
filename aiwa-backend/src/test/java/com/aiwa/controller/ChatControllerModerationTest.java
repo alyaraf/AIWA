@@ -82,7 +82,7 @@ class ChatControllerModerationTest {
         User stranger = User.builder().id(999L).email("stranger@x.com").role(UserRole.CUSTOMER).build();
         when(userRepo.findByLogin("stranger@x.com")).thenReturn(Optional.of(stranger));
 
-        assertThatThrownBy(() -> controller.list(5L, principal("stranger@x.com")))
+        assertThatThrownBy(() -> controller.list(5L, null, principal("stranger@x.com")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("access_denied");
     }
@@ -98,7 +98,7 @@ class ChatControllerModerationTest {
                         .message("abusive text").removed(true).build()
         ));
 
-        List<ApiResponse.ChatMessageDto> rows = controller.list(5L, principal("nour@x.com")).getBody().getData();
+        List<ApiResponse.ChatMessageDto> rows = controller.list(5L, null, principal("nour@x.com")).getBody().getData();
 
         assertThat(rows.get(0).getMessage()).isEqualTo("hello");
         assertThat(rows.get(1).isRemoved()).isTrue();

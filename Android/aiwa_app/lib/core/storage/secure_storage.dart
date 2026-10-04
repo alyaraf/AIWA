@@ -39,6 +39,13 @@ class SecureStorage {
 
   Future<String?> getUserId() => _storage.read(key: AppConstants.userIdKey);
 
+  /// The signed-in user as last fetched (JSON), so a cold start without a
+  /// network still opens signed in (L-14). Removed by [clearAll].
+  Future<void> saveCachedUser(String json) =>
+      _storage.write(key: 'cached_user', value: json);
+
+  Future<String?> getCachedUser() => _storage.read(key: 'cached_user');
+
   Future<void> clearAll() {
     _generation++;
     return _storage.deleteAll();

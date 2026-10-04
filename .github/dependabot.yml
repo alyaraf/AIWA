@@ -1,0 +1,42 @@
+# AU-11: dependency scanning. Dependabot opens a pull request for each security
+# advisory and, weekly, for outdated dependencies; each one runs the CI (PRs only).
+# GitHub's Dependabot alerts must be switched on in the repository settings
+# (Settings → Code security) for the security updates.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /aiwa-backend
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    # Spring Boot majors are planned upgrades, not weekly bumps.
+    ignore:
+      - dependency-name: "org.springframework.boot:*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /aiwa-admin-dashboard-updated
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: pub
+    directory: /Android/aiwa_app
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directory: /aiwa-backend
+    schedule: { interval: weekly }
+
+  - package-ecosystem: docker
+    directory: /aiwa-admin-dashboard-updated
+    schedule: { interval: weekly }
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

@@ -65,7 +65,7 @@ public class SettlementController {
         List<CommissionLedgerEntry> outstanding = ledgerRepo.findByProviderIdAndStatusIn(
                 provider.getId(), List.of(LedgerEntryStatus.DUE, LedgerEntryStatus.OVERDUE));
         if (outstanding.isEmpty()) {
-            throw new com.aiwa.exception.BusinessException("No outstanding balance to settle");
+            throw new com.aiwa.exception.BusinessException("settlement.error.nothing_to_settle");
         }
         if (provider.getSettlementReportedAt() != null
                 && outstanding.stream().anyMatch(e -> e.getPayoutReportedAt() != null)) {

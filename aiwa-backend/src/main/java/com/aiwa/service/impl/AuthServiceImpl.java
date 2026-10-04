@@ -57,18 +57,14 @@ public class AuthServiceImpl implements AuthService {
         String email = email(req.getEmail());
         String phone = Identifiers.normalizePhone(req.getPhone());
         requirePasswordFitsBcrypt(req.getPassword());
-        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
-            throw new BusinessException("auth.error.email_taken");
-        }
-        if (phone != null && userRepository.existsByPhone(phone)) {
-            throw new BusinessException("auth.error.phone_taken");
-        }
         if (email == null && phone == null) {
             throw new BusinessException("auth.error.email_or_phone_required");
         }
         if (req.getRole() == UserRole.ADMIN) {
             throw new BusinessException("auth.error.admin_registration_blocked");
         }
+        // AU-14 / L-1: ownership is proved before "already taken" is answered, so the
+        // register endpoint can't be used to find out which numbers have an account.
         if (phone != null && !otpService.isPhoneVerified(phone)) {
             throw new BusinessException("auth.error.phone_not_verified");
         }
@@ -76,6 +72,12 @@ public class AuthServiceImpl implements AuthService {
         // before, any unverified address could be registered.
         if (phone == null && !otpService.isEmailVerified(email)) {
             throw new BusinessException("auth.error.email_not_verified");
+        }
+        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
+            throw new BusinessException("auth.error.email_taken");
+        }
+        if (phone != null && userRepository.existsByPhone(phone)) {
+            throw new BusinessException("auth.error.phone_taken");
         }
 
         // CR-05: only an address proved with a code becomes the account's email.

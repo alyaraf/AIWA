@@ -136,6 +136,11 @@ public class SecurityConfig {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
+        // AU-14 / L-2: the account status (disabled, locked) is checked only after the
+        // password. Checked first, a wrong password on a suspended account answered
+        // 423 instead of 401 and told anyone that the account exists.
+        provider.setPreAuthenticationChecks(user -> { });
+        provider.setPostAuthenticationChecks(new org.springframework.security.authentication.AccountStatusUserDetailsChecker());
         return provider;
     }
 

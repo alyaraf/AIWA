@@ -42,10 +42,15 @@ public class ChatController {
     @GetMapping("/bookings/{bookingId}/chat")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.ChatMessageDto>>> list(
             @PathVariable Long bookingId,
+            @RequestParam(required = false) Long afterId,
             @AuthenticationPrincipal UserDetails userDetails) {
         Booking booking = loadAuthorizedBooking(bookingId, resolveUserId(userDetails));
-        return ResponseEntity.ok(ApiResponse.Success.of(chatRepo.findByBookingIdOrderByCreatedAtAsc(booking.getId())
-                .stream().map(this::toDto).toList()));
+        // AU-10: ?afterId= returns only newer messages, so the 5-second poll no longer
+        // reloads the whole thread. Without it, the full thread as before.
+        List<ChatMessage> messages = afterId == null
+                ? chatRepo.findByBookingIdOrderByCreatedAtAsc(booking.getId())
+                : chatRepo.findByBookingIdAndIdGreaterThanOrderByIdAsc(booking.getId(), afterId);
+        return ResponseEntity.ok(ApiResponse.Success.of(messages.stream().map(this::toDto).toList()));
     }
 
     @PostMapping("/bookings/{bookingId}/chat")

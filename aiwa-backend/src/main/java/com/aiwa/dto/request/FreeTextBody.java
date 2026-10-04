@@ -30,7 +30,7 @@ public class FreeTextBody extends HashMap<String, String> {
     /** Like {@link #pick} for a field that used to be a required parameter. */
     public static String require(FreeTextBody body, String key, String param) {
         String value = pick(body, key, param);
-        if (value == null) throw new BusinessException("Missing required field '" + key + "'");
+        if (value == null) throw new BusinessException("error.field_required");
         return value;
     }
 }

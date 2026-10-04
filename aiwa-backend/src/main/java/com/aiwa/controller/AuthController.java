@@ -45,6 +45,18 @@ public class AuthController {
     @org.springframework.beans.factory.annotation.Value("${aiwa.auth.cookie-secure:false}")
     private boolean cookieSecure;
 
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMeterRegistry(io.micrometer.core.instrument.MeterRegistry registry) {
+        this.meterRegistry = registry;
+    }
+
+    /** AU-11: aiwa.auth.login{result}, for the SignInFailureSpike alert. */
+    private void countLogin(String result) {
+        if (meterRegistry != null) meterRegistry.counter("aiwa.auth.login", "result", result).increment();
+    }
+
     // ── Register / Login ──────────────────────────────────────────────────────
 
     @PostMapping("/register")
@@ -61,7 +73,20 @@ public class AuthController {
     @Operation(summary = "Login with email/phone + password")
     public ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> login(
             @Valid @RequestBody AuthRequest.Login request) {
-        ApiResponse.AuthResponse auth = authService.login(request);
+        ApiResponse.AuthResponse auth;
+        try {
+            auth = authService.login(request);
+        } catch (org.springframework.security.authentication.BadCredentialsException e) {
+            countLogin("bad_credentials");
+            throw e;
+        } catch (org.springframework.security.authentication.AccountStatusException e) {
+            countLogin("account_blocked");
+            throw e;
+        } catch (com.aiwa.exception.TooManyRequestsException e) {
+            countLogin("locked_out");
+            throw e;
+        }
+        countLogin(auth.isMfaRequired() ? "mfa_required" : "ok");
         ResponseEntity.BodyBuilder response = ResponseEntity.ok();
         if (auth.getAccessToken() != null) {
             response.header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString());

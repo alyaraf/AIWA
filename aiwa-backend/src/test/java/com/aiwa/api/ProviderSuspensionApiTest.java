@@ -210,6 +210,61 @@ class ProviderSuspensionApiTest {
     }
 
     @Test
+    void theProviderNoLongerSeesTheCustomersAddressOnceTheRequestEnds() throws Exception {
+        // AU-20 / L-23: addresses stayed visible to providers after reject, expiry or cancel.
+        long addressId = json.readTree(mvc.perform(post("/account/addresses").header("Authorization", customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"label\":\"Home\",\"addressLine\":\"12 Nile St, Zamalek\",\"latitude\":30.06,\"longitude\":31.22}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString())
+                .get("data").get("id").asLong();
+        long id = json.readTree(mvc.perform(post("/bookings").header("Authorization", customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of(
+                                "providerId", profile.getId(), "serviceId", service.getId(), "bookingType", "SCHEDULED",
+                                "bookingDate", AiwaTime.today().plusDays(3).toString(), "startTime", "10:00",
+                                "homeService", true, "savedAddressId", addressId))))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString())
+                .get("data").get("id").asLong();
+
+        // Open request: the provider needs the address to decide and to quote travel.
+        mvc.perform(get("/bookings/" + id).header("Authorization", providerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.savedAddress.addressLine").value("12 Nile St, Zamalek"));
+
+        mvc.perform(patch("/bookings/" + id + "/reject").header("Authorization", providerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"Fully booked\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.booking.savedAddress").doesNotExist());
+        mvc.perform(get("/bookings/" + id).header("Authorization", providerToken))
+                .andExpect(jsonPath("$.data.savedAddress").doesNotExist());
+        mvc.perform(get("/bookings/provider").param("status", "REJECTED").header("Authorization", providerToken))
+                .andExpect(jsonPath("$.data.content[0].savedAddress").doesNotExist());
+        // The customer still sees their own address.
+        mvc.perform(get("/bookings/" + id).header("Authorization", customerToken))
+                .andExpect(jsonPath("$.data.savedAddress.addressLine").value("12 Nile St, Zamalek"));
+    }
+
+    @Test
+    void chatPollingWithAfterIdReturnsOnlyNewerMessages() throws Exception {
+        // AU-10: the app's 5-second poll no longer reloads the whole thread.
+        long id = book(3, "10:00");
+        long first = 0;
+        for (String text : new String[]{"hello", "are you free?", "see you"}) {
+            long mid = json.readTree(mvc.perform(post("/bookings/" + id + "/chat").header("Authorization", customerToken)
+                            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("message", text))))
+                    .andExpect(status().is2xxSuccessful()).andReturn().getResponse().getContentAsString())
+                    .get("data").get("id").asLong();
+            if (first == 0) first = mid;
+        }
+        mvc.perform(get("/bookings/" + id + "/chat").header("Authorization", providerToken))
+                .andExpect(jsonPath("$.data.length()").value(3));
+        mvc.perform(get("/bookings/" + id + "/chat").param("afterId", String.valueOf(first))
+                        .header("Authorization", providerToken))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].message").value("are you free?"));
+    }
+
+    @Test
     void anInvalidTransitionAnswersWithAKeyNotAnEnglishSentence() throws Exception {
         long id = book(3, "10:00");
         mvc.perform(patch("/bookings/" + id + "/arrived").header("Authorization", providerToken))

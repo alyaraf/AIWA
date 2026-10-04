@@ -30,19 +30,39 @@ waiting for an owner rule are listed at the end.
 | L-26 (part) | fixed | `/provider/gallery/{id}` is 404 for an unlisted provider (owner and admins still see it). Chat-report dedupe not changed. | `ModerationPrivacyApiTest` |
 | — | fixed | Mojibake in `AdminUsersController` Swagger tags. | — |
 
+### Second round (same branch)
+
+| ID | Status | What changed | Covering tests |
+|---|---|---|---|
+| AU-20 / L-23 | fixed | Providers see the customer's saved address only while the request is open or the visit is live; after reject, expiry, cancel, completion or no-show it is left out of every provider response. The customer still sees it. | `ProviderSuspensionApiTest.theProviderNoLongerSeesTheCustomersAddressOnceTheRequestEnds` |
+| AU-14 / L-1 | fixed | Register proves the phone or email (OTP) before answering "already taken". | existing auth tests |
+| AU-14 / L-2 | fixed | Account status is checked after the password: a wrong password on a disabled account is a plain 401. | `ModerationPrivacyApiTest` |
+| AU-14 / L-6 | fixed | The `accessToken` cookie is no longer accepted; only the Bearer header. | `ModerationPrivacyApiTest` |
+| AU-14 / L-7 | fixed | After a revocation could not be written to Redis, Redis misses are double-checked in the database until that token would have expired. | `TokenBlacklistServiceTest` (+2) |
+| AU-13 (more) | fixed | Not-found errors answer the translated `error.not_found` (code kept); user-facing settlement, terms, missing-field and reject errors use message keys (en, ar). Admin-only messages stay English (the panel is English). | `SettlementControllerTest` (assertion now on the key) |
+| AU-15 / L-14 | fixed | The app caches the signed-in user; a cold start with no network opens that account instead of the sign-in screen (tokens were always kept). | app `auth_flow_test` (+2) |
+| AU-10 (part) | fixed | `GET /bookings/{id}/chat?afterId=` returns only newer messages; the app polls incrementally with an in-flight guard and reloads the full thread about once a minute. | `ProviderSuspensionApiTest.chatPollingWithAfterIdReturnsOnlyNewerMessages`, app `chat_poll_test` |
+| AU-11 (part) | fixed | `.github/dependabot.yml` (Maven, npm, pub, Docker, Actions); CI fails on high/critical `npm audit` advisories; counters `aiwa.push.sent{result}` and `aiwa.auth.login{result}` with alerts `PushSendFailures` and `SignInFailureSpike`. | `npm audit` clean today |
+| AU-12 (part) | fixed | Every round icon button is announced by screen readers (back, close, call, chat, send, edit, delete, share, notifications, save) in English and Arabic. | app `shared_widgets_test` (+1) |
+| AU-08 (more) | fixed | Admin contact changes notify the user and the OLD phone (SMS) and email; TOTP secrets encrypted at rest when `TOTP_ENCRYPTION_KEY` is set (plain values still read; prod logs a warning without the key). | `AdminUsersControllerTest` (+2), `TotpSecretConverterTest` (4) |
+| CR-14 (rest) | fixed | JPEGs the JDK can't decode (CMYK) have their EXIF/XMP/IPTC/comment segments removed; ICC and Adobe segments kept. | `FileStorageMetadataTest` (+2) |
+| CR-13(f) | fixed | V27 adds `bookings.waiting_since_instant` (timestamptz); the response window uses it, so the repeated autumn hour can't expire a request early. Older rows keep the previous rule. | `BookingDstNightTest` (+1) |
+
 ## Test edits
 
 - `BookingLifecycleServiceTest`: the booking fixture's provider is now APPROVED and active (data only; the H-1 guard refuses an unapproved one).
 - `BookingHomeServiceTravelFeeTest`: home-service requests carry a saved address (data only; M-1).
 - `VerificationRequestInfoTest`, `AdminUsersControllerTest`: constructors take the booking service.
 - App `push_registrar_test`: "sign-out clears the token" asserted the L-15 bug (a token-less DELETE); it now asserts nothing is sent. The CR-18 test got a token source.
+- `SettlementControllerTest.payingWithNoDuesFails`: asserts the message key instead of the English sentence (AU-13).
+- `ChatControllerModerationTest`: passes `afterId = null` to the new parameter.
 
 ## Not changed: needs an owner rule or a device
 
 CR-09 / M-6 (who may raise SOS), CR-10 / M-4 (deletion with debt or live bookings), CR-12 (travel re-quote),
 E-1 (enforce admin TOTP), H-2 closure sweep and no-show contest, M-5 (round home-based providers' location),
-M-7 (penalties and strikes), L-22 (per-type terms acceptance). L-14 (offline cold start) needs a cached-user
-state in the router. H-5 and M-13 need real phones. M-8 load test, M-12 off-site backups and a restore drill
+M-7 (penalties and strikes), L-22 (per-type terms acceptance), M-1 (bookings by customers only). L-17 (dates
+with an offset) changes every DTO and both clients. H-5 and M-13 need real phones. M-8 load test, M-12 off-site backups and a restore drill
 need infrastructure.
 
 ## Test runs
@@ -50,4 +70,5 @@ need infrastructure.
 | When | Backend (`mvn -o test`) | Flutter (`flutter test`) | Admin (`vitest` + build) |
 |---|---|---|---|
 | Baseline `7cf09c3` | 303 passed | 166 passed, analyze clean | 102 passed, build ok |
-| End of this branch | 328 passed | 168 passed, analyze clean | 104 passed, build ok |
+| First round `029195f` | 328 passed | 168 passed, analyze clean | 104 passed, build ok |
+| Second round | 343 passed | 172 passed, analyze clean | 104 passed, build ok |

@@ -129,6 +129,30 @@ class ModerationPrivacyApiTest {
     }
 
     @Test
+    void aWrongPasswordOnADisabledAccountLooksLikeAnyWrongPassword() throws Exception {
+        // AU-14 / L-2: the status was checked before the password, so 423 revealed the account.
+        User u = user(UserRole.CUSTOMER);
+        u.setActive(false);
+        userRepo.save(u);
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("identifier", u.getEmail(), "password", "Wrong-123!"))))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("identifier", u.getEmail(), "password", PASSWORD))))
+                .andExpect(status().isLocked());
+    }
+
+    @Test
+    void theAccessTokenCookieNoLongerSignsIn() throws Exception {
+        // AU-14 / L-6: only the Authorization header is accepted.
+        String token = login(user(UserRole.CUSTOMER)).substring("Bearer ".length());
+        mvc.perform(get("/notifications").cookie(new jakarta.servlet.http.Cookie("accessToken", token)))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/notifications").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void aSuspendedProvidersGalleryIsNotPublic() throws Exception {
         User owner = user(UserRole.PROVIDER);
         ProviderProfile p = providerRepo.save(ProviderProfile.builder()

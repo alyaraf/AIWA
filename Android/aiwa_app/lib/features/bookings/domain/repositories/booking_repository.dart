@@ -84,7 +84,10 @@ abstract class BookingRepository {
     required String description,
   });
 
-  Future<Either<Failure, List<ChatMessageEntity>>> getChat(String bookingId);
+  Future<Either<Failure, List<ChatMessageEntity>>> getChat(
+    String bookingId, {
+    String? afterId,
+  });
 
   Future<Either<Failure, ChatMessageEntity>> sendChat(
     String bookingId,

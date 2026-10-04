@@ -24,6 +24,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+@lombok.extern.slf4j.Slf4j
 @RestController
 @RequestMapping("/admin/users")
 @PreAuthorize("hasRole('ADMIN')")
@@ -336,6 +337,8 @@ public class AdminUsersController {
         }
 
         java.util.List<String> changed = new java.util.ArrayList<>();
+        String oldEmail = target.getEmail();
+        String oldPhone = target.getPhone();
         String name = request.getFullName() == null ? null : request.getFullName().trim();
         // CR-02: a number saved as 010… was never found by sign-in or reset, which look up +2010….
         String email = email(request.getEmail());
@@ -366,8 +369,53 @@ public class AdminUsersController {
         }
         userRepo.save(target);
         auditService.record("USER_DETAILS_UPDATED", target.getFullName() + " (" + String.join(", ", changed) + ")");
+        if (changed.contains("email") || changed.contains("phone")) {
+            notifyContactChanged(target, oldEmail, changed.contains("email"), oldPhone, changed.contains("phone"));
+        }
         return ResponseEntity.ok(ApiResponse.Success.of("Details updated", toDto(target)));
     }
+
+    /**
+     * AU-08 / M-3: support changing a sign-in contact is told to the user, and to
+     * the OLD phone and email: after a takeover the account itself is in the wrong
+     * hands, so only the old contact can raise the alarm. Best effort.
+     */
+    private void notifyContactChanged(User u, String oldEmail, boolean emailChanged, String oldPhone, boolean phoneChanged) {
+        String what = emailChanged && phoneChanged ? "email and phone number"
+                : emailChanged ? "email" : "phone number";
+        String whatAr = emailChanged && phoneChanged ? "البريد الإلكتروني ورقم الهاتف"
+                : emailChanged ? "البريد الإلكتروني" : "رقم الهاتف";
+        String text = "AIWA support changed the " + what + " you sign in with. If you did not ask for this, "
+                + "contact AIWA support now.";
+        try {
+            notificationService.send(u.getId(), com.aiwa.enums.NotificationType.ACCOUNT_WARNING,
+                    "Your sign-in details changed", "تم تغيير بيانات تسجيل الدخول",
+                    text, "قام دعم AIWA بتغيير " + whatAr + " الذي تسجل الدخول به. إذا لم تطلب ذلك، تواصل مع دعم AIWA الآن.",
+                    null, null);
+        } catch (RuntimeException e) {
+            log.warn("Contact-change notice not recorded: {}", e.getMessage());
+        }
+        if (phoneChanged && oldPhone != null && smsService != null) {
+            try {
+                smsService.send(oldPhone, text);
+            } catch (RuntimeException e) {
+                log.warn("Contact-change SMS to the old number failed: {}", e.getMessage());
+            }
+        }
+        if (emailChanged && oldEmail != null && emailService != null) {
+            try {
+                emailService.send(oldEmail, "Your AIWA sign-in details changed", text);
+            } catch (RuntimeException e) {
+                log.warn("Contact-change email to the old address failed: {}", e.getMessage());
+            }
+        }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.service.SmsService smsService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.service.EmailService emailService;
 
     @PostMapping("/{id}/reset-password")
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT)

@@ -90,6 +90,7 @@ public class FcmPushService implements PushNotificationService {
             accessToken = accessToken(sa);
         } catch (RuntimeException | IOException e) {
             log.error("Push not sent — FCM credentials unusable: {}", e.getMessage());
+            count("credentials");
             return;
         }
 
@@ -109,6 +110,7 @@ public class FcmPushService implements PushNotificationService {
         String url = "https://fcm.googleapis.com/v1/projects/" + sa.projectId() + "/messages:send";
         try {
             restTemplate.postForEntity(url, new HttpEntity<>(Map.of("message", message), headers), String.class);
+            count("ok");
         } catch (HttpClientErrorException e) {
             String err = e.getResponseBodyAsString();
             int status = e.getStatusCode().value();
@@ -119,12 +121,27 @@ public class FcmPushService implements PushNotificationService {
             } else if (status == 401) {
                 invalidateAccessToken();
             }
+            count(status == 404 || err.contains("UNREGISTERED") ? "unregistered" : "rejected");
             log.warn("FCM rejected push to token …{}: {}", tail(deviceToken), e.getStatusCode());
+            count(status == 404 || err.contains("UNREGISTERED") ? "unregistered" : "rejected");
         } catch (RestClientException e) {
             // A push failure must never break the caller — the in-app notification
             // was already recorded; this is only the best-effort real-time nudge.
             log.warn("FCM push failed for token …{}: {}", tail(deviceToken), e.getMessage());
+            count("error");
         }
+    }
+
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMeterRegistry(io.micrometer.core.instrument.MeterRegistry registry) {
+        this.meterRegistry = registry;
+    }
+
+    /** AU-11: aiwa.push.sent{result} — ok, unregistered, rejected, error, credentials. */
+    private void count(String result) {
+        if (meterRegistry != null) meterRegistry.counter("aiwa.push.sent", "result", result).increment();
     }
 
     void clearToken(String deviceToken) {

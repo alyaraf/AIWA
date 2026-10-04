@@ -142,6 +142,21 @@ class BookingDstNightTest {
         assertThat(b.getStatus()).isEqualTo(BookingStatus.EXPIRED);
     }
 
+    @Test
+    void aRequestWrittenInTheRepeatedHourIsNotExpiredAnHourEarly() {
+        // CR-13(f): its wall time also names the hour before, which the local-time
+        // column was read as. The stored instant (V27) is not ambiguous.
+        ZoneOffsetTransition change = clockChange(false);
+        Instant created = change.getInstant().plus(Duration.ofMinutes(10));        // second time round
+        Booking b = booking(BookingStatus.PENDING, wall(created).plusDays(2));
+        b.setCreatedAt(wall(created));
+        b.setWaitingSinceInstant(created);
+
+        assertThat(sweep(b, created.plus(Duration.ofMinutes(20)), 30)).isZero();
+        assertThat(b.getStatus()).isEqualTo(BookingStatus.PENDING);
+        assertThat(sweep(b, created.plus(Duration.ofMinutes(35)), 30)).isEqualTo(1);
+    }
+
     // ── cancellation cut-off ──────────────────────────────────────────────────
 
     @Test

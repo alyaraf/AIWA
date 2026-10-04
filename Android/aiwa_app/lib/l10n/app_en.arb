@@ -1815,5 +1815,11 @@
   "staffSaved": "Staff member updated.",
   "staffDeactivate": "Remove from bookings",
   "staffDeactivated": "Staff member deactivated.",
-  "linkOpenFailed": "No app on this phone could open that. Please try another way."
+  "linkOpenFailed": "No app on this phone could open that. Please try another way.",
+  "a11yChat": "Open chat",
+  "a11ySend": "Send message",
+  "a11yEdit": "Edit",
+  "a11yShare": "Share",
+  "a11ySave": "Save to favourites",
+  "a11ySaved": "Saved to favourites"
 }

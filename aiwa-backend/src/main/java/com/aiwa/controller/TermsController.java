@@ -59,11 +59,11 @@ public class TermsController {
         String docType = type != null ? validType(type)
                 : (user.getRole() == UserRole.PROVIDER ? "PROVIDER_TERMS" : "CUSTOMER_TERMS");
         TermsPolicy policy = termsRepo.findByTypeAndVersion(docType, version)
-                .orElseThrow(() -> new BusinessException("Terms version not found: " + version));
+                .orElseThrow(() -> new BusinessException("terms.error.version_not_found"));
         // Accepting a superseded version would leave the user on outdated terms
         // while the app believes they are current.
         if (!policy.isActive()) {
-            throw new BusinessException("Terms version " + version + " is no longer current");
+            throw new BusinessException("terms.error.version_superseded");
         }
 
         user.setAcceptedTermsVersion(version);

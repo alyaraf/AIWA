@@ -28,6 +28,9 @@ public class TokenBlacklistService {
     private final JwtUtils jwtUtils;
     private final RevokedTokenRepository revokedRepo;
 
+    /** Until when Redis may be missing a revocation that the database has (L-7). */
+    private volatile Instant checkDatabaseOnMissUntil = Instant.EPOCH;
+
     public void blacklist(String token) {
         if (token == null || token.isBlank() || !jwtUtils.validateToken(token)) {
             return;
@@ -38,6 +41,10 @@ public class TokenBlacklistService {
             redis.set(key(token), "1", Duration.ofMillis(ttlMillis));
         } catch (RuntimeException e) {
             log.warn("Could not write the token revocation to Redis (the database copy still holds): {}", e.getMessage());
+            // AU-14 / L-7: until this token would have expired anyway, a Redis miss is
+            // double-checked in the database, or the token works again once Redis is back.
+            Instant until = Instant.now().plusMillis(ttlMillis);
+            if (until.isAfter(checkDatabaseOnMissUntil)) checkDatabaseOnMissUntil = until;
         }
         try {
             if (!revokedRepo.existsById(hash(token))) {
@@ -100,7 +107,9 @@ public class TokenBlacklistService {
         if (token == null) return false;
         try {
             // Entries written before the SHA-256 key are still honoured until they expire.
-            return redis.exists(key(token)) || redis.exists(legacyKey(token));
+            if (redis.exists(key(token)) || redis.exists(legacyKey(token))) return true;
+            // A revocation written while Redis was down lives only in the database (L-7).
+            return Instant.now().isBefore(checkDatabaseOnMissUntil) && revokedRepo.existsById(hash(token));
         } catch (RuntimeException e) {
             log.warn("Blacklist check: Redis unavailable, using the database: {}", e.getMessage());
             return revokedRepo.existsById(hash(token));

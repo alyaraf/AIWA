@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dartz/dartz.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
@@ -142,6 +144,10 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, UserEntity>> getCurrentUser() async {
     try {
       final user = await _remote.getCurrentUser();
+      try {
+        // L-14: kept for a cold start without a network (AuthBloc).
+        await _storage.saveCachedUser(jsonEncode(user.toJson()));
+      } catch (_) {}
       return Right(user);
     } on UnauthorizedException {
       return const Left(UnauthorizedFailure());

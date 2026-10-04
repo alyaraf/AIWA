@@ -203,8 +203,9 @@ public class FileStorageServiceImpl {
      * few images are decoded at once, a request that cannot get a slot in time is answered 429.
      */
     private byte[] stripMetadata(MultipartFile file, String ext) {
+        byte[] data = null;
         try {
-            byte[] data = file.getBytes();
+            data = file.getBytes();
             if ("webp".equals(ext)) {
                 return stripWebpMetadata(data);
             }
@@ -214,8 +215,7 @@ public class FileStorageServiceImpl {
             try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(data))) {
                 Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
                 if (!readers.hasNext()) {
-                    log.warn("Public image stored unchanged: no decoder, metadata not stripped");
-                    return null;
+                    return undecodable(data, ext, "no decoder");
                 }
                 ImageReader reader = readers.next();
                 try {
@@ -233,10 +233,11 @@ public class FileStorageServiceImpl {
                     // Decode a subsampled copy of very large images so the decode itself stays bounded.
                     int sub = Math.max(1, Math.max(width, height) / maxImageSide);
                     param.setSourceSubsampling(sub, sub, 0, 0);
+                    final byte[] bytes = data;
                     return withDecodeSlot(() -> {
                         BufferedImage src = reader.read(0, param);
                         boolean png = "png".equals(ext);
-                        return encode(src, png, png ? 1 : exifOrientation(data));
+                        return encode(src, png, png ? 1 : exifOrientation(bytes));
                     });
                 } finally {
                     reader.dispose();
@@ -245,9 +246,57 @@ public class FileStorageServiceImpl {
         } catch (BusinessException e) {
             throw e;
         } catch (IOException | RuntimeException e) {
-            log.warn("Public image stored unchanged: could not re-encode ({})", e.toString());
-            return null;
+            return undecodable(data, ext, e.toString());
         }
+    }
+
+    /**
+     * CR-14: a JPEG the JDK can't decode (CMYK, unusual sampling) used to be stored with
+     * its EXIF GPS position. Its metadata segments are cut out instead; anything else
+     * that can't be processed is stored unchanged, as before.
+     */
+    private byte[] undecodable(byte[] data, String ext, String why) {
+        if ("jpg".equals(ext) && data != null) {
+            byte[] stripped = stripJpegMetadata(data);
+            if (stripped != null) {
+                log.info("Public JPEG not re-encoded ({}); metadata segments removed", why);
+                return stripped;
+            }
+        }
+        log.warn("Public image stored unchanged: could not re-encode ({}), metadata not stripped", why);
+        return null;
+    }
+
+    /**
+     * Copies a JPEG without the segments that carry personal metadata: APP1 (EXIF with GPS,
+     * XMP), APP3–APP13 (IPTC, maker data), APP15 and comments. APP0 (JFIF), APP2 (ICC colour
+     * profile) and APP14 (Adobe, needed to show CMYK colours right) stay. Everything from the
+     * first scan on is copied as is. Returns null for anything that doesn't parse.
+     */
+    static byte[] stripJpegMetadata(byte[] jpeg) {
+        if (jpeg.length < 4 || (jpeg[0] & 0xFF) != 0xFF || (jpeg[1] & 0xFF) != 0xD8) return null;
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(jpeg.length);
+        out.write(0xFF);
+        out.write(0xD8);
+        int i = 2;
+        while (i + 4 <= jpeg.length) {
+            if ((jpeg[i] & 0xFF) != 0xFF) return null;
+            int marker = jpeg[i + 1] & 0xFF;
+            if (marker == 0xFF) { i++; continue; }
+            if (marker == 0xDA) { // start of scan: the rest is image data
+                out.write(jpeg, i, jpeg.length - i);
+                return out.toByteArray();
+            }
+            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8)) { out.write(jpeg, i, 2); i += 2; continue; }
+            int len = ((jpeg[i + 2] & 0xFF) << 8) | (jpeg[i + 3] & 0xFF);
+            if (len < 2 || i + 2 + len > jpeg.length) return null;
+            boolean personal = marker == 0xFE                                   // COM
+                    || marker == 0xE1                                           // APP1: EXIF, XMP
+                    || (marker >= 0xE3 && marker <= 0xED) || marker == 0xEF;    // APP3-13, APP15
+            if (!personal) out.write(jpeg, i, 2 + len);
+            i += 2 + len;
+        }
+        return null;
     }
 
     @FunctionalInterface

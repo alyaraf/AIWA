@@ -68,7 +68,8 @@ abstract class BookingRemoteDataSource {
     required String description,
   });
 
-  Future<List<ChatMessageEntity>> getChat(String bookingId);
+  /// [afterId]: only messages newer than this one (AU-10 polling).
+  Future<List<ChatMessageEntity>> getChat(String bookingId, {String? afterId});
 
   Future<ChatMessageEntity> sendChat(String bookingId, String message);
 
@@ -275,8 +276,14 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
   );
 
   @override
-  Future<List<ChatMessageEntity>> getChat(String bookingId) async {
-    final response = await _api.get(ApiConstants.bookingChat(bookingId));
+  Future<List<ChatMessageEntity>> getChat(
+    String bookingId, {
+    String? afterId,
+  }) async {
+    final response = await _api.get(
+      ApiConstants.bookingChat(bookingId),
+      queryParameters: afterId == null ? null : {'afterId': afterId},
+    );
     return [
       for (final e in response.data['data'] as List? ?? const [])
         ChatMessageEntity.fromJson(e as Map<String, dynamic>),

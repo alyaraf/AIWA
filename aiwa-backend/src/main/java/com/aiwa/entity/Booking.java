@@ -129,6 +129,12 @@ public class Booking extends BaseEntity {
      */
     private LocalDateTime awaitingSince;
 
+    /**
+     * CR-13(f): when the answer clock last (re)started, as an instant (V27). Set
+     * together with createdAt, proposedAt and awaitingSince; null on older rows.
+     */
+    private java.time.Instant waitingSinceInstant;
+
     /** Set once the 2-hour reminder went out, so it is sent exactly once (R2-06). */
     private LocalDateTime reminderSentAt;
 
