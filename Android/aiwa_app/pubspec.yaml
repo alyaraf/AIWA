@@ -36,7 +36,7 @@ dependencies:
 
   # Image
   cached_network_image: ^3.4.1
-  image_picker: ^1.1.2
+  image_picker: ^1.2.3
 
   # Location
   geolocator: ^12.0.0
