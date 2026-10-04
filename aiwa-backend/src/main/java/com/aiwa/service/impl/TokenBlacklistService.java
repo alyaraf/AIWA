@@ -87,11 +87,6 @@ public class TokenBlacklistService {
         return true;
     }
 
-    /** Kept for callers of the earlier name; same as {@link #claimStrict}. */
-    public boolean claim(String token) {
-        return claimStrict(token);
-    }
-
     /** Refresh and MFA tokens: the database record decides. */
     public boolean isBlacklistedStrict(String token) {
         if (token == null) return false;

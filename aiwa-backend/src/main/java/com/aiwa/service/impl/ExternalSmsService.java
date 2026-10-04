@@ -43,6 +43,8 @@ public class ExternalSmsService implements SmsService {
             Set.of("error", "failed", "failure", "fail", "rejected", "refused", "undelivered");
 
     private final RestTemplate restTemplate;
+    /** AU-09: sign-up and reset codes run on a request thread, so they give up much sooner than an SOS text. */
+    private final RestTemplate otpRestTemplate;
     private final ObjectMapper json = new ObjectMapper();
     private MeterRegistry meterRegistry;
 
@@ -61,6 +63,10 @@ public class ExternalSmsService implements SmsService {
                 .setConnectTimeout(Duration.ofSeconds(5))
                 .setReadTimeout(Duration.ofSeconds(10))
                 .build();
+        this.otpRestTemplate = restTemplateBuilder
+                .setConnectTimeout(Duration.ofSeconds(3))
+                .setReadTimeout(Duration.ofSeconds(5))
+                .build();
     }
 
     @Autowired(required = false)
@@ -70,15 +76,15 @@ public class ExternalSmsService implements SmsService {
 
     @Override
     public void sendOtp(String phone, String code, int expiresInMinutes) {
-        post(phone, "Your AIWA verification code is " + code + ". It expires in " + expiresInMinutes + " minutes.", "otp");
+        post(otpRestTemplate, phone, "Your AIWA verification code is " + code + ". It expires in " + expiresInMinutes + " minutes.", "otp");
     }
 
     @Override
     public void send(String phone, String message) {
-        post(phone, message, "text");
+        post(restTemplate, phone, message, "text");
     }
 
-    private void post(String phone, String message, String kind) {
+    private void post(RestTemplate template, String phone, String message, String kind) {
         if (apiUrl == null || apiUrl.isBlank() || apiKey == null || apiKey.isBlank()) {
             count(kind, "not_configured");
             throw new BusinessException("SMS provider is not configured");
@@ -89,7 +95,7 @@ public class ExternalSmsService implements SmsService {
         Map<String, Object> body = Map.of("to", phone, "sender", sender, "message", message);
         ResponseEntity<String> response;
         try {
-            response = restTemplate.postForEntity(apiUrl, new HttpEntity<>(body, headers), String.class);
+            response = template.postForEntity(apiUrl, new HttpEntity<>(body, headers), String.class);
         } catch (RestClientException e) {
             count(kind, "error");
             log.error("SMS gateway error for …{}: {}", tail(phone), e.getMessage());

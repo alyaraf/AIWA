@@ -110,6 +110,11 @@ public class ChatController {
         if (!message.getBooking().getId().equals(bookingId)) {
             throw new BusinessException("chat.error.wrong_booking");
         }
+        // L-26: one open case per message; reporting it again only confirms it was received.
+        if (moderationRepo.existsByStatusAndTargetTypeAndTargetId(
+                com.aiwa.enums.ModerationStatus.OPEN, ModerationTargetType.CHAT_MESSAGE, messageId)) {
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.Success.of("Message reported", null));
+        }
         moderationRepo.save(ModerationCase.builder()
                 .targetType(ModerationTargetType.CHAT_MESSAGE)
                 .targetId(messageId)

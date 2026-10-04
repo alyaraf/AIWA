@@ -80,6 +80,8 @@ jwt:
   # DR-002: short access tokens bound how long a revoked one works while Redis is down; clients refresh silently.
   expiration: ${JWT_EXPIRATION_MS:900000}
   refresh-expiration: 604800000
+  # L-18: admins re-sign-in after this long (8 h); their tokens live in the browser.
+  admin-refresh-expiration: ${JWT_ADMIN_REFRESH_EXPIRATION_MS:28800000}
 
 springdoc:
   api-docs:

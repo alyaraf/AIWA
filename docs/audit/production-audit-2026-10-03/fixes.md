@@ -64,11 +64,32 @@ waiting for an owner rule are listed at the end.
 
 Test edits: none to existing assertions. `application-test.yml` sets `aiwa.terms.enforce-on-booking=false` (shared test contexts); `OwnerRulesApiTest` turns it on.
 
+### Fourth round: security and quality hardening (2026-10-04, branch hardening/security-quality-2026-10-04)
+
+| ID | Status | What changed | Covering tests |
+|---|---|---|---|
+| AU-08 / M-3 | fixed | The temporary password is sent to the **user** (SMS, else email) and is no longer returned to the admin; if neither channel works the reset rolls back and the old password keeps working. The admin panel shows "sent by SMS to ***1234". Support can no longer read it out to the user. | `AdminUsersControllerTest` (2), `SupportResetLiftsSignInLockApiTest` |
+| AU-08 / M-3 | fixed | ID documents and selfies are encrypted at rest (AES-256-GCM) once `DOCUMENT_ENCRYPTION_KEY` is set; files written before stay readable, an encrypted file without the key fails loudly. Public photos are never encrypted. | `PrivateFileCipherTest` (4), `FileStorageServiceImplTest` |
+| AU-09 / H-4 | fixed | OTP texts time out after 3 s connect / 5 s read (SOS texts keep 5 / 10 s) so a gateway outage ties up request threads for less time. | `ExternalSmsServiceTest` |
+| L-8 | fixed | With Redis down, sending or checking an OTP answers 503 `otp.error.unavailable` instead of an unexplained 500. | `OtpRedisDownTest` (2) |
+| L-9 (rest) | fixed | Bounds on the admin create/edit forms (names 255, phone 32, password 12 to 72), SOS coordinates and accuracy, availability slot length (5 to 240 min), reschedule reason (255), verification reject reason (255), request-info message (900) and note (2000). | `HardeningApiTest` (3) |
+| L-12 | fixed | A provider can be approved only after the ID front, ID back and selfie were submitted. | `HardeningApiTest` |
+| L-5 | fixed | Deleting a user takes the same row lock as deactivating, and the last active super admin can’t be deleted. The bootstrap branch of `requireSuperAdmin` stays (an existing test documents it as deliberate recovery). | `AdminUsersControllerTest` |
+| L-18 | fixed | Admin accounts’ refresh tokens live 8 hours (`JWT_ADMIN_REFRESH_EXPIRATION_MS`) instead of 7 days; everyone else is unchanged. | `HardeningApiTest` |
+| L-21 | fixed | The admin inbox reads at most the requested number of disputed bookings instead of loading all of them. | existing inbox tests |
+| L-26 | fixed | A chat message has at most one open report; reporting it again only confirms it. | `HardeningApiTest` |
+| M-8 / AU-10 | fixed | Notifications are deleted after 180 days (`NOTIFICATION_RETENTION_DAYS`, 0 = keep), nightly at 03:30. | `HardeningApiTest` |
+| DB | fixed | V30: `CHECK` constraints keep service prices, booking totals and travel fees, and commission amounts from going negative (`NOT VALID`, so existing rows can’t stop the migration). | not run on PostgreSQL |
+| §14 | fixed | Dead code removed: `UserRepository.findByPushToken`, `BookingRepository.findByStatusAndCreatedAtBefore`, `CommissionLedgerRepository.findAllByOrderByCreatedAtDesc`, `TokenBlacklistService.claim`. | compile |
+
+Not done, on purpose: turning `open-in-view` off (entities are mapped lazily in many controllers and only some are covered by tests, so a missed one would be a 500 in production only; do it as its own change with an end-to-end run); discovery and sweep queries in SQL (needs a load test first); `lower(email)` unique index (fails while `identifier_collisions` rows exist; resolve them first); `users.push_token` column drop (destructive); dates with an offset (L-17); pushing OTP sends to a background thread (the user would no longer learn when it failed); L-27 push-token binding (low risk, needs an install id in the app).
+
 ## Test edits
 
 - `BookingLifecycleServiceTest`: the booking fixture's provider is now APPROVED and active (data only; the H-1 guard refuses an unapproved one).
 - `BookingHomeServiceTravelFeeTest`: home-service requests carry a saved address (data only; M-1).
 - `VerificationRequestInfoTest`, `AdminUsersControllerTest`: constructors take the booking service.
+- `SupportResetLiftsSignInLockApiTest` and `AdminUsersControllerTest.resetPassword...`: they read the temporary password from the admin’s response; they now read it from the message sent to the user, and assert the response doesn’t contain it (AU-08).
 - App `push_registrar_test`: "sign-out clears the token" asserted the L-15 bug (a token-less DELETE); it now asserts nothing is sent. The CR-18 test got a token source.
 - `SettlementControllerTest.payingWithNoDuesFails`: asserts the message key instead of the English sentence (AU-13).
 - `ChatControllerModerationTest`: passes `afterId = null` to the new parameter.
@@ -100,3 +121,4 @@ password shown to the admin, ID documents unencrypted on disk), OTP sent off the
 | First round `029195f` | 328 passed | 168 passed, analyze clean | 104 passed, build ok |
 | Second round | 343 passed | 172 passed, analyze clean | 104 passed, build ok |
 | Third round | 359 passed | 172 passed, analyze clean | 104 passed, build ok |
+| Fourth round | 375 passed | 172 passed (unchanged), analyze clean | 104 passed, build ok (in a Linux container) |

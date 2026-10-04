@@ -988,7 +988,7 @@ async function mockRequest(path, options = {}) {
       return { success: true };
     }
     if (options.method === "POST" && path.includes("/reset-password")) {
-      return { temporaryPassword: "Aiwa-Kp7mQx2t" };
+      return { delivery: "SMS", sentTo: "***4477" };
     }
     if (options.method === "PATCH" && path.match(/^\/admin\/users\/[^/?]+$/)) {
       const id = path.split("/").pop();

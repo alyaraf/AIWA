@@ -161,6 +161,23 @@ class AdminUsersControllerTest {
     }
 
     @Test
+    void cannotDeleteTheLastActiveSuperAdminAndTheDeleteTakesTheLock() {
+        // L-5: delete had no last-super-admin rule and no row lock (deactivate has both, DR-007).
+        User me = superAdmin(1L, "me@x.com");
+        User target = superAdmin(2L, "target@x.com");
+        when(userRepo.findById(2L)).thenReturn(Optional.of(target));
+        when(userRepo.findByLogin("me@x.com")).thenReturn(Optional.of(me));
+        when(userRepo.countByRole(UserRole.ADMIN)).thenReturn(3L);
+        when(userRepo.countActiveSuperAdmins()).thenReturn(1L);
+
+        assertThatThrownBy(() -> controller.deleteUser(2L, principal("me@x.com")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("last active super admin");
+        verify(userRepo).lockActiveSuperAdmins();
+        verify(userRepo, never()).delete(any(User.class));
+    }
+
+    @Test
     void cannotDeactivateLastSuperAdmin() {
         User me = superAdmin(1L, "me@x.com");
         User target = superAdmin(2L, "target@x.com");
@@ -225,19 +242,43 @@ class AdminUsersControllerTest {
     }
 
     @Test
-    void resetPasswordReturnsTempAndReencodes() {
+    void resetPasswordSendsTheTempToTheUserNotTheAdmin() {
+        // AU-08 / M-3: the admin never sees the password.
+        com.aiwa.service.SmsService sms = mock(com.aiwa.service.SmsService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "smsService", sms);
         User customer = User.builder().id(3L).fullName("Layla").email("layla@x.com")
-                .role(UserRole.CUSTOMER).active(true).password("oldhash").build();
+                        .phone("+201000000009").role(UserRole.CUSTOMER).active(true).password("oldhash").build();
         when(userRepo.findById(3L)).thenReturn(Optional.of(customer));
         when(encoder.encode(anyString())).thenReturn("newhash");
         when(userRepo.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var res = controller.resetPassword(3L, principal("admin@x.com"));
 
-        String temp = res.getBody().getData().get("temporaryPassword");
-        assertThat(temp).startsWith("Aiwa-").hasSize(13);
+        assertThat(res.getBody().getData()).doesNotContainKey("temporaryPassword")
+                .containsEntry("delivery", "SMS").containsEntry("sentTo", "***0009");
+        org.mockito.ArgumentCaptor<String> text = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(sms).send(eq("+201000000009"), text.capture());
+        assertThat(text.getValue()).containsPattern("Aiwa-[A-Za-z0-9]{8}");
         assertThat(customer.getPassword()).isEqualTo("newhash");
-        verify(auditService).record(eq("PASSWORD_RESET"), eq("Layla"));
+        verify(auditService).record(eq("PASSWORD_RESET"), eq("Layla (sent by SMS)"));
+    }
+
+    @Test
+    void resetPasswordFailsWithoutAChannelAndWhenDeliveryFails() {
+        com.aiwa.service.SmsService sms = mock(com.aiwa.service.SmsService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "smsService", sms);
+        when(encoder.encode(anyString())).thenReturn("newhash");
+        when(userRepo.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        User noContact = User.builder().id(4L).fullName("X").role(UserRole.CUSTOMER).active(true).password("oldhash").build();
+        when(userRepo.findById(4L)).thenReturn(Optional.of(noContact));
+        assertThatThrownBy(() -> controller.resetPassword(4L, principal("admin@x.com")))
+                .isInstanceOf(BusinessException.class).hasMessage("admin.error.reset_no_channel");
+
+        User phoneOnly = User.builder().id(5L).fullName("Y").phone("+201000000010").role(UserRole.CUSTOMER).active(true).password("oldhash").build();
+        when(userRepo.findById(5L)).thenReturn(Optional.of(phoneOnly));
+        doThrow(new RuntimeException("gateway down")).when(sms).send(anyString(), anyString());
+        assertThatThrownBy(() -> controller.resetPassword(5L, principal("admin@x.com")))
+                .isInstanceOf(BusinessException.class).hasMessage("admin.error.reset_delivery_failed");
     }
 
     // ── CR-02: one spelling for every stored phone and email ────────────────

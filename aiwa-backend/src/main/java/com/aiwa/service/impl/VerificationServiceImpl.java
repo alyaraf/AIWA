@@ -96,6 +96,11 @@ public class VerificationServiceImpl {
         ProviderProfile profile = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
 
+        // L-12: a provider is listed only after the ID and selfie were actually submitted.
+        if (profile.getNationalIdFrontPath() == null || profile.getNationalIdBackPath() == null
+                || profile.getSelfiePath() == null) {
+            throw new BusinessException("verification.error.documents_missing");
+        }
         boolean firstApproval = profile.getVerifiedAt() == null;
         profile.setVerificationStatus(VerificationStatus.APPROVED);
         profile.setRejectionReason(null);

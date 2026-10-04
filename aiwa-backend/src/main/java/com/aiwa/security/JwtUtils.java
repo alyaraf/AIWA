@@ -22,6 +22,10 @@ public class JwtUtils {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
+    /** L-18: admin sessions are kept in the browser, so their refresh token lives hours, not days. */
+    @Value("${jwt.admin-refresh-expiration:28800000}")
+    private long adminRefreshExpiration = 28_800_000L;
+
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
@@ -66,6 +70,11 @@ public class JwtUtils {
 
     /** The userId claim lets a refresh resolve the account by id, never by guessing from the subject (V-01). */
     public String generateRefreshToken(String identifier, Long userId) {
+        return generateRefreshToken(identifier, userId, false);
+    }
+
+    /** @param admin an admin account: the shorter admin lifetime applies (L-18) */
+    public String generateRefreshToken(String identifier, Long userId, boolean admin) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
                 .setSubject(identifier)
@@ -76,7 +85,7 @@ public class JwtUtils {
                 // same string (rotation blacklists the old one).
                 .setId(java.util.UUID.randomUUID().toString())
                 .setIssuedAt(new Date(now))
-                .setExpiration(new Date(now + refreshExpiration))
+                .setExpiration(new Date(now + (admin ? adminRefreshExpiration : refreshExpiration)))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }

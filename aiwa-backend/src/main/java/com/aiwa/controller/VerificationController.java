@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import java.io.File;
 import org.springframework.data.domain.*;
@@ -128,7 +127,8 @@ public class VerificationController {
             @PathVariable Long providerId,
             @RequestParam(required = false) String reason,
             @RequestBody(required = false) FreeTextBody body) {
-        verificationService.reject(providerId, FreeTextBody.require(body, "reason", reason));
+        // L-9: the columns are 255 / 1000 / 2000 characters; longer text was a 500 at the database.
+        verificationService.reject(providerId, FreeTextBody.bounded(FreeTextBody.require(body, "reason", reason), 255));
         auditService.record("PROVIDER_REJECTED", "provider #" + providerId);
         return ResponseEntity.ok(ApiResponse.Success.of("Provider rejected", null));
     }
@@ -140,7 +140,7 @@ public class VerificationController {
             @PathVariable Long providerId,
             @RequestParam(required = false) String message,
             @RequestBody(required = false) FreeTextBody body) {
-        verificationService.requestMoreInfo(providerId, FreeTextBody.require(body, "message", message));
+        verificationService.requestMoreInfo(providerId, FreeTextBody.bounded(FreeTextBody.require(body, "message", message), 900));
         auditService.record("PROVIDER_INFO_REQUESTED", "provider #" + providerId);
         return ResponseEntity.ok(ApiResponse.Success.of("Information requested from provider", null));
     }
@@ -151,7 +151,7 @@ public class VerificationController {
     public ResponseEntity<ApiResponse.Success<Void>> saveNote(
             @PathVariable Long providerId,
             @RequestBody java.util.Map<String, String> body) {
-        verificationService.saveNote(providerId, body.get("note"));
+        verificationService.saveNote(providerId, FreeTextBody.bounded(body.get("note"), 2000));
         return ResponseEntity.ok(ApiResponse.Success.of("Note saved", null));
     }
 
@@ -213,6 +213,14 @@ public class VerificationController {
         return serveDocument(stored);
     }
 
+    private byte[] readDocument(java.nio.file.Path path) {
+        try {
+            return fileStorageService.readPrivate(path); // AU-08: decrypts when stored encrypted
+        } catch (java.io.IOException e) {
+            throw new com.aiwa.exception.BusinessException("upload.error.storage_failed");
+        }
+    }
+
     private ResponseEntity<org.springframework.core.io.Resource> serveDocument(String storedPath) {
         java.nio.file.Path path = fileStorageService.resolvePrivate(storedPath).orElse(null);
         if (path == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
@@ -225,7 +233,7 @@ public class VerificationController {
                 .contentType(type)
                 .header("Content-Disposition", "inline; filename=\"" + name + "\"")
                 .header("Cache-Control", "no-store")
-                .body(new FileSystemResource(path));
+                .body(new org.springframework.core.io.ByteArrayResource(readDocument(path)));
     }
 
     private Long resolveUserId(UserDetails ud) {

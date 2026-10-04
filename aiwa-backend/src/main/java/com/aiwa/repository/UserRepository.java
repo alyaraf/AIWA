@@ -17,7 +17,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByPhone(String phone);
     Optional<User> findByEmailIgnoreCase(String email);
     boolean existsByEmailIgnoreCase(String email);
-    java.util.List<User> findByPushToken(String pushToken);
 
     /**
      * The account a sign-in identifier names (V-01): an email when it contains

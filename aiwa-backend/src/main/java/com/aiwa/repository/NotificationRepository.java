@@ -18,4 +18,10 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Modifying
     @Query("UPDATE Notification n SET n.read = true WHERE n.user.id = :userId")
     void markAllReadForUser(@Param("userId") Long userId);
+
+    /** M-8: retention. Deletes notifications created before the cutoff; returns how many. */
+    @Modifying
+    @Query("DELETE FROM Notification n WHERE n.createdAt < :cutoff")
+    @org.springframework.transaction.annotation.Transactional
+    int deleteOlderThan(@Param("cutoff") java.time.LocalDateTime cutoff);
 }

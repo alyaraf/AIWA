@@ -99,6 +99,14 @@ public class FileStorageServiceImpl {
         decodeSlots = new Semaphore(Math.max(1, permits), true);
     }
 
+    /** Encrypts private files when DOCUMENT_ENCRYPTION_KEY is set; a test seam, so not final. */
+    private com.aiwa.util.PrivateFileCipher privateCipher = new com.aiwa.util.PrivateFileCipher(System.getenv("DOCUMENT_ENCRYPTION_KEY"));
+
+    /** The contents of a stored private file, decrypted when it was written encrypted. */
+    public byte[] readPrivate(Path path) throws IOException {
+        return privateCipher.decrypt(Files.readAllBytes(path));
+    }
+
     /** Store a public gallery image; returns its public URL path. */
     public String storePublic(MultipartFile file) {
         return storePublic(file, "gallery");
@@ -493,7 +501,10 @@ public class FileStorageServiceImpl {
         try {
             Files.createDirectories(dir);
             Path dest = dir.resolve(filename);
-            if (processed != null) {
+            if (basePath.equals(privatePath) && privateCipher.enabled()) {
+                // AU-08: ID documents and selfies are encrypted at rest (DOCUMENT_ENCRYPTION_KEY).
+                Files.write(dest, privateCipher.encrypt(processed != null ? processed : file.getBytes()));
+            } else if (processed != null) {
                 Files.write(dest, processed);
             } else {
                 try (InputStream in = file.getInputStream()) {

@@ -125,7 +125,7 @@ public class AdminInboxController {
                 });
 
         // Disputed bookings — customer says they didn't pay, or something's wrong.
-        bookingRepo.findByPaymentStatusOrderByCreatedAtDesc(PaymentStatus.DISPUTED).stream()
+        bookingRepo.findByPaymentStatusOrderByCreatedAtDesc(PaymentStatus.DISPUTED, PageRequest.of(0, perSource)).stream()
                 .limit(perSource)
                 .forEach(b -> items.add(ApiResponse.InboxItemDto.builder()
                         .id("dispute-" + b.getId())

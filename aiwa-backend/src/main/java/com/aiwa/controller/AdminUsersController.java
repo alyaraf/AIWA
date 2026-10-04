@@ -263,9 +263,13 @@ public class AdminUsersController {
     @DeleteMapping("/{id}")
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPER_ADMIN)
     @Operation(summary = "Delete a user account (ADMIN · Super admin)")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<Void>> deleteUser(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
+        // L-5: same serialisation as deactivate (DR-007), so two parallel deletions can't
+        // each see "2 left" and remove every super admin.
+        userRepo.lockActiveSuperAdmins();
         User user = userRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", id));
         User currentAdmin = resolveUser(userDetails);
@@ -275,6 +279,11 @@ public class AdminUsersController {
         }
         if (UserRole.ADMIN.equals(user.getRole()) && userRepo.countByRole(UserRole.ADMIN) <= 1) {
             throw new BusinessException("Cannot delete the last admin user");
+        }
+        if (UserRole.ADMIN.equals(user.getRole()) && user.isActive()
+                && user.hasPermission(com.aiwa.enums.AdminPermission.SUPER_ADMIN)
+                && userRepo.countActiveSuperAdmins() <= 1) {
+            throw new BusinessException("Can't delete " + user.getFullName() + " — they're the last active super admin");
         }
 
         String label = user.getFullName();
@@ -419,7 +428,7 @@ public class AdminUsersController {
 
     @PostMapping("/{id}/reset-password")
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT)
-    @Operation(summary = "Set a one-time temporary password for a locked-out user (ADMIN · Support)")
+    @Operation(summary = "Set a one-time temporary password for a locked-out user and send it to THEM by SMS or email (ADMIN · Support)")
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<java.util.Map<String, String>>> resetPassword(
             @PathVariable Long id,
@@ -435,14 +444,42 @@ public class AdminUsersController {
         target.setTokensValidAfter(java.time.Instant.now());
         userRepo.save(target);
         userRepo.clearLoginAttempts(target.getId()); // CR-01: the user is locked out of sign-in, so lift that lock too
-        auditService.record("PASSWORD_RESET", target.getFullName());
+        // AU-08 / M-3: the password goes to the user (SMS, else email), never to the admin, who
+        // could otherwise sign in as them. If it can't be delivered this throws and the whole
+        // reset rolls back, so the user's old password keeps working.
+        java.util.Map<String, String> delivered = deliverTemporaryPassword(target, temp);
+        auditService.record("PASSWORD_RESET", target.getFullName() + " (sent by " + delivered.get("delivery") + ")");
         notificationService.send(target.getId(), com.aiwa.enums.NotificationType.ACCOUNT_WARNING,
                 "Your password was reset", "تمت إعادة تعيين كلمة المرور الخاصة بك",
-                "An administrator reset your password. Sign in with the temporary password you were given, then change it.",
-                "قام أحد المشرفين بإعادة تعيين كلمة مرورك. سجّل الدخول بكلمة المرور المؤقتة ثم قم بتغييرها.",
+                "An administrator reset your password. We sent a temporary password to your phone or email; sign in with it, then change it. If you did not ask for this, contact AIWA support.",
+                "قام أحد المشرفين بإعادة تعيين كلمة مرورك. أرسلنا كلمة مرور مؤقتة إلى هاتفك أو بريدك؛ سجّل الدخول بها ثم غيّرها. إذا لم تطلب ذلك، تواصل مع دعم AIWA.",
                 null, null);
-        return ResponseEntity.ok(ApiResponse.Success.of("Temporary password created",
-                java.util.Map.of("temporaryPassword", temp)));
+        return ResponseEntity.ok(ApiResponse.Success.of("Temporary password sent to the user", delivered));
+    }
+
+    /** SMS to the phone, else email to the address. Returns {delivery, sentTo}; throws when neither works. */
+    private java.util.Map<String, String> deliverTemporaryPassword(User u, String temp) {
+        String text = "AIWA: your temporary password is " + temp + ". Sign in and change it now. "
+                + "If you did not ask for a reset, contact AIWA support.";
+        if (u.getPhone() != null && smsService != null) {
+            try {
+                smsService.send(u.getPhone(), text);
+                return java.util.Map.of("delivery", "SMS", "sentTo", "***" + u.getPhone().substring(Math.max(0, u.getPhone().length() - 4)));
+            } catch (RuntimeException e) {
+                log.warn("Temporary password SMS failed for user {}: {}", u.getId(), e.getMessage());
+            }
+        }
+        if (u.getEmail() != null && emailService != null) {
+            try {
+                emailService.send(u.getEmail(), "Your temporary AIWA password", text);
+                String at = u.getEmail().indexOf('@') > 0 ? u.getEmail().substring(u.getEmail().indexOf('@')) : "";
+                return java.util.Map.of("delivery", "EMAIL", "sentTo", u.getEmail().charAt(0) + "***" + at);
+            } catch (RuntimeException e) {
+                log.warn("Temporary password email failed for user {}: {}", u.getId(), e.getMessage());
+            }
+        }
+        throw new BusinessException(u.getPhone() == null && u.getEmail() == null
+                ? "admin.error.reset_no_channel" : "admin.error.reset_delivery_failed");
     }
 
     private static String generateTempPassword() {

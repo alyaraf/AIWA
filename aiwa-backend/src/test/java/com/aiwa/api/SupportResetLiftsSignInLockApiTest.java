@@ -56,6 +56,8 @@ class SupportResetLiftsSignInLockApiTest {
     @Autowired PasswordEncoder encoder;
     @Autowired RedisRuntimeService redis;
 
+    @org.springframework.boot.test.mock.mockito.MockBean com.aiwa.service.EmailService emailService;
+
     @BeforeEach
     void resetRedis() {
         ((InMemoryRedisRuntimeService) redis).clear();
@@ -98,7 +100,14 @@ class SupportResetLiftsSignInLockApiTest {
         String body = mvc.perform(post("/admin/users/" + locked.getId() + "/reset-password")
                         .header("Authorization", "Bearer " + supportToken))
                 .andReturn().getResponse().getContentAsString();
-        String temporary = json.readTree(body).get("data").get("temporaryPassword").asText();
+        // AU-08: the password goes to the user by email (this user has no phone), not to the admin.
+        assertThat(body).doesNotContain("temporaryPassword").doesNotContain("Aiwa-");
+        org.mockito.ArgumentCaptor<String> text = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(emailService).send(org.mockito.ArgumentMatchers.eq(locked.getEmail()),
+                org.mockito.ArgumentMatchers.anyString(), text.capture());
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("Aiwa-[A-Za-z0-9]{8}").matcher(text.getValue());
+        assertThat(m.find()).isTrue();
+        String temporary = m.group();
 
         assertThat(loginStatus(locked, temporary)).as("the temporary password works at once").isEqualTo(200);
     }

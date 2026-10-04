@@ -11,7 +11,7 @@ the privacy policy (`deploy/site/privacy.html`) once legal has reviewed it
 |------|-------|----------------|----------------------------------|
 | Chat messages of past bookings | `chat_messages` | Evidence for disputes and safety reports involving the other party | Keep 12 months after the booking, then delete the text. Keep longer only if a complaint or SOS is open on that booking |
 | SOS events with location | `safety_events`, `sos_deliveries` | Safety incidents may involve the police | Keep 24 months; keep coordinates only for SOS events (not other safety events) |
-| Notification text | `notifications` | Inbox history; holds names and service names | Delete with the account (no further use) |
+| Notification text | `notifications` | Inbox history; holds names and service names | Delete with the account; otherwise deleted after 180 days (`NOTIFICATION_RETENTION_DAYS`, 0 = keep) |
 | Bookings, reviews, commission ledger | `bookings`, `reviews`, `commission_ledger_entries` | Accounting and the other party's history; already shown as "Deleted user" | Keep, linked to the anonymised account, as long as tax rules require (usually 5 years) |
 | Audit log | `audit_log` | Who did what in the admin panel | Keep 24 months |
 | Backups | `deploy/backups`, off-site copy | Disaster recovery | 14 days on the server, 30 days off-site; a deleted account disappears from backups when they age out. Say so in the privacy policy |

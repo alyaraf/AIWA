@@ -40,6 +40,22 @@ class FileStorageServiceImplTest {
     }
 
     @Test
+    void privateDocumentsAreEncryptedOnDiskWhenAKeyIsSetAndReadBackIntact() throws Exception {
+        // AU-08 / M-3: an ID photo is not readable from a copy of the uploads volume.
+        ReflectionTestUtils.setField(storage, "privateCipher", new com.aiwa.util.PrivateFileCipher(
+                java.util.Base64.getEncoder().encodeToString(new byte[32])));
+        String stored = storage.storePrivate(new MockMultipartFile("id", "id.png", "image/png", PNG), "11");
+        Path onDisk = storage.resolvePrivate(stored).orElseThrow();
+
+        assertThat(Files.readAllBytes(onDisk)).isNotEqualTo(PNG);
+        assertThat(new String(Files.readAllBytes(onDisk), java.nio.charset.StandardCharsets.ISO_8859_1)).startsWith("AIWAENC1");
+        assertThat(storage.readPrivate(onDisk)).isEqualTo(PNG);
+        // Public images are never encrypted: browsers load them directly.
+        String pub = storage.storePublic(new MockMultipartFile("image", "x.png", "image/png", PNG));
+        assertThat(Files.readAllBytes(tmp.resolve("public").resolve(pub.substring("/files/public/".length())))).isNotEmpty();
+    }
+
+    @Test
     void htmlDisguisedAsAnImageIsRejected() {
         assertThatThrownBy(() -> storage.storePublic(
                 new MockMultipartFile("image", "a.png", "image/png", "<html></html>".getBytes())))

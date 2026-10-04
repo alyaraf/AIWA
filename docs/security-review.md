@@ -17,7 +17,8 @@ E-1 closes when every box is ticked.
 
 ## 2. Tokens and sessions (DR-002, DR-018, DR-030)
 
-- Access token 15 min (`JWT_EXPIRATION_MS`), refresh 7 days, MFA challenge 5 min;
+- Access token 15 min (`JWT_EXPIRATION_MS`), refresh 7 days (8 hours for admin accounts,
+  `JWT_ADMIN_REFRESH_EXPIRATION_MS`), MFA challenge 5 min;
   each has a `typ` claim and only access tokens authenticate requests.
 - Issue time in ms (`iatms`); `users.tokens_valid_after` cuts off every older
   token (password reset, phone change, suspension).
@@ -41,7 +42,8 @@ E-1 closes when every box is ticked.
   prod). SUPPORT admins are not forced.
 - TOTP secrets are encrypted at rest once `TOTP_ENCRYPTION_KEY` is set (AU-08).
 - [ ] Confirm SUPPORT stays optional, or require it for every admin too.
-- [ ] Set `TOTP_ENCRYPTION_KEY` in `deploy/.env` and keep a copy with the other secrets.
+- [ ] Set `TOTP_ENCRYPTION_KEY` and `DOCUMENT_ENCRYPTION_KEY` in `deploy/.env` and keep a copy of both with
+  the other secrets: without them, admins with 2FA can’t sign in and stored ID photos can’t be opened.
 
 ## 4. Admin accounts (DR-007, DR-031)
 
@@ -49,6 +51,9 @@ E-1 closes when every box is ticked.
   (edit, permissions, reset, deactivate, reactivate) needs SUPER_ADMIN.
 - The last active super admin can't be removed; changes take row locks first.
 - `@Version` on users: a stale save can't undo a suspension.
+- Support’s password reset sends the temporary password to the user by SMS or email; the admin
+  never sees it (AU-08). Contact changes by support notify the user and the old phone/email.
+- ID documents and selfies are encrypted at rest once `DOCUMENT_ENCRYPTION_KEY` is set.
 - The first super admin comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD` once
   (`AdminBootstrapConfig`); change that password after first sign-in.
 - [ ] Agree who holds SUPER_ADMIN at launch (at least two people).

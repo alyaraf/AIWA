@@ -473,7 +473,9 @@ public class AuthServiceImpl {
     private ApiResponse.AuthResponse buildAuthResponse(User user) {
         String identifier = identifierOf(user);
         String access  = jwtUtils.generateAccessToken(identifier, user.getId(), user.getRole().name());
-        String refresh = jwtUtils.generateRefreshToken(identifier, user.getId());
+        String refresh = user.getRole() == UserRole.ADMIN
+                ? jwtUtils.generateRefreshToken(identifier, user.getId(), true) // L-18: shorter for admins
+                : jwtUtils.generateRefreshToken(identifier, user.getId());
 
         return ApiResponse.AuthResponse.builder()
                 .accessToken(access)

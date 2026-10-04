@@ -17,5 +17,6 @@ public class RescheduleRequest {
     @NotNull(message = "New start time is required")
     private LocalTime startTime;
 
+    @jakarta.validation.constraints.Size(max = 255, message = "{validation.text.too_long}")
     private String reason;
 }

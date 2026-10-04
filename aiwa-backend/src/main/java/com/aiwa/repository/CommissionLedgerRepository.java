@@ -14,7 +14,6 @@ public interface CommissionLedgerRepository extends JpaRepository<CommissionLedg
     List<CommissionLedgerEntry> findByStatusOrderByCreatedAtAsc(LedgerEntryStatus status);
     List<CommissionLedgerEntry> findByStatusIn(java.util.Collection<LedgerEntryStatus> statuses);
     List<CommissionLedgerEntry> findByProviderIdAndStatusIn(Long providerId, java.util.Collection<LedgerEntryStatus> statuses);
-    List<CommissionLedgerEntry> findAllByOrderByCreatedAtDesc();
 
     // ── DR-028: paged / aggregated in the database instead of loading every row ──
 

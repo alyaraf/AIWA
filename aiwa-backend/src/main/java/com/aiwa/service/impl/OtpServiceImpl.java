@@ -73,7 +73,10 @@ public class OtpServiceImpl {
     public void sendOtp(String phone) {
         String id = com.aiwa.util.Identifiers.normalizePhone(phone);
         requireAllowedCountry(id);
-        requireGlobalBudget();
+        whileRedisIsUp(() -> {
+            requireGlobalBudget();
+            return null;
+        });
         String code = issue(id);
         smsService.sendOtp(id, code, OTP_TTL_MINUTES);
         if (meterRegistry != null) meterRegistry.counter(OTP_SENT_METRIC, "channel", "sms").increment();
@@ -149,7 +152,24 @@ public class OtpServiceImpl {
 
     // ── shared ───────────────────────────────────────────────────────────────
 
+    /**
+     * L-8: Redis holds the codes; while it is down sending and checking a code answers 503
+     * (otp.error.unavailable) and an alert-worthy log line, not an unexplained 500.
+     */
+    private <T> T whileRedisIsUp(java.util.function.Supplier<T> work) {
+        try {
+            return work.get();
+        } catch (org.springframework.dao.DataAccessException e) {
+            log.error("OTP unavailable, Redis is down: {}", e.getMessage());
+            throw new com.aiwa.exception.ServiceUnavailableException("otp.error.unavailable");
+        }
+    }
+
     private String issue(String identifier) {
+        return whileRedisIsUp(() -> issueCode(identifier));
+    }
+
+    private String issueCode(String identifier) {
         long recent = redis.increment(sendsKey(identifier, "10m"), Duration.ofMinutes(10));
         long daily = redis.increment(sendsKey(identifier, "day"), Duration.ofDays(1));
         if (recent > maxSendsPer10Minutes || daily > maxSendsPerDay) {
@@ -163,6 +183,13 @@ public class OtpServiceImpl {
     }
 
     private void verify(String identifier, String code) {
+        whileRedisIsUp(() -> {
+            verifyCode(identifier, code);
+            return null;
+        });
+    }
+
+    private void verifyCode(String identifier, String code) {
         long attempts = redis.increment(attemptKey(identifier), OTP_TTL);
         if (attempts > MAX_VERIFY_ATTEMPTS) {
             throw new BusinessException("otp.error.too_many_attempts");

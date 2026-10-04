@@ -2327,7 +2327,6 @@ export function ProfileView({ user: userProp, onBack, onStatusChange, onUserChan
   const [busy, setBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [permsOpen, setPermsOpen] = useState(false);
-  const [tempPw, setTempPw] = useState(null);
 
   // Editing another admin's account (details, permissions, password) needs super admin.
   const canManageThis = isAdmin ? (USE_MOCKS || (currentUser?.permissions || []).includes("SUPER_ADMIN")) : can("SUPPORT");
@@ -2367,14 +2366,15 @@ export function ProfileView({ user: userProp, onBack, onStatusChange, onUserChan
   function resetPassword() {
     setConfirm({
       title: `Reset ${user.fullName}'s password?`,
-      body: "A one-time temporary password is generated. Their current password stops working immediately — give them the new one to sign in with.",
+      body: "A one-time temporary password is generated and sent to the user by SMS (or email if they have no phone). Their current password stops working immediately. You will not see the new password.",
       confirmLabel: "Reset password",
       tone: "danger",
       onConfirm: async () => {
         setBusy(true);
         try {
-          const res = await runAction(() => api.resetUserPassword(user.id), { success: "Temporary password created" });
-          if (res?.temporaryPassword) setTempPw(res.temporaryPassword);
+          // AU-08: the password goes to the user, never to the admin.
+          const res = await runAction(() => api.resetUserPassword(user.id), { success: "Temporary password sent to the user" });
+          if (res?.delivery) toast(`Sent by ${res.delivery === "SMS" ? "SMS" : "email"} to ${res.sentTo}`, "ok");
         } catch { /* toast */ } finally { setBusy(false); }
       }
     });
@@ -2681,9 +2681,6 @@ export function ProfileView({ user: userProp, onBack, onStatusChange, onUserChan
       {permsOpen && (
         <PermissionsModal user={user} busy={busy} onClose={() => setPermsOpen(false)} onSave={savePermissions} />
       )}
-      {tempPw && (
-        <TempPasswordModal name={user.fullName} password={tempPw} onClose={() => setTempPw(null)} />
-      )}
     </section>
   );
 }
@@ -2969,32 +2966,6 @@ function EditUserModal({ user, busy, onClose, onSave }) {
 }
 
 /* Shows a freshly generated temporary password once, with copy. */
-function TempPasswordModal({ name, password, onClose }) {
-  const [copied, setCopied] = useState(false);
-  function copy() {
-    try { navigator.clipboard.writeText(password); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ignore */ }
-  }
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="modal-close" onClick={onClose}><X size={18} /></button>
-        <p className="eyebrow">Password reset</p>
-        <h2>Temporary password for {name}</h2>
-        <p className="muted" style={{ margin: "0 0 12px" }}>
-          Give this to the user now — it won't be shown again. They should change it after signing in.
-        </p>
-        <div className="temp-pw">
-          <code>{password}</code>
-          <button className="btn btn-secondary sm" onClick={copy}>{copied ? <><Check size={14} /> Copied</> : <>Copy</>}</button>
-        </div>
-        <div className="modal-actions">
-          <button className="btn btn-primary" onClick={onClose}>Done</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* Edit an admin's permissions */
 function PermissionsModal({ user, busy, onClose, onSave }) {
   const [selected, setSelected] = useState(user.permissions || []);

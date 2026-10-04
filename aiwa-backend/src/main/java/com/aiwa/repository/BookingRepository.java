@@ -120,9 +120,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     boolean existsBySavedAddressId(Long savedAddressId);
 
-    /** Gap: PENDING requests created before the cutoff that the provider never answered. */
-    List<Booking> findByStatusAndCreatedAtBefore(BookingStatus status, java.time.LocalDateTime cutoff);
-
     /** All bookings in one status — used by the expiry sweep, which applies a per-provider window. */
     List<Booking> findByStatus(BookingStatus status);
 
@@ -142,7 +139,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     long countByPaymentStatus(com.aiwa.enums.PaymentStatus paymentStatus);
 
     /** Used by the admin inbox — bookings currently in dispute need admin attention. */
-    List<Booking> findByPaymentStatusOrderByCreatedAtDesc(com.aiwa.enums.PaymentStatus paymentStatus);
+    List<Booking> findByPaymentStatusOrderByCreatedAtDesc(com.aiwa.enums.PaymentStatus paymentStatus, Pageable pageable);
 
     Page<Booking> findByProviderIdOrderByCreatedAtDesc(Long providerId, Pageable pageable);
 
