@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -105,6 +106,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByStaffMemberIdAndBookingDate(Long staffMemberId, LocalDate date);
 
     List<Booking> findByCustomerIdAndStatus(Long customerId, BookingStatus status);
+
+    List<Booking> findByProviderIdAndStatusIn(Long providerId, Collection<BookingStatus> statuses);
 
     boolean existsByCustomerIdAndProviderIdAndStatusIn(Long customerId, Long providerId,
                                                        java.util.Collection<BookingStatus> statuses);

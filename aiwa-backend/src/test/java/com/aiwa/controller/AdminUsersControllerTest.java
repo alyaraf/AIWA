@@ -41,7 +41,8 @@ class AdminUsersControllerTest {
             mock(com.aiwa.service.impl.AccountDeletionService.class);
 
     private final AdminUsersController controller =
-            new AdminUsersController(userRepo, providerRepo, bookingRepo, reviewRepo, complaintRepo, encoder, notificationService, auditService, accountDeletion);
+            new AdminUsersController(userRepo, providerRepo, bookingRepo, reviewRepo, complaintRepo, encoder, notificationService, auditService, accountDeletion,
+                    mock(com.aiwa.service.impl.BookingServiceImpl.class));
 
     private UserDetails principal(String username) {
         return new org.springframework.security.core.userdetails.User(

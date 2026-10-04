@@ -1814,5 +1814,6 @@
   "staffServicesHint": "Does these services (none picked = all)",
   "staffSaved": "Staff member updated.",
   "staffDeactivate": "Remove from bookings",
-  "staffDeactivated": "Staff member deactivated."
+  "staffDeactivated": "Staff member deactivated.",
+  "linkOpenFailed": "No app on this phone could open that. Please try another way."
 }

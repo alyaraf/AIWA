@@ -13,6 +13,10 @@ class ApiClient {
   /// rejected), 403, 423. Listened to in app.dart.
   static final authEvents = StreamController<int>.broadcast();
 
+  /// The backend's `code` on a 403 caused by the caller's role
+  /// (SecurityConfig.ROLE_FORBIDDEN_CODE).
+  static const roleForbiddenCode = 'auth.error.forbidden_role';
+
   /// Emits `true` on connection errors and `false` on the next response.
   static final offline = StreamController<bool>.broadcast();
 
@@ -303,8 +307,13 @@ class _ErrorInterceptor extends Interceptor {
         ApiClient.offline.add(false);
         final data = err.response?.data;
         final message = data is Map ? data['message'] as String? : null;
+        final code = data is Map ? data['code'] as String? : null;
         if (statusCode == 401) return const UnauthorizedException();
-        if (statusCode == 403 || statusCode == 423) {
+        // 423 always; 403 only when the role was refused. A business 403
+        // ("not your booking", "account suspended") carries its own code and
+        // is shown inline by the screen, not as the Forbidden page (M-9).
+        if (statusCode == 423 ||
+            (statusCode == 403 && (code == null || code == roleForbiddenCode))) {
           ApiClient.authEvents.add(statusCode!);
         }
         return ServerException(

@@ -86,6 +86,51 @@ public class GlobalExceptionHandler {
                 .body(buildError(HttpStatus.BAD_REQUEST, "Bad Request", "Malformed request body"));
     }
 
+    /**
+     * M-9: a unique or foreign-key constraint refused the write — typically two
+     * identical requests racing (registration, review, ledger row). A 409 the
+     * client can reload on, not a 500 that pages operations.
+     */
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse.Error> handleIntegrity(org.springframework.dao.DataIntegrityViolationException ex) {
+        log.warn("Constraint violation: {}", ex.getMostSpecificCause().getMessage());
+        return keyed(HttpStatus.CONFLICT, "Conflict", "error.duplicate_or_conflict");
+    }
+
+    /** M-9: an Optional.orElseThrow() with no message, e.g. the signed-in user no longer exists. */
+    @ExceptionHandler(java.util.NoSuchElementException.class)
+    public ResponseEntity<ApiResponse.Error> handleNoSuchElement(java.util.NoSuchElementException ex) {
+        return keyed(HttpStatus.NOT_FOUND, "Not Found", "error.not_found");
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse.Error> handleMissingPart(
+            org.springframework.web.multipart.support.MissingServletRequestPartException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(buildError(HttpStatus.BAD_REQUEST, "Bad Request",
+                        "Missing required part '" + ex.getRequestPartName() + "'"));
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MultipartException.class)
+    public ResponseEntity<ApiResponse.Error> handleMultipart(org.springframework.web.multipart.MultipartException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(buildError(HttpStatus.BAD_REQUEST, "Bad Request", "A file upload was expected"));
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse.Error> handleMediaType(org.springframework.web.HttpMediaTypeNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(buildError(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported Media Type",
+                        "Content type not supported"));
+    }
+
+    /** Bean-validation on @RequestParam / @PathVariable (@Min, @Max, @Size on a validated controller). */
+    @ExceptionHandler({jakarta.validation.ConstraintViolationException.class,
+            org.springframework.web.method.annotation.HandlerMethodValidationException.class})
+    public ResponseEntity<ApiResponse.Error> handleParamValidation(Exception ex) {
+        return keyed(HttpStatus.BAD_REQUEST, "Validation Failed", "error.invalid_parameter");
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse.Error> handleBusiness(BusinessException ex) {
         // BusinessException carries either a plain English sentence (legacy call
@@ -128,9 +173,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse.Error> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(buildError(HttpStatus.FORBIDDEN, "Forbidden",
-                        "You don't have permission to perform this action."));
+        // @PreAuthorize refused the caller's role or admin permission.
+        return keyed(HttpStatus.FORBIDDEN, "Forbidden", com.aiwa.config.SecurityConfig.ROLE_FORBIDDEN_CODE);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

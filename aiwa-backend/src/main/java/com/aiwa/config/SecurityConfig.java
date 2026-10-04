@@ -37,6 +37,26 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final RedisRateLimitFilter redisRateLimitFilter;
     private final UserDetailsService userDetailsService;
+    private final com.aiwa.i18n.MessageHelper messages;
+
+    /** The {@code code} of a 403 caused by the caller's role, not by a business rule. */
+    public static final String ROLE_FORBIDDEN_CODE = "auth.error.forbidden_role";
+
+    private void writeError(jakarta.servlet.http.HttpServletResponse response, HttpStatus status,
+                            String error, String key) throws java.io.IOException {
+        response.setStatus(status.value());
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        com.fasterxml.jackson.databind.node.ObjectNode body =
+                com.fasterxml.jackson.databind.json.JsonMapper.builder().build().createObjectNode()
+                        .put("success", false)
+                        .put("status", status.value())
+                        .put("error", error)
+                        .put("code", key)
+                        .put("message", messages.get(key))
+                        .put("timestamp", java.time.LocalDateTime.now().toString());
+        response.getWriter().write(body.toString());
+    }
 
     @Value("${aiwa.cors.allowed-origins}")
     private List<String> allowedOrigins;
@@ -96,12 +116,14 @@ public class SecurityConfig {
                         // No / invalid / expired credentials -> 401 (client should re-authenticate).
                         // Authenticated but lacking the required permission -> 403 (handled by
                         // GlobalExceptionHandler; the client shows a "no permission" message, no logout).
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                            response.setContentType("application/json");
-                            response.getWriter().write(
-                                    "{\"error\":\"Unauthorized\",\"message\":\"Authentication required\"}");
-                        }))
+                        // Both write the same {success,status,error,code,message,timestamp}
+                        // shape as GlobalExceptionHandler (M-9).
+                        .authenticationEntryPoint((request, response, authException) ->
+                                writeError(response, HttpStatus.UNAUTHORIZED, "Unauthorized", "auth.error.authentication_required"))
+                        // A URL rule refused the caller's role. The apps show their
+                        // "not for your account" screen only for this code.
+                        .accessDeniedHandler((request, response, denied) ->
+                                writeError(response, HttpStatus.FORBIDDEN, "Forbidden", ROLE_FORBIDDEN_CODE)))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(redisRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

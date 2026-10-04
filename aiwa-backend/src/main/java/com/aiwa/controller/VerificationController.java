@@ -159,9 +159,10 @@ public class VerificationController {
     @PreAuthorize(Perms.SUPPORT)
     @Operation(summary = "Suspend a provider (ADMIN · Support)")
     public ResponseEntity<ApiResponse.Success<Void>> suspend(@PathVariable Long providerId) {
-        verificationService.suspend(providerId);
-        auditService.record("PROVIDER_SUSPENDED", "provider #" + providerId);
-        return ResponseEntity.ok(ApiResponse.Success.of("Provider suspended", null));
+        int cancelled = verificationService.suspend(providerId);
+        auditService.record("PROVIDER_SUSPENDED", "provider #" + providerId + ", " + cancelled + " booking(s) cancelled");
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                "Provider suspended" + (cancelled > 0 ? "; " + cancelled + " upcoming booking(s) cancelled" : ""), null));
     }
 
     @PostMapping("/admin/verification/{providerId}/reactivate")

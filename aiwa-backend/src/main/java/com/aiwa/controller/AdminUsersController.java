@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/admin/users")
 @PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
-@Tag(name = "Admin â€” Users", description = "Admin user management endpoints")
+@Tag(name = "Admin — Users", description = "Admin user management endpoints")
 public class AdminUsersController {
 
     private final UserRepository userRepo;
@@ -40,9 +40,10 @@ public class AdminUsersController {
     private final com.aiwa.service.impl.NotificationServiceImpl notificationService;
     private final com.aiwa.service.impl.AuditService auditService;
     private final com.aiwa.service.impl.AccountDeletionService accountDeletion;
+    private final com.aiwa.service.impl.BookingServiceImpl bookingService;
 
     @GetMapping
-    @Operation(summary = "List all users â€” filter by role, search by name/phone/email")
+    @Operation(summary = "List all users — filter by role, search by name/phone/email")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.UserDto>>> listUsers(
             @RequestParam(required = false) String role,
@@ -227,8 +228,17 @@ public class AdminUsersController {
         // End every session now, not when the access token expires.
         u.setTokensValidAfter(java.time.Instant.now());
         userRepo.save(u);
-        auditService.record("USER_DEACTIVATED", u.getFullName());
-        return ResponseEntity.ok(ApiResponse.Success.of("User deactivated", null));
+        // H-1: a deactivated provider's bookings that haven't started are
+        // cancelled and the customers told, instead of waiting for a no-show.
+        int cancelled = UserRole.PROVIDER.equals(u.getRole())
+                ? providerRepo.findByUserId(u.getId())
+                        .map(p -> bookingService.cancelForSuspendedProvider(p.getId(), "Provider account deactivated"))
+                        .orElse(0)
+                : 0;
+        auditService.record("USER_DEACTIVATED", u.getFullName()
+                + (cancelled > 0 ? ", " + cancelled + " booking(s) cancelled" : ""));
+        return ResponseEntity.ok(ApiResponse.Success.of(
+                "User deactivated" + (cancelled > 0 ? "; " + cancelled + " upcoming booking(s) cancelled" : ""), null));
     }
 
     @PatchMapping("/{id}/reactivate")

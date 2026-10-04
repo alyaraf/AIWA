@@ -539,12 +539,16 @@ public class BookingServiceImpl implements BookingService {
         if (!isProvider && !isCustomer) throw new ForbiddenException("error.not_authorized");
 
         if (!booking.getStatus().canTransitionTo(newStatus)) {
-            throw new BusinessException("Cannot change status from "
-                    + booking.getStatus() + " to " + newStatus);
+            throw new BusinessException("booking.error.invalid_transition");
         }
 
         if (newStatus != BookingStatus.CANCELLED && !isProvider) {
             throw new BusinessException("booking.error.only_provider_update_status");
+        }
+        // H-1: a suspended or deactivated provider may still decline or cancel,
+        // but can't take a booking forward (accept, set off, arrive, start, no-show).
+        if (isProvider && newStatus != BookingStatus.CANCELLED && newStatus != BookingStatus.REJECTED) {
+            requireProviderInGoodStanding(booking.getProvider());
         }
 
         BookingStatus previous = booking.getStatus();
@@ -582,6 +586,50 @@ public class BookingServiceImpl implements BookingService {
 
         sendStatusNotification(booking, newStatus, isCustomer);
         return toDto(booking);
+    }
+
+    /**
+     * H-1: the provider's listing is approved and the owner account is active.
+     * Completing a session that is already under way stays allowed, so the
+     * visit and its commission are recorded; every other forward step is refused.
+     */
+    static void requireProviderInGoodStanding(ProviderProfile provider) {
+        if (provider.getVerificationStatus() != VerificationStatus.APPROVED
+                || provider.getUser() == null || !provider.getUser().isActive()) {
+            throw new ForbiddenException("booking.error.provider_suspended");
+        }
+    }
+
+    /** Statuses cancelled when a provider is suspended: everything not yet under way. */
+    static final List<BookingStatus> CANCEL_ON_SUSPENSION = List.of(
+            BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED);
+
+    /**
+     * H-1: cancels the provider's bookings that haven't started (pending, accepted,
+     * on the way, arrived) and tells each customer. A session already in progress
+     * is left to finish. Joins the caller's transaction (suspend / deactivate).
+     *
+     * @return how many bookings were cancelled
+     */
+    @Transactional
+    public int cancelForSuspendedProvider(Long providerId, String reason) {
+        List<Booking> live = bookingRepo.findByProviderIdAndStatusIn(providerId, CANCEL_ON_SUSPENSION);
+        LocalDateTime now = LocalDateTime.now();
+        for (Booking booking : live) {
+            booking.setStatus(BookingStatus.CANCELLED);
+            booking.setCancelledBy("ADMIN");
+            booking.setCancellationReason(trimReason(reason));
+            booking.setCancelledAt(now);
+            bookingRepo.save(booking);
+            String service = booking.getService().getName();
+            notifyCustomer(booking, NotificationType.BOOKING_CANCELLED,
+                    "Booking cancelled", "تم إلغاء الحجز",
+                    "Your booking for " + service + " on " + booking.getBookingDate()
+                            + " was cancelled because the provider is no longer available on AIWA. You can book another provider.",
+                    "تم إلغاء حجزك لـ " + service + " بتاريخ " + booking.getBookingDate()
+                            + " لأن مقدم الخدمة لم يعد متاحاً على AIWA. يمكنك الحجز لدى مقدم خدمة آخر.");
+        }
+        return live.size();
     }
 
     /** How early before the appointment a provider may set off, start, or finish (R2-17). */
@@ -675,7 +723,7 @@ public class BookingServiceImpl implements BookingService {
         if (!booking.getProvider().getUser().getId().equals(userId))
             throw new BusinessException("booking.error.only_provider_complete");
         if (!booking.getStatus().canTransitionTo(BookingStatus.COMPLETED))
-            throw new BusinessException("Cannot complete booking in status: " + booking.getStatus());
+            throw new BusinessException("booking.error.invalid_transition");
         requireStepAllowed(booking, BookingStatus.COMPLETED);
 
         booking.setStatus(BookingStatus.COMPLETED);
@@ -1036,6 +1084,7 @@ public class BookingServiceImpl implements BookingService {
 
         if (!booking.getProvider().getUser().getId().equals(providerUserId))
             throw new BusinessException("booking.error.only_provider_propose");
+        requireProviderInGoodStanding(booking.getProvider());
         if (booking.getStatus() != BookingStatus.PENDING)
             throw new BusinessException("booking.error.propose_requires_pending");
 
@@ -1152,6 +1201,7 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
         if (!booking.getProvider().getUser().getId().equals(providerUserId))
             throw new ForbiddenException("error.not_authorized");
+        requireProviderInGoodStanding(booking.getProvider());
         if (!booking.isHomeService())
             throw new BusinessException("booking.error.quote_home_service_only");
         if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.ACCEPTED)

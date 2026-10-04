@@ -121,8 +121,9 @@ aiwa:
     # 200 million pixels still admits the largest phone sensors (200 MP modes); nothing a phone takes is bigger.
     public-max-image-pixels: 200000000
     # A progressive JPEG keeps all its coefficients in native memory while decoding, so it gets a lower ceiling
-    # (14142 x 14142 would pin ~700 MB for ~40 s). 50 million pixels is a 50 MP photo, above any phone's default mode.
-    public-max-progressive-pixels: 50000000
+    # (14142 x 14142 would pin ~700 MB for ~40 s). H-3: 25 million pixels (~85 MB pinned per decode) still admits
+    # any phone's default photo mode; progressive photos are rare from phone cameras anyway.
+    public-max-progressive-pixels: ${PUBLIC_MAX_PROGRESSIVE_PIXELS:25000000}
     # Public-image decodes allowed at once (the rest wait up to public-decode-wait-ms for a slot, then get HTTP 429).
     public-decode-concurrency: 2
     public-decode-wait-ms: 5000

@@ -26,7 +26,11 @@ void main() {
       req.response
         ..statusCode = int.parse(req.uri.pathSegments.last)
         ..headers.contentType = ContentType.json
-        ..write('{"message":"nope"}')
+        ..write(
+          req.uri.queryParameters['code'] == null
+              ? '{"message":"nope"}'
+              : '{"message":"nope","code":"${req.uri.queryParameters['code']}"}',
+        )
         ..close();
     });
   });
@@ -52,6 +56,31 @@ void main() {
     final event = ApiClient.authEvents.stream.first;
     await expectLater(client.get('$base/423'), throwsA(isA<ServerException>()));
     expect(await event, 423);
+  });
+
+  test('a role 403 opens the Forbidden screen (auth event)', () async {
+    final event = ApiClient.authEvents.stream.first;
+    await expectLater(
+      client.get('$base/403?code=${ApiClient.roleForbiddenCode}'),
+      throwsA(isA<ServerException>()),
+    );
+    expect(await event, 403);
+  });
+
+  test('a business 403 is only an error for the screen, no auth event', () async {
+    final events = <int>[];
+    final sub = ApiClient.authEvents.stream.listen(events.add);
+    await expectLater(
+      client.get('$base/403?code=error.access_denied'),
+      throwsA(
+        isA<ServerException>()
+            .having((e) => e.statusCode, 'statusCode', 403)
+            .having((e) => e.message, 'message', 'nope'),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+    expect(events, isEmpty);
   });
 
   test('connection refused -> NetworkException', () async {

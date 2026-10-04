@@ -58,6 +58,38 @@ class FileStorageDecodeLimitsTest {
     }
 
     @Test
+    void aJunkByteBetweenSegmentsDoesNotHideAProgressiveBomb() throws Exception {
+        // H-3 (audit 2026-10-03): one byte after APP0 used to end the marker walk with "not progressive".
+        byte[] bomb = progressiveJpeg(8, 8);
+        patchSize(bomb, 0xC2, 14142, 14142);
+        byte[] withJunk = insertAfterFirstSegment(bomb, (byte) 0x00);
+        assertThat(FileStorageServiceImpl.progressivePixels(withJunk)).isEqualTo(14142L * 14142L);
+        byte[] withJunkRun = insertAfterFirstSegment(bomb, (byte) 0x12, (byte) 0x34, (byte) 0xFF, (byte) 0x00);
+        assertThat(FileStorageServiceImpl.progressivePixels(withJunkRun)).isEqualTo(14142L * 14142L);
+
+        assertThatThrownBy(() -> storage.storePublic(new MockMultipartFile("i", "a.jpg", "image/jpeg", withJunk), "avatars"))
+                .isInstanceOf(BusinessException.class).hasMessage("upload.error.image_too_large");
+        assertThat(Files.exists(tmp.resolve("public"))).as("nothing stored").isFalse();
+    }
+
+    @Test
+    void theDecoderMetadataGuardRefusesAProgressiveFrameTheMarkerWalkMissed() throws Exception {
+        byte[] photo = progressiveJpeg(64, 64);
+        try (var in = ImageIO.createImageInputStream(new ByteArrayInputStream(photo))) {
+            var reader = ImageIO.getImageReaders(in).next();
+            reader.setInput(in, true, true);
+            assertThat(FileStorageServiceImpl.isBaselineJpeg(reader)).isFalse();
+            reader.dispose();
+        }
+        try (var in = ImageIO.createImageInputStream(new ByteArrayInputStream(baselineJpeg(64, 64)))) {
+            var reader = ImageIO.getImageReaders(in).next();
+            reader.setInput(in, true, true);
+            assertThat(FileStorageServiceImpl.isBaselineJpeg(reader)).isTrue();
+            reader.dispose();
+        }
+    }
+
+    @Test
     void aProgressivePhotoUnderTheCeilingStillStores() throws Exception {
         byte[] photo = progressiveJpeg(640, 480);
         String url = storage.storePublic(new MockMultipartFile("i", "a.jpg", "image/jpeg", photo), "avatars");
@@ -157,6 +189,17 @@ class FileStorageDecodeLimitsTest {
             if ((jpeg[i] & 0xFF) == 0xFF && (jpeg[i + 1] & 0xFF) == 0xC2) return i;
         }
         return -1;
+    }
+
+    /** Copy of {@code jpeg} with {@code junk} inserted right after the first segment that follows SOI (APP0). */
+    private static byte[] insertAfterFirstSegment(byte[] jpeg, byte... junk) {
+        int len = ((jpeg[4] & 0xFF) << 8) | (jpeg[5] & 0xFF);
+        int at = 4 + len;
+        byte[] out = new byte[jpeg.length + junk.length];
+        System.arraycopy(jpeg, 0, out, 0, at);
+        System.arraycopy(junk, 0, out, at, junk.length);
+        System.arraycopy(jpeg, at, out, at + junk.length, jpeg.length - at);
+        return out;
     }
 
     /** Rewrites the declared height and width of the SOFn frame header. */

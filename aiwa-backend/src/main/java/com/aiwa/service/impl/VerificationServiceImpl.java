@@ -20,6 +20,7 @@ public class VerificationServiceImpl {
     private final ProviderProfileRepository providerRepo;
     private final NotificationServiceImpl notificationService;
     private final WaitlistService waitlistService;
+    private final BookingServiceImpl bookingService;
 
     /**
      * Whether this provider may (re)submit documents. Refused once approved, and
@@ -169,24 +170,32 @@ public class VerificationServiceImpl {
         );
     }
 
-    /** Admin: suspend a provider (req 2) */
+    /**
+     * Admin: suspend a provider (req 2). H-1: their bookings that haven't started
+     * are cancelled and each customer is told; a session already in progress is
+     * left to finish.
+     *
+     * @return how many bookings were cancelled
+     */
     @Transactional
-    public void suspend(Long providerId) {
+    public int suspend(Long providerId) {
         ProviderProfile profile = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
         profile.setVerificationStatus(VerificationStatus.SUSPENDED);
         providerRepo.save(profile);
+        int cancelled = bookingService.cancelForSuspendedProvider(providerId, "Provider suspended");
 
         notificationService.send(
                 profile.getUser().getId(),
                 NotificationType.PROVIDER_SUSPENDED,
                 "Your provider account is suspended",
                 "تم إيقاف حساب مزود الخدمة الخاص بك",
-                "Your provider profile has been suspended by an administrator. You will not receive new bookings until it is reactivated.",
-                "تم إيقاف ملفك كمزود خدمة من قبل الإدارة. لن تستقبل حجوزات جديدة حتى إعادة التفعيل.",
+                "Your provider profile has been suspended by an administrator. You will not receive new bookings until it is reactivated, and your upcoming bookings have been cancelled.",
+                "تم إيقاف ملفك كمزود خدمة من قبل الإدارة. لن تستقبل حجوزات جديدة حتى إعادة التفعيل، وتم إلغاء حجوزاتك القادمة.",
                 null,
                 providerId
         );
+        return cancelled;
     }
 
     /** Admin: reactivate a suspended provider (req 2) */

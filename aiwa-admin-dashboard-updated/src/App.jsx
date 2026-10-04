@@ -1390,7 +1390,7 @@ function VerificationDetail({ provider, onBack, onApprove, onReject, onRequestIn
   function confirmSuspend() {
     setConfirm({
       title: "Suspend this provider?",
-      body: "They stop receiving new bookings immediately and their profile is hidden from search until you reactivate them.",
+      body: "They stop receiving new bookings immediately and their profile is hidden from search until you reactivate them. Their upcoming bookings that have not started are cancelled and the customers are notified.",
       confirmLabel: "Suspend provider",
       tone: "danger",
       onConfirm: async () => {
@@ -1777,7 +1777,9 @@ export function Flags() {
     if (!isProvider && flag.targetUserId == null) { toast("This flag has no account to suspend.", "error"); return; }
     setConfirm({
       title: `Suspend ${flag.name}?`,
-      body: "They will lose access to the app until an admin reactivates the account.",
+      body: isProvider
+        ? "Their profile is hidden until an admin reactivates them. Their upcoming bookings that have not started are cancelled and the customers are notified."
+        : "They will lose access to the app until an admin reactivates the account.",
       confirmLabel: "Suspend",
       tone: "danger",
       onConfirm: () => doSuspend(flag, isProvider)
@@ -1940,7 +1942,8 @@ function UsersPage({ currentUser }) {
     // paged list the panel can't count them itself (doDeactivate shows it).
     setConfirm({
       title: user.role === "ADMIN" ? "Deactivate admin?" : "Suspend account?",
-      body: `${user.fullName} will be signed out and blocked until reactivated.`,
+      body: `${user.fullName} will be signed out and blocked until reactivated.`
+        + (user.role === "PROVIDER" ? " Their upcoming bookings that have not started are cancelled and the customers are notified." : ""),
       confirmLabel: user.role === "ADMIN" ? "Deactivate" : "Suspend",
       tone: "danger",
       onConfirm: () => doDeactivate(user)

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/widgets/open_external.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -102,12 +102,10 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
   Future<void> _directions(BookingEntity b) async {
     final address = b.providerAddress;
     if (address == null || address.isEmpty) return;
-    final uri = Uri.parse(
-      'https://maps.google.com/?q=${Uri.encodeComponent(address)}',
+    await openExternal(
+      context,
+      Uri.parse('https://maps.google.com/?q=${Uri.encodeComponent(address)}'),
     );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   @override

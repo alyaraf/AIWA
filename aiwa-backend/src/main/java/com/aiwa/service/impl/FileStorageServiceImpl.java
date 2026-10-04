@@ -85,8 +85,8 @@ public class FileStorageServiceImpl {
      * progressive image in native memory while it decodes (the heap limit and the subsampling do not bound that),
      * so a ~1 MB file declaring 14142 x 14142 would pin hundreds of MB and ~40 s of CPU.
      */
-    @Value("${aiwa.storage.public-max-progressive-pixels:50000000}")
-    private long maxProgressivePixels = 50_000_000L;
+    @Value("${aiwa.storage.public-max-progressive-pixels:25000000}")
+    private long maxProgressivePixels = 25_000_000L;
 
     /** Public-image decodes allowed at the same time; the others wait (at most {@link #decodeWaitMillis}) for a slot. */
     private Semaphore decodeSlots = new Semaphore(2, true);
@@ -224,6 +224,11 @@ public class FileStorageServiceImpl {
                     if ((long) width * height > maxImagePixels) {
                         throw new BusinessException("upload.error.image_too_large");
                     }
+                    // H-3, second guard: ask the decoder itself, so a header our marker walk reads
+                    // differently from libjpeg still can't slip a large progressive frame through.
+                    if ("jpg".equals(ext) && (long) width * height > maxProgressivePixels && !isBaselineJpeg(reader)) {
+                        throw new BusinessException("upload.error.image_too_large");
+                    }
                     ImageReadParam param = reader.getDefaultReadParam();
                     // Decode a subsampled copy of very large images so the decode itself stays bounded.
                     int sub = Math.max(1, Math.max(width, height) / maxImageSide);
@@ -268,16 +273,37 @@ public class FileStorageServiceImpl {
     }
 
     /**
+     * True only when the JPEG reader's header metadata names a sequential frame (SOF process 0 or 1).
+     * Progressive, lossless, or metadata that can't be read all count as "not baseline".
+     */
+    static boolean isBaselineJpeg(ImageReader reader) {
+        try {
+            javax.imageio.metadata.IIOMetadata md = reader.getImageMetadata(0);
+            org.w3c.dom.Node root = md.getAsTree("javax_imageio_jpeg_image_1.0");
+            org.w3c.dom.NodeList sofs = ((org.w3c.dom.Element) root).getElementsByTagName("sof");
+            if (sofs.getLength() == 0) return false;
+            org.w3c.dom.Node process = sofs.item(0).getAttributes().getNamedItem("process");
+            return process != null && ("0".equals(process.getNodeValue()) || "1".equals(process.getNodeValue()));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * Declared width x height of a progressive JPEG (frame types SOF2, SOF6, SOF10, SOF14), read from the marker
      * segments without decoding; 0 for a baseline JPEG or anything that does not parse (ImageIO then decides).
+     * H-3: bytes between segments that are not a marker are skipped, as libjpeg skips them ("extraneous bytes
+     * before marker") and decodes on. Stopping there let one junk byte hide a huge progressive frame.
      */
     static long progressivePixels(byte[] jpeg) {
         int i = 2; // after SOI
-        while (i + 4 <= jpeg.length && (jpeg[i] & 0xFF) == 0xFF) {
+        while (i + 4 <= jpeg.length) {
+            if ((jpeg[i] & 0xFF) != 0xFF) { i++; continue; }             // junk before a marker: resync
             int marker = jpeg[i + 1] & 0xFF;
             if (marker == 0xFF) { i++; continue; }                       // fill byte
+            if (marker == 0x00) { i += 2; continue; }                    // not a marker: junk
             if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8)) { i += 2; continue; } // no length
-            if (marker == 0xDA) return 0;                                // scan data: the frame header was before it
+            if (marker == 0xD9 || marker == 0xDA) return 0;              // end, or scan data: no frame header before it
             int len = ((jpeg[i + 2] & 0xFF) << 8) | (jpeg[i + 3] & 0xFF);
             boolean frame = marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
             if (frame) {
