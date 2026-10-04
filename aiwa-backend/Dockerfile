@@ -8,7 +8,7 @@ COPY src ./src
 RUN mvn -q clean package -DskipTests
 
 # ── Runtime stage ─────────────────────────────────────────────
-FROM eclipse-temurin:17.0.20.1_1-jre-alpine
+FROM eclipse-temurin:24.0.2_12-jre-alpine
 WORKDIR /app
 
 # Run as an unprivileged user; uploads live on a mounted volume it owns.
