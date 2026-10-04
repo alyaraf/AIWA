@@ -1,6 +1,6 @@
 # ── Build stage ───────────────────────────────────────────────
 # Exact versions (R2-20): a rebuild produces the same image, not whatever "17" means today.
-FROM maven:3.9.16-eclipse-temurin-17 AS build
+FROM maven:3-eclipse-temurin-24 AS build
 WORKDIR /app
 COPY pom.xml .
 RUN mvn -q dependency:go-offline
