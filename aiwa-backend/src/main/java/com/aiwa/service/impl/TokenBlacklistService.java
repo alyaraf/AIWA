@@ -31,6 +31,15 @@ public class TokenBlacklistService {
     /** Until when Redis may be missing a revocation that the database has (L-7). */
     private volatile Instant checkDatabaseOnMissUntil = Instant.EPOCH;
 
+    /**
+     * SA-06: the same deadline, kept in the database so a restarted or second instance knows
+     * it too. It is a row in revoked_tokens under this fixed key, removed when it expires.
+     */
+    static final String REDIS_GAP_MARKER = "redis-gap-marker";
+    private static final Duration GAP_REFRESH = Duration.ofSeconds(5);
+    private volatile Instant sharedGapUntil = Instant.EPOCH;
+    private volatile Instant sharedGapReadAt = Instant.EPOCH;
+
     public void blacklist(String token) {
         if (token == null || token.isBlank() || !jwtUtils.validateToken(token)) {
             return;
@@ -45,6 +54,7 @@ public class TokenBlacklistService {
             // double-checked in the database, or the token works again once Redis is back.
             Instant until = Instant.now().plusMillis(ttlMillis);
             if (until.isAfter(checkDatabaseOnMissUntil)) checkDatabaseOnMissUntil = until;
+            recordRedisGap(until);
         }
         try {
             if (!revokedRepo.existsById(hash(token))) {
@@ -104,10 +114,36 @@ public class TokenBlacklistService {
             // Entries written before the SHA-256 key are still honoured until they expire.
             if (redis.exists(key(token)) || redis.exists(legacyKey(token))) return true;
             // A revocation written while Redis was down lives only in the database (L-7).
-            return Instant.now().isBefore(checkDatabaseOnMissUntil) && revokedRepo.existsById(hash(token));
+            return databaseMayHoldMore() && revokedRepo.existsById(hash(token));
         } catch (RuntimeException e) {
             log.warn("Blacklist check: Redis unavailable, using the database: {}", e.getMessage());
             return revokedRepo.existsById(hash(token));
+        }
+    }
+
+    private boolean databaseMayHoldMore() {
+        Instant now = Instant.now();
+        if (now.isBefore(checkDatabaseOnMissUntil)) return true;
+        if (now.isAfter(sharedGapReadAt.plus(GAP_REFRESH))) {
+            try {
+                sharedGapUntil = revokedRepo.findById(REDIS_GAP_MARKER)
+                        .map(RevokedToken::getExpiresAt).orElse(Instant.EPOCH);
+                sharedGapReadAt = now;
+            } catch (RuntimeException e) {
+                log.warn("Could not read the Redis gap marker: {}", e.getMessage());
+            }
+        }
+        return now.isBefore(sharedGapUntil);
+    }
+
+    private void recordRedisGap(Instant until) {
+        try {
+            var existing = revokedRepo.findById(REDIS_GAP_MARKER);
+            if (existing.isPresent() && !existing.get().getExpiresAt().isBefore(until)) return;
+            existing.ifPresent(m -> revokedRepo.deleteById(REDIS_GAP_MARKER));
+            revokedRepo.saveAndFlush(new RevokedToken(REDIS_GAP_MARKER, until));
+        } catch (RuntimeException e) {
+            log.warn("Could not record the Redis gap marker: {}", e.getMessage());
         }
     }
 

@@ -160,8 +160,8 @@ class ApiFlowIntegrationTest {
     @Test
     void phoneSignUpRequiresTheOtpAndThenWorks() throws Exception {
         String phone = uniquePhone();
-        Map<String, Object> register = Map.of("fullName", "New Customer", "phone", phone,
-                "password", PASSWORD, "role", "CUSTOMER");
+        Map<String, Object> register = new java.util.HashMap<>(Map.of("fullName", "New Customer", "phone", phone,
+                "password", PASSWORD, "role", "CUSTOMER"));
 
         // Without a verified phone the registration is refused.
         mvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON)
@@ -175,9 +175,10 @@ class ApiFlowIntegrationTest {
         ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
         verify(smsService).sendOtp(eq(phone), code.capture(), anyInt());
 
-        mvc.perform(post("/auth/verify-otp").contentType(MediaType.APPLICATION_JSON)
+        String receipt = data(mvc.perform(post("/auth/verify-otp").contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("phone", phone, "code", code.getValue()))))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())).get("receipt").asText();
+        register.put("verificationReceipt", receipt);
 
         String access = data(mvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(register)))

@@ -279,7 +279,7 @@ public class ProviderServiceImpl {
 
         return providers.stream().map(p -> {
             boolean accepting = p.getVerificationStatus() == VerificationStatus.APPROVED
-                    && !p.isVacationMode() && !p.isOfflineMode() && !p.isSettlementPaused();
+                    && !p.isVacationMode() && !p.isOfflineMode() && !p.isBookingPaused();
             boolean withinHours = today.getOrDefault(p.getId(), List.of()).stream()
                     .anyMatch(a -> !now.isBefore(a.getStartTime()) && now.isBefore(a.getEndTime()));
             return ApiResponse.ProviderSummaryDto.builder()
@@ -298,7 +298,7 @@ public class ProviderServiceImpl {
                     .providerType(p.getProviderType())
                     .vacationMode(p.isVacationMode())
                     .offlineMode(p.isOfflineMode())
-                    .settlementPaused(p.isSettlementPaused())
+                    .settlementPaused(p.isBookingPaused())
                     .startingPrice(minPrice.get(p.getId()))
                     .openNow(accepting && withinHours)
                     // A shop has several people; only an individual is "busy" as a whole.
@@ -343,7 +343,7 @@ public class ProviderServiceImpl {
                 .vacationMode(p.isVacationMode())
                 .offlineMode(p.isOfflineMode())
                 .travelBufferMinutes(p.getTravelBufferMinutes())
-                .settlementPaused(p.isSettlementPaused())
+                .settlementPaused(p.isBookingPaused())
                 .homeServiceTravelFee(p.getHomeServiceTravelFee())
                 .serviceRadiusKm(p.getServiceRadiusKm())
                 .owner(toPublicOwnerDto(p.getUser()))

@@ -69,6 +69,30 @@ class TokenBlacklistServiceTest {
         assertThat(service.isBlacklisted("other")).isFalse();
     }
 
+    // SA-06: the gap is remembered in the database, so a restarted or second instance
+    // still double-checks a Redis miss instead of starting with a clean memory.
+    @Test
+    void aFreshInstanceDoubleChecksTheDatabaseWhileTheStoredRedisGapIsOpen() {
+        when(repo.findById(TokenBlacklistService.REDIS_GAP_MARKER)).thenReturn(java.util.Optional.of(
+                new RevokedToken(TokenBlacklistService.REDIS_GAP_MARKER, java.time.Instant.now().plusSeconds(600))));
+        when(redis.exists(anyString())).thenReturn(false);
+        when(repo.existsById(TokenBlacklistService.hash("revoked-in-the-gap"))).thenReturn(true);
+
+        assertThat(service.isBlacklisted("revoked-in-the-gap")).isTrue();
+        assertThat(service.isBlacklisted("fine")).isFalse();
+    }
+
+    @Test
+    void aRedisWriteFailureStoresTheGapMarkerForOtherInstances() {
+        when(jwtUtils.validateToken("t")).thenReturn(true);
+        when(jwtUtils.getRemainingValidityMillis("t")).thenReturn(60000L);
+        doThrow(new RuntimeException("down")).when(redis).set(anyString(), anyString(), any());
+
+        service.blacklist("t");
+
+        verify(repo).saveAndFlush(argThat(r -> r.getTokenHash().equals(TokenBlacklistService.REDIS_GAP_MARKER)));
+    }
+
     @Test
     void withRedisHealthyARedisMissDoesNotHitTheDatabase() {
         when(redis.exists(anyString())).thenReturn(false);

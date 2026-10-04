@@ -37,7 +37,7 @@ E-1 closes when every box is ticked.
 - TOTP for admins; setup and disable need the password and, when on, a current code.
 - The MFA challenge is single-use, checked against the session cut-off.
 - **Decided 2026-10-04 and enforced:** in prod a SUPER_ADMIN or FINANCE admin without
-  2FA gets 403 `auth.error.admin_2fa_required` on every `/admin/**` call and the panel
+  2FA gets 403 `auth.error.admin_2fa_required` on every call except `/auth/**` (SA-01) and the panel
   shows the setup card (`AdminTwoFactorInterceptor`, `REQUIRE_ADMIN_2FA`, default on in
   prod). SUPPORT admins are not forced.
 - TOTP secrets are encrypted at rest once `TOTP_ENCRYPTION_KEY` is set (AU-08).

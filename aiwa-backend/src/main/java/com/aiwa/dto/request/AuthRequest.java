@@ -33,6 +33,10 @@ public class AuthRequest {
 
         /** Gap 6: language preference set at registration */
         private Language preferredLanguage = Language.EN;
+
+        /** SA-03: the receipt POST /auth/verify-otp returned for this phone or email. */
+        @Size(max = 100)
+        private String verificationReceipt;
     }
 
     @Data

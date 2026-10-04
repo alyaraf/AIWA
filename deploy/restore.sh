@@ -45,6 +45,17 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 plain "$dump" > "$tmp/db.dump" || die "cannot read $dump (wrong key?)"
 [ -s "$tmp/db.dump" ] || die "$dump is empty"
 "${compose[@]}" exec -T postgres pg_restore --list < "$tmp/db.dump" > /dev/null || die "$dump is not a readable dump (wrong key?)"
+# SA-04: --list only reads the table of contents, so a dump with an intact contents page and a
+# truncated payload passes it, and the restore below would then wipe the live data and fail halfway.
+# Restore into a disposable database first: if that does not complete, nothing live is touched.
+scratch="restore_check_$$"
+pg() { "${compose[@]}" exec -T postgres sh -c "$1" _ "$scratch"; } # $1 sees the scratch name as "$1"
+pg 'createdb -U "$POSTGRES_USER" "$1"' < /dev/null || die "cannot create a scratch database to test the restore"
+if ! pg 'pg_restore --no-owner --exit-on-error -U "$POSTGRES_USER" -d "$1"' < "$tmp/db.dump" > /dev/null 2> "$tmp/check.err"; then
+  pg 'dropdb -U "$POSTGRES_USER" --if-exists "$1"' < /dev/null > /dev/null 2>&1 || true
+  die "$dump does not restore completely (truncated or damaged): $(tail -n 2 "$tmp/check.err" | tr -s "[:space:]" " ")"
+fi
+pg 'dropdb -U "$POSTGRES_USER" --if-exists "$1"' < /dev/null > /dev/null 2>&1 || echo "note: scratch database $scratch was not dropped; drop it by hand" >&2
 if [ -n "$uploads" ]; then
   plain "$uploads" > "$tmp/uploads.tgz" || die "cannot read $uploads (wrong key?)"
   tar -tzf "$tmp/uploads.tgz" > /dev/null || die "$uploads is not a readable tarball (wrong key?)"
@@ -60,7 +71,12 @@ fi
 # Keep the app from writing while the data is swapped.
 "${compose[@]}" stop backend
 
-"${compose[@]}" exec -T postgres sh -c 'pg_restore --clean --if-exists --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$tmp/db.dump"
+# One transaction that stops at the first error: if anything still goes wrong, the live database is
+# rolled back to how it was instead of being left half-restored.
+if ! "${compose[@]}" exec -T postgres sh -c 'pg_restore --clean --if-exists --no-owner --single-transaction --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$tmp/db.dump"; then
+  "${compose[@]}" start backend
+  die "the restore failed and was rolled back; the live database is as it was and the backend is running again"
+fi
 
 if [ -n "$uploads" ]; then
   "${compose[@]}" run --rm -T --entrypoint sh backup -c 'find /uploads -mindepth 1 -delete && tar -xzf - -C /uploads' < "$tmp/uploads.tgz"

@@ -296,6 +296,7 @@ public class AdminUsersController {
         } else {
             // A deletion request to support (OPS-4): the same erasure as in-app
             // deletion. A hard delete failed for anyone who had ever booked.
+            accountDeletion.requireNoLiveVisit(user); // SA-11: not around a visit that is under way
             accountDeletion.delete(user);
         }
         auditService.record("USER_DELETED", label + " (#" + id + ")");

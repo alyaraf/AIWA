@@ -112,12 +112,13 @@ public class OtpServiceImpl {
         }
     }
 
-    public void verifyOtp(String phone, String code) {
-        verify(com.aiwa.util.Identifiers.normalizePhone(phone), code);
+    /** Checks the code and returns the receipt that register must present (SA-03). */
+    public String verifyOtp(String phone, String code) {
+        return verify(com.aiwa.util.Identifiers.normalizePhone(phone), code);
     }
 
-    public boolean isPhoneVerified(String phone) {
-        return isVerified(com.aiwa.util.Identifiers.normalizePhone(phone));
+    public boolean isPhoneVerified(String phone, String receipt) {
+        return isVerified(com.aiwa.util.Identifiers.normalizePhone(phone), receipt);
     }
 
     public void consumePhoneVerification(String phone) {
@@ -134,12 +135,12 @@ public class OtpServiceImpl {
                         + " minutes. If you didn't ask for it, you can ignore this email.");
     }
 
-    public void verifyEmailOtp(String email, String code) {
-        verify(normalizeEmail(email), code);
+    public String verifyEmailOtp(String email, String code) {
+        return verify(normalizeEmail(email), code);
     }
 
-    public boolean isEmailVerified(String email) {
-        return email != null && isVerified(normalizeEmail(email));
+    public boolean isEmailVerified(String email, String receipt) {
+        return email != null && isVerified(normalizeEmail(email), receipt);
     }
 
     public void consumeEmailVerification(String email) {
@@ -182,14 +183,11 @@ public class OtpServiceImpl {
         return code;
     }
 
-    private void verify(String identifier, String code) {
-        whileRedisIsUp(() -> {
-            verifyCode(identifier, code);
-            return null;
-        });
+    private String verify(String identifier, String code) {
+        return whileRedisIsUp(() -> verifyCode(identifier, code));
     }
 
-    private void verifyCode(String identifier, String code) {
+    private String verifyCode(String identifier, String code) {
         long attempts = redis.increment(attemptKey(identifier), OTP_TTL);
         if (attempts > MAX_VERIFY_ATTEMPTS) {
             throw new BusinessException("otp.error.too_many_attempts");
@@ -209,11 +207,21 @@ public class OtpServiceImpl {
             throw new BusinessException("otp.error.expired");
         }
         redis.delete(attemptKey(identifier));
-        redis.set(verifiedKey(identifier), "1", VERIFIED_TTL);
+        // SA-03: the proof is a random receipt only the caller who typed the code holds. It used
+        // to be a flag on the number, so anyone could register a number someone else had verified.
+        byte[] raw = new byte[24];
+        RANDOM.nextBytes(raw);
+        String receipt = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+        redis.set(verifiedKey(identifier), receipt, VERIFIED_TTL);
+        return receipt;
     }
 
-    private boolean isVerified(String identifier) {
-        return identifier != null && redis.exists(verifiedKey(identifier));
+    private boolean isVerified(String identifier, String receipt) {
+        if (identifier == null || receipt == null || receipt.isBlank()) return false;
+        return redis.get(verifiedKey(identifier))
+                .map(saved -> MessageDigest.isEqual(saved.getBytes(StandardCharsets.UTF_8),
+                        receipt.trim().getBytes(StandardCharsets.UTF_8)))
+                .orElse(false);
     }
 
     private void consume(String identifier) {

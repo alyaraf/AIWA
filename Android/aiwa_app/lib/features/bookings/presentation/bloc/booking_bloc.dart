@@ -13,6 +13,9 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
   int _page = 0;
   String? _filterStatus;
 
+  /// SA-13: one load-more at a time.
+  bool _loadingMore = false;
+
   /// One Idempotency-Key per booking attempt: a retry of the same request
   /// (e.g. after a timeout) reuses it, so the backend returns the first
   /// booking instead of creating a second one.
@@ -68,6 +71,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
   ) async {
     emit(BookingLoading());
     _page = 0;
+    _loadingMore = false;
     _filterStatus = event.status;
     final result = await bookingRepository.getMyBookings(status: event.status, page: 0);
     result.fold(
@@ -87,18 +91,27 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     Emitter<BookingState> emit,
   ) async {
     final current = state;
-    if (current is! BookingListLoaded || !current.hasMore) return;
-    _page++;
-    final result = await bookingRepository.getMyBookings(status: _filterStatus, page: _page);
-    result.fold(
-      (_) {},
-      (paged) => emit(
-        current.copyWith(
-          bookings: [...current.bookings, ...paged.content],
-          hasMore: paged.hasNextPage,
-        ),
-      ),
-    );
+    if (current is! BookingListLoaded || !current.hasMore || _loadingMore) return;
+    _loadingMore = true;
+    try {
+      // SA-13: the page number moves only when its answer arrived; a failed request is
+      // asked for again by the next tap instead of skipping a page of bookings.
+      final result = await bookingRepository.getMyBookings(status: _filterStatus, page: _page + 1);
+      result.fold(
+        (_) {},
+        (paged) {
+          _page++;
+          emit(
+            current.copyWith(
+              bookings: [...current.bookings, ...paged.content],
+              hasMore: paged.hasNextPage,
+            ),
+          );
+        },
+      );
+    } finally {
+      _loadingMore = false;
+    }
   }
 
   Future<void> _onCancel(

@@ -119,6 +119,10 @@ public class Booking extends BaseEntity {
     @Column(precision = 10, scale = 2)
     private BigDecimal commissionAmount;
 
+    /** SA-07: the commission rate when the booking was made; completion charges this one. Null on older bookings. */
+    @Column(name = "commission_percent_at_booking", precision = 5, scale = 2)
+    private BigDecimal commissionPercentAtBooking;
+
     /** Set when the customer checks in at an on-site/venue booking. */
     private LocalDateTime checkedInAt;
 

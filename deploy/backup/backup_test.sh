@@ -16,6 +16,8 @@ cat > "$tmp/stubs/pg_dump" <<'S'
 [ "$1" = -Fc ] && [ "$2" = -f ] && yes aiwa | head -c 2000 > "$3"
 S
 printf '#!/bin/sh\nexit 0\n' > "$tmp/stubs/pg_restore"
+printf '#!/bin/sh\nexit 0\n' > "$tmp/stubs/createdb"
+printf '#!/bin/sh\nexit 0\n' > "$tmp/stubs/dropdb"
 cat > "$tmp/stubs/tar" <<'S'
 #!/bin/sh
 [ "${STUB_FAIL:-}" = tar ] && exit 1
@@ -84,6 +86,9 @@ echo "$*" >> "$FAKE_LOG"
 snap() { { umask; for f in "$TMPDIR"/tmp.*/ "$TMPDIR"/tmp.*/*; do stat -c '%a %n' "$f"; done; } >> "$FAKE_LOG.modes" 2>&1; }
 case " $* " in
   *" pg_restore --list "*) snap; [ "$(head -c 5)" = PGDMP ] ;;
+  # SA-04: the scratch database the dump is test-restored into first
+  *" createdb "*|*" dropdb "*) ;;
+  *" pg_restore --no-owner --exit-on-error "*) cat > "$FAKE_LOG.scratch"; [ "${FAKE_SCRATCH_FAIL:-}" != 1 ] ;;
   *" exec "*) cat > "$FAKE_LOG.restored" ;;
   *" run "*) snap; script="${!#}"; sh -c "${script//\/uploads/$FAKE_UPLOADS}" ;;
 esac
@@ -117,6 +122,10 @@ run_restore badtar "$r/key" "$r/db.dump" "$r/bad.tgz"
 check "restore, corrupt tarball: fails and leaves uploads alone" '[ $rc -ne 0 ] && untouched'
 run_restore baddump "$r/key" "$r/bad.dump" "$r/up.tgz"
 check "restore, corrupt dump: fails and leaves uploads alone" '[ $rc -ne 0 ] && untouched'
+# SA-04: a dump that reads its table of contents but does not restore completely stops the script
+# before the backend is stopped, the live database is cleaned or the uploads are emptied.
+run_restore scratchfail "$r/key" "$r/db.dump" "$r/up.tgz" FAKE_SCRATCH_FAIL=1
+check "restore, dump that fails the scratch restore: fails and leaves everything alone" '[ $rc -ne 0 ] && untouched && grep -q "does not restore completely" "$FAKE/out"'
 run_restore good "$r/key" "$r/db.dump.enc" "$r/up.tgz.enc"
 check "restore, right key: replaces database and uploads" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ] && [ ! -e "$FAKE/uploads/live.jpg" ] && cmp -s "$FAKE/log.restored" "$r/db.dump"'
 run_restore plain "$r/nokey" "$r/db.dump" "$r/up.tgz"

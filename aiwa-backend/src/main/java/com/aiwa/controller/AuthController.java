@@ -354,14 +354,17 @@ public class AuthController {
 
     @PostMapping("/verify-otp")
     @Operation(summary = "Verify OTP ({phone} or {email} + code) — call before /register to confirm ownership")
-    public ResponseEntity<ApiResponse.Success<Void>> verifyOtp(
+    public ResponseEntity<ApiResponse.Success<java.util.Map<String, String>>> verifyOtp(
             @Valid @RequestBody OtpRequest.VerifyOtp request) {
+        // SA-03: the receipt goes with the register call; the verified flag alone proves nothing.
         if (request.getPhone() != null && !request.getPhone().isBlank()) {
-            otpService.verifyOtp(request.getPhone().trim(), request.getCode());
-            return ResponseEntity.ok(ApiResponse.Success.of("Phone verified successfully", null));
+            String receipt = otpService.verifyOtp(request.getPhone().trim(), request.getCode());
+            return ResponseEntity.ok(ApiResponse.Success.of("Phone verified successfully",
+                    java.util.Map.of("receipt", receipt)));
         }
-        otpService.verifyEmailOtp(request.getEmail(), request.getCode());
-        return ResponseEntity.ok(ApiResponse.Success.of("Email verified successfully", null));
+        String receipt = otpService.verifyEmailOtp(request.getEmail(), request.getCode());
+        return ResponseEntity.ok(ApiResponse.Success.of("Email verified successfully",
+                java.util.Map.of("receipt", receipt)));
     }
 
     @PostMapping("/reset-password")
@@ -440,11 +443,12 @@ public class AuthController {
 
     @PostMapping("/2fa/enable")
     @Operation(summary = "Confirm 2FA setup with a code from the authenticator app")
-    public ResponseEntity<ApiResponse.Success<Void>> enableTotp(
+    public ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> enableTotp(
             @Valid @RequestBody AuthRequest.EnableTotp request,
             @AuthenticationPrincipal UserDetails userDetails) {
-        authService.enableTotp(userDetails.getUsername(), request.getCode());
-        return ResponseEntity.ok(ApiResponse.Success.of("Two-factor authentication enabled", null));
+        // Earlier sessions end (SA-02); the response carries the caller's new token pair.
+        return ResponseEntity.ok(ApiResponse.Success.of("Two-factor authentication enabled",
+                authService.enableTotp(userDetails.getUsername(), request.getCode())));
     }
 
     @PostMapping("/2fa/disable")

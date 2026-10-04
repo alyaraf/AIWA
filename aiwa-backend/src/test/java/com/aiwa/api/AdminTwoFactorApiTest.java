@@ -26,7 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -92,5 +94,19 @@ class AdminTwoFactorApiTest {
     void supportAdminsAreNotAffected() throws Exception {
         mvc.perform(get("/admin/users").header("Authorization", admin(false, AdminPermission.SUPPORT)))
                 .andExpect(status().isOk());
+    }
+
+    // SA-01: the requirement covers every route an admin capability lives on, not just /admin/**.
+    @Test
+    void aSuperAdminWithoutTwoFactorCannotPublishTermsOrChangeSupportSettings() throws Exception {
+        String superAdmin = admin(false, AdminPermission.SUPER_ADMIN);
+        mvc.perform(post("/terms").header("Authorization", superAdmin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":\"x\",\"body\":\"y\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("auth.error.admin_2fa_required"));
+        mvc.perform(patch("/support/admin/settings").header("Authorization", superAdmin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("auth.error.admin_2fa_required"));
     }
 }

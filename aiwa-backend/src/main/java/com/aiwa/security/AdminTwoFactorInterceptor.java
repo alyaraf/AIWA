@@ -17,9 +17,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * E-1 / AU-09 (owner rule 2026-10-04): a SUPER_ADMIN or FINANCE admin must turn on
- * two-factor sign-in before using the admin API. Until then every /admin/** call
- * answers 403 with code {@value #CODE}; /auth/** (profile, 2FA setup) stays open,
- * so the panel can walk them through the setup.
+ * two-factor sign-in before using the API as an admin. Until then every call except
+ * /auth/** (profile, 2FA setup, which the panel needs to walk them through the setup)
+ * answers 403 with code {@value #CODE}. SA-01: this covers every route, not only
+ * /admin/**, because publishing terms or changing support settings are admin
+ * capabilities that live outside that prefix.
  *
  * <p>On with {@code aiwa.auth.require-admin-2fa=true} (the prod profile).
  */
@@ -37,7 +39,8 @@ public class AdminTwoFactorInterceptor implements HandlerInterceptor, WebMvcConf
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(this).addPathPatterns("/admin/**");
+        registry.addInterceptor(this).addPathPatterns("/**")
+                .excludePathPatterns("/auth/**", "/actuator/**", "/error");
     }
 
     @Override

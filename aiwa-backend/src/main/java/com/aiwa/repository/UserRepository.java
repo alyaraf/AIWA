@@ -92,6 +92,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
            "AND p = com.aiwa.enums.AdminPermission.SUPER_ADMIN")
     java.util.List<User> lockActiveSuperAdmins();
 
+    /** Row lock on one user until commit: serialises work that counts a customer's open bookings (SA-10). */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.id = :id")
+    java.util.Optional<User> lockById(@org.springframework.data.repository.query.Param("id") Long id);
+
     Page<User> findByRoleOrderByCreatedAtDesc(UserRole role, Pageable pageable);
 
     /**

@@ -72,6 +72,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   AuthRemoteDataSourceImpl(this._client);
 
   /// OTP destination: the backend takes {phone} (SMS) or {email} (email code).
+  /// SA-03: the receipt /auth/verify-otp hands out, kept per phone or email until
+  /// register presents it. Static because the datasource is rebuilt per resolve.
+  static final Map<String, String> _otpReceipts = {};
+
   static Map<String, String> _destination(String identifier) =>
       identifier.contains('@') ? {'email': identifier} : {'phone': identifier};
 
@@ -122,6 +126,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     if (preferredLanguage != null) {
       body['preferredLanguage'] = preferredLanguage;
     }
+    final receipt = _otpReceipts[phone ?? email];
+    if (receipt != null) body['verificationReceipt'] = receipt;
 
     final response = await _client.post(ApiConstants.register, data: body);
     final data = response.data as Map<String, dynamic>;
@@ -165,6 +171,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         message: data['message'] as String? ?? 'Invalid OTP',
       );
     }
+    final receipt = (data['data'] as Map<String, dynamic>?)?['receipt'];
+    if (receipt is String) _otpReceipts[phone] = receipt;
   }
 
   @override

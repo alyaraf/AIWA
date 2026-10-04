@@ -67,6 +67,24 @@ public class AccountDeletionService {
         }
     }
 
+    /**
+     * SA-11: support's deletion is an override for ordinary bookings (they are cancelled), but a
+     * visit that is already under way cannot just be cancelled around the other person. It is
+     * refused until the visit ends or someone resolves it.
+     */
+    @Transactional(readOnly = true)
+    public void requireNoLiveVisit(User user) {
+        List<BookingStatus> visit = List.of(BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED, BookingStatus.IN_PROGRESS);
+        boolean asCustomer = visit.stream()
+                .anyMatch(st -> !bookingRepo.findByCustomerIdAndStatus(user.getId(), st).isEmpty());
+        var profile = providerRepo.findByUserId(user.getId());
+        boolean asProvider = profile.isPresent()
+                && !bookingRepo.findByProviderIdAndStatusIn(profile.get().getId(), visit).isEmpty();
+        if (asCustomer || asProvider) {
+            throw new com.aiwa.exception.ConflictException("admin.error.delete_live_visit");
+        }
+    }
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.aiwa.repository.CommissionLedgerRepository ledgerRepo;
 

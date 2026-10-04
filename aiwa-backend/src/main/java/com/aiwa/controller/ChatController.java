@@ -161,7 +161,9 @@ public class ChatController {
     public ResponseEntity<ApiResponse.Success<Void>> resolveReported(
             @PathVariable Long caseId,
             @RequestParam String action) {
+        // SA-09: a case of another type (a review, a gallery image) is not this resolver's to act on.
         var moderationCase = moderationRepo.findById(caseId)
+                .filter(c -> c.getTargetType() == ModerationTargetType.CHAT_MESSAGE)
                 .orElseThrow(() -> new ResourceNotFoundException("Moderation case", caseId));
         String choice = action == null ? "" : action.trim().toUpperCase();
         if (choice.equals("REMOVE")) {

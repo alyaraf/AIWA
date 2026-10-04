@@ -39,6 +39,10 @@ class ChatCubit extends Cubit<ChatState> {
   bool _inFlight = false;
   int _ticks = 0;
 
+  /// SA-12: ids of messages that arrived (sent here or polled) while a full load was running.
+  /// That load's answer may predate them, so they are kept when it lands.
+  final Set<String> _arrivedDuringLoad = {};
+
   /// Every 5 s: only messages newer than the last one; every 12th tick (about
   /// a minute) the whole thread, so a message moderation hid disappears too.
   void _tick() {
@@ -54,12 +58,20 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> load() async {
     if (_inFlight) return;
     _inFlight = true;
+    _arrivedDuringLoad.clear();
     try {
       final r = await _repo.getChat(bookingId);
       if (isClosed) return;
       r.fold(
         (f) => emit(state.copyWith(error: f.message)),
-        (m) => emit(state.copyWith(messages: m)),
+        (m) {
+          final fetched = {for (final e in m) e.id};
+          final kept = [
+            for (final e in state.messages ?? const <ChatMessageEntity>[])
+              if (_arrivedDuringLoad.contains(e.id) && !fetched.contains(e.id)) e,
+          ];
+          emit(state.copyWith(messages: [...m, ...kept]));
+        },
       );
     } finally {
       _inFlight = false;
@@ -77,6 +89,7 @@ class ChatCubit extends Cubit<ChatState> {
         final known = {for (final e in state.messages ?? const []) e.id};
         final fresh = [for (final e in m) if (!known.contains(e.id)) e];
         if (fresh.isNotEmpty) {
+          _arrivedDuringLoad.addAll(fresh.map((e) => e.id));
           emit(state.copyWith(messages: [...?state.messages, ...fresh]));
         }
       });
@@ -95,7 +108,11 @@ class ChatCubit extends Cubit<ChatState> {
         return false;
       },
       (m) {
-        emit(state.copyWith(messages: [...?state.messages, m]));
+        // SA-12: a poll may already have shown this message; never list it twice.
+        if (state.messages?.any((e) => e.id == m.id) != true) {
+          _arrivedDuringLoad.add(m.id);
+          emit(state.copyWith(messages: [...?state.messages, m]));
+        }
         return true;
       },
     );

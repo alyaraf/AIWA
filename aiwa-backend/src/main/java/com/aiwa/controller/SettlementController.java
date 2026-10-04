@@ -149,7 +149,7 @@ public class SettlementController {
         return ResponseEntity.ok(ApiResponse.Success.of(ApiResponse.SettlementDetailDto.builder()
                 .providerId(providerId)
                 .providerName(provider.getBusinessName())
-                .settlementPaused(provider.isSettlementPaused())
+                .settlementPaused(provider.isBookingPaused())
                 .accountSuspended(provider.getVerificationStatus() == com.aiwa.enums.VerificationStatus.SUSPENDED)
                 .status(statusOf(all))
                 .paymentReportedAt(provider.getSettlementReportedAt())
@@ -321,6 +321,8 @@ public class SettlementController {
         ProviderProfile provider = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
         provider.setSettlementPaused(paused);
+        // SA-08: an admin lifting the pause is also the review that ends a disciplinary hold.
+        if (!paused) provider.setDisciplinaryHold(false);
         providerRepo.save(provider);
         auditService.record(paused ? "SETTLEMENT_PAUSED" : "SETTLEMENT_RESUMED", provider.getBusinessName());
         return ResponseEntity.ok(ApiResponse.Success.of("Settlement pause updated", null));
@@ -343,7 +345,7 @@ public class SettlementController {
                 .dueDate(dueDateOf(all))
                 .status(statusOf(all))
                 .paymentReportedAt(provider.getSettlementReportedAt())
-                .settlementPaused(provider.isSettlementPaused())
+                .settlementPaused(provider.isBookingPaused())
                 .entries(all.stream().map(this::toDto).toList())
                 .build();
     }
@@ -390,7 +392,7 @@ public class SettlementController {
                     .grossAmount(gross)
                     .balanceOwed(owed)
                     .status(overdue > 0 ? "OVERDUE" : outstanding > 0 ? "WITHIN_LIMIT" : "SETTLED")
-                    .settlementPaused(p.isSettlementPaused())
+                    .settlementPaused(p.isBookingPaused())
                     .accountSuspended(p.getVerificationStatus() == com.aiwa.enums.VerificationStatus.SUSPENDED)
                     .dueDate(oldest == null ? null : oldest.plusDays(settlementService.dueDays()))
                     .paymentReportedAt(p.getSettlementReportedAt())

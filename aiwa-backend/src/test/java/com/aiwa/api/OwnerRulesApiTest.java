@@ -85,6 +85,7 @@ class OwnerRulesApiTest {
     @Autowired BookingServiceImpl bookingService;
     @Autowired PasswordEncoder encoder;
     @Autowired RedisRuntimeService redis;
+    @Autowired com.aiwa.repository.ModerationCaseRepository moderationRepo;
 
     private User owner;
     private ProviderProfile profile;
@@ -127,6 +128,14 @@ class OwnerRulesApiTest {
         customer = user(UserRole.CUSTOMER);
         customerToken = login(customer);
         providerToken = login(owner);
+        // SA-15: V13 seeds live terms on PostgreSQL (the H2 schema has none), and this class turns the
+        // booking check on, so a customer who is meant to book has accepted them. The tests that
+        // are about missing acceptance publish their own version and keep their own checks.
+        var live = termsRepo.findFirstByTypeAndActiveTrueOrderByCreatedAtDescIdDesc("CUSTOMER_TERMS").orElse(null);
+        if (live != null) {
+            mvc.perform(post("/terms/accept").param("version", live.getVersion()).param("type", "CUSTOMER_TERMS")
+                    .header("Authorization", customerToken)).andExpect(status().isOk());
+        }
     }
 
     private long book(boolean home, Long addressId) throws Exception {
@@ -257,7 +266,11 @@ class OwnerRulesApiTest {
                             .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"Sick\"}"))
                     .andExpect(status().isOk());
         }
-        assertThat(providerRepo.findById(profile.getId()).orElseThrow().isSettlementPaused()).isTrue();
+        var paused = providerRepo.findById(profile.getId()).orElseThrow();
+        // SA-08: a disciplinary hold of its own, so settling the penalties cannot lift it.
+        assertThat(paused.isDisciplinaryHold()).isTrue();
+        assertThat(paused.isSettlementPaused()).isFalse();
+        assertThat(paused.isBookingPaused()).isTrue();
     }
 
     // ── AU-03: stale bookings and no-show contests ─────────────────────────────
@@ -379,5 +392,73 @@ class OwnerRulesApiTest {
         } finally {
             termsRepo.findAll().stream().filter(p -> "9.0".equals(p.getVersion())).forEach(termsRepo::delete);
         }
+    }
+
+    // ── System audit 2026-10-04 ────────────────────────────────────────────────
+
+    private String superAdminToken() throws Exception {
+        int n = SEQ.incrementAndGet();
+        User admin = userRepo.save(User.builder().fullName("sa admin " + n).email("sa-admin" + n + "@test.aiwa")
+                .phone("+2010778" + String.format("%05d", n)).password(encoder.encode(PASSWORD))
+                .role(UserRole.ADMIN).active(true).termsAccepted(true)
+                .adminPermissions(new java.util.HashSet<>(java.util.EnumSet.of(
+                        com.aiwa.enums.AdminPermission.SUPER_ADMIN, com.aiwa.enums.AdminPermission.SUPPORT)))
+                .build());
+        return login(admin);
+    }
+
+    // SA-07: a rate change applies to bookings made after it, as the admin panel says.
+    @Test
+    void aCommissionRateChangeDoesNotReachBookingsAlreadyMade() throws Exception {
+        profile.setCommissionOverridePercent(new BigDecimal("10"));
+        providerRepo.save(profile);
+        long id = book(false, null);
+        assertThat(booking(id).getCommissionPercentAtBooking()).isEqualByComparingTo("10");
+
+        profile = providerRepo.findById(profile.getId()).orElseThrow(); // the booking bumped its version
+        profile.setCommissionOverridePercent(new BigDecimal("25"));
+        providerRepo.save(profile);
+        set(id, b -> {
+            b.setStatus(BookingStatus.IN_PROGRESS);
+            b.setBookingDate(LocalDate.now().minusDays(3));
+        });
+        bookingService.closeStaleBookings();
+
+        var entry = ledgerRepo.findByBookingId(id).orElseThrow();
+        assertThat(entry.getCommissionPercent()).isEqualByComparingTo("10");
+        assertThat(entry.getCommissionAmount()).isEqualByComparingTo("30.00"); // 10% of 300, not 25%
+    }
+
+    // SA-09: a resolver only acts on a case of its own type.
+    @Test
+    void aModerationResolverRefusesACaseOfAnotherType() throws Exception {
+        String admin = superAdminToken();
+        var reviewCase = moderationRepo.save(com.aiwa.entity.ModerationCase.builder()
+                .targetType(com.aiwa.enums.ModerationTargetType.REVIEW).targetId(987654L).reason("x").build());
+        var chatCase = moderationRepo.save(com.aiwa.entity.ModerationCase.builder()
+                .targetType(com.aiwa.enums.ModerationTargetType.CHAT_MESSAGE).targetId(987655L).reason("x").build());
+
+        mvc.perform(post("/admin/chat/moderation/" + reviewCase.getId() + "/resolve").param("action", "REMOVE")
+                        .header("Authorization", admin))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/admin/reviews/moderation/" + chatCase.getId() + "/resolve").param("action", "REMOVE")
+                        .header("Authorization", admin))
+                .andExpect(status().isNotFound());
+        assertThat(moderationRepo.findById(reviewCase.getId()).orElseThrow().getStatus())
+                .isEqualTo(com.aiwa.enums.ModerationStatus.OPEN);
+        assertThat(moderationRepo.findById(chatCase.getId()).orElseThrow().getStatus())
+                .isEqualTo(com.aiwa.enums.ModerationStatus.OPEN);
+    }
+
+    // SA-11: support's deletion does not cancel around a visit that is already under way.
+    @Test
+    void anAdminCannotDeleteAnAccountWhileAVisitIsOnTheWay() throws Exception {
+        long id = book(false, null);
+        set(id, b -> b.setStatus(BookingStatus.ON_THE_WAY));
+        mvc.perform(delete("/admin/users/" + customer.getId()).header("Authorization", superAdminToken()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("admin.error.delete_live_visit"));
+        assertThat(userRepo.findById(customer.getId()).orElseThrow().isActive()).isTrue();
+        assertThat(booking(id).getStatus()).isEqualTo(BookingStatus.ON_THE_WAY);
     }
 }

@@ -45,6 +45,19 @@ encrypt() {
   rm -f "$1"
 }
 
+# SA-04: pg_restore --list reads only the table of contents, so a dump cut off in its payload passed
+# it. Restoring into a throwaway database proves the whole file reads back.
+verify_dump() {
+  v="aiwa_verify_$$"
+  createdb "$v" || return 1
+  if pg_restore --no-owner --exit-on-error -d "$v" "$1" > /dev/null 2>&1; then
+    dropdb --if-exists "$v" > /dev/null 2>&1 || true
+    return 0
+  fi
+  dropdb --if-exists "$v" > /dev/null 2>&1 || true
+  return 1
+}
+
 run_backup() {
   stamp=$(date -u +%Y%m%d-%H%M%S)
   dump="$OUT/db/aiwa-$stamp.dump"
@@ -66,9 +79,8 @@ run_backup() {
   if [ "$size" -lt "$MIN_DUMP_BYTES" ]; then
     rm -f "$dump.partial"; fail "dump is only $size bytes"; return 1
   fi
-  # pg_restore --list reads the whole table of contents: fails on a corrupt or truncated dump.
-  if ! pg_restore --list "$dump.partial" > /dev/null; then
-    rm -f "$dump.partial"; fail "pg_restore cannot read the dump"; return 1
+  if ! verify_dump "$dump.partial"; then
+    rm -f "$dump.partial"; fail "the dump does not restore into a scratch database"; return 1
   fi
   if [ "$encrypted" = 1 ]; then
     encrypt "$dump.partial" "$dump$ext.partial" || { rm -f "$dump.partial" "$dump$ext.partial"; fail "cannot encrypt the dump"; return 1; }

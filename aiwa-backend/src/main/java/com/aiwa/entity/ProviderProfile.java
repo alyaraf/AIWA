@@ -64,6 +64,19 @@ public class ProviderProfile extends BaseEntity {
     @Builder.Default
     private boolean settlementPaused = false;
 
+    /**
+     * SA-08: set by the three-strike cancellation pause (AU-07). Separate from settlementPaused,
+     * which settling commission clears; only an admin lifting the pause clears this one.
+     */
+    @Builder.Default
+    @Column(name = "disciplinary_hold", nullable = false)
+    private boolean disciplinaryHold = false;
+
+    /** Paused for any reason: unpaid commission or a disciplinary review. */
+    public boolean isBookingPaused() {
+        return settlementPaused || disciplinaryHold;
+    }
+
     // ── Per-provider overrides (null = fall back to the platform setting) ──────
     /** Custom platform commission for this provider (%). Null = use the platform rate. */
     @Column(precision = 5, scale = 2)

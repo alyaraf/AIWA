@@ -4,6 +4,13 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+    hikari:
+      # SA-15: Spring caches one context per distinct test configuration, and each used to keep a
+      # 20-connection pool open. On a real PostgreSQL (max_connections 100) the suite ran out of
+      # connections; small pools that hold no idle connections keep it well inside the limit.
+      maximum-pool-size: 6
+      minimum-idle: 0
+      idle-timeout: 10000
   jpa:
     hibernate:
       ddl-auto: create-drop

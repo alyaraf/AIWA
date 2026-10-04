@@ -121,7 +121,9 @@ public class ReviewController {
     public ResponseEntity<ApiResponse.Success<Void>> resolveReported(
             @PathVariable Long caseId,
             @RequestParam String action) {
+        // SA-09: only a review case; a chat or gallery case with the same target id is left alone.
         var moderationCase = moderationRepo.findById(caseId)
+                .filter(c -> c.getTargetType() == com.aiwa.enums.ModerationTargetType.REVIEW)
                 .orElseThrow(() -> new com.aiwa.exception.ResourceNotFoundException("Moderation case", caseId));
         String choice = action == null ? "" : action.trim().toUpperCase();
         if (choice.equals("REMOVE") || choice.equals("HIDE")) {

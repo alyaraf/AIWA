@@ -88,11 +88,17 @@ const NO_REFRESH_RETRY_PATHS = new Set(["/auth/refresh", "/auth/login"]);
 // they share one in-flight attempt and all retry once it settles.
 let refreshInFlight = null;
 
+// SA-14: why the last refresh failed. A refresh the server REJECTED (401/403) ends the session;
+// one that could not be answered (network down, 5xx, a proxy error page) must not, or a short
+// backend outage signs every admin out.
+let refreshFailedTransiently = false;
+
 function refreshAccessToken() {
   if (refreshInFlight) return refreshInFlight;
 
   const storedRefreshToken = window.localStorage.getItem(REFRESH_KEY);
   if (!storedRefreshToken) return Promise.resolve(false);
+  refreshFailedTransiently = false;
   const generation = sessionGeneration;
   // Another tab refreshed first (it rotated the refresh token, so ours is
   // rejected): its tokens in storage are the answer, not a sign-out.
@@ -106,8 +112,12 @@ function refreshAccessToken() {
   })
     .then(async (response) => {
       const text = await response.text();
-      const data = text ? JSON.parse(text) : null;
-      if (!response.ok) return adoptedFromOtherTab();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+      if (!response.ok) {
+        if (response.status !== 401 && response.status !== 403) refreshFailedTransiently = true;
+        return adoptedFromOtherTab();
+      }
       const tokens = unwrap(data);
       if (!tokens?.accessToken) return adoptedFromOtherTab();
       // Signed out (or in as someone else) while this was in flight: drop it.
@@ -115,7 +125,10 @@ function refreshAccessToken() {
       writeTokens(tokens);
       return true;
     })
-    .catch(adoptedFromOtherTab)
+    .catch(() => {
+      refreshFailedTransiently = true;
+      return adoptedFromOtherTab();
+    })
     .finally(() => { refreshInFlight = null; });
 
   return refreshInFlight;
@@ -149,6 +162,14 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
       const stored = getAccessToken();
       const refreshed = (stored && stored !== token) || await refreshAccessToken();
       if (refreshed && generation === sessionGeneration) return request(path, options, true);
+      if (!refreshed && refreshFailedTransiently && generation === sessionGeneration) {
+        // The refresh could not be answered, which says nothing about the session: keep the
+        // tokens and report a temporary failure instead of the 401 that signs the admin out.
+        const unavailable = new Error("The server could not be reached. You are still signed in; try again in a moment.");
+        unavailable.status = 503;
+        unavailable.transient = true;
+        throw unavailable;
+      }
     }
     const message = data?.message || data?.error || `Request failed with status ${response.status}`;
     const error = new Error(message);
@@ -210,9 +231,13 @@ export const api = {
     method: "POST",
     body: JSON.stringify({ password, code: code || undefined })
   }),
+  /** SA-02: turning 2FA on ends the sessions issued before it; the response carries the new pair. */
   totpEnable: (code) => request("/auth/2fa/enable", {
     method: "POST",
     body: JSON.stringify({ code })
+  }).then((result) => {
+    if (result?.accessToken) setTokens(result);
+    return result;
   }),
   totpDisable: (password, code) => request("/auth/2fa/disable", {
     method: "POST",

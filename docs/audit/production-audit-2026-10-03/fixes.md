@@ -84,6 +84,28 @@ Test edits: none to existing assertions. `application-test.yml` sets `aiwa.terms
 
 Not done, on purpose: turning `open-in-view` off (entities are mapped lazily in many controllers and only some are covered by tests, so a missed one would be a 500 in production only; do it as its own change with an end-to-end run); discovery and sweep queries in SQL (needs a load test first); `lower(email)` unique index (fails while `identifier_collisions` rows exist; resolve them first); `users.push_token` column drop (destructive); dates with an offset (L-17); pushing OTP sends to a background thread (the user would no longer learn when it failed); L-27 push-token binding (low risk, needs an install id in the app).
 
+### Fifth round: the system audit items SA-01 to SA-15 (2026-10-04, main)
+
+| ID | Status | What changed | Covering tests |
+|---|---|---|---|
+| SA-01 | fixed | The mandatory two-factor check covers every route except `/auth/**`, `/actuator/**` and `/error`, not only `/admin/**`. A Super admin or Finance admin without two-factor can no longer publish terms or change support settings. | `AdminTwoFactorApiTest` |
+| SA-02 | fixed | `POST /auth/2fa/enable` ends every session issued before it (access and refresh tokens) and returns a fresh token pair in `data`; the admin panel stores it. | `AdminTwoFactorEnrolmentApiTest`, panel `api.js` |
+| SA-03 | fixed | `POST /auth/verify-otp` returns a random one-time `receipt`; `/auth/register` needs it as `verificationReceipt`. Before, any caller could register a number someone else had just verified. The app keeps the receipt and sends it. | `VerifiedEmailApiTest`, `ApiFlowIntegrationTest` |
+| SA-04 | fixed | `restore.sh` test-restores the dump into a scratch database first and runs the live restore as one transaction that stops at the first error, restarting the backend if it fails; `backup.sh` verifies the dump the same way instead of only reading its table of contents. | `deploy/restore_test.sh` (real PostgreSQL, 7 checks), `backup_test.sh` (28) |
+| SA-05 | partly fixed | The double hyphen in the manifest comment is gone (the manifest was invalid XML) and CI has an Android debug build job. The job has not run yet, and the Sentry Kotlin error the audit saw on a preview SDK is not isolated. | none possible without the Android SDK |
+| SA-06 | fixed | A Redis write failure during a revocation is recorded in the database too (a marker row in `revoked_tokens`), so a restarted or second instance still double-checks Redis misses against the database. | `TokenBlacklistServiceTest` (2) |
+| SA-07 | fixed (rule chosen) | A booking stores the commission rate in force when it was made (`commission_percent_at_booking`, V32); completion charges that rate, so a later change applies to future bookings only, as the panel says. Older bookings keep using the current rate. Cancellation-penalty rules still read the current setting. | `OwnerRulesApiTest` |
+| SA-08 | fixed | The three-strike pause is its own flag (`disciplinary_hold`, V31); settling commission clears only the financial pause, and only an admin lifting the pause clears the hold. | `OwnerRulesApiTest` |
+| SA-09 | fixed | The chat and review moderation resolvers answer 404 for a case of another type. | `OwnerRulesApiTest` |
+| SA-10 | fixed | Booking creation takes the customer's row lock (after the provider's) before counting open requests. | `CustomerPendingCapRaceTest` (fails every time without the lock) |
+| SA-11 | fixed | Support's deletion is refused (409 `admin.error.delete_live_visit`) while a visit is on the way, arrived or in progress. | `OwnerRulesApiTest` |
+| SA-12 | fixed | The chat cubit keeps messages that arrived while a full load was running and never lists a message twice. | app `chat_poll_test` (2) |
+| SA-13 | fixed | A failed load-more asks for the same page again; one load-more runs at a time. | app `booking_load_more_test` |
+| SA-14 | fixed | The admin panel tells a refresh the server rejected (401/403) from one it could not get an answer to (network, 5xx, proxy page); the latter keeps the tokens and shows a temporary failure. | panel `api.refresh-token.test.js` (3) |
+| SA-15 | fixed | The suite passes on PostgreSQL 16 with Flyway and schema validation: test pools are small (6, no idle connections), the H2-only `auto_increment` is portable, three classes no longer share a phone prefix, and `OwnerRulesApiTest` accepts the terms V13 seeds (the tests about missing acceptance are unchanged). A second run needs a fresh database, as in CI. | whole suite |
+
+Needs doing by hand: set the two encryption keys and tell support that temporary passwords go to the user (fourth round); apps built before this round cannot register until they are updated, because register now needs the receipt.
+
 ## Test edits
 
 - `BookingLifecycleServiceTest`: the booking fixture's provider is now APPROVED and active (data only; the H-1 guard refuses an unapproved one).
@@ -122,3 +144,4 @@ password shown to the admin, ID documents unencrypted on disk), OTP sent off the
 | Second round | 343 passed | 172 passed, analyze clean | 104 passed, build ok |
 | Third round | 359 passed | 172 passed, analyze clean | 104 passed, build ok |
 | Fourth round | 375 passed | 172 passed (unchanged), analyze clean | 104 passed, build ok (in a Linux container) |
+| Fifth round | 384 passed on H2, 383 on PostgreSQL 16 | 175 passed, analyze clean | 107 passed, build ok (in a Linux container) |

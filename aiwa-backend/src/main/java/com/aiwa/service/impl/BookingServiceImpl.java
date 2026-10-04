@@ -279,6 +279,10 @@ public class BookingServiceImpl {
             throw new BusinessException("terms.error.not_accepted");
         }
         // M-1: one account can't hold a provider calendar after another with open requests.
+        // SA-10: the count runs under the customer's row lock, taken after the provider's, so two
+        // parallel requests for two providers cannot both see zero. Provider first, customer second,
+        // everywhere, so the two locks cannot deadlock.
+        if (maxOpenRequests > 0) userRepo.lockById(customerId);
         if (maxOpenRequests > 0
                 && bookingRepo.countByCustomerIdAndStatus(customerId, BookingStatus.PENDING) >= maxOpenRequests) {
             throw new TooManyRequestsException("booking.error.too_many_pending");
@@ -320,6 +324,7 @@ public class BookingServiceImpl {
         }
 
         Booking booking = Booking.builder()
+                .commissionPercentAtBooking(platformSettings.getCommissionPercentFor(provider))
                 .customer(customer)
                 .provider(provider)
                 .service(service)
@@ -394,7 +399,7 @@ public class BookingServiceImpl {
         if (provider.getVerificationStatus() != VerificationStatus.APPROVED
                 || provider.getUser() == null || !provider.getUser().isActive())
             throw new BusinessException("booking.error.provider_unavailable");
-        if (provider.isVacationMode() || provider.isOfflineMode() || provider.isSettlementPaused())
+        if (provider.isVacationMode() || provider.isOfflineMode() || provider.isBookingPaused())
             throw new BusinessException("booking.error.provider_not_accepting");
     }
 
@@ -1155,8 +1160,8 @@ public class BookingServiceImpl {
     void pauseAfterRepeatedCancellations(ProviderProfile provider) {
         long recent = bookingRepo.countByProviderIdAndCancelledByAndPenaltyAppliedTrueAndCancelledAtAfter(
                 provider.getId(), "PROVIDER", LocalDateTime.now().minus(STRIKE_WINDOW));
-        if (recent < STRIKES_TO_PAUSE || provider.isSettlementPaused()) return;
-        provider.setSettlementPaused(true);
+        if (recent < STRIKES_TO_PAUSE || provider.isDisciplinaryHold()) return;
+        provider.setDisciplinaryHold(true);
         providerRepo.save(provider);
         notificationService.send(provider.getUser().getId(), NotificationType.ACCOUNT_WARNING,
                 "New bookings paused", "تم إيقاف الحجوزات الجديدة مؤقتاً",
@@ -1661,9 +1666,12 @@ public class BookingServiceImpl {
             return;
         }
         if (commissionLedgerRepo.existsByBookingId(booking.getId())) return;
-        // Rate is the admin-editable platform setting at completion time; snapshotted
-        // onto the ledger entry so historical entries keep the rate they were charged.
-        BigDecimal pct = platformSettings.getCommissionPercentFor(booking.getProvider());
+        // SA-07: the rate fixed when the booking was made (the panel promises a rate change
+        // applies to future bookings only); bookings from before that fall back to the current
+        // rate. Either way it is copied onto the ledger entry, so history keeps what was charged.
+        BigDecimal pct = booking.getCommissionPercentAtBooking() != null
+                ? booking.getCommissionPercentAtBooking()
+                : platformSettings.getCommissionPercentFor(booking.getProvider());
         // Commission is charged on the *service* portion only. Any home-service
         // travel fee is pass-through — the provider is paying Uber out of it, the
         // platform doesn't skim it. Ledger's bookingAmount still records the true
@@ -1718,7 +1726,7 @@ public class BookingServiceImpl {
                 .stream()
                 .filter(p -> !p.getId().equals(rejected.getId()))
                 .filter(p -> p.getVerificationStatus() == VerificationStatus.APPROVED)
-                .filter(p -> !p.isVacationMode() && !p.isOfflineMode() && !p.isSettlementPaused())
+                .filter(p -> !p.isVacationMode() && !p.isOfflineMode() && !p.isBookingPaused())
                 .filter(p -> p.getPrimaryCategory() == service.getCategory()
                           || p.getServices().stream().anyMatch(
                                 s -> s.isActive() && s.getCategory() == service.getCategory()))

@@ -110,10 +110,10 @@ class VerifiedEmailApiTest {
     }
 
     /** send-otp + verify-otp: what the app does before /auth/register. */
-    private void proveOwnership(String field, String destination) throws Exception {
+    private String proveOwnership(String field, String destination) throws Exception {
         send(post("/auth/send-otp"), null, Map.of(field, destination)).andExpect(status().isOk());
-        send(post("/auth/verify-otp"), null, Map.of(field, destination, "code", codeFor(destination)))
-                .andExpect(status().isOk());
+        return data(send(post("/auth/verify-otp"), null, Map.of(field, destination, "code", codeFor(destination)))
+                .andExpect(status().isOk())).get("receipt").asText();
     }
 
     // ── email change ─────────────────────────────────────────────────────────
@@ -174,24 +174,40 @@ class VerifiedEmailApiTest {
 
     // ── sign-up by phone with someone else's email ───────────────────────────
 
+    // SA-03: a number someone else proved cannot be registered by a caller who lacks the receipt.
+    @Test
+    void aVerifiedNumberCannotBeRegisteredWithoutTheReceiptOfWhoeverVerifiedIt() throws Exception {
+        String phone = uniquePhone();
+        String receipt = proveOwnership("phone", phone);
+        Map<String, Object> body = new java.util.HashMap<>(Map.of("fullName", "Intruder", "phone", phone,
+                "password", PASSWORD, "role", "CUSTOMER"));
+        send(post("/auth/register"), null, body).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.phone_not_verified"));
+        body.put("verificationReceipt", "not-the-receipt");
+        send(post("/auth/register"), null, body).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.error.phone_not_verified"));
+        body.put("verificationReceipt", receipt);
+        send(post("/auth/register"), null, body).andExpect(status().isCreated());
+    }
+
     @Test
     void aPhoneSignUpWithSomeoneElsesEmailNeitherBlocksTheOwnerNorCatchesTheirReset() throws Exception {
         String victimEmail = uniqueEmail();
         String attackerPhone = uniquePhone();
 
         // The attacker signs up by phone and names the victim's email.
-        proveOwnership("phone", attackerPhone);
+        String attackerReceipt = proveOwnership("phone", attackerPhone);
         JsonNode attacker = data(send(post("/auth/register"), null, Map.of("fullName", "Attacker", "phone", attackerPhone,
-                "email", victimEmail, "password", PASSWORD, "role", "CUSTOMER"))
+                "email", victimEmail, "password", PASSWORD, "role", "CUSTOMER", "verificationReceipt", attackerReceipt))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.user.email").doesNotExist())
                 .andExpect(jsonPath("$.data.user.pendingEmail").value(victimEmail)));
         long attackerId = attacker.get("user").get("id").asLong();
 
         // The owner of the address can still register with it.
-        proveOwnership("email", victimEmail);
+        String victimReceipt = proveOwnership("email", victimEmail);
         JsonNode victim = data(send(post("/auth/register"), null, Map.of("fullName", "Victim", "email", victimEmail,
-                "password", "Victim123!", "role", "CUSTOMER"))
+                "password", "Victim123!", "role", "CUSTOMER", "verificationReceipt", victimReceipt))
                 .andExpect(status().isCreated()));
         long victimId = victim.get("user").get("id").asLong();
         assertThat(victimId).isNotEqualTo(attackerId);

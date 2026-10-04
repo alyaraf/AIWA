@@ -63,12 +63,12 @@ public class AuthServiceImpl {
         }
         // AU-14 / L-1: ownership is proved before "already taken" is answered, so the
         // register endpoint can't be used to find out which numbers have an account.
-        if (phone != null && !otpService.isPhoneVerified(phone)) {
+        if (phone != null && !otpService.isPhoneVerified(phone, req.getVerificationReceipt())) {
             throw new BusinessException("auth.error.phone_not_verified");
         }
         // An email-only account must prove it owns the address (email OTP, BE-10);
         // before, any unverified address could be registered.
-        if (phone == null && !otpService.isEmailVerified(email)) {
+        if (phone == null && !otpService.isEmailVerified(email, req.getVerificationReceipt())) {
             throw new BusinessException("auth.error.email_not_verified");
         }
         if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
@@ -194,8 +194,12 @@ public class AuthServiceImpl {
                 .build();
     }
 
+    /**
+     * SA-02: turning two-factor on ends every session issued before it, refresh tokens
+     * included, because those were minted without a code. The caller gets a fresh pair.
+     */
     @Transactional
-    public void enableTotp(String identifier, String code) {
+    public ApiResponse.AuthResponse enableTotp(String identifier, String code) {
         User user = findUser(identifier);
 
         if (user.getTotpSecret() == null) {
@@ -205,7 +209,9 @@ public class AuthServiceImpl {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
         user.setTotpEnabled(true);
+        user.setTokensValidAfter(sessionCutoff());
         userRepository.save(user);
+        return buildAuthResponse(user);
     }
 
     @Transactional

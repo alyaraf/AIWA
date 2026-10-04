@@ -96,7 +96,7 @@ class ProviderSuspensionApiTest {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName(role.name().toLowerCase() + " " + n)
                 .email("suspend-" + role.name().toLowerCase() + n + "@test.aiwa")
-                .phone("+2010772" + String.format("%05d", n))
+                .phone("+2010781" + String.format("%05d", n))
                 .password(encoder.encode(PASSWORD)).role(role).active(true).termsAccepted(true)
                 .adminPermissions(perms.length == 0 ? new HashSet<>() : new HashSet<>(EnumSet.copyOf(List.of(perms))))
                 .build());

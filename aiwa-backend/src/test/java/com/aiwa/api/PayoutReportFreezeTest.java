@@ -69,7 +69,7 @@ class PayoutReportFreezeTest {
     private User user(UserRole role, AdminPermission... perms) {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName("payout " + n).email("payout" + n + "@freeze.aiwa")
-                .phone("+2010777" + String.format("%05d", n)).password(encoder.encode(PASSWORD))
+                .phone("+2010780" + String.format("%05d", n)).password(encoder.encode(PASSWORD))
                 .role(role).active(true).termsAccepted(true)
                 .adminPermissions(perms.length == 0 ? new HashSet<>()
                         : new HashSet<>(EnumSet.copyOf(java.util.List.of(perms))))

@@ -91,6 +91,21 @@ describe("api.js — silent refresh on 401", () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
+  // SA-14: only a refresh the server rejects ends the session.
+  it.each([
+    ["a 503 answer", () => jsonRes(503, { message: "down" })],
+    ["a proxy error page", () => ({ ok: false, status: 502, text: async () => "<html>Bad gateway</html>" })],
+    ["a network failure", () => { throw new TypeError("Failed to fetch"); }]
+  ])("keeps the tokens and answers a temporary failure when the refresh gets %s", async (_name, refreshAnswer) => {
+    const spy = vi.spyOn(globalThis, "fetch");
+    spy.mockImplementationOnce(async () => jsonRes(401, { message: "expired" }));
+    spy.mockImplementationOnce(async () => refreshAnswer());
+
+    await expect(api.dashboardRaw()).rejects.toMatchObject({ status: 503, transient: true });
+    expect(window.localStorage.getItem("aiwa_admin_access_token")).toBe("expired-access-token");
+    expect(window.localStorage.getItem("aiwa_admin_refresh_token")).toBe("good-refresh-token");
+  });
+
   it("does not attempt to refresh when /auth/login itself 401s (that IS the login screen)", async () => {
     queueFetch([
       jsonRes(401, { error: "Unauthorized", message: "Invalid credentials" })

@@ -282,7 +282,7 @@ public class AdminController {
                 .providerType(p.getProviderType())
                 .vacationMode(p.isVacationMode())
                 .offlineMode(p.isOfflineMode())
-                .settlementPaused(p.isSettlementPaused())
+                .settlementPaused(p.isBookingPaused())
                 .build();
     }
 
