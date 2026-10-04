@@ -1,3 +1,4 @@
+import 'package:aiwa_app/features/providers/domain/repositories/provider_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/injection_container.dart';
@@ -7,7 +8,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_sheet.dart';
 import '../../../providers/domain/entities/provider_detail_entity.dart';
-import '../../../providers/domain/usecases/get_provider_slots_usecase.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -125,7 +125,7 @@ class _BookNowCheckState extends State<_BookNowCheck>
         p.services.where((s) => s.available).firstOrNull?.id;
     if (serviceId == null) return null;
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final r = await sl<GetProviderSlotsUseCase>()(p.id, serviceId, today);
+    final r = await sl<ProviderRepository>().getAvailableSlots(p.id, serviceId, today);
     return r.fold((_) => null, (s) => [for (final x in s) ...x.times]);
   }
 

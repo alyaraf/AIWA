@@ -3,12 +3,6 @@ import 'package:aiwa_app/core/storage/secure_storage.dart';
 import 'package:aiwa_app/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:aiwa_app/features/auth/data/models/user_model.dart';
 import 'package:aiwa_app/features/auth/data/repositories/auth_repository_impl.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/get_current_user_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/login_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/register_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/send_otp_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/update_profile_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/verify_otp_usecase.dart';
 import 'package:aiwa_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:aiwa_app/features/auth/presentation/bloc/auth_event.dart';
 import 'package:aiwa_app/features/auth/presentation/bloc/auth_state.dart';
@@ -100,12 +94,7 @@ void main() {
     () async {
       remote.loginError = StateError('mfa response has no tokens');
       final bloc = AuthBloc(
-        loginUseCase: LoginUseCase(repo),
-        registerUseCase: RegisterUseCase(repo),
-        sendOtpUseCase: SendOtpUseCase(repo),
-        verifyOtpUseCase: VerifyOtpUseCase(repo),
-        getCurrentUserUseCase: GetCurrentUserUseCase(repo),
-        updateProfileUseCase: UpdateProfileUseCase(repo),
+        authRepository: repo,
         secureStorage: storage,
       );
       bloc.add(const AuthLoginEvent(identifier: 'x', password: 'secret'));
@@ -121,12 +110,7 @@ void main() {
     await storage.saveAccessToken('t');
     await storage.setRemember(false);
     final bloc = AuthBloc(
-      loginUseCase: LoginUseCase(repo),
-      registerUseCase: RegisterUseCase(repo),
-      sendOtpUseCase: SendOtpUseCase(repo),
-      verifyOtpUseCase: VerifyOtpUseCase(repo),
-      getCurrentUserUseCase: GetCurrentUserUseCase(repo),
-      updateProfileUseCase: UpdateProfileUseCase(repo),
+      authRepository: repo,
       secureStorage: storage,
     );
     bloc.add(AuthCheckSessionEvent());
@@ -137,12 +121,7 @@ void main() {
   });
 
   AuthBloc newBloc() => AuthBloc(
-    loginUseCase: LoginUseCase(repo),
-    registerUseCase: RegisterUseCase(repo),
-    sendOtpUseCase: SendOtpUseCase(repo),
-    verifyOtpUseCase: VerifyOtpUseCase(repo),
-    getCurrentUserUseCase: GetCurrentUserUseCase(repo),
-    updateProfileUseCase: UpdateProfileUseCase(repo),
+    authRepository: repo,
     secureStorage: storage,
   );
 

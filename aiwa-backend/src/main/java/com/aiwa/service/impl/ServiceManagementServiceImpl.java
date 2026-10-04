@@ -9,7 +9,6 @@ import com.aiwa.exception.BusinessException;
 import com.aiwa.exception.ResourceNotFoundException;
 import com.aiwa.repository.ProviderProfileRepository;
 import com.aiwa.repository.ServiceRepository;
-import com.aiwa.service.ServiceManagementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,12 +17,11 @@ import java.util.stream.Collectors;
 
 @org.springframework.stereotype.Service
 @RequiredArgsConstructor
-public class ServiceManagementServiceImpl implements ServiceManagementService {
+public class ServiceManagementServiceImpl {
 
     private final ServiceRepository serviceRepo;
     private final ProviderProfileRepository providerRepo;
 
-    @Override
     @Transactional
     public ApiResponse.ServiceDto create(Long userId, ServiceRequest req) {
         ProviderProfile profile = providerRepo.findByUserId(userId)
@@ -44,7 +42,6 @@ public class ServiceManagementServiceImpl implements ServiceManagementService {
         return toDto(serviceRepo.save(service));
     }
 
-    @Override
     @Transactional
     public ApiResponse.ServiceDto update(Long userId, Long serviceId, ServiceRequest req) {
         Service service = serviceRepo.findById(serviceId)
@@ -65,7 +62,6 @@ public class ServiceManagementServiceImpl implements ServiceManagementService {
         return toDto(serviceRepo.save(service));
     }
 
-    @Override
     @Transactional
     public void delete(Long userId, Long serviceId) {
         Service service = serviceRepo.findById(serviceId)
@@ -79,7 +75,6 @@ public class ServiceManagementServiceImpl implements ServiceManagementService {
         serviceRepo.save(service);
     }
 
-    @Override
     @Transactional(readOnly = true)
     public List<ApiResponse.ServiceDto> getByProvider(Long providerId) {
         return serviceRepo.findByProviderIdAndActiveTrue(providerId)

@@ -30,17 +30,7 @@ class HomeRepositoryImpl implements HomeRepository {
         page: page,
         size: size,
       );
-      // ponytail: field-by-field copy of a PagedData the datasource already returns; `return Right(result);` works (Model extends Entity, generics are covariant)
-      return Right(
-        PagedData(
-          content: result.content,
-          totalElements: result.totalElements,
-          totalPages: result.totalPages,
-          number: result.number,
-          size: result.size,
-          last: result.last,
-        ),
-      );
+      return Right(result);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
@@ -60,17 +50,7 @@ class HomeRepositoryImpl implements HomeRepository {
         page: page,
         size: size,
       );
-      // ponytail: field-by-field copy of a PagedData the datasource already returns; `return Right(result);` works (Model extends Entity, generics are covariant)
-      return Right(
-        PagedData(
-          content: result.content,
-          totalElements: result.totalElements,
-          totalPages: result.totalPages,
-          number: result.number,
-          size: result.size,
-          last: result.last,
-        ),
-      );
+      return Right(result);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {

@@ -2,8 +2,6 @@ import 'package:aiwa_app/core/errors/failures.dart';
 import 'package:aiwa_app/core/network/api_response.dart';
 import 'package:aiwa_app/features/notifications/domain/entities/notification_entity.dart';
 import 'package:aiwa_app/features/notifications/domain/repositories/notification_repository.dart';
-import 'package:aiwa_app/features/notifications/domain/usecases/get_notifications_usecase.dart';
-import 'package:aiwa_app/features/notifications/domain/usecases/get_unread_count_usecase.dart';
 import 'package:aiwa_app/features/notifications/presentation/bloc/notification_bloc.dart';
 import 'package:aiwa_app/features/notifications/presentation/bloc/notification_event.dart';
 import 'package:aiwa_app/features/notifications/presentation/bloc/notification_state.dart';
@@ -61,8 +59,6 @@ void main() {
   setUp(() async {
     repo = _FakeRepo();
     bloc = NotificationBloc(
-      getNotifications: GetNotificationsUseCase(repo),
-      getUnreadCount: GetUnreadCountUseCase(repo),
       repository: repo,
     );
     bloc.add(NotificationLoadEvent());

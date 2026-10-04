@@ -10,7 +10,6 @@ import com.aiwa.exception.TooManyRequestsException;
 import com.aiwa.repository.UserRepository;
 import com.aiwa.security.JwtUtils;
 import com.aiwa.security.TotpService;
-import com.aiwa.service.AuthService;
 import com.aiwa.util.Identifiers;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.*;
@@ -23,7 +22,7 @@ import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
-public class AuthServiceImpl implements AuthService {
+public class AuthServiceImpl {
 
     private final UserRepository userRepository;
     private final com.aiwa.repository.ProviderProfileRepository providerProfileRepo;
@@ -49,7 +48,6 @@ public class AuthServiceImpl implements AuthService {
     @org.springframework.beans.factory.annotation.Autowired
     private RedisRuntimeService redis;
 
-    @Override
     @Transactional
     public ApiResponse.AuthResponse register(AuthRequest.Register req) {
         // One spelling per email and phone (R2-19): "Nour@x.com" and "nour@x.com",
@@ -114,7 +112,6 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(user);
     }
 
-    @Override
     public ApiResponse.AuthResponse login(AuthRequest.Login req) {
         // CR-01: the attempt is taken from the account's budget before the password
         // is looked at, so parallel guesses cannot outrun the count.
@@ -146,7 +143,6 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(user);
     }
 
-    @Override
     public ApiResponse.AuthResponse verifyMfa(String mfaToken, String code) {
         if (mfaToken == null || !jwtUtils.isMfaChallengeToken(mfaToken) || !jwtUtils.validateToken(mfaToken)
                 || tokenBlacklistService.isBlacklistedStrict(mfaToken)) {
@@ -176,7 +172,6 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(user);
     }
 
-    @Override
     public ApiResponse.TwoFactorSetupDto beginTotpSetup(String identifier, String password, String code) {
         User user = findUser(identifier);
         // DR-017: restarting setup replaces the secret and turns 2FA off until the
@@ -199,7 +194,6 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
-    @Override
     @Transactional
     public void enableTotp(String identifier, String code) {
         User user = findUser(identifier);
@@ -214,7 +208,6 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
     }
 
-    @Override
     @Transactional
     public void disableTotp(String identifier, String password, String code) {
         User user = findUser(identifier);
@@ -224,7 +217,6 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
     }
 
-    @Override
     public boolean isTotpEnabled(String identifier) {
         return findUser(identifier).isTotpEnabled();
     }
@@ -235,7 +227,6 @@ public class AuthServiceImpl implements AuthService {
      * session cut-off are refused, and the used refresh token is revoked
      * (rotation) so a stolen copy can't keep minting sessions in parallel.
      */
-    @Override
     public ApiResponse.AuthResponse refreshToken(String refreshToken) {
         // Every failure here means the same thing to a client: drop the stored
         // tokens and show the login screen. InvalidTokenException maps to 401 so
@@ -263,13 +254,11 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(user);
     }
 
-    @Override
     public void logout(String accessToken, String refreshToken) {
         tokenBlacklistService.blacklist(accessToken);
         tokenBlacklistService.blacklist(refreshToken);
     }
 
-    @Override
     public ApiResponse.UserDto getCurrentUser(String identifier) {
         return toUserDto(findUser(identifier));
     }
@@ -279,7 +268,6 @@ public class AuthServiceImpl implements AuthService {
      * is revoked — someone who reset because their password leaked must not stay
      * signed in on the attacker's device.
      */
-    @Override
     @Transactional
     public void resetPassword(AuthRequest.ResetPassword req) {
         User user;
@@ -312,7 +300,6 @@ public class AuthServiceImpl implements AuthService {
      * sessions are revoked — a phone-based login's token subject is the old
      * number — and a fresh token pair for the new identity is returned.
      */
-    @Override
     @Transactional
     public ApiResponse.AuthResponse changePhone(String identifier, AuthRequest.ChangePhone req) {
         User user = findUser(identifier);
@@ -334,7 +321,6 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(user);
     }
 
-    @Override
     public void confirmPassword(String identifier, String password) {
         requireCurrentPassword(findUser(identifier), password);
     }
@@ -344,7 +330,6 @@ public class AuthServiceImpl implements AuthService {
      * the code sent to it checks out. Like a phone change, every other session is
      * ended and the caller gets a fresh token pair.
      */
-    @Override
     @Transactional
     public ApiResponse.AuthResponse confirmEmail(String identifier, String code) {
         User user = findUser(identifier);
@@ -363,7 +348,6 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(user);
     }
 
-    @Override
     @Transactional
     public void updateLanguage(String identifier, com.aiwa.enums.Language language) {
         User user = findUser(identifier);

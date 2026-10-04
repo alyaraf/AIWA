@@ -4,7 +4,7 @@ import com.aiwa.dto.request.ServiceRequest;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.repository.UserRepository;
-import com.aiwa.service.ServiceManagementService;
+import com.aiwa.service.impl.ServiceManagementServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,7 +21,7 @@ import java.util.List;
 @Tag(name = "Services", description = "Service management for providers")
 public class ServiceController {
 
-    private final ServiceManagementService serviceManagementService;
+    private final ServiceManagementServiceImpl serviceManagementService;
     private final UserRepository userRepo;
 
     @GetMapping("/providers/{providerId}/services")

@@ -1,16 +1,13 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/repositories/saved_repository.dart';
-import '../../domain/usecases/get_saved_providers_usecase.dart';
 import 'saved_event.dart';
 import 'saved_state.dart';
 
 class SavedBloc extends Bloc<SavedEvent, SavedState> {
-  final GetSavedProvidersUseCase getSavedProviders;
   final SavedRepository _repository;
   int _page = 0;
 
   SavedBloc({
-    required this.getSavedProviders,
     required this._repository,
   }) : super(SavedInitial()) {
     on<SavedLoadEvent>(_onLoad);
@@ -21,7 +18,7 @@ class SavedBloc extends Bloc<SavedEvent, SavedState> {
   Future<void> _onLoad(SavedLoadEvent event, Emitter<SavedState> emit) async {
     emit(SavedLoading());
     _page = 0;
-    final result = await getSavedProviders(page: 0);
+    final result = await _repository.getSavedProviders(page: 0);
     result.fold(
       (f) => emit(SavedError(f.message)),
       (paged) => emit(
@@ -37,7 +34,7 @@ class SavedBloc extends Bloc<SavedEvent, SavedState> {
     final current = state;
     if (current is! SavedLoaded || !current.hasMore) return;
     _page++;
-    final result = await getSavedProviders(page: _page);
+    final result = await _repository.getSavedProviders(page: _page);
     result.fold(
       (_) {},
       (paged) => emit(

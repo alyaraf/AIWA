@@ -1,19 +1,13 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../domain/usecases/get_notifications_usecase.dart';
-import '../../domain/usecases/get_unread_count_usecase.dart';
 import '../../domain/repositories/notification_repository.dart';
 import 'notification_event.dart';
 import 'notification_state.dart';
 
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
-  final GetNotificationsUseCase getNotifications;
-  final GetUnreadCountUseCase getUnreadCount;
   final NotificationRepository _repository;
   int _page = 0;
 
   NotificationBloc({
-    required this.getNotifications,
-    required this.getUnreadCount,
     required this._repository,
   }) : super(NotificationInitial()) {
     on<NotificationGetUnreadCountEvent>(_onGetCount);
@@ -27,7 +21,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     NotificationGetUnreadCountEvent event,
     Emitter<NotificationState> emit,
   ) async {
-    final result = await getUnreadCount();
+    final result = await _repository.getUnreadCount();
     result.fold((_) {}, (count) {
       final current = state;
       if (current is NotificationLoaded) {
@@ -50,8 +44,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   ) async {
     emit(NotificationLoading());
     _page = 0;
-    final countFuture = getUnreadCount();
-    final result = await getNotifications(page: 0);
+    final countFuture = _repository.getUnreadCount();
+    final result = await _repository.getNotifications(page: 0);
     // Server total, not just page 0; page count is the fallback.
     final count = (await countFuture).fold((_) => null, (c) => c);
     result.fold(
@@ -73,7 +67,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     final current = state;
     if (current is! NotificationLoaded || !current.hasMore) return;
     _page++;
-    final result = await getNotifications(page: _page);
+    final result = await _repository.getNotifications(page: _page);
     result.fold(
       (_) {},
       (paged) => emit(

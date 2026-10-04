@@ -10,7 +10,6 @@ import com.aiwa.exception.ResourceNotFoundException;
 import com.aiwa.repository.AvailabilityRepository;
 import com.aiwa.repository.ProviderProfileRepository;
 import com.aiwa.repository.StaffMemberRepository;
-import com.aiwa.service.AvailabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,13 +19,12 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class AvailabilityServiceImpl implements AvailabilityService {
+public class AvailabilityServiceImpl {
 
     private final AvailabilityRepository availabilityRepo;
     private final ProviderProfileRepository providerRepo;
     private final StaffMemberRepository staffRepo;
 
-    @Override
     @Transactional
     public ApiResponse.AvailabilityDto upsert(Long userId, AvailabilityRequest req) {
         ProviderProfile profile = providerRepo.findByUserId(userId)
@@ -61,14 +59,12 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         return toDto(availabilityRepo.save(avail));
     }
 
-    @Override
     @Transactional(readOnly = true)
     public List<ApiResponse.AvailabilityDto> getByProvider(Long providerId) {
         return availabilityRepo.findByProviderIdAndAvailableTrue(providerId)
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    @Override
     @Transactional
     public void delete(Long userId, Long availabilityId) {
         Availability avail = availabilityRepo.findById(availabilityId)

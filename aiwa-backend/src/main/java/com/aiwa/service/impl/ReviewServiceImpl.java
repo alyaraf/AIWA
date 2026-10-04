@@ -10,7 +10,6 @@ import com.aiwa.exception.BusinessException;
 import com.aiwa.exception.ForbiddenException;
 import com.aiwa.exception.ResourceNotFoundException;
 import com.aiwa.repository.*;
-import com.aiwa.service.ReviewService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
@@ -23,7 +22,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class ReviewServiceImpl implements ReviewService {
+public class ReviewServiceImpl {
 
     static final int MAX_TAGS = 10;
     static final int MAX_TAG_LENGTH = 40;
@@ -41,7 +40,6 @@ public class ReviewServiceImpl implements ReviewService {
         this.notificationService = notificationService;
     }
 
-    @Override
     @Transactional
     public ApiResponse.ReviewDto create(Long userId, ReviewRequest req) {
         ReviewDirection direction = req.getDirection() != null
@@ -99,7 +97,6 @@ public class ReviewServiceImpl implements ReviewService {
      * provider's own ratings OF their customers and SAFETY reports — on the
      * provider's public profile.
      */
-    @Override
     @Transactional(readOnly = true)
     public Page<ApiResponse.ReviewDto> getByProvider(Long providerId, Pageable pageable) {
         return reviewRepo.findByProviderIdAndDirectionAndHiddenFalseOrderByCreatedAtDesc(
@@ -146,7 +143,6 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     /** Admin moderation: hide/unhide a review and recompute the provider's rating. */
-    @Override
     @Transactional
     public ApiResponse.ReviewDto setVisibility(Long reviewId, boolean hidden) {
         Review review = reviewRepo.findById(reviewId)

@@ -8,7 +8,7 @@ import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.exception.BusinessException;
 import com.aiwa.repository.UserRepository;
-import com.aiwa.service.AuthService;
+import com.aiwa.service.impl.AuthServiceImpl;
 import com.aiwa.service.impl.OtpServiceImpl;
 import com.aiwa.security.JwtUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,7 +28,7 @@ public class AuthController {
 
     private static final String ACCESS_TOKEN_COOKIE = "accessToken";
 
-    private final AuthService authService;
+    private final AuthServiceImpl authService;
     private final OtpServiceImpl otpService;
     private final UserRepository userRepo;
     private final com.aiwa.repository.ProviderProfileRepository providerProfileRepo;

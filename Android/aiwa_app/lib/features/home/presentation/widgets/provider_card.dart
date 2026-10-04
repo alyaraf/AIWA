@@ -1,3 +1,4 @@
+import 'package:aiwa_app/features/providers/domain/repositories/provider_repository.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/constants/api_constants.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +14,6 @@ import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
-import '../../../providers/domain/usecases/save_provider_usecase.dart';
 import '../../domain/entities/provider_summary_entity.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -163,10 +163,10 @@ class _SaveHeartButtonState extends State<SaveHeartButton> {
       _saved = next;
       _busy = true;
     });
-    final useCase = sl<SaveProviderUseCase>();
+    final repo = sl<ProviderRepository>();
     final result = next
-        ? await useCase.save(widget.providerId)
-        : await useCase.unsave(widget.providerId);
+        ? await repo.saveProvider(widget.providerId)
+        : await repo.unsaveProvider(widget.providerId);
     if (!mounted) return;
     setState(() {
       _busy = false;

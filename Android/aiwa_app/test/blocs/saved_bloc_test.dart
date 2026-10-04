@@ -2,7 +2,6 @@ import 'package:aiwa_app/core/errors/failures.dart';
 import 'package:aiwa_app/core/network/api_response.dart';
 import 'package:aiwa_app/features/home/domain/entities/provider_summary_entity.dart';
 import 'package:aiwa_app/features/saved/domain/repositories/saved_repository.dart';
-import 'package:aiwa_app/features/saved/domain/usecases/get_saved_providers_usecase.dart';
 import 'package:aiwa_app/features/saved/presentation/bloc/saved_bloc.dart';
 import 'package:aiwa_app/features/saved/presentation/bloc/saved_event.dart';
 import 'package:aiwa_app/features/saved/presentation/bloc/saved_state.dart';
@@ -52,7 +51,6 @@ void main() {
   test('removing a saved provider drops it from the list', () async {
     final repo = _FakeSavedRepository();
     final bloc = SavedBloc(
-      getSavedProviders: GetSavedProvidersUseCase(repo),
       repository: repo,
     );
 
@@ -75,7 +73,6 @@ void main() {
   test('a failed unsave restores the provider with an error', () async {
     final repo = _FakeSavedRepository()..fail = true;
     final bloc = SavedBloc(
-      getSavedProviders: GetSavedProvidersUseCase(repo),
       repository: repo,
     );
 

@@ -1,18 +1,14 @@
+import '../../domain/repositories/booking_repository.dart';
 import 'dart:math';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/telemetry.dart';
-import '../../domain/usecases/cancel_booking_usecase.dart';
-import '../../domain/usecases/create_booking_usecase.dart';
-import '../../domain/usecases/get_my_bookings_usecase.dart';
 import 'booking_event.dart';
 import 'booking_state.dart';
 
 class BookingBloc extends Bloc<BookingEvent, BookingState> {
-  final CreateBookingUseCase createBooking;
-  final GetMyBookingsUseCase getMyBookings;
-  final CancelBookingUseCase cancelBooking;
+  final BookingRepository bookingRepository;
 
   int _page = 0;
   String? _filterStatus;
@@ -24,9 +20,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
   String _attemptKey = '';
 
   BookingBloc({
-    required this.createBooking,
-    required this.getMyBookings,
-    required this.cancelBooking,
+    required this.bookingRepository,
   }) : super(BookingInitial()) {
     on<BookingCreateEvent>(_onCreate);
     on<BookingLoadMyEvent>(_onLoadMy);
@@ -46,7 +40,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
         (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
       ).join();
     }
-    final result = await createBooking(
+    final result = await bookingRepository.createBooking(
       providerId: event.providerId,
       serviceId: event.serviceId,
       scheduledDate: event.scheduledDate,
@@ -75,7 +69,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     emit(BookingLoading());
     _page = 0;
     _filterStatus = event.status;
-    final result = await getMyBookings(status: event.status, page: 0);
+    final result = await bookingRepository.getMyBookings(status: event.status, page: 0);
     result.fold(
       (f) => emit(BookingError(f.message)),
       (paged) => emit(
@@ -95,7 +89,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     final current = state;
     if (current is! BookingListLoaded || !current.hasMore) return;
     _page++;
-    final result = await getMyBookings(status: _filterStatus, page: _page);
+    final result = await bookingRepository.getMyBookings(status: _filterStatus, page: _page);
     result.fold(
       (_) {},
       (paged) => emit(
@@ -112,7 +106,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     Emitter<BookingState> emit,
   ) async {
     emit(BookingLoading());
-    final result = await cancelBooking(event.bookingId);
+    final result = await bookingRepository.cancelBooking(event.bookingId);
     result.fold(
       (f) => emit(BookingError(f.message)),
       (booking) => emit(BookingCancelled(booking)),

@@ -1,3 +1,5 @@
+import 'package:aiwa_app/features/home/domain/repositories/home_repository.dart';
+import 'package:aiwa_app/features/providers/domain/repositories/provider_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -16,9 +18,7 @@ import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../../shared/widgets/section_header.dart';
 import '../../../../shared/widgets/system_screen.dart' show PopIn;
 import '../../../home/domain/entities/provider_summary_entity.dart';
-import '../../../home/domain/usecases/get_nearby_providers_usecase.dart';
 import '../../../home/presentation/widgets/provider_card.dart' show RatingMeta;
-import '../../../providers/domain/usecases/get_provider_slots_usecase.dart';
 import '../../domain/entities/booking_entity.dart';
 import '../bloc/live_booking_cubit.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
@@ -203,7 +203,7 @@ Future<_Extras> _loadExtras(BookingEntity b) async {
   for (final i in const [0, 1]) {
     if (slots.length >= 3) break;
     final d = DateTime(now.year, now.month, now.day + i);
-    final r = await sl<GetProviderSlotsUseCase>()(
+    final r = await sl<ProviderRepository>().getAvailableSlots(
       b.providerId,
       b.serviceId,
       DateFormat('yyyy-MM-dd').format(d),
@@ -224,7 +224,7 @@ Future<_Extras> _loadExtras(BookingEntity b) async {
   final lat = b.providerLat, lng = b.providerLng;
   if (lat != null && lng != null) {
     Future<List<ProviderSummaryEntity>> near(String? category) async =>
-        (await sl<GetNearbyProvidersUseCase>()(
+        (await sl<HomeRepository>().getNearbyProviders(
           lat: lat,
           lng: lng,
           category: category,

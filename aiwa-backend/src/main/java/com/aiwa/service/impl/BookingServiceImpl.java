@@ -11,7 +11,6 @@ import com.aiwa.exception.ForbiddenException;
 import com.aiwa.exception.ResourceNotFoundException;
 import com.aiwa.exception.TooManyRequestsException;
 import com.aiwa.repository.*;
-import com.aiwa.service.BookingService;
 import com.aiwa.util.AiwaTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +27,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class BookingServiceImpl implements BookingService {
+public class BookingServiceImpl {
 
     private final BookingRepository bookingRepo;
     private final UserRepository userRepo;
@@ -78,7 +77,6 @@ public class BookingServiceImpl implements BookingService {
 
     // ── CREATE ─────────────────────────────────────────────────────────────────
 
-    @Override
     @Transactional
     public ApiResponse.BookingDto create(Long customerId, BookingRequest req) {
         return create(customerId, req, null);
@@ -210,7 +208,6 @@ public class BookingServiceImpl implements BookingService {
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
             org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
                     new org.springframework.transaction.support.TransactionSynchronization() {
-                        @Override
                         public void afterCommit() {
                             guarded.run();
                         }
@@ -452,7 +449,6 @@ public class BookingServiceImpl implements BookingService {
 
     // ── READ ───────────────────────────────────────────────────────────────────
 
-    @Override
     @Transactional(readOnly = true)
     public ApiResponse.BookingDto getById(Long bookingId, Long requesterId) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -468,7 +464,6 @@ public class BookingServiceImpl implements BookingService {
         return dto;
     }
 
-    @Override
     @Transactional(readOnly = true)
     public Page<ApiResponse.BookingDto> getMyBookings(Long customerId, Pageable pageable) {
         return getMyBookings(customerId, null, pageable);
@@ -484,7 +479,6 @@ public class BookingServiceImpl implements BookingService {
         return page.map(this::toDto);
     }
 
-    @Override
     @Transactional(readOnly = true)
     public Page<ApiResponse.BookingDto> getProviderBookings(Long userId, Pageable pageable) {
         return getProviderBookings(userId, null, false, pageable);
@@ -546,7 +540,6 @@ public class BookingServiceImpl implements BookingService {
 
     // ── STATUS UPDATE ──────────────────────────────────────────────────────────
 
-    @Override
     @Transactional
     public ApiResponse.BookingDto updateStatus(Long userId, Long bookingId, BookingStatus newStatus) {
         return updateStatus(userId, bookingId, newStatus, null);
@@ -742,7 +735,6 @@ public class BookingServiceImpl implements BookingService {
 
     // ── COMPLETE + payment outcome (cash vs disputed) ──────────────────────────
 
-    @Override
     @Transactional
     public ApiResponse.BookingDto complete(Long userId, Long bookingId, boolean cashCollected) {
         return complete(userId, bookingId, cashCollected, null);
@@ -787,7 +779,6 @@ public class BookingServiceImpl implements BookingService {
     }
 
     /** Admin override: force-cancel any non-terminal booking. */
-    @Override
     @Transactional
     public ApiResponse.BookingDto adminForceCancel(Long bookingId, String reason) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -822,7 +813,6 @@ public class BookingServiceImpl implements BookingService {
     }
 
     /** Admin resolves a DISPUTED payment: confirm cash (+commission) or write it off. */
-    @Override
     @Transactional
     public ApiResponse.BookingDto adminResolveDispute(Long bookingId, boolean paid) {
         return adminResolveDispute(bookingId, paid ? "PAID" : "UNPAID");
@@ -835,7 +825,6 @@ public class BookingServiceImpl implements BookingService {
      *  NO_SHOW — no-show recorded + penalty, no commission
      *  CANCEL  — booking voided entirely
      */
-    @Override
     @Transactional
     public ApiResponse.BookingDto adminResolveDispute(Long bookingId, String outcome) {
         return adminResolveDispute(bookingId, outcome, null);
@@ -922,7 +911,6 @@ public class BookingServiceImpl implements BookingService {
     }
 
     /** Customer checks in at an on-site/venue booking so the provider can begin. */
-    @Override
     @Transactional
     public ApiResponse.BookingDto checkIn(Long customerId, Long bookingId) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -963,7 +951,6 @@ public class BookingServiceImpl implements BookingService {
      * Customer confirms cash was paid, or reports it unpaid/disputed, after the
      * provider has completed the service.
      */
-    @Override
     @Transactional
     public ApiResponse.BookingDto confirmPayment(Long customerId, Long bookingId, boolean paid) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -1280,7 +1267,6 @@ public class BookingServiceImpl implements BookingService {
 
     // ── PROVIDER PROPOSES ALTERNATIVE TIME (customer accept/decline) ───────────
 
-    @Override
     @Transactional
     public ApiResponse.BookingDto proposeReschedule(Long providerUserId, Long bookingId, RescheduleRequest req) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -1318,7 +1304,6 @@ public class BookingServiceImpl implements BookingService {
         return toProviderDto(booking);
     }
 
-    @Override
     @Transactional
     public ApiResponse.BookingDto respondToProposal(Long customerId, Long bookingId, boolean accept) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -1488,7 +1473,6 @@ public class BookingServiceImpl implements BookingService {
 
     // ── REJECT with reason + return alternatives ───────────────────────────────
 
-    @Override
     @Transactional
     public ApiResponse.BookingWithAlternativesDto rejectWithAlternatives(
             Long userId, Long bookingId, String reason) {
@@ -1530,7 +1514,6 @@ public class BookingServiceImpl implements BookingService {
 
     // ── AVAILABLE SLOTS ────────────────────────────────────────────────────────
 
-    @Override
     @Transactional(readOnly = true)
     public List<ApiResponse.TimeSlotDto> getAvailableSlots(Long providerId, Long serviceId,
                                                            Long staffMemberId, LocalDate date) {
@@ -1763,7 +1746,6 @@ public class BookingServiceImpl implements BookingService {
      * uses — ignoring the booking itself, so shifting by 30 minutes within its own
      * slot is no longer reported as a conflict.
      */
-    @Override
     @Transactional
     public ApiResponse.BookingDto reschedule(Long customerId, Long bookingId, RescheduleRequest req) {
         Booking booking = bookingRepo.findById(bookingId)

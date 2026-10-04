@@ -4,12 +4,6 @@ import 'package:aiwa_app/core/network/api_client.dart';
 import 'package:aiwa_app/core/storage/secure_storage.dart';
 import 'package:aiwa_app/features/auth/domain/entities/user_entity.dart';
 import 'package:aiwa_app/features/auth/domain/repositories/auth_repository.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/get_current_user_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/login_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/register_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/send_otp_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/update_profile_usecase.dart';
-import 'package:aiwa_app/features/auth/domain/usecases/verify_otp_usecase.dart';
 import 'package:aiwa_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:aiwa_app/features/auth/presentation/bloc/auth_event.dart';
 import 'package:aiwa_app/features/auth/presentation/bloc/auth_state.dart';
@@ -63,12 +57,7 @@ class _Repo implements AuthRepository {
 
 Future<AuthBloc> _open(WidgetTester tester, _Repo repo, Widget page) async {
   final bloc = AuthBloc(
-    loginUseCase: LoginUseCase(repo),
-    registerUseCase: RegisterUseCase(repo),
-    sendOtpUseCase: SendOtpUseCase(repo),
-    verifyOtpUseCase: VerifyOtpUseCase(repo),
-    getCurrentUserUseCase: GetCurrentUserUseCase(repo),
-    updateProfileUseCase: UpdateProfileUseCase(repo),
+    authRepository: repo,
     secureStorage: SecureStorage(const FlutterSecureStorage()),
   )..add(AuthGetCurrentUserEvent());
   await bloc.stream.firstWhere((s) => s is AuthAuthenticated);

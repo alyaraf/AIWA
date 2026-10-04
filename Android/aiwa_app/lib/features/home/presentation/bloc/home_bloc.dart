@@ -1,13 +1,11 @@
+import '../../domain/repositories/home_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/telemetry.dart';
-import '../../domain/usecases/get_nearby_providers_usecase.dart';
-import '../../domain/usecases/search_providers_usecase.dart';
 import 'home_event.dart';
 import 'home_state.dart';
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  final GetNearbyProvidersUseCase getNearbyProviders;
-  final SearchProvidersUseCase searchProviders;
+  final HomeRepository homeRepository;
 
   double _lat = 30.0444;
   double _lng = 31.2357;
@@ -23,7 +21,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   int _seq = 0;
   static const int _pageSize = 20;
 
-  HomeBloc({required this.getNearbyProviders, required this.searchProviders})
+  HomeBloc({required this.homeRepository})
     : super(HomeInitial()) {
     on<HomeLoadEvent>(_onLoad);
     on<HomeLoadMoreEvent>(_onLoadMore);
@@ -41,7 +39,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     _query = null;
     final seq = ++_seq;
 
-    final result = await getNearbyProviders(
+    final result = await homeRepository.getNearbyProviders(
       lat: _lat,
       lng: _lng,
       radiusKm: _radiusKm,
@@ -85,8 +83,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final page = _page + 1;
     final query = _query;
     final result = query != null
-        ? await searchProviders(query: query, page: page, size: _pageSize)
-        : await getNearbyProviders(
+        ? await homeRepository.searchProviders(query: query, page: page, size: _pageSize)
+        : await homeRepository.getNearbyProviders(
             lat: _lat,
             lng: _lng,
             radiusKm: _radiusKm,
@@ -119,7 +117,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     _query = null;
     final seq = ++_seq;
     emit(HomeLoading());
-    final result = await getNearbyProviders(
+    final result = await homeRepository.getNearbyProviders(
       lat: _lat,
       lng: _lng,
       radiusKm: _radiusKm,
@@ -147,7 +145,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final seq = ++_seq;
     emit(HomeLoading());
     trackFunnel('search'); // not the query: it can hold names
-    final result = await searchProviders(query: event.query, size: _pageSize);
+    final result = await homeRepository.searchProviders(query: event.query, size: _pageSize);
     if (seq != _seq) return;
     result.fold(
       (failure) => emit(HomeError(failure.message)),

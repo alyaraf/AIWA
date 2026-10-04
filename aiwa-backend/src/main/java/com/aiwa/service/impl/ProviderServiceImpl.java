@@ -10,7 +10,6 @@ import com.aiwa.enums.VerificationStatus;
 import com.aiwa.exception.BusinessException;
 import com.aiwa.exception.ResourceNotFoundException;
 import com.aiwa.repository.*;
-import com.aiwa.service.ProviderService;
 import com.aiwa.util.AiwaTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
@@ -26,7 +25,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class ProviderServiceImpl implements ProviderService {
+public class ProviderServiceImpl {
 
     private final ProviderProfileRepository providerRepo;
     private final UserRepository userRepo;
@@ -38,7 +37,6 @@ public class ProviderServiceImpl implements ProviderService {
     private static final Duration PROVIDER_CACHE_TTL = Duration.ofMinutes(5);
     private static final int MAX_PAGE_SIZE = 50;
 
-    @Override
     @Transactional
     public ApiResponse.ProviderDetailDto createProfile(Long userId, ProviderProfileRequest req) {
         if (providerRepo.findByUserId(userId).isPresent()) {
@@ -64,7 +62,6 @@ public class ProviderServiceImpl implements ProviderService {
         return toDetailDto(saved, null, null);
     }
 
-    @Override
     @Transactional
     public ApiResponse.ProviderDetailDto updateProfile(Long userId, ProviderProfileRequest req) {
         ProviderProfile profile = providerRepo.findByUserId(userId)
@@ -96,7 +93,6 @@ public class ProviderServiceImpl implements ProviderService {
         return toDetailDto(providerRepo.save(profile), null, null);
     }
 
-    @Override
     @Transactional(readOnly = true)
     public ApiResponse.ProviderDetailDto getById(Long providerId, Double userLat, Double userLng) {
         return getById(providerId, userLat, userLng, null, false);
@@ -143,7 +139,6 @@ public class ProviderServiceImpl implements ProviderService {
         return dto;
     }
 
-    @Override
     @Transactional(readOnly = true)
     public Page<ApiResponse.ProviderSummaryDto> getNearby(double lat, double lng, double radiusKm,
                                                            ServiceCategory category, String sort, Pageable pageable) {
@@ -191,7 +186,6 @@ public class ProviderServiceImpl implements ProviderService {
         return slice(dtos, pageable);
     }
 
-    @Override
     @Transactional(readOnly = true)
     public Page<ApiResponse.ProviderSummaryDto> search(String query, Pageable pageable) {
         String q = query == null ? "" : query.trim();
@@ -204,7 +198,6 @@ public class ProviderServiceImpl implements ProviderService {
         return new PageImpl<>(dtos, page.getPageable(), page.getTotalElements());
     }
 
-    @Override
     @Transactional(readOnly = true)
     public ApiResponse.DashboardDto getDashboard(Long userId) {
         ProviderProfile profile = providerRepo.findByUserId(userId)

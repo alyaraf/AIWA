@@ -41,7 +41,7 @@ public class AccountController {
     private final ProviderProfileRepository providerRepo;
     private final NotificationServiceImpl notificationService;
     private final com.aiwa.service.impl.AccountDeletionService accountDeletion;
-    private final com.aiwa.service.AuthService authService;
+    private final com.aiwa.service.impl.AuthServiceImpl authService;
 
     // ── Saved addresses ──────────────────────────────────────────────────────
 

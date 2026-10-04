@@ -2,8 +2,6 @@ import 'package:aiwa_app/core/errors/failures.dart';
 import 'package:aiwa_app/core/network/api_response.dart';
 import 'package:aiwa_app/features/home/domain/entities/provider_summary_entity.dart';
 import 'package:aiwa_app/features/home/domain/repositories/home_repository.dart';
-import 'package:aiwa_app/features/home/domain/usecases/get_nearby_providers_usecase.dart';
-import 'package:aiwa_app/features/home/domain/usecases/search_providers_usecase.dart';
 import 'package:aiwa_app/features/home/presentation/bloc/home_bloc.dart';
 import 'package:aiwa_app/features/home/presentation/bloc/home_event.dart';
 import 'package:aiwa_app/features/home/presentation/bloc/home_state.dart';
@@ -19,8 +17,7 @@ void main() {
   setUp(() {
     repo = _Repo();
     bloc = HomeBloc(
-      getNearbyProviders: GetNearbyProvidersUseCase(repo),
-      searchProviders: SearchProvidersUseCase(repo),
+      homeRepository: repo,
     );
   });
   tearDown(() => bloc.close());

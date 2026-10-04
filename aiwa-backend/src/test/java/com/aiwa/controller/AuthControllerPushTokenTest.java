@@ -8,7 +8,7 @@ import com.aiwa.enums.UserRole;
 import com.aiwa.repository.PushDeviceRepository;
 import com.aiwa.repository.UserRepository;
 import com.aiwa.security.JwtUtils;
-import com.aiwa.service.AuthService;
+import com.aiwa.service.impl.AuthServiceImpl;
 import com.aiwa.service.impl.FileStorageServiceImpl;
 import com.aiwa.service.impl.OtpServiceImpl;
 import com.aiwa.service.impl.PushDeviceService;
@@ -34,7 +34,7 @@ class AuthControllerPushTokenTest {
     private final PushDeviceRepository deviceRepo = mock(PushDeviceRepository.class);
     private final PushDeviceService pushDevices = new PushDeviceService(deviceRepo);
 
-    private final AuthController controller = new AuthController(mock(AuthService.class), mock(OtpServiceImpl.class),
+    private final AuthController controller = new AuthController(mock(AuthServiceImpl.class), mock(OtpServiceImpl.class),
             userRepo, mock(com.aiwa.repository.ProviderProfileRepository.class), mock(FileStorageServiceImpl.class),
             mock(JwtUtils.class), mock(com.aiwa.repository.TermsPolicyRepository.class), pushDevices,
             mock(com.aiwa.service.impl.TermsAcceptanceService.class));

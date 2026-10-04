@@ -4,7 +4,7 @@ import com.aiwa.dto.request.FreeTextBody;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.ChatMessage;
 import com.aiwa.repository.ChatMessageRepository;
-import com.aiwa.service.BookingService;
+import com.aiwa.service.impl.BookingServiceImpl;
 import com.aiwa.service.impl.AuditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,7 +22,7 @@ import java.util.List;
 @Tag(name = "Admin Bookings", description = "Admin overrides on bookings")
 public class AdminBookingController {
 
-    private final BookingService bookingService;
+    private final BookingServiceImpl bookingService;
     private final ChatMessageRepository chatRepo;
     private final AuditService auditService;
 

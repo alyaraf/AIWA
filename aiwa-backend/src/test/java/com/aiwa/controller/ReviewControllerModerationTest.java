@@ -10,7 +10,7 @@ import com.aiwa.enums.ModerationTargetType;
 import com.aiwa.repository.ModerationCaseRepository;
 import com.aiwa.repository.ReviewRepository;
 import com.aiwa.repository.UserRepository;
-import com.aiwa.service.ReviewService;
+import com.aiwa.service.impl.ReviewServiceImpl;
 import com.aiwa.service.impl.AuditService;
 import org.junit.jupiter.api.Test;
 

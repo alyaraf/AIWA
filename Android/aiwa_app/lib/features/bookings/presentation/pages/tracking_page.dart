@@ -1,3 +1,4 @@
+import 'package:aiwa_app/features/providers/domain/repositories/provider_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -19,7 +20,6 @@ import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/reason_sheet.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
 import '../../../../shared/widgets/slot_conflict_sheet.dart';
-import '../../../providers/domain/usecases/get_provider_slots_usecase.dart';
 import '../../domain/entities/booking_entity.dart';
 import '../bloc/live_booking_cubit.dart';
 import 'booking_outcome_pages.dart' show OutcomeScreen;
@@ -163,7 +163,7 @@ class _TrackingViewState extends State<_TrackingView> {
     );
     if (date == null || !mounted) return;
     final day = DateFormat('yyyy-MM-dd').format(date);
-    final r = await sl<GetProviderSlotsUseCase>()(b.providerId, b.serviceId, day);
+    final r = await sl<ProviderRepository>().getAvailableSlots(b.providerId, b.serviceId, day);
     if (!mounted) return;
     final times = r.fold(
       (_) => const <String>[],

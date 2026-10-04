@@ -73,6 +73,18 @@ Test edits: none to existing assertions. `application-test.yml` sets `aiwa.terms
 - `SettlementControllerTest.payingWithNoDuesFails`: asserts the message key instead of the English sentence (AU-13).
 - `ChatControllerModerationTest`: passes `afterId = null` to the new parameter.
 
+## Cleanup (Cleanup tab of the tracker, 2026-10-04, branch cleanup/remove-dead-abstractions-2026-10-04)
+
+| Item | Status | What changed |
+|---|---|---|
+| App: 19 use cases (`domain/usecases/`) | done | Every one only forwarded a call to a repository with the same signature and defaults. Deleted; the blocs and the four widgets that resolved a use case from get_it now call the repository. DI registrations removed. 9 test files build the blocs with the repository. |
+| App: field-by-field `PagedData` copies | done | 4 copies replaced with `return Right(result);` (home x2, notifications, saved). The bookings one filters, so it stays. |
+| Backend: six single-implementation service interfaces | done | `AuthService`, `AvailabilityService`, `BookingService`, `ProviderService`, `ReviewService`, `ServiceManagementService` deleted; the `*Impl` classes stay and are injected directly (`Email`, `Sms` and `Push` keep their interfaces: they have real second implementations). |
+| App: repository interfaces with one `*Impl` | not done, on purpose | Every bloc test fakes a repository through the interface (`implements BookingRepository` and the like), so removing them would mean rewriting those fakes for no behaviour change. Revisit only if the tests move to a mocking library. |
+| App: `dartz` `Either` to a sealed `Result` | not done, on purpose | Touches every repository, bloc and test; no bug or size win to justify it now. |
+
+Tests after the cleanup: backend 359, Flutter 172 (analyze clean). No assertion changed; the tests only construct the blocs differently.
+
 ## Not changed: needs an owner rule or a device
 
 Settled by the owner on 2026-10-04 and implemented in the third round: CR-09, CR-10, CR-12, AU-03, AU-05,

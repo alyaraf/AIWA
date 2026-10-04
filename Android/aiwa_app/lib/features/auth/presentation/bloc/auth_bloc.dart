@@ -1,3 +1,4 @@
+import '../../domain/repositories/auth_repository.dart';
 import 'dart:convert';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,22 +9,11 @@ import '../../../../core/errors/failures.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/user_model.dart';
 import '../../domain/entities/user_entity.dart';
-import '../../domain/usecases/get_current_user_usecase.dart';
-import '../../domain/usecases/login_usecase.dart';
-import '../../domain/usecases/register_usecase.dart';
-import '../../domain/usecases/send_otp_usecase.dart';
-import '../../domain/usecases/update_profile_usecase.dart';
-import '../../domain/usecases/verify_otp_usecase.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  final LoginUseCase loginUseCase;
-  final RegisterUseCase registerUseCase;
-  final SendOtpUseCase sendOtpUseCase;
-  final VerifyOtpUseCase verifyOtpUseCase;
-  final GetCurrentUserUseCase getCurrentUserUseCase;
-  final UpdateProfileUseCase updateProfileUseCase;
+  final AuthRepository authRepository;
   final SecureStorage secureStorage;
 
   /// Revokes the session server-side on sign-out; null in unit tests.
@@ -33,12 +23,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final PushRegistrar? pushRegistrar;
 
   AuthBloc({
-    required this.loginUseCase,
-    required this.registerUseCase,
-    required this.sendOtpUseCase,
-    required this.verifyOtpUseCase,
-    required this.getCurrentUserUseCase,
-    required this.updateProfileUseCase,
+    required this.authRepository,
     required this.secureStorage,
     this.apiClient,
     this.pushRegistrar,
@@ -136,7 +121,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
     final hasSession = await secureStorage.hasValidSession();
     if (hasSession) {
-      final result = await getCurrentUserUseCase();
+      final result = await authRepository.getCurrentUser();
       final failure = result.fold((f) => f, (_) => null);
       if (failure == null) {
         result.fold((_) {}, (user) => emit(AuthAuthenticated(user)));
@@ -170,7 +155,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onLogin(AuthLoginEvent event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
-    final result = await loginUseCase(
+    final result = await authRepository.login(
       identifier: event.identifier,
       password: event.password,
     );
@@ -178,7 +163,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       _,
     ) async {
       await secureStorage.setRemember(event.remember);
-      final userResult = await getCurrentUserUseCase();
+      final userResult = await authRepository.getCurrentUser();
       userResult.fold(
         (failure) => emit(AuthError(failure.message)),
         (user) => emit(AuthAuthenticated(user)),
@@ -191,7 +176,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(AuthLoading());
-    final result = await registerUseCase(
+    final result = await authRepository.register(
       fullName: event.fullName,
       password: event.password,
       email: event.email,
@@ -204,7 +189,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await result.fold((failure) async => emit(AuthError(failure.message)), (
       _,
     ) async {
-      final userResult = await getCurrentUserUseCase();
+      final userResult = await authRepository.getCurrentUser();
       userResult.fold(
         (failure) => emit(AuthError(failure.message)),
         (user) => emit(AuthAuthenticated(user)),
@@ -217,7 +202,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(AuthLoading());
-    final result = await sendOtpUseCase(phone: event.phone);
+    final result = await authRepository.sendOtp(phone: event.phone);
     result.fold(
       (failure) => emit(AuthError(failure.message)),
       (_) => emit(AuthOtpSent(event.phone)),
@@ -229,7 +214,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(AuthLoading());
-    final result = await verifyOtpUseCase(phone: event.phone, code: event.code);
+    final result = await authRepository.verifyOtp(phone: event.phone, code: event.code);
     result.fold(
       (failure) => emit(AuthError(failure.message)),
       (_) => emit(AuthOtpVerified(event.phone)),
@@ -250,7 +235,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthGetCurrentUserEvent event,
     Emitter<AuthState> emit,
   ) async {
-    final result = await getCurrentUserUseCase();
+    final result = await authRepository.getCurrentUser();
     result.fold(
       (failure) => emit(AuthError(failure.message)),
       (user) => emit(AuthAuthenticated(user)),
@@ -263,7 +248,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     // No AuthLoading/AuthProfileUpdated: the Profile tab treats any
     // non-authenticated state as a guest and would flash the lock screen.
-    final result = await updateProfileUseCase(
+    final result = await authRepository.updateProfile(
       fullName: event.fullName,
       email: event.email,
       currentPassword: event.currentPassword,

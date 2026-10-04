@@ -3,10 +3,6 @@ import 'dart:async';
 import 'package:aiwa_app/core/errors/failures.dart';
 import 'package:aiwa_app/features/providers/domain/entities/provider_detail_entity.dart';
 import 'package:aiwa_app/features/providers/domain/repositories/provider_repository.dart';
-import 'package:aiwa_app/features/providers/domain/usecases/check_saved_usecase.dart';
-import 'package:aiwa_app/features/providers/domain/usecases/get_provider_detail_usecase.dart';
-import 'package:aiwa_app/features/providers/domain/usecases/get_provider_slots_usecase.dart';
-import 'package:aiwa_app/features/providers/domain/usecases/save_provider_usecase.dart';
 import 'package:aiwa_app/features/providers/presentation/bloc/provider_bloc.dart';
 import 'package:aiwa_app/features/providers/presentation/bloc/provider_event.dart';
 import 'package:aiwa_app/features/providers/presentation/bloc/provider_state.dart';
@@ -104,10 +100,7 @@ class _FakeProviderRepository implements ProviderRepository {
 }
 
 ProviderBloc _bloc(ProviderRepository repo) => ProviderBloc(
-  getProviderDetail: GetProviderDetailUseCase(repo),
-  saveProvider: SaveProviderUseCase(repo),
-  checkSaved: CheckSavedUseCase(repo),
-  getSlots: GetProviderSlotsUseCase(repo),
+  providerRepository: repo,
 );
 
 AvailabilitySlot _slot(String date, List<String> times) =>

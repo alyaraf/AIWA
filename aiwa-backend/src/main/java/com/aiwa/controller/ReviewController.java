@@ -4,7 +4,7 @@ import com.aiwa.dto.request.ReviewRequest;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.repository.UserRepository;
-import com.aiwa.service.ReviewService;
+import com.aiwa.service.impl.ReviewServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

@@ -1,28 +1,19 @@
+import '../../domain/repositories/provider_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../domain/entities/provider_detail_entity.dart';
-import '../../domain/usecases/check_saved_usecase.dart';
-import '../../domain/usecases/get_provider_detail_usecase.dart';
-import '../../domain/usecases/get_provider_slots_usecase.dart';
-import '../../domain/usecases/save_provider_usecase.dart';
 import 'provider_event.dart';
 import 'provider_state.dart';
 
 class ProviderBloc extends Bloc<ProviderEvent, ProviderState> {
-  final GetProviderDetailUseCase getProviderDetail;
-  final SaveProviderUseCase saveProvider;
-  final CheckSavedUseCase checkSaved;
-  final GetProviderSlotsUseCase getSlots;
+  final ProviderRepository providerRepository;
 
   /// Slots fetched so far. Kept outside the state because a slot request can
   /// finish before the provider detail does (handlers run concurrently).
   List<AvailabilitySlot> _slots = const [];
 
   ProviderBloc({
-    required this.getProviderDetail,
-    required this.saveProvider,
-    required this.checkSaved,
-    required this.getSlots,
+    required this.providerRepository,
   }) : super(ProviderInitial()) {
     on<ProviderLoadEvent>(_onLoad);
     on<ProviderToggleSaveEvent>(_onToggleSave);
@@ -34,11 +25,11 @@ class ProviderBloc extends Bloc<ProviderEvent, ProviderState> {
     Emitter<ProviderState> emit,
   ) async {
     emit(ProviderLoading());
-    final detailResult = await getProviderDetail(event.providerId);
+    final detailResult = await providerRepository.getProviderDetail(event.providerId);
     await detailResult.fold((f) async => emit(ProviderError(f.message)), (
       provider,
     ) async {
-      final savedResult = await checkSaved(event.providerId);
+      final savedResult = await providerRepository.isProviderSaved(event.providerId);
       final isSaved = savedResult.fold((_) => false, (s) => s);
       emit(
         ProviderLoaded(
@@ -59,8 +50,8 @@ class ProviderBloc extends Bloc<ProviderEvent, ProviderState> {
     final next = !current.isSaved;
     emit(current.copyWith(isSaved: next));
     final result = next
-        ? await saveProvider.save(event.providerId)
-        : await saveProvider.unsave(event.providerId);
+        ? await providerRepository.saveProvider(event.providerId)
+        : await providerRepository.unsaveProvider(event.providerId);
     final latest = state;
     if (result.isLeft() && latest is ProviderLoaded) {
       emit(latest.copyWith(isSaved: !next));
@@ -71,7 +62,7 @@ class ProviderBloc extends Bloc<ProviderEvent, ProviderState> {
     ProviderLoadSlotsEvent event,
     Emitter<ProviderState> emit,
   ) async {
-    final result = await getSlots(
+    final result = await providerRepository.getAvailableSlots(
       event.providerId,
       event.serviceId,
       event.date,

@@ -4,7 +4,7 @@ import com.aiwa.dto.request.AvailabilityRequest;
 import com.aiwa.dto.response.ApiResponse;
 import com.aiwa.entity.User;
 import com.aiwa.repository.UserRepository;
-import com.aiwa.service.AvailabilityService;
+import com.aiwa.service.impl.AvailabilityServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,7 +21,7 @@ import java.util.List;
 @Tag(name = "Availability", description = "Manage provider working hours and slots")
 public class AvailabilityController {
 
-    private final AvailabilityService availabilityService;
+    private final AvailabilityServiceImpl availabilityService;
     private final UserRepository userRepo;
 
     @GetMapping("/providers/{providerId}/availability")
