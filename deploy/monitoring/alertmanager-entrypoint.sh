@@ -29,11 +29,24 @@ q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
   echo "  group_interval: 5m"
   echo "  repeat_interval: 4h"
   echo "  routes:"
+  echo "    - matchers: ['alertname=\"Watchdog\"']"
+  echo "      receiver: watchdog"
+  echo "      group_wait: 0s"
+  echo "      group_interval: 1m"
+  echo "      repeat_interval: 5m"
   echo "    - matchers: ['severity=\"critical\"']"
   echo "      receiver: team"
   echo "      group_wait: 0s"
   echo "      repeat_interval: 30m"
   echo "receivers:"
+  # F-07: dead-man's switch. The Watchdog alert always fires; with DEADMAN_WEBHOOK_URL set (healthchecks.io,
+  # Better Stack) it is pinged every 5 minutes, so the external service alerts when this whole pipeline stops.
+  echo "  - name: watchdog"
+  if [ -n "${DEADMAN_WEBHOOK_URL:-}" ]; then
+    echo "    webhook_configs:"
+    echo "      - url: $(q "$DEADMAN_WEBHOOK_URL")"
+    echo "        send_resolved: false"
+  fi
   echo "  - name: team"
   if [ -n "$email" ]; then
     echo "    email_configs:"

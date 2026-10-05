@@ -4,7 +4,7 @@
 FROM node:20.20.2-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 COPY . .
 ARG VITE_API_BASE_URL
 RUN test -n "$VITE_API_BASE_URL" || (echo "Pass --build-arg VITE_API_BASE_URL=https://api.<domain>/api" && exit 1)

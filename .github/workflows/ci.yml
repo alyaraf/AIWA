@@ -63,7 +63,22 @@ jobs:
           FLYWAY_ENABLED: "true"
           JPA_DDL_AUTO: validate
           JWT_SECRET: ci-only-jwt-secret-that-is-long-enough-for-hs256-signing-0123456789
+          # F-01: the S-01 guard applies to every profile but local/test, so this boot uses the
+          # hardened settings (well-formed dummy keys and providers, never real secrets).
+          SPRING_PROFILES_ACTIVE: prod
+          SMS_PROVIDER: external
+          SMS_API_URL: https://sms.example.invalid/send
+          SMS_API_KEY: ci-only
+          EMAIL_PROVIDER: http
+          EMAIL_API_URL: https://mail.example.invalid/send
+          EMAIL_API_KEY: ci-only
+          PUSH_PROVIDER: fcm
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/ci-firebase.json
+          SAFETY_ONCALL_PHONES: "+201000000000"
+          TOTP_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          DOCUMENT_ENCRYPTION_KEY: ZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTA=
         run: |
+          echo "{}" > /tmp/ci-firebase.json
           mvn -B -q package -DskipTests
           java -jar target/*.jar > app.log 2>&1 &
           for _ in $(seq 1 60); do
@@ -86,7 +101,7 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: aiwa-admin-dashboard-updated/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts   # F-18: no install scripts from dependencies
       # AU-11: known high/critical advisories in what ships to the browser fail the build.
       - run: npm audit --omit=dev --audit-level=high
       - run: npm test
@@ -173,7 +188,8 @@ jobs:
       - name: OWASP Dependency-Check
         run: |
           if [ -z "$NVD_API_KEY" ]; then
-            echo "::warning::NVD_API_KEY is not set: the backend CVE scan was SKIPPED (see docs/release.md)"; exit 0
+            if [ "$GITHUB_EVENT_NAME" = "push" ]; then echo "::warning::NVD_API_KEY is not set: the backend CVE scan was SKIPPED (see docs/release.md)"; exit 0; fi
+            echo "::error::NVD_API_KEY is not set: the scheduled/manual CVE scan cannot run (F-18)"; exit 1
           fi
           mvn -B -ntp -DskipTests org.owasp:dependency-check-maven:12.1.8:check             -DnvdApiKey="$NVD_API_KEY" -Dformat=ALL -DfailBuildOnCVSS=7 -DskipTestScope=true
       - uses: actions/upload-artifact@v4

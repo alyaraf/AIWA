@@ -28,6 +28,10 @@
 
 {$ADMIN_DOMAIN} {
 	import common
+	# F-19: the admin panel is for staff. ADMIN_ALLOWED_IPS (space-separated CIDRs, deploy/.env) limits who
+	# can even load it; the default allows everyone, so set it to your office/VPN ranges.
+	@notAllowed not remote_ip {$ADMIN_ALLOWED_IPS}
+	respond @notAllowed 403
 	reverse_proxy admin:8080
 }
 

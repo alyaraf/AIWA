@@ -39,7 +39,7 @@ fail() {
 # Encrypt $1 to $2 (same settings as restore.sh), prove it decrypts back to $1, drop $1.
 # The key is read into the environment because Windows openssl has no fd: passwords.
 encrypt() {
-  command -v openssl > /dev/null || apk add -q --no-cache openssl > /dev/null 2>&1 || return 1
+  command -v openssl > /dev/null || return 1  # F-02: baked into the image (backup/Dockerfile), no network install
   BACKUP_PASS=$(cat "$KEY") openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_PASS < "$1" > "$2" || return 1
   BACKUP_PASS=$(cat "$KEY") openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_PASS < "$2" | cmp -s - "$1" || return 1
   rm -f "$1"

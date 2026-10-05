@@ -1,0 +1,27 @@
+# F-18: secrets and known-vulnerability scan of the repository and the Docker images' base layers.
+name: Security scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan (secrets and high/critical vulnerabilities with a fix)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-dirs: Android/aiwa_app/build,aiwa-admin-dashboard-updated/node_modules,aiwa-backend/target
