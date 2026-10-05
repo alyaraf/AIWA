@@ -50,7 +50,7 @@ class ApiClient {
       final inner = e.error;
       if (inner is ServerException ||
           inner is UnauthorizedException ||
-          inner is NetworkException) {
+          inner is NetworkException) { // includes SessionChangedException
         throw inner!;
       }
       throw ServerException(
@@ -184,6 +184,26 @@ class _AuthInterceptor extends Interceptor {
     handler.next(options);
   }
 
+  /// M-01: a SUCCESSFUL answer for a request sent under an earlier session (the user signed out, or into another
+  /// account, while it was in flight) must not reach the caller, which would cache it or show it as the current
+  /// user's. Only the retry/401 path used to check the session.
+  @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    final sent = response.requestOptions.extra['session'];
+    if (sent is int && sent != SecureStorage.generation) {
+      return handler.reject(
+        DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.cancel,
+          error: const SessionChangedException(),
+        ),
+        true,
+      );
+    }
+    handler.next(response);
+  }
+
   @override
   Future<void> onError(
     DioException err,
@@ -229,6 +249,11 @@ class _AuthInterceptor extends Interceptor {
     }
     opts.headers['Authorization'] = 'Bearer $newToken';
     opts.extra['retried'] = true;
+    // M-03: a multipart body is a one-shot stream and is already finalized by the first send, so the retry needs a
+    // fresh copy (the files are re-read from their builders). Without this an avatar / gallery / ID-document upload
+    // that hit an expired access token failed again even though the refresh worked.
+    final body = opts.data;
+    if (body is FormData) opts.data = body.clone();
     try {
       handler.resolve(await _dio.fetch(opts));
     } on DioException catch (e) {
@@ -293,6 +318,9 @@ class _ErrorInterceptor extends Interceptor {
   }
 
   static Exception mapError(DioException err) {
+    if (err.error is SessionChangedException) {
+      return err.error! as SessionChangedException; // not an outage: do not flip the offline banner
+    }
     switch (err.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.receiveTimeout:

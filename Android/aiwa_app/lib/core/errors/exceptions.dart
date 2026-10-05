@@ -13,6 +13,14 @@ class NetworkException implements Exception {
   const NetworkException({this.message = 'No internet connection'});
 }
 
+/// A response arrived for a request that was sent under a session that has since ended (sign-out, expiry, account
+/// switch). It is not an outage and not the new session's data, so it is dropped (audit M-01). It extends
+/// [NetworkException] so repositories that only know the three API exceptions still turn it into a failure instead of
+/// crashing; the blocs check the session generation themselves and emit nothing for it.
+class SessionChangedException extends NetworkException {
+  const SessionChangedException() : super(message: 'The session changed');
+}
+
 class CacheException implements Exception {
   final String message;
   const CacheException({required this.message});

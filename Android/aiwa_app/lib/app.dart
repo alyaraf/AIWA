@@ -14,6 +14,7 @@ import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
 import 'features/notifications/notification_routes.dart';
 import 'features/notifications/presentation/bloc/notification_bloc.dart';
+import 'features/notifications/presentation/bloc/notification_event.dart';
 import 'shared/widgets/offline_banner.dart';
 
 class AiwaApp extends StatelessWidget {
@@ -29,31 +30,41 @@ class AiwaApp extends StatelessWidget {
         BlocProvider<NotificationBloc>(create: (_) => sl<NotificationBloc>()),
       ],
       child: BlocListener<AuthBloc, AuthState>(
-        // A signed-in user's gender picks the palette (male = default).
-        listenWhen: (_, s) => s is AuthAuthenticated,
-        listener: (_, s) {
-          if (s is AuthAuthenticated && s.user.gender != null) {
-            ThemeController.applyGender(s.user.gender);
-          }
-          // A newer policy went live since this user last accepted
-          // (GET /auth/me termsUpToDate): ask once, from anywhere. Users who
-          // never accepted are still in sign-up, which accepts on its own.
-          if (s is AuthAuthenticated &&
-              s.user.termsUpToDate == false &&
-              s.user.acceptedTermsVersion != null) {
-            final path = router.routerDelegate.currentConfiguration.uri.path;
-            if (path != AppRoutes.termsReaccept) {
-              router.push(AppRoutes.termsReaccept);
+        // M-01: the inbox is account-scoped state held by an app-wide bloc; it must not outlive the account.
+        listenWhen: (prev, cur) =>
+            cur is AuthUnauthenticated ||
+            (prev is AuthAuthenticated &&
+                cur is AuthAuthenticated &&
+                prev.user.id != cur.user.id),
+        listener: (context, _) =>
+            context.read<NotificationBloc>().add(NotificationResetEvent()),
+        child: BlocListener<AuthBloc, AuthState>(
+          // A signed-in user's gender picks the palette (male = default).
+          listenWhen: (_, s) => s is AuthAuthenticated,
+          listener: (_, s) {
+            if (s is AuthAuthenticated && s.user.gender != null) {
+              ThemeController.applyGender(s.user.gender);
             }
-          }
-          // A push that cold-started the app is routed once someone is signed in.
-          final launch = PushService.pendingLaunchTap;
-          if (s is AuthAuthenticated && launch != null) {
-            PushService.pendingLaunchTap = null;
-            openPushTarget(launch, isProvider: s.user.isProvider);
-          }
-        },
-        child: const _ThemedApp(),
+            // A newer policy went live since this user last accepted
+            // (GET /auth/me termsUpToDate): ask once, from anywhere. Users who
+            // never accepted are still in sign-up, which accepts on its own.
+            if (s is AuthAuthenticated &&
+                s.user.termsUpToDate == false &&
+                s.user.acceptedTermsVersion != null) {
+              final path = router.routerDelegate.currentConfiguration.uri.path;
+              if (path != AppRoutes.termsReaccept) {
+                router.push(AppRoutes.termsReaccept);
+              }
+            }
+            // A push that cold-started the app is routed once someone is signed in.
+            final launch = PushService.pendingLaunchTap;
+            if (s is AuthAuthenticated && launch != null) {
+              PushService.pendingLaunchTap = null;
+              openPushTarget(launch, isProvider: s.user.isProvider);
+            }
+          },
+          child: const _ThemedApp(),
+        ),
       ),
     );
   }

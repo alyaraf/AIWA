@@ -417,6 +417,40 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get authTermsReadFull => 'الشروط والسياسات كاملة';
+
+  @override
+  String get authTermsLoadFailed =>
+      'تعذّر تحميل الشروط الحالية. تحقّق من اتصالك وحاول مرة أخرى.';
+
+  @override
+  String get authTermsChangedWhileSigningUp =>
+      'تم تحديث الشروط أثناء تسجيلك. يرجى مراجعة النسخة الجديدة قبل المتابعة.';
+
+  @override
+  String get authTermsReview => 'مراجعة الشروط';
+
+  @override
+  String get provSetupTitle => 'أكمل إعداد نشاطك';
+
+  @override
+  String get provSetupBody =>
+      'تم إنشاء حسابك، لكن بيانات نشاطك لم تُحفظ بعد. أضفها مع هويتك لنتمكن من مراجعتك.';
+
+  @override
+  String get provSetupContinue => 'متابعة الإعداد';
+
+  @override
+  String get provDocsMissingTitle => 'ارفع هويتك';
+
+  @override
+  String get provDocsMissingBody =>
+      'تم حفظ نشاطك، لكننا لم نستلم صور الهوية والصورة الشخصية بعد. ارفعها ليتم مراجعتك.';
+
+  @override
+  String get provDocsUpload => 'رفع المستندات';
+
+  @override
   String get categoryHair => 'الشعر';
 
   @override

@@ -21,6 +21,16 @@ class NetworkFailure extends Failure {
   const NetworkFailure([super.message = 'No internet connection']);
 }
 
+/// The answer belongs to a session that has ended; a bloc must ignore it (audit M-01).
+class SessionChangedFailure extends Failure {
+  const SessionChangedFailure() : super('The session changed');
+}
+
+/// The policy version a person read is no longer the current one (audit M-07).
+class TermsChangedFailure extends Failure {
+  const TermsChangedFailure() : super('The terms changed');
+}
+
 class CacheFailure extends Failure {
   const CacheFailure(super.message);
 }

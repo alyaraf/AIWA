@@ -126,40 +126,46 @@ class _TermsReacceptPageState extends State<TermsReacceptPage> {
               ),
             ),
             const SizedBox(height: 20),
-            if (_terms == null && _error == null)
-              const ShimmerBox(height: 76, radius: 14)
-            else
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.cream,
-                  borderRadius: BorderRadius.circular(AppTheme.radius14),
-                ),
-                child: _terms == null
-                    ? Text(_error!, style: boxStyle)
-                    : Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: AppLocalizations.of(
-                                context,
-                              ).authTermsVersion(_terms!.version),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
+            // M-07: the whole policy, scrollable, not six lines with an ellipsis: this is the text being accepted.
+            Expanded(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: SingleChildScrollView(
+                  child: _terms == null && _error == null
+                      ? const ShimmerBox(height: 76, radius: 14)
+                      : Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.cream,
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radius14,
                             ),
-                            TextSpan(
-                              text:
-                                  ' — ${_terms!.textFor(AppLocalizations.of(context).localeName)}',
-                            ),
-                          ],
+                          ),
+                          child: _terms == null
+                              ? Text(_error!, style: boxStyle)
+                              : Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: AppLocalizations.of(
+                                          context,
+                                        ).authTermsVersion(_terms!.version),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text:
+                                            ' — ${_terms!.textFor(AppLocalizations.of(context).localeName)}',
+                                      ),
+                                    ],
+                                  ),
+                                  style: boxStyle,
+                                ),
                         ),
-                        maxLines: 6,
-                        overflow: TextOverflow.ellipsis,
-                        style: boxStyle,
-                      ),
+                ),
               ),
-            const Spacer(),
+            ),
             if (_terms != null && _error != null) ...[
               InlineBanner(
                 tone: BannerTone.danger,

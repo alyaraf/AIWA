@@ -104,10 +104,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   };
 
+  /// M-01: true when the session this handler started under has ended (sign-out, expiry, another account signed in).
+  /// Nothing may be cached or emitted for it: the answer is the previous account's, and emitting it would show that
+  /// account's identity (or sign the new one out).
+  bool _ended(int session) => SecureStorage.generation != session;
+
   Future<void> _onCheckSession(
     AuthCheckSessionEvent event,
     Emitter<AuthState> emit,
   ) async {
+    final session = SecureStorage.generation;
     if (!await secureStorage.getRemember()) {
       // End it on the server too, or a shared phone keeps getting the last
       // user's notifications and their refresh token stays valid (CR-18).
@@ -122,17 +128,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final hasSession = await secureStorage.hasValidSession();
     if (hasSession) {
       final result = await authRepository.getCurrentUser();
+      if (_ended(session)) return;
       final failure = result.fold((f) => f, (_) => null);
       if (failure == null) {
         result.fold((_) {}, (user) => emit(AuthAuthenticated(user)));
         return;
       }
-      // L-14: no network at cold start is not a signed-out session. The tokens
-      // are kept either way; show the last known account until the API answers.
-      if (failure is NetworkFailure) {
+      if (failure is SessionChangedFailure) return;
+      // L-14: no network at cold start (or a server error) is not a signed-out session. The tokens are kept either
+      // way; show the last known account until the API answers. Only a rejected session signs out (M-04).
+      if (failure is! UnauthorizedFailure) {
         final cached = await _cachedUser();
+        if (_ended(session)) return;
         if (cached != null) {
-          emit(AuthAuthenticated(cached));
+          emit(AuthAuthenticated(cached, refreshError: failure.message));
           return;
         }
       }
@@ -163,9 +172,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       _,
     ) async {
       await secureStorage.setRemember(event.remember);
+      final session = SecureStorage.generation; // the session this sign-in just started
       final userResult = await authRepository.getCurrentUser();
+      if (_ended(session)) return;
       userResult.fold(
-        (failure) => emit(AuthError(failure.message)),
+        (failure) => failure is SessionChangedFailure
+            ? null
+            : emit(AuthError(failure.message)),
         (user) => emit(AuthAuthenticated(user)),
       );
     });
@@ -189,9 +202,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await result.fold((failure) async => emit(AuthError(failure.message)), (
       _,
     ) async {
+      final session = SecureStorage.generation;
       final userResult = await authRepository.getCurrentUser();
+      if (_ended(session)) return;
       userResult.fold(
-        (failure) => emit(AuthError(failure.message)),
+        (failure) => failure is SessionChangedFailure
+            ? null
+            : emit(AuthError(failure.message)),
         (user) => emit(AuthAuthenticated(user)),
       );
     });
@@ -235,12 +252,27 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthGetCurrentUserEvent event,
     Emitter<AuthState> emit,
   ) async {
+    final session = SecureStorage.generation;
     final result = await authRepository.getCurrentUser();
-    result.fold(
-      (failure) => emit(AuthError(failure.message)),
-      (user) => emit(AuthAuthenticated(user)),
-    );
+    if (_ended(session)) return;
+    result.fold(_onProfileFailure(emit), (user) => emit(AuthAuthenticated(user)));
   }
+
+  /// A failed profile refresh / save (M-04): the identity stays while the session is still valid, with the reason
+  /// beside it; only a rejected session signs out. Outside a signed-in session (sign-up in progress) it is the
+  /// plain error it always was.
+  void Function(Failure) _onProfileFailure(Emitter<AuthState> emit) =>
+      (failure) {
+        if (failure is SessionChangedFailure) return;
+        final current = state;
+        if (failure is UnauthorizedFailure) {
+          emit(AuthUnauthenticated());
+        } else if (current is AuthAuthenticated) {
+          emit(AuthAuthenticated(current.user, refreshError: failure.message));
+        } else {
+          emit(AuthError(failure.message));
+        }
+      };
 
   Future<void> _onUpdateProfile(
     AuthUpdateProfileEvent event,
@@ -248,15 +280,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     // No AuthLoading/AuthProfileUpdated: the Profile tab treats any
     // non-authenticated state as a guest and would flash the lock screen.
+    final session = SecureStorage.generation;
     final result = await authRepository.updateProfile(
       fullName: event.fullName,
       email: event.email,
       currentPassword: event.currentPassword,
       profileImageUrl: event.profileImageUrl,
     );
-    result.fold(
-      (failure) => emit(AuthError(failure.message)),
-      (user) => emit(AuthAuthenticated(user)),
-    );
+    if (_ended(session)) return;
+    result.fold(_onProfileFailure(emit), (user) => emit(AuthAuthenticated(user)));
   }
 }

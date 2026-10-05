@@ -848,6 +848,66 @@ abstract class AppLocalizations {
   /// **'v{version}'**
   String authTermsVersion(Object version);
 
+  /// No description provided for @authTermsReadFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full terms and policies'**
+  String get authTermsReadFull;
+
+  /// No description provided for @authTermsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t load the current terms. Check your connection and try again.'**
+  String get authTermsLoadFailed;
+
+  /// No description provided for @authTermsChangedWhileSigningUp.
+  ///
+  /// In en, this message translates to:
+  /// **'The terms were updated while you were signing up. Please review the new version before you continue.'**
+  String get authTermsChangedWhileSigningUp;
+
+  /// No description provided for @authTermsReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review terms'**
+  String get authTermsReview;
+
+  /// No description provided for @provSetupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish setting up your business'**
+  String get provSetupTitle;
+
+  /// No description provided for @provSetupBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is created, but your business details have not been saved yet. Add them with your ID so we can review you.'**
+  String get provSetupBody;
+
+  /// No description provided for @provSetupContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue setup'**
+  String get provSetupContinue;
+
+  /// No description provided for @provDocsMissingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload your ID'**
+  String get provDocsMissingTitle;
+
+  /// No description provided for @provDocsMissingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your business is saved, but we have not received your ID photos and selfie yet. Upload them to be reviewed.'**
+  String get provDocsMissingBody;
+
+  /// No description provided for @provDocsUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload documents'**
+  String get provDocsUpload;
+
   /// No description provided for @categoryHair.
   ///
   /// In en, this message translates to:

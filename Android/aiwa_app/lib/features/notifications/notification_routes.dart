@@ -1,5 +1,7 @@
 import '../../core/router/app_router.dart';
 
+final _positiveId = RegExp(r'^[1-9][0-9]{0,17}$');
+
 /// Where tapping a notification goes, for both the inbox and a push (FE-3).
 /// [bookingId] is the notification's related booking. Null means "no screen":
 /// the tap only marks it read.
@@ -9,7 +11,11 @@ String? notificationTarget({
   required bool isProvider,
 }) {
   final t = type.toUpperCase();
-  final id = (bookingId == null || bookingId.isEmpty) ? null : bookingId;
+  // A booking id from a push payload is untrusted text that ends up inside a route: only a positive integer is
+  // used (audit M-09), so a malformed or hostile value can neither open a wrong screen nor inject path segments.
+  final id = (bookingId != null && _positiveId.hasMatch(bookingId))
+      ? bookingId
+      : null;
   if (t.contains('TERMS')) return AppRoutes.termsReaccept;
 
   if (isProvider) {

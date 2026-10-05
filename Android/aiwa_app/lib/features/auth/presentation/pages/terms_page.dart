@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -7,6 +8,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
+import '../../domain/repositories/auth_repository.dart';
 import '../widgets/step_header.dart';
 import 'package:aiwa_app/l10n/l10n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -23,6 +25,50 @@ class TermsPage extends StatefulWidget {
 
 class _TermsPageState extends State<TermsPage> {
   bool _agree = false;
+
+  /// The policy this person will be recorded as accepting: the CURRENT version for their role, fetched and shown in
+  /// full here. Acceptance is later sent for exactly this version (audit M-07), never for whatever is latest by then.
+  TermsDoc? _doc;
+  bool _loadFailed = false;
+
+  bool get _isProvider => widget.registrationData['role'] == 'PROVIDER';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loadFailed = false;
+      _agree = false; // a new version has to be agreed to again
+    });
+    final r = await sl<AuthRepository>().latestTerms(
+      termsTypeFor(provider: _isProvider),
+    );
+    if (!mounted) return;
+    setState(
+      () => r.fold((_) => _loadFailed = true, (doc) {
+        _doc = doc;
+      }),
+    );
+  }
+
+  Future<void> _continue() async {
+    final doc = _doc;
+    if (doc == null) return;
+    final result = await context.push<Object?>(
+      AppRoutes.preferences,
+      extra: {
+        ...widget.registrationData,
+        'termsVersion': doc.version,
+        'termsType': termsTypeFor(provider: _isProvider),
+      },
+    );
+    // Preferences found a newer version than the one agreed to: show it again.
+    if (result == 'terms-changed' && mounted) await _load();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,12 +92,7 @@ class _TermsPageState extends State<TermsPage> {
         label: l.authAgreeContinue,
         size: AiwaButtonSize.lg,
         fullWidth: true,
-        onPressed: _agree
-            ? () => context.push(
-                AppRoutes.preferences,
-                extra: widget.registrationData,
-              )
-            : null,
+        onPressed: _agree && _doc != null ? _continue : null,
       ),
       children: [
         AiwaIconButton(
@@ -125,12 +166,67 @@ class _TermsPageState extends State<TermsPage> {
           ),
           const SizedBox(height: 14),
         ],
-        const SizedBox(height: 4),
+        // The actual current policy, in full, before consent.
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.cream,
+            borderRadius: BorderRadius.circular(AppTheme.radius14),
+          ),
+          child: _doc == null
+              ? (_loadFailed
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(l.authTermsLoadFailed),
+                          const SizedBox(height: 8),
+                          AiwaButton(
+                            label: l.commonRetry,
+                            size: AiwaButtonSize.sm,
+                            variant: AiwaButtonVariant.ghost,
+                            onPressed: _load,
+                          ),
+                        ],
+                      )
+                    : const SizedBox(
+                        height: 40,
+                        child: Center(child: CircularProgressIndicator()),
+                      ))
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${l.authTermsReadFull} · ${l.authTermsVersion(_doc!.version)}',
+                      style: AppTextStyles.label.copyWith(fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      child: Scrollbar(
+                        child: SingleChildScrollView(
+                          child: Text(
+                            _doc!.textFor(l.localeName),
+                            style: AppTextStyles.bodySm.copyWith(
+                              fontSize: AppTextStyles.fsLabelSmPlus,
+                              color: AppColors.ink2,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 14),
         Semantics(
           checked: _agree,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _agree = !_agree),
+            onTap: () {
+              if (_doc == null) return; // nothing to agree to until it is shown
+              setState(() => _agree = !_agree);
+            },
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

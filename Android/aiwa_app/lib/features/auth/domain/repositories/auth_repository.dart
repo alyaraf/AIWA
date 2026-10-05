@@ -20,6 +20,23 @@ extension TermsDocText on TermsDoc {
 String termsTypeFor({required bool provider}) =>
     provider ? 'PROVIDER_TERMS' : 'CUSTOMER_TERMS';
 
+/// Records acceptance of the version the person was SHOWN ([shownVersion]), and only that one (audit M-07). If a newer
+/// version went live since, nothing is recorded: acceptance of text they never saw would be meaningless, so the caller
+/// sends them back to read the current one. [shownVersion] null (an older client flow) accepts the latest, as before.
+Future<Either<Failure, void>> acceptShownTerms(
+  AuthRepository repo, {
+  required String type,
+  required String? shownVersion,
+}) async {
+  final latest = await repo.latestTerms(type);
+  return latest.fold((f) async => Left(f), (policy) {
+    if (shownVersion != null && shownVersion != policy.version) {
+      return Future.value(const Left(TermsChangedFailure()));
+    }
+    return repo.acceptTerms(shownVersion ?? policy.version);
+  });
+}
+
 abstract class AuthRepository {
   Future<Either<Failure, Map<String, String>>> login({
     required String identifier,

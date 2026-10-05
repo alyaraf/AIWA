@@ -13,9 +13,13 @@ class AuthLoading extends AuthState {}
 
 class AuthAuthenticated extends AuthState {
   final UserEntity user;
-  const AuthAuthenticated(this.user);
+
+  /// Why the last profile refresh failed (offline, server error), or null. The identity stays: a transient failure
+  /// must not turn a signed-in user into a guest (audit M-04). Cleared by the next successful refresh.
+  final String? refreshError;
+  const AuthAuthenticated(this.user, {this.refreshError});
   @override
-  List<Object?> get props => [user];
+  List<Object?> get props => [user, refreshError];
 }
 
 class AuthUnauthenticated extends AuthState {}

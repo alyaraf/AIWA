@@ -19,6 +19,7 @@ class UserModel extends UserEntity {
     super.searchRadiusMinKm,
     super.searchRadiusMaxKm,
     super.providerProfile,
+    super.providerOnboarding,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +42,7 @@ class UserModel extends UserEntity {
       termsUpToDate: json['termsUpToDate'] as bool?,
       searchRadiusMinKm: (json['searchRadiusMinKm'] as num?)?.toDouble(),
       searchRadiusMaxKm: (json['searchRadiusMaxKm'] as num?)?.toDouble(),
+      providerOnboarding: json['providerOnboarding'] as String?,
       // UserDto sends the flat providerProfileId / providerStatus.
       providerProfile: json['providerProfile'] != null
           ? ProviderProfileSummaryModel.fromJson(
@@ -77,6 +79,7 @@ class UserModel extends UserEntity {
       'termsUpToDate': termsUpToDate,
       'searchRadiusMinKm': searchRadiusMinKm,
       'searchRadiusMaxKm': searchRadiusMaxKm,
+      'providerOnboarding': providerOnboarding,
       if (providerProfile != null)
         'providerProfile': {
           'id': providerProfile!.id,

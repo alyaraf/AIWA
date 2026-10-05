@@ -46,22 +46,36 @@ class _ProviderPendingPageState extends State<ProviderPendingPage> {
       listener: (context, _) => context.go(AppRoutes.providerDashboard),
       builder: (context, s) {
         final p = s is AuthAuthenticated ? s.user.providerProfile : null;
-        return _body(context, p);
+        final onboarding = s is AuthAuthenticated
+            ? s.user.providerOnboarding
+            : null;
+        return _body(context, p, onboarding);
       },
     );
   }
 
-  Widget _body(BuildContext context, ProviderProfileSummary? p) {
+  Widget _body(
+    BuildContext context,
+    ProviderProfileSummary? p,
+    String? onboarding,
+  ) {
     final l = AppLocalizations.of(context);
     final insets = MediaQuery.paddingOf(context);
+    // M-05: what the server really has. The old screen claimed the documents were received for a provider whose
+    // business profile (or documents) never made it, with no way to finish.
+    final noProfile = onboarding == 'NO_PROFILE';
+    final missingDocs = onboarding == 'NEEDS_DOCUMENTS';
+    final incomplete = noProfile || missingDocs;
     final rejected = p?.isRejected ?? false;
     final suspended = p?.isSuspended ?? false;
     final note = p?.note?.trim();
     final hasNote = note != null && note.isNotEmpty;
     // Pending with a note = the admin asked for more info.
-    final needsDocs = rejected || (!suspended && hasNote);
+    final needsDocs = rejected || (!suspended && hasNote) || missingDocs;
     final icon = suspended
         ? LucideIcons.ban
+        : incomplete
+        ? LucideIcons.clipboardList
         : needsDocs
         ? LucideIcons.triangleAlert
         : LucideIcons.hourglass;
@@ -139,6 +153,10 @@ class _ProviderPendingPageState extends State<ProviderPendingPage> {
                         Text(
                           suspended
                               ? l.provSuspendedTitle
+                              : noProfile
+                              ? l.provSetupTitle
+                              : missingDocs
+                              ? l.provDocsMissingTitle
                               : rejected
                               ? l.provRejectedTitle
                               : hasNote
@@ -151,12 +169,16 @@ class _ProviderPendingPageState extends State<ProviderPendingPage> {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        if (suspended || rejected)
+                        if (suspended || rejected || incomplete)
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 320),
                             child: Text(
                               suspended
                                   ? l.provSuspendedBody
+                                  : noProfile
+                                  ? l.provSetupBody
+                                  : missingDocs
+                                  ? l.provDocsMissingBody
                                   : l.provRejectedBody,
                               style: AppTextStyles.bodySm.copyWith(
                                 color: AppColors.rose300,
@@ -165,27 +187,27 @@ class _ProviderPendingPageState extends State<ProviderPendingPage> {
                             ),
                           )
                         else
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 320),
-                          child: Text.rich(
-                            TextSpan(
-                              style: AppTextStyles.bodySm.copyWith(
-                                color: AppColors.rose300,
-                                height: 1.6,
-                              ),
-                              children:
-                                  spansOf(l.provPendingBody('{duration}'), {
-                                    'duration': TextSpan(
-                                      text: l.provPendingUnder24h,
-                                      style: TextStyle(
-                                        color: AppColors.bone,
-                                        fontWeight: FontWeight.w700,
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 320),
+                            child: Text.rich(
+                              TextSpan(
+                                style: AppTextStyles.bodySm.copyWith(
+                                  color: AppColors.rose300,
+                                  height: 1.6,
+                                ),
+                                children:
+                                    spansOf(l.provPendingBody('{duration}'), {
+                                      'duration': TextSpan(
+                                        text: l.provPendingUnder24h,
+                                        style: TextStyle(
+                                          color: AppColors.bone,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
-                                  }),
+                                    }),
+                              ),
                             ),
                           ),
-                        ),
                         const SizedBox(height: 26),
                         if (hasNote && !suspended) ...[
                           _StatusRow(
@@ -195,7 +217,7 @@ class _ProviderPendingPageState extends State<ProviderPendingPage> {
                           ),
                           const SizedBox(height: 10),
                         ],
-                        if (!needsDocs && !suspended) ...[
+                        if (!needsDocs && !suspended && !incomplete) ...[
                           _StatusRow(
                             icon: LucideIcons.circleCheck,
                             text: l.provPendingIdReceived,
@@ -215,9 +237,30 @@ class _ProviderPendingPageState extends State<ProviderPendingPage> {
                           ),
                         ],
                         const Spacer(),
+                        if (noProfile) ...[
+                          AiwaButton(
+                            label: l.provSetupContinue,
+                            icon: LucideIcons.clipboardList,
+                            variant: AiwaButtonVariant.accent,
+                            fullWidth: true,
+                            size: AiwaButtonSize.lg,
+                            // The same steps as sign-up (business, ID, terms, preferences); the account exists
+                            // already, so the last step only saves what is missing.
+                            onPressed: () => context.push(
+                              AppRoutes.providerBusiness,
+                              extra: const {
+                                'role': 'PROVIDER',
+                                'resumeSetup': true,
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         if (needsDocs) ...[
                           AiwaButton(
-                            label: l.provResubmit,
+                            label: missingDocs
+                                ? l.provDocsUpload
+                                : l.provResubmit,
                             icon: LucideIcons.upload,
                             variant: AiwaButtonVariant.accent,
                             fullWidth: true,

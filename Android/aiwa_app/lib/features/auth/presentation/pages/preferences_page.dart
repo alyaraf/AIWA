@@ -71,11 +71,27 @@ class _PreferencesPageState extends State<PreferencesPage> {
     );
   }
 
+  /// Set when the version shown on the terms page is no longer the current one (M-07).
+  bool _termsChanged = false;
+
   Future<Either<Failure, void>> _acceptTerms(AuthRepository repo) async {
     // V13 seeds PROVIDER_TERMS, and /terms/accept checks the version against
     // the caller's role, so a provider can't fall back to the customer policy.
-    final t = await repo.latestTerms(termsTypeFor(provider: _isProvider));
-    return t.fold((f) async => Left(f), (p) => repo.acceptTerms(p.version));
+    final result = await acceptShownTerms(
+      repo,
+      type: termsTypeFor(provider: _isProvider),
+      shownVersion: _d['termsVersion'] as String?, // what the person read and agreed to on the previous step
+    );
+    if (result.fold((f) => f is TermsChangedFailure, (_) => false)) {
+      _termsChanged = true;
+      if (!mounted) return result;
+      return Left(
+        ServerFailure(
+          AppLocalizations.of(context).authTermsChangedWhileSigningUp,
+        ),
+      );
+    }
+    return result;
   }
 
   /// After register: terms, radius, then the provider profile + documents.
@@ -277,6 +293,16 @@ class _PreferencesPageState extends State<PreferencesPage> {
               body: _error,
               compact: true,
             ),
+          if (_termsChanged) ...[
+            const SizedBox(height: 10),
+            // M-07: the version agreed to is stale; reading the new one is the only way forward.
+            AiwaButton(
+              label: AppLocalizations.of(context).authTermsReview,
+              variant: AiwaButtonVariant.ghost,
+              fullWidth: true,
+              onPressed: () => context.pop('terms-changed'),
+            ),
+          ],
         ],
       ),
     );

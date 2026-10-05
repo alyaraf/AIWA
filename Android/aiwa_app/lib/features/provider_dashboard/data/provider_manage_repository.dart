@@ -72,6 +72,16 @@ class ProviderManageRepository {
             as Json,
   );
 
+  /// PATCH /provider/mode/travel-buffer?minutes= (0–60). Narrow on purpose (audit M-06): the buffer stepper used to
+  /// send the whole business profile through PUT /provider/profile, which put back an older name, bio or address if
+  /// they had been edited elsewhere since the Schedule screen loaded.
+  Future<Either<Failure, void>> setTravelBuffer(int minutes) => _run(
+    () => _api.patch(
+      ApiConstants.providerTravelBuffer,
+      queryParameters: {'minutes': minutes},
+    ),
+  );
+
   /// PATCH /provider/mode/travel-fee — null/0 clears the fee.
   Future<Either<Failure, void>> setTravelFee(num? amount) => _run(
     () => _api.patch(

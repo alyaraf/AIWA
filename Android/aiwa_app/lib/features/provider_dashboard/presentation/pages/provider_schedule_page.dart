@@ -225,7 +225,7 @@ class _WeekListState extends State<WeekList> {
 }
 
 /// Travel buffer stepper (provider-screens.jsx:460-471): 0–60, step 5,
-/// saved to PUT /provider/profile travelBufferMinutes after a short pause.
+/// saved with PATCH /provider/mode/travel-buffer after a short pause.
 class _TravelBuffer extends StatefulWidget {
   final Json detail;
   const _TravelBuffer({required this.detail});
@@ -254,10 +254,8 @@ class _TravelBufferState extends State<_TravelBuffer> {
     });
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 600), () async {
-      final r = await sl<ProviderManageRepository>().updateProfile({
-        ...widget.detail,
-        'travelBufferMinutes': v,
-      });
+      // Only the buffer is sent (M-06): the detail this screen loaded earlier may be older than the business profile.
+      final r = await sl<ProviderManageRepository>().setTravelBuffer(v);
       if (mounted) {
         setState(
           () => _error = r.fold(

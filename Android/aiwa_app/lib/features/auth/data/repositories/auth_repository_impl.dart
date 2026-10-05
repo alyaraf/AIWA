@@ -142,15 +142,28 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<Either<Failure, UserEntity>> getCurrentUser() async {
+    // M-01: the session this profile is fetched for. If the user signs out or into another account before the
+    // answer arrives, it must neither be cached nor returned: it is the previous account's profile.
+    final session = SecureStorage.generation;
     try {
       final user = await _remote.getCurrentUser();
+      if (session != SecureStorage.generation) {
+        return const Left(SessionChangedFailure());
+      }
       try {
         // L-14: kept for a cold start without a network (AuthBloc).
         await _storage.saveCachedUser(jsonEncode(user.toJson()));
+        // The write above can land after a sign-out cleared storage: take it back.
+        if (session != SecureStorage.generation) {
+          await _storage.deleteCachedUser();
+          return const Left(SessionChangedFailure());
+        }
       } catch (_) {}
       return Right(user);
     } on UnauthorizedException {
       return const Left(UnauthorizedFailure());
+    } on SessionChangedException {
+      return const Left(SessionChangedFailure());
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
@@ -165,6 +178,7 @@ class AuthRepositoryImpl implements AuthRepository {
     String? currentPassword,
     String? profileImageUrl,
   }) async {
+    final session = SecureStorage.generation;
     try {
       final user = await _remote.updateProfile(
         fullName: fullName,
@@ -172,7 +186,12 @@ class AuthRepositoryImpl implements AuthRepository {
         currentPassword: currentPassword,
         profileImageUrl: profileImageUrl,
       );
+      if (session != SecureStorage.generation) {
+        return const Left(SessionChangedFailure());
+      }
       return Right(user);
+    } on SessionChangedException {
+      return const Left(SessionChangedFailure());
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
@@ -232,8 +251,23 @@ class AuthRepositoryImpl implements AuthRepository {
     List<String> staff = const [],
   }) async {
     try {
-      await _remote.createProviderProfile(profile);
+      // M-05: safe to repeat. The profile POST can commit and a later staff POST fail; a retry used to POST the
+      // profile again and be refused as "already exists", leaving the provider stuck. The server is asked what it
+      // already has, and only what is missing is sent.
+      final me = await _remote.getCurrentUser();
+      var profileId = me.providerProfile?.id;
+      if (profileId == null || profileId == 0) {
+        await _remote.createProviderProfile(profile);
+        profileId = (await _remote.getCurrentUser()).providerProfile?.id;
+      }
+      final have = <String>{
+        if (profileId != null && profileId != 0)
+          for (final n in await _remote.staffNames(profileId))
+            n.trim().toLowerCase(),
+      };
       for (final name in staff) {
+        final key = name.trim().toLowerCase();
+        if (key.isEmpty || !have.add(key)) continue;
         await _remote.addStaff(name);
       }
       return const Right(null);

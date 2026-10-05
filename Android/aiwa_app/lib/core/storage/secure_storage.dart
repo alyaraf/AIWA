@@ -46,6 +46,8 @@ class SecureStorage {
 
   Future<String?> getCachedUser() => _storage.read(key: 'cached_user');
 
+  Future<void> deleteCachedUser() => _storage.delete(key: 'cached_user');
+
   Future<void> clearAll() {
     _generation++;
     return _storage.deleteAll();

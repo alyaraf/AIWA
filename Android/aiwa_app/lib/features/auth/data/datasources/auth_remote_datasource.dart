@@ -54,6 +54,9 @@ abstract class AuthRemoteDataSource {
   Future<void> uploadAvatar(String path);
   Future<void> createProviderProfile(Map<String, dynamic> profile);
   Future<void> addStaff(String fullName);
+
+  /// Names of the provider's active staff (GET /providers/{id}/staff), to skip those already added.
+  Future<List<String>> staffNames(int providerId);
   Future<void> uploadVerificationDocuments({
     required String idFront,
     required String idBack,
@@ -284,6 +287,19 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<void> addStaff(String fullName) =>
       _client.post(ApiConstants.providerStaff, data: {'fullName': fullName});
+
+  @override
+  Future<List<String>> staffNames(int providerId) async {
+    final response = await _client.get(
+      ApiConstants.providerStaffList('$providerId'),
+    );
+    final data = response.data is Map ? response.data['data'] : null;
+    return [
+      if (data is List)
+        for (final s in data)
+          if (s is Map && s['fullName'] is String) s['fullName'] as String,
+    ];
+  }
 
   /// Multipart nationalIdFront / nationalIdBack / selfie.
   @override

@@ -1,11 +1,18 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../domain/repositories/notification_repository.dart';
 import 'notification_event.dart';
 import 'notification_state.dart';
 
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   final NotificationRepository _repository;
+
+  /// The last page that was actually received. Continuation asks for `_page + 1` and only moves this after the
+  /// answer arrived, so a failed request is repeated instead of skipping a page (M-11).
   int _page = 0;
+
+  /// Bumped by every (re)load and session change: an answer for an older list is dropped (M-10/M-11 pattern).
+  int _list = 0;
 
   NotificationBloc({
     required this._repository,
@@ -15,6 +22,15 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     on<NotificationLoadMoreEvent>(_onLoadMore);
     on<NotificationMarkReadEvent>(_onMarkRead);
     on<NotificationMarkAllReadEvent>(_onMarkAll);
+    on<NotificationResetEvent>(_onReset);
+  }
+
+  /// The signed-in account changed (sign-out / another account): forget everything of the previous one, and make
+  /// any answer still in flight for it harmless (M-01).
+  void _onReset(NotificationResetEvent event, Emitter<NotificationState> emit) {
+    _list++;
+    _page = 0;
+    emit(NotificationInitial());
   }
 
   Future<void> _onGetCount(
@@ -43,11 +59,14 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     Emitter<NotificationState> emit,
   ) async {
     emit(NotificationLoading());
+    final list = ++_list;
+    final session = SecureStorage.generation;
     _page = 0;
     final countFuture = _repository.getUnreadCount();
     final result = await _repository.getNotifications(page: 0);
     // Server total, not just page 0; page count is the fallback.
     final count = (await countFuture).fold((_) => null, (c) => c);
+    if (list != _list || session != SecureStorage.generation) return;
     result.fold(
       (f) => emit(NotificationError(f.message)),
       (paged) => emit(
@@ -65,17 +84,37 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     Emitter<NotificationState> emit,
   ) async {
     final current = state;
-    if (current is! NotificationLoaded || !current.hasMore) return;
-    _page++;
-    final result = await _repository.getNotifications(page: _page);
+    // One continuation at a time: a second tap while one is in flight used to capture the same list and append
+    // out of order, or replace the page that arrived first.
+    if (current is! NotificationLoaded || !current.hasMore || current.loadingMore) {
+      return;
+    }
+    final list = _list;
+    final session = SecureStorage.generation;
+    emit(current.copyWith(loadingMore: true, loadMoreError: null));
+    final result = await _repository.getNotifications(page: _page + 1);
+    if (list != _list || session != SecureStorage.generation) return;
+    final latest = state;
+    if (latest is! NotificationLoaded) return;
     result.fold(
-      (_) {},
-      (paged) => emit(
-        current.copyWith(
-          notifications: [...current.notifications, ...paged.content],
-          hasMore: paged.hasNextPage,
-        ),
-      ),
+      // Stay on this page and say so: the next tap asks for the same one again.
+      (failure) => emit(latest.copyWith(loadingMore: false, loadMoreError: failure.message)),
+      (paged) {
+        _page++;
+        // Rows already shown (a new notification pushed an old one onto the next page) are not repeated.
+        final known = {for (final n in latest.notifications) n.id};
+        emit(
+          latest.copyWith(
+            notifications: [
+              ...latest.notifications,
+              ...paged.content.where((n) => !known.contains(n.id)),
+            ],
+            hasMore: paged.hasNextPage,
+            loadingMore: false,
+            loadMoreError: null,
+          ),
+        );
+      },
     );
   }
 

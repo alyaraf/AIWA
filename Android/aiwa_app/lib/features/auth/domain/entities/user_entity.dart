@@ -23,6 +23,10 @@ class UserEntity extends Equatable {
   final double? searchRadiusMaxKm;
   final ProviderProfileSummary? providerProfile;
 
+  /// How far a provider got through sign-up, from the server's own records (M-05): NO_PROFILE, NEEDS_DOCUMENTS or
+  /// SUBMITTED; null for everyone else (and for an older backend).
+  final String? providerOnboarding;
+
   const UserEntity({
     required this.id,
     required this.fullName,
@@ -41,6 +45,7 @@ class UserEntity extends Equatable {
     this.searchRadiusMinKm,
     this.searchRadiusMaxKm,
     this.providerProfile,
+    this.providerOnboarding,
   });
 
   bool get isCustomer => role == 'CUSTOMER';
@@ -63,6 +68,7 @@ class UserEntity extends Equatable {
     acceptedTermsVersion,
     termsAcceptedAt,
     termsUpToDate,
+    providerOnboarding,
   ];
 }
 

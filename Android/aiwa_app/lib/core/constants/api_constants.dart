@@ -64,6 +64,7 @@ class ApiConstants {
   static String providerStaffById(String id) => '/provider/staff/$id';
   static const String providerMode = '/provider/mode';
   static const String providerTravelFee = '/provider/mode/travel-fee';
+  static const String providerTravelBuffer = '/provider/mode/travel-buffer';
   static const String providerSettlement = '/provider/settlement';
   static const String providerSettlementPay = '/provider/settlement/pay';
   static const String providerServiceCreate = '/provider/services';

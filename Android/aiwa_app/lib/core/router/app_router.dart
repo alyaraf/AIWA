@@ -150,6 +150,16 @@ class AppRoutes {
   // later signs up from elsewhere.
   static String? resumeAfterSignUp;
 
+  /// The deferred destination for the step that is about to navigate to [next]. Only the step that lands on Home
+  /// consumes it: the location step's [next] is the notification step, so reading (and clearing) it there left the
+  /// final step with nothing to resume and the guest's booking intent was lost (audit M-08).
+  static String? consumeResumeFor(String next) {
+    if (next != home) return null;
+    final resume = resumeAfterSignUp;
+    resumeAfterSignUp = null;
+    return resume;
+  }
+
   /// Where a signed-in user lands: providers wait on the pending gate until
   /// their verification is approved.
   static String landingFor(UserEntity u) => !u.isProvider

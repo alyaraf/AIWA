@@ -116,10 +116,8 @@ class PermissionPrimingPage extends StatelessWidget {
 
   void _done(BuildContext context, bool allowed) {
     if (next != null) {
-      final resume = next == AppRoutes.home
-          ? AppRoutes.resumeAfterSignUp
-          : null;
-      AppRoutes.resumeAfterSignUp = null;
+      // M-08: only the step that ends on Home takes the deferred booking.
+      final resume = AppRoutes.consumeResumeFor(next!);
       context.go(next!);
       // Sign-up started at the auth gate: land on Home, then continue the
       // booking on top of it so back returns to Home.

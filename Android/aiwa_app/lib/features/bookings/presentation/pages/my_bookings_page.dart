@@ -72,6 +72,10 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
     'IN_PROGRESS',
   };
 
+  /// M-02: the server filters (GET /bookings/my?status=A,B,C), so the first page is full of live bookings instead of
+  /// being the newest 20 of every status, which hid an older live booking behind pages of finished ones.
+  static const _liveQuery = 'PENDING,ACCEPTED,ON_THE_WAY,ARRIVED,IN_PROGRESS';
+
   @override
   void initState() {
     super.initState();
@@ -82,7 +86,7 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
   void _load() {
     _bloc.add(
       _tab == 'upcoming'
-          ? const BookingLoadMyEvent()
+          ? const BookingLoadMyEvent(status: _liveQuery)
           : const BookingLoadMyEvent(status: _pastStatuses),
     );
   }
@@ -172,7 +176,7 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
         sliver: SliverToBoxAdapter(child: SkeletonList(count: 3)),
       );
     }
-    // /bookings/my ignores `status`, so both tabs filter client-side.
+    // The server already filtered by status; this stays as a guard for rows that moved on since the request.
     final bookings = state.bookings
         .where(
           (b) => _tab == 'upcoming'
@@ -180,7 +184,8 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
               : _pastStatuses.split(',').contains(b.status),
         )
         .toList();
-    if (bookings.isEmpty) {
+    // A page can be empty after the guard above while the server still has more (M-02): never hide "Load more".
+    if (bookings.isEmpty && !state.hasMore) {
       final upcoming = _tab == 'upcoming';
       return SliverPadding(
         padding: pad,

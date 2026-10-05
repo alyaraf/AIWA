@@ -20,3 +20,6 @@ class NotificationMarkReadEvent extends NotificationEvent {
 class NotificationMarkAllReadEvent extends NotificationEvent {}
 
 class NotificationLoadMoreEvent extends NotificationEvent {}
+
+/// The signed-in account changed or ended: drop the previous account's inbox (audit M-01).
+class NotificationResetEvent extends NotificationEvent {}

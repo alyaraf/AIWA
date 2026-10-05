@@ -167,11 +167,27 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if (state.hasMore)
         SliverToBoxAdapter(
           child: Center(
-            child: TextButton(
-              onPressed: () => context.read<NotificationBloc>().add(
-                NotificationLoadMoreEvent(),
-              ),
-              child: Text(l.commonLoadMore),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (state.loadMoreError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      l.error(state.loadMoreError!),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                TextButton(
+                  // Disabled while a page is on its way: two taps no longer race.
+                  onPressed: state.loadingMore
+                      ? null
+                      : () => context.read<NotificationBloc>().add(
+                          NotificationLoadMoreEvent(),
+                        ),
+                  child: Text(l.commonLoadMore),
+                ),
+              ],
             ),
           ),
         ),

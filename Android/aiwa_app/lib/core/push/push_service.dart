@@ -86,7 +86,20 @@ class PushService {
         (m) => taps.add(_strings(m.data)),
       );
       final launch = await FirebaseMessaging.instance.getInitialMessage();
-      if (launch != null) pendingLaunchTap = _strings(launch.data);
+      if (launch != null) {
+        pendingLaunchTap = _strings(launch.data);
+      } else {
+        // M-09: a notification the app showed itself (foreground message, shown through the local plugin) and the
+        // user tapped after the app was killed starts the app with the LOCAL plugin's launch details, not with an
+        // FCM initial message. Both land in the same pending tap, which app.dart routes through the same
+        // validated pipeline once someone is signed in.
+        final details = await _local.getNotificationAppLaunchDetails();
+        if (details?.didNotificationLaunchApp ?? false) {
+          pendingLaunchTap ??= tapFromPayload(
+            details?.notificationResponse?.payload,
+          );
+        }
+      }
       _ready = true;
     } catch (e) {
       // Push is a convenience; a bad config must never stop the app starting.
@@ -144,11 +157,21 @@ class PushService {
   }
 
   static void _emit(String? payload) {
-    if (payload == null || payload.isEmpty) return;
+    final tap = tapFromPayload(payload);
+    if (tap != null) taps.add(tap);
+  }
+
+  /// The push data a local notification carries (the JSON written by [_showForeground]), or null when the
+  /// payload is missing, not JSON or not an object.
+  @visibleForTesting
+  static Map<String, String>? tapFromPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
     try {
       final decoded = jsonDecode(payload);
-      if (decoded is Map) taps.add(_strings(decoded));
-    } catch (_) {}
+      return decoded is Map ? _strings(decoded) : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   static Map<String, String> _strings(Map<dynamic, dynamic> data) => {

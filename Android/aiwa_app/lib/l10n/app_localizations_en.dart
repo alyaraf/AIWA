@@ -413,6 +413,40 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get authTermsReadFull => 'Full terms and policies';
+
+  @override
+  String get authTermsLoadFailed =>
+      'We couldn\'t load the current terms. Check your connection and try again.';
+
+  @override
+  String get authTermsChangedWhileSigningUp =>
+      'The terms were updated while you were signing up. Please review the new version before you continue.';
+
+  @override
+  String get authTermsReview => 'Review terms';
+
+  @override
+  String get provSetupTitle => 'Finish setting up your business';
+
+  @override
+  String get provSetupBody =>
+      'Your account is created, but your business details have not been saved yet. Add them with your ID so we can review you.';
+
+  @override
+  String get provSetupContinue => 'Continue setup';
+
+  @override
+  String get provDocsMissingTitle => 'Upload your ID';
+
+  @override
+  String get provDocsMissingBody =>
+      'Your business is saved, but we have not received your ID photos and selfie yet. Upload them to be reviewed.';
+
+  @override
+  String get provDocsUpload => 'Upload documents';
+
+  @override
   String get categoryHair => 'Hair';
 
   @override
