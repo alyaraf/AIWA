@@ -58,7 +58,11 @@ describe("api.js — another tab's session changes (CR-18 follow-up, F-05)", () 
     otherTabWrites(null);
     answer401(res(401, { message: "expired" }));
 
-    expect((await pending).status).toBe(401);
+    // P-04: the answer belongs to the session that ended, so it is discarded as stale (status 0), never reported
+    // as a 401 that would end whichever session is current now.
+    const failure = await pending;
+    expect(failure.stale).toBe(true);
+    expect(failure.status).toBe(0);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(mod.getAccessToken()).toBeNull();
   });

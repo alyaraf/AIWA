@@ -49,9 +49,8 @@ describe("api.js - idle sign-out", () => {
 
     expect(mod.getAccessToken()).toBeNull();
     expect(window.localStorage.getItem(SESSION)).toBeNull();
-    // No refresh attempt (the session was ended first), and the stale bearer was not sent.
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(new Headers(fetchSpy.mock.calls[0][1].headers).get("Authorization")).toBeNull();
+    // AD-04: the session is ended first and the call is not made at all, with or without the stale bearer.
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("keeps an active session signed in", async () => {

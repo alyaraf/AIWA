@@ -107,6 +107,54 @@ if (typeof window !== "undefined" && IDLE_MS) {
   window.addEventListener("keydown", onUserActivity, { passive: true });
 }
 
+// AD-04: one signal for "this session is over" (idle limit or a refresh the server rejected). The App
+// subscribes and drops every view that still holds the previous admin's data; before, only the request
+// that noticed learned about it, and a page that swallowed the error stayed on screen with its old rows.
+const sessionEndedListeners = new Set();
+
+/** Subscribes to session end (reason "idle" | "expired"); returns the unsubscribe function. */
+export function onSessionEnded(listener) {
+  sessionEndedListeners.add(listener);
+  return () => sessionEndedListeners.delete(listener);
+}
+
+function endSession(reason) {
+  const hadSession = hasSession();
+  clearTokens();
+  if (hadSession) sessionEndedListeners.forEach((listener) => { try { listener(reason); } catch { /* a listener must not break sign-out */ } });
+}
+
+function sessionEndedError(reason) {
+  const error = new Error(reason === "idle"
+    ? "You were signed out after a period of inactivity. Please sign in again."
+    : "Your session has ended. Please sign in again.");
+  error.status = 401;
+  error.sessionEnded = true;
+  return error;
+}
+
+/**
+ * Enforces the idle limit. Called before every request and blob download, by the App's timer and when the tab
+ * becomes visible again. Returns true when it ended the session.
+ */
+export function enforceIdleLimit() {
+  if (hasSession() && sessionIdleExpired()) {
+    endSession("idle");
+    return true;
+  }
+  return false;
+}
+
+// P-04: a response that arrives after the session changed (sign-out, expiry, another tab signing in as someone
+// else) belongs to the previous session and must never be shown or cached for the new one.
+function staleSessionError() {
+  const error = new Error("The session changed while this request was running.");
+  error.status = 0;
+  error.code = "SESSION_CHANGED";
+  error.stale = true;
+  return error;
+}
+
 // CR-18: how long the best-effort server sign-out may take before it is dropped.
 const SIGN_OUT_TIMEOUT_MS = 3000;
 
@@ -115,6 +163,10 @@ const SIGN_OUT_TIMEOUT_MS = 3000;
  * then the server is told on a best-effort basis (it revokes the refresh cookie's token and clears
  * the cookie), giving up after a few seconds.
  */
+// P-03: the logout response clears the refresh cookie. A slow logout that finishes after the NEXT sign-in has set
+// its cookie would clear the new session's cookie, so a sign-in waits for any sign-out still in flight.
+let signOutInFlight = null;
+
 function signOut() {
   const token = getAccessToken();
   const hadSession = hasSession();
@@ -124,9 +176,14 @@ function signOut() {
   const timer = setTimeout(() => controller.abort(), SIGN_OUT_TIMEOUT_MS);
   const headers = { "Content-Type": "application/json", ...CSRF_HEADERS };
   if (token) headers.Authorization = `Bearer ${token}`;
-  return fetch(`${API_BASE_URL}/auth/logout`, {
+  const call = fetch(`${API_BASE_URL}/auth/logout`, {
     method: "POST", headers, credentials: "include", signal: controller.signal, body: "{}"
-  }).catch(() => {}).finally(() => clearTimeout(timer));
+  }).catch(() => {}).finally(() => {
+    clearTimeout(timer);
+    if (signOutInFlight === call) signOutInFlight = null;
+  });
+  signOutInFlight = call;
+  return call;
 }
 
 // A 401 from any endpoint but these two means "this access token is no good
@@ -190,9 +247,38 @@ function refreshAccessToken() {
   return refreshInFlight;
 }
 
+/**
+ * Authenticated GET for a non-JSON body (document images, CSV exports). It goes through the same session rules
+ * as request(): idle limit, one refresh-and-retry on 401, and a response that arrives after the session changed
+ * is discarded (AD-04).
+ */
+async function authedBlobFetch(path, isRetryAfterRefresh = false) {
+  if (enforceIdleLimit()) throw sessionEndedError("idle");
+  const generation = sessionGeneration;
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (generation !== sessionGeneration) throw staleSessionError();
+  if (response.status === 401 && !isRetryAfterRefresh) {
+    const stored = getAccessToken();
+    const refreshed = (stored && stored !== token) || await refreshAccessToken();
+    if (refreshed && generation === sessionGeneration) return authedBlobFetch(path, true);
+    if (!refreshed && !refreshFailedTransiently && generation === sessionGeneration && hasSession()) {
+      endSession("expired");
+      throw sessionEndedError("expired");
+    }
+  }
+  return response;
+}
+
 async function request(path, options = {}, isRetryAfterRefresh = false) {
   if (USE_MOCKS) return mockRequest(path, options);
-  if (hasSession() && sessionIdleExpired()) clearTokens();
+  if (path === "/auth/login") {
+    // A sign-in is how a session starts, so a leftover idle record from an old session is cleared, not an error.
+    if (signOutInFlight) await signOutInFlight;
+    if (hasSession() && sessionIdleExpired()) clearTokens();
+  } else if (enforceIdleLimit()) {
+    throw sessionEndedError("idle");
+  }
 
   const headers = new Headers(options.headers || {});
   if (!(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
@@ -215,6 +301,9 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
     }
   }
 
+  // P-04: the session changed while this was in flight; the body belongs to the previous one.
+  if (generation !== sessionGeneration) throw staleSessionError();
+
   if (!response.ok) {
     if (response.status === 401 && !isRetryAfterRefresh && !NO_REFRESH_RETRY_PATHS.has(path)
         && generation === sessionGeneration) {
@@ -230,6 +319,10 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
         unavailable.transient = true;
         throw unavailable;
       }
+    }
+    // The server rejected the session (and its refresh): it is over for every view, not just this call.
+    if (response.status === 401 && !NO_REFRESH_RETRY_PATHS.has(path) && generation === sessionGeneration && hasSession()) {
+      endSession("expired");
     }
     const message = data?.message || data?.error || `Request failed with status ${response.status}`;
     const error = new Error(message);
@@ -248,17 +341,45 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
  * page of 500 and silently drop the rest; now they walk the pages. Capped at
  * 50 pages so a runaway list can't hang the panel.
  */
+export const MAX_PAGES = 50;
+
 export async function requestAllPages(path, size = 200) {
   const sep = path.includes("?") ? "&" : "?";
   const all = [];
-  for (let page = 0; page < 50; page += 1) {
+  let truncated = false;
+  let total = null;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
     const result = await request(`${path}${sep}page=${page}&size=${size}`);
     const items = normalizeList(result);
     all.push(...items);
     const totalPages = result?.totalPages ?? result?.data?.totalPages;
+    total = result?.totalElements ?? result?.data?.totalElements ?? total;
     if (totalPages == null || page + 1 >= totalPages || items.length < size) break;
+    // Hit the cap with the server still holding more: say so. The list is NOT complete (AD-13).
+    if (page + 1 >= MAX_PAGES) truncated = true;
   }
-  return all;
+  return markTruncation(all, truncated, total);
+}
+
+/**
+ * Carries "this list was cut off" along with the rows. The properties are not enumerable, so existing code that
+ * maps, filters or spreads the array keeps working; {@link isTruncated} reads them back, and normalizing a list
+ * with {@link carryTruncation} keeps the mark.
+ */
+function markTruncation(list, truncated, total) {
+  Object.defineProperty(list, "truncated", { value: !!truncated, enumerable: false, configurable: true });
+  Object.defineProperty(list, "serverTotal", { value: total ?? null, enumerable: false, configurable: true });
+  return list;
+}
+
+/** Maps a loaded list and keeps its truncation mark. */
+export function carryTruncation(source, mapped) {
+  return markTruncation(mapped, source?.truncated === true, source?.serverTotal ?? null);
+}
+
+/** True when the list stopped at the page cap although the server has more rows. */
+export function isTruncated(list) {
+  return !!list && list.truncated === true;
 }
 
 /** E-1 (AdminTwoFactorInterceptor): the code of a 403 that means "turn on two-factor first". */
@@ -305,32 +426,23 @@ export const api = {
   }),
   dashboard: () => request("/admin/dashboard").then(normalizeDashboard),
   dashboardRaw: () => request("/admin/dashboard").then(unwrap),
-  verifications: () => requestAllPages("/admin/verification/pending").then((items) => items.map(normalizeVerification)),
-  verificationByStatus: (status) => requestAllPages(`/admin/verification?status=${encodeURIComponent(status)}`).then((items) => items.map(normalizeVerification)),
+  verifications: () => requestAllPages("/admin/verification/pending").then((items) => carryTruncation(items, items.map(normalizeVerification))),
+  verificationByStatus: (status) => requestAllPages(`/admin/verification?status=${encodeURIComponent(status)}`).then((items) => carryTruncation(items, items.map(normalizeVerification))),
   approveProvider: (providerId) => request(`/admin/verification/${providerId}/approve`, { method: "POST" }),
   rejectProvider: (providerId, reason) => request(`/admin/verification/${providerId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   /** Blob URL for a private verification document (caller must revokeObjectURL). */
   verificationDocUrl: async (filePath) => {
     if (USE_MOCKS) return null;
     const docPath = `/admin/verification/document?filePath=${encodeURIComponent(filePath)}`;
-    let token = getAccessToken();
-    let res = await fetch(`${API_BASE_URL}${docPath}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    if (res.status === 401 && (await refreshAccessToken())) {
-      token = getAccessToken();
-      res = await fetch(`${API_BASE_URL}${docPath}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-    }
+    const res = await authedBlobFetch(docPath);
     if (!res.ok) { const e = new Error(`Document load failed (${res.status})`); e.status = res.status; throw e; }
     return URL.createObjectURL(await res.blob());
   },
-  reviewReports: () => requestAllPages("/admin/reviews/moderation").then((items) => items.map(normalizeReviewReport)),
+  reviewReports: () => requestAllPages("/admin/reviews/moderation").then((items) => carryTruncation(items, items.map(normalizeReviewReport))),
   resolveReviewReport: (caseId, action) => request(`/admin/reviews/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
-  chatReports: () => requestAllPages("/admin/chat/moderation").then((items) => items.map(normalizeChatReport)),
+  chatReports: () => requestAllPages("/admin/chat/moderation").then((items) => carryTruncation(items, items.map(normalizeChatReport))),
   resolveChatReport: (caseId, action) => request(`/admin/chat/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
-  complaints: () => requestAllPages("/admin/complaints").then((items) => items.map(normalizeComplaint)),
+  complaints: () => requestAllPages("/admin/complaints").then((items) => carryTruncation(items, items.map(normalizeComplaint))),
   resolveComplaint: (id, notes) => request(`/admin/complaints/${id}/resolve`, { method: "POST", body: JSON.stringify({ notes }) }).then(normalizeComplaint),
   flagComplaint: (id) => request(`/admin/complaints/${id}/flag`, { method: "POST" }),
   userActivity: (id) => request(`/admin/users/${id}/activity`).then(unwrap),
@@ -358,10 +470,10 @@ export const api = {
   userDetail: (id) => request(`/admin/users/${id}`).then(normalizeUser),
   providerDetail: (providerId) => request(`/providers/${providerId}`),
   reactivateProvider: (providerId) => request(`/admin/verification/${providerId}/reactivate`, { method: "POST" }),
-  moderation: () => requestAllPages("/admin/moderation").then((items) => items.map(normalizeModeration)),
+  moderation: () => requestAllPages("/admin/moderation").then((items) => carryTruncation(items, items.map(normalizeModeration))),
   moderationAction: (id, payload) => request(`/admin/moderation/${id}/action?status=${encodeURIComponent(payload.status)}`, { method: "PATCH", body: JSON.stringify({ notes: payload.notes || "" }) }),
   // DR-028: these lists are paged on the server; walk every page.
-  settlements: () => requestAllPages("/admin/settlements").then((items) => items.map(normalizeSettlement)),
+  settlements: () => requestAllPages("/admin/settlements").then((items) => carryTruncation(items, items.map(normalizeSettlement))),
   settle: (id, expectedAmount, reference) => request(`/admin/settlements/${id}/settle?expectedAmount=${encodeURIComponent(expectedAmount)}&reference=${encodeURIComponent(reference)}`, { method: "PATCH" }),
   settlementOverview: () => request("/admin/settlements/overview"),
   settlementProviders: () => requestAllPages("/admin/settlements/providers"),
@@ -384,7 +496,7 @@ export const api = {
   // DR-006: walks every page. It asked for one page of 100 (the server's cap),
   // newest first, so with more open alerts the oldest ones were never shown.
   safetyQueue: (status = "OPEN") => requestAllPages(`/admin/safety?status=${encodeURIComponent(status)}`, 100)
-    .then((items) => items.map(normalizeSafety)),
+    .then((items) => carryTruncation(items, items.map(normalizeSafety))),
   resolveSafety: (eventId, notes) => request(`/admin/safety/${eventId}/resolve`, { method: "POST", body: JSON.stringify({ notes }) })
     .then(normalizeSafety),
   exportAudit: (query = "") => downloadFile(`/admin/audit/export${query ? `?query=${encodeURIComponent(query)}` : ""}`, "aiwa-audit-log.csv", "text/csv"),
@@ -470,8 +582,8 @@ export const api = {
   bookingStats: () => request("/admin/bookings/stats"),
   exportBookingList: (query = "", filter = "All") =>
     downloadFile(`/admin/bookings/export?${bookingParams(query, filter)}`, "aiwa-bookings.csv", "text/csv"),
-  reviews: () => requestAllPages("/admin/reviews").then((items) => items.map(normalizeReview)),
-  flags: () => requestAllPages("/admin/flags").then((items) => items.map(normalizeFlag))
+  reviews: () => requestAllPages("/admin/reviews").then((items) => carryTruncation(items, items.map(normalizeReview))),
+  flags: () => requestAllPages("/admin/flags").then((items) => carryTruncation(items, items.map(normalizeFlag)))
 };
 
 function unwrap(payload) {
@@ -533,16 +645,7 @@ async function downloadFile(path, filename, mime) {
     saveBlob(new Blob([csv], { type: mime }), filename);
     return { ok: true };
   }
-  let token = getAccessToken();
-  let response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
-  });
-  if (response.status === 401 && (await refreshAccessToken())) {
-    token = getAccessToken();
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-  }
+  const response = await authedBlobFetch(path);
   if (!response.ok) {
     const error = new Error(`Export failed with status ${response.status}`);
     error.status = response.status;
@@ -790,7 +893,9 @@ function normalizeReview(item) {
     to: item.provider?.businessName || item.to || "Provider",
     rating: item.rating || 0,
     text: item.comment || item.text || "-",
-    status: item.status || "VISIBLE"
+    // AD-09: the backend sends a boolean `hidden` (no status field); derive the state from it.
+    hidden: item.hidden === true,
+    status: item.hidden === true ? "HIDDEN" : (item.status || "VISIBLE")
   };
 }
 

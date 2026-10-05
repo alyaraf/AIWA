@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -48,7 +49,9 @@ import {
   X,
   XCircle
 } from "lucide-react";
-import { api, clearTokens, hasSession, mock, setAdminTwoFactorHandler, setTokens, TOKEN_STORAGE_KEYS, USE_MOCKS } from "./api";
+import { toCsv } from "./csv";
+import { ModalFrame } from "./Dialog";
+import { api, clearTokens, enforceIdleLimit, hasSession, isTruncated, mock, onSessionEnded, setAdminTwoFactorHandler, setTokens, TOKEN_STORAGE_KEYS, USE_MOCKS } from "./api";
 
 /* String → component map for icons that arrive as strings from the API/mock. */
 const iconMap = {
@@ -122,8 +125,27 @@ function can(permission) {
   if (USE_MOCKS) return true;
   return currentPermissions.includes("SUPER_ADMIN") || currentPermissions.includes(permission);
 }
-/** S-05: screens the API refuses to an admin without one of these permissions are not offered. */
-const NAV_REQUIRES = { bookings: ["SUPPORT", "FINANCE"], settlements: ["FINANCE"], audit: ["SUPER_ADMIN"] };
+/**
+ * Read-capability matrix, mirrored from the API (B-04 / AD-08): a screen is offered only when the API will answer
+ * for this admin. SUPER_ADMIN holds SUPPORT and FINANCE. Dashboard and Policies & support hold no personal data.
+ */
+const NAV_REQUIRES = {
+  safety: ["SUPPORT"],
+  verifications: ["SUPPORT"],
+  complaints: ["SUPPORT"],
+  flags: ["SUPPORT"],
+  reviews: ["SUPPORT"],
+  moderation: ["SUPPORT"],
+  "chat-reports": ["SUPPORT"],
+  users: ["SUPPORT", "FINANCE"],
+  bookings: ["SUPPORT", "FINANCE"],
+  settlements: ["FINANCE"],
+  audit: ["SUPER_ADMIN"]
+};
+/** Another admin's account can only be changed by a Super admin; every other account by Support. */
+export function canManageTarget(target) {
+  return target?.role === "ADMIN" ? can("SUPER_ADMIN") : can("SUPPORT");
+}
 export function navAllowed(id) {
   const need = NAV_REQUIRES[id];
   return !need || need.some((permission) => can(permission));
@@ -164,8 +186,7 @@ export function ConfirmHost() {
   const Glyph = state.icon || AlertTriangle;
   const blocked = state.input && text.trim().length === 0;
   return (
-    <div className="modal-backdrop" onClick={close}>
-      <div className="confirm-card" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true">
+    <ModalFrame onClose={close} label={state.title} role="alertdialog" cardClassName="confirm-card">
         <span className={`confirm-icon ${state.tone === "danger" ? "danger" : "plum"}`}>
           <Glyph size={20} />
         </span>
@@ -189,20 +210,20 @@ export function ConfirmHost() {
             {state.confirmLabel || "Confirm"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalFrame>
   );
 }
 
 /** Runs an async action with unified feedback: toast on success/error, logout on 401. */
-async function runAction(fn, { success, failure } = {}) {
+async function runAction(fn, { success, failure, refresh = true } = {}) {
   try {
     const result = await fn();
     if (success) toast(success, "ok");
     // After any successful mutation, refresh every subscribed useLoad + the
     // notification bell so the UI reflects the new server state — including
     // notifications for the thing the user just resolved disappearing.
-    refreshApp();
+    // (A multi-step action passes refresh:false and refreshes once, after its last step.)
+    if (refresh) refreshApp();
     return result;
   } catch (err) {
     if (err?.status === 401) {
@@ -238,7 +259,8 @@ function Toaster() {
     return () => toastListeners.delete(listener);
   }, []);
   if (items.length === 0) return null;
-  return (
+  // In a portal: while a dialog is open the rest of the page is inert, and an error toast must still be announced.
+  return createPortal(
     <div className="toast-stack" role="status" aria-live="polite">
       {items.map((item) => (
         <div key={item.id} className={`toast ${item.kind === "error" ? "error" : "ok"}`}>
@@ -246,8 +268,26 @@ function Toaster() {
           <span>{item.message}</span>
         </div>
       ))}
-    </div>
+    </div>,
+    document.body
   );
+}
+
+/**
+ * Props that make a clickable table row a keyboard control (AD-11): focusable, announced as a button, activated by
+ * Enter or Space. Spread it on the row; `expanded` adds aria-expanded for rows that open a detail panel.
+ */
+export function rowActivation(activate, expanded) {
+  return {
+    role: "button",
+    tabIndex: 0,
+    ...(expanded === undefined ? {} : { "aria-expanded": !!expanded }),
+    onClick: activate,
+    onKeyDown: (event) => {
+      if (event.target !== event.currentTarget) return; // a control inside the row keeps its own keys
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); }
+    }
+  };
 }
 
 /* Small inline loading + empty helpers used across tables. */
@@ -362,6 +402,19 @@ export function InlineBanner({ tone = "info", title, body }) {
   );
 }
 
+/** AD-13: a list loaded through the 50-page safety cap that the server still has more rows for. */
+export function TruncatedNotice({ list }) {
+  if (!isTruncated(list)) return null;
+  const total = list.serverTotal;
+  return (
+    <InlineBanner
+      tone="warn"
+      title="Showing only part of this list"
+      body={`Only the first ${list.length.toLocaleString()}${total ? ` of ${Number(total).toLocaleString()}` : ""} rows were loaded, so search, counts and exports below are incomplete. Narrow the filter or ask engineering to enable server-side paging.`}
+    />
+  );
+}
+
 // CR-22: until /auth/me answers, the signed-in admin is nobody (no permissions)
 // rather than the mock super admin.
 const LOADING_SESSION = { user: { permissions: [] }, loading: true };
@@ -399,6 +452,28 @@ export default function App() {
   useEffect(() => {
     onAuthExpired = () => { clearTokens(); setSession(null); setRoute("dashboard"); };
     return () => { onAuthExpired = () => {}; };
+  }, []);
+
+  // AD-04: one signal for a session that ended (idle limit, or a refresh the server rejected), whichever
+  // request noticed first. Every view is dropped with the session so nothing of the previous admin stays on
+  // screen, and the idle limit is also enforced by a timer and when the tab is shown again, not only by calls.
+  useEffect(() => {
+    if (USE_MOCKS) return undefined;
+    const unsubscribe = onSessionEnded((reason) => {
+      setSession(null);
+      setRoute("dashboard");
+      toast(reason === "idle" ? "Signed out after a period of inactivity." : "Your session has ended. Please sign in again.", "error");
+    });
+    const check = () => { enforceIdleLimit(); };
+    const timer = window.setInterval(check, 15_000);
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => {
+      unsubscribe();
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
   }, []);
 
   // On reload the session starts empty and loading; hydrate the real signed-in
@@ -881,11 +956,14 @@ function TopBar() {
 
 function RefreshButton() {
   const [spinning, setSpinning] = useState(false);
-  function handleClick() {
+  async function handleClick() {
     setSpinning(true);
-    refreshApp();
-    toast("Refreshed", "ok");
-    setTimeout(() => setSpinning(false), 700);
+    try {
+      const ok = await refreshApp();
+      toast(ok ? "Refreshed" : "Some screens could not be refreshed. Try again.", ok ? "ok" : "error");
+    } finally {
+      setSpinning(false);
+    }
   }
   return (
     <button
@@ -1157,6 +1235,7 @@ function Verifications() {
   const [selected, setSelected] = useState(null);
   const [counts, setCounts] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [refreshTick, refreshDone] = useRefreshSignal();
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
 
@@ -1172,10 +1251,11 @@ function Verifications() {
     let alive = true;
     api.verificationCounts().then((result) => { if (alive) setCounts(result); }).catch(() => {});
     return () => { alive = false; };
-  }, [reloadKey]);
+  }, [reloadKey, refreshTick]);
 
   useEffect(() => {
     let alive = true;
+    let failed = false;
     setError("");
     setLoading(true);
     const loader = tab === "PENDING"
@@ -1183,10 +1263,11 @@ function Verifications() {
       : api.verificationByStatus(VERIFICATION_TABS.find((t) => t.key === tab).status);
     loader
       .then((rows) => { if (alive) setByTab((current) => ({ ...current, [tab]: rows })); })
-      .catch((err) => { if (alive) setError(err.message || "Request failed"); })
-      .finally(() => { if (alive) setLoading(false); });
+      .catch((err) => { failed = true; if (alive) setError(err.message || "Request failed"); })
+      .finally(() => { if (alive) { setLoading(false); refreshDone(!failed); } });
     return () => { alive = false; };
-  }, [tab, reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, reloadKey, refreshTick]);
 
   function refreshAll() {
     setByTab({});
@@ -1261,6 +1342,7 @@ function Verifications() {
         }
       />
       <ReadOnlyNote need="SUPPORT" />
+      <TruncatedNotice list={data} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search provider, category, city, submitted…" />
       <article className="table-card">
         <div className="table-scroll">
@@ -1268,7 +1350,7 @@ function Verifications() {
             <span>Provider</span><span>Category</span><span>City</span><span>Documents</span><span>Submitted</span><span />
           </div>
           {pageRows.map((provider) => (
-            <div className="table row verifications clickable" key={provider.id} onClick={() => setSelected(provider.id)}>
+            <div className="table row verifications clickable" key={provider.id} {...rowActivation(() => setSelected(provider.id))}>
               <ProfileCell name={provider.name} palette={provider.palette} flag={provider.flag} />
               <span>{provider.category}</span>
               <span>{provider.city}</span>
@@ -1336,21 +1418,14 @@ function DocumentCard({ label, icon: DocIcon, path, onOpen }) {
 }
 
 function DocumentLightbox({ src, label, onClose }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
   return (
-    <div className="modal-backdrop lightbox" onClick={onClose}>
-      <div className="lightbox-body" onClick={(e) => e.stopPropagation()}>
+    <ModalFrame onClose={onClose} label={label} backdropClassName="lightbox" cardClassName="lightbox-body">
         <div className="lightbox-head">
           <span>{label}</span>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         <img src={src} alt={label} />
-      </div>
-    </div>
+    </ModalFrame>
   );
 }
 
@@ -1705,6 +1780,7 @@ function Complaints() {
         right={<>{chip("ALL", `All (${data.length})`)}{chip("OPEN", "Open")}{chip("UNDER_REVIEW", "In review")}{chip("RESOLVED", "Resolved")}</>}
       />
       <ReadOnlyNote need="SUPPORT" />
+      <TruncatedNotice list={data} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search customer, provider, subject, priority, status…" />
       <article className="table-card">
         <div className="table-scroll">
@@ -1753,6 +1829,9 @@ export function Flags() {
   const [openId, setOpenId] = useState(null);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState(null);
+  // AD-07: warn / suspend and "close the complaint" are two writes. When the second one fails the first one has
+  // already happened, so the row stays, says what was done, and offers a retry of only the closing step.
+  const [partial, setPartial] = useState({});
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [query]);
 
@@ -1792,16 +1871,29 @@ export function Flags() {
       onConfirm: () => doWarn(flag)
     });
   }
+  /** Second step of warn / suspend: close the complaint. Never repeats the first step. */
+  async function closeComplaint(flag, done, note) {
+    setBusyId(flag.id);
+    try {
+      await api.resolveComplaint(flag.id, note);
+      setPartial((current) => { const next = { ...current }; delete next[flag.id]; return next; });
+      setData((current) => current.filter((entry) => entry.id !== flag.id));
+      setOpenId(null);
+      refreshApp();
+    } catch (err) {
+      setPartial((current) => ({ ...current, [flag.id]: { done, note } }));
+      toast(`${done}, but the complaint could not be closed (${err?.message || "request failed"}). It stays in the list; use "Retry closing".`, "error");
+    } finally { setBusyId(null); }
+  }
+
   async function doWarn(flag) {
     setBusyId(flag.id);
     try {
-      await runAction(() => api.warnUser(flag.targetUserId, flag.reason), { success: `Warning sent to ${flag.name}` });
-      // Taking action on a flag is how it gets resolved — without this it comes
-      // right back on the next refresh even though it was just handled.
-      await api.resolveComplaint(flag.id, `Warned ${flag.name}`).catch(() => {});
-      setData((current) => current.filter((entry) => entry.id !== flag.id));
-      setOpenId(null);
-    } catch { /* toast shown */ } finally { setBusyId(null); }
+      await runAction(() => api.warnUser(flag.targetUserId, flag.reason), { success: `Warning sent to ${flag.name}`, refresh: false });
+    } catch { setBusyId(null); return; /* toast shown, nothing happened */ }
+    setBusyId(null);
+    // Taking action on a flag is how it gets resolved: without this it comes back on the next refresh.
+    await closeComplaint(flag, `Warning sent to ${flag.name}`, `Warned ${flag.name}`);
   }
 
   function suspend(flag) {
@@ -1823,20 +1915,19 @@ export function Flags() {
     try {
       await runAction(
         () => (isProvider ? api.suspendProvider(flag.targetProviderId) : api.deactivateUser(flag.targetUserId)),
-        { success: `${flag.name} suspended` }
+        { success: `${flag.name} suspended`, refresh: false }
       );
-      // Same reason as warn(): mark the underlying complaint resolved + unflagged
-      // so it doesn't reappear in this list on the next load.
-      await api.resolveComplaint(flag.id, `Suspended ${flag.name}`).catch(() => {});
-      setData((current) => current.filter((entry) => entry.id !== flag.id));
-      setOpenId(null);
-    } catch { /* toast shown */ } finally { setBusyId(null); }
+    } catch { setBusyId(null); return; /* toast shown, nothing happened */ }
+    setBusyId(null);
+    // Same reason as warn(): mark the underlying complaint resolved + unflagged.
+    await closeComplaint(flag, `${flag.name} suspended`, `Suspended ${flag.name}`);
   }
 
   return (
     <section className="page-content">
       <PageHeader eyebrow="Trust & safety" title="Flags" />
       <ReadOnlyNote need="SUPPORT" />
+      <TruncatedNotice list={data} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search type, name, reason, reporter…" />
       <article className="table-card">
         <div className="table-scroll">
@@ -1856,7 +1947,17 @@ export function Flags() {
                     <button className="btn btn-ghost sm" onClick={() => setOpenId(isOpen ? null : flag.id)}>{isOpen ? "Close" : "Review"}</button>
                   </span>
                 </div>
-                {isOpen && (
+                {isOpen && partial[flag.id] && (
+                  <div className="flag-actions">
+                    <InlineBanner tone="warn" title={partial[flag.id].done}
+                      body="The complaint is still open because closing it failed. The action above is not repeated; retry only the closing step." />
+                    <button className="btn btn-primary sm" disabled={busyId === flag.id}
+                      onClick={() => closeComplaint(flag, partial[flag.id].done, partial[flag.id].note)}>
+                      Retry closing
+                    </button>
+                  </div>
+                )}
+                {isOpen && !partial[flag.id] && (
                   <div className="flag-actions">
                     <button className="btn btn-secondary sm" disabled={!can("SUPPORT") || flag.targetUserId == null || busyId === flag.id}
                       title={flag.targetUserId == null ? "No target user to warn on this flag" : ""}
@@ -1900,6 +2001,7 @@ function UsersPage({ currentUser }) {
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => setReloadKey((k) => k + 1);
+  const [refreshTick, refreshDone] = useRefreshSignal();
   const [filter, setFilter] = useState("ALL");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -1927,12 +2029,10 @@ function UsersPage({ currentUser }) {
         .finally(() => { if (alive) setLoading(false); });
     }, 200);
     return () => { alive = false; clearTimeout(handle); };
-  }, [filter, query, page, reloadKey]);
+  }, [filter, query, page, reloadKey, refreshTick]);
 
-  useEffect(() => {
-    appRefreshListeners.add(reload);
-    return () => appRefreshListeners.delete(reload);
-  }, []);
+  // AD-06: the global Refresh reloads this list too and waits for it.
+  useEffect(() => { if (!loading) refreshDone(!error); }, [loading, error, refreshDone]);
 
   useEffect(() => { setPage(1); }, [filter, query]);
   const rows = data;
@@ -2166,7 +2266,7 @@ function UsersPage({ currentUser }) {
                     <button className="row-menu-item" onClick={() => { setMenuOpen(null); setProfileFor(user); }}>
                       <Eye size={14} /> View profile
                     </button>
-                    {can("SUPPORT") && (user.status === "ACTIVE"
+                    {canManageTarget(user) && (user.status === "ACTIVE"
                       ? <button className="row-menu-item danger" onClick={() => requestDeactivate(user)}>
                           <Ban size={14} /> {user.role === "ADMIN" ? "Deactivate" : "Suspend"}
                         </button>
@@ -2957,9 +3057,8 @@ function EditUserModal({ user, busy, onClose, onSave }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <button type="button" className="modal-close" onClick={onClose}><X size={18} /></button>
+    <ModalFrame onClose={onClose} label={`Edit ${user.fullName}`} as="form" cardClassName="modal-card" cardProps={{ onSubmit: submit }}>
+        <button type="button" className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
         <p className="eyebrow">Account</p>
         <h2>Edit {user.fullName}</h2>
         <label>Full name<input value={fullName} onChange={(e) => setFullName(e.target.value)} /></label>
@@ -2969,8 +3068,7 @@ function EditUserModal({ user, busy, onClose, onSave }) {
           <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" disabled={busy || !dirty}>{busy ? "Saving…" : "Save changes"}</button>
         </div>
-      </form>
-    </div>
+    </ModalFrame>
   );
 }
 
@@ -2980,9 +3078,9 @@ function PermissionsModal({ user, busy, onClose, onSave }) {
   const [selected, setSelected] = useState(user.permissions || []);
   const toggle = (id) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (selected.length) onSave(selected); }}>
-        <button type="button" className="modal-close" onClick={onClose}><X size={18} /></button>
+    <ModalFrame onClose={onClose} label={`Permissions for ${user.fullName}`} as="form" cardClassName="modal-card"
+      cardProps={{ onSubmit: (e) => { e.preventDefault(); if (selected.length) onSave(selected); } }}>
+        <button type="button" className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
         <p className="eyebrow">Access control</p>
         <h2>{user.fullName}'s permissions</h2>
         <PermissionPicker selected={selected} onToggle={toggle} />
@@ -2991,8 +3089,7 @@ function PermissionsModal({ user, busy, onClose, onSave }) {
           <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" disabled={busy || selected.length === 0}>{busy ? "Saving…" : "Save"}</button>
         </div>
-      </form>
-    </div>
+    </ModalFrame>
   );
 }
 
@@ -3020,23 +3117,6 @@ function PermissionPicker({ selected, onToggle }) {
   );
 }
 
-/* ─────────────────────────── Placeholder (roadmap) ─────────────────────────── */
-function Placeholder({ title, icon: IconCmp }) {
-  return (
-    <section className="page-content">
-      <PageHeader eyebrow="Coming next" title={title} />
-      <article className="placeholder-card">
-        <span className="placeholder-icon"><IconCmp size={28} /></span>
-        <p className="placeholder-lead">This section is on the roadmap.</p>
-        <p className="placeholder-body">
-          The Dashboard, Verifications, Complaints, Flags, Users, Moderation and
-          Settlements surfaces are functional — tell me which to build out next and
-          I'll wire it up.
-        </p>
-      </article>
-    </section>
-  );
-}
 
 /* ─────────────────────────── Bookings ─────────────────────────── */
 const BOOKINGS_PAGE_SIZE = 6;
@@ -3089,6 +3169,9 @@ function Bookings() {
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const reload = () => setReloadKey((k) => k + 1);
+  // AD-06: the global Refresh reloads this list too and waits for it.
+  const [refreshTick, refreshDone] = useRefreshSignal();
+  useEffect(() => { if (!loading) refreshDone(!error); }, [loading, error, refreshDone]);
 
   // Search, filter and paging run on the server (GET /admin/bookings), debounced.
   useEffect(() => {
@@ -3102,18 +3185,14 @@ function Bookings() {
         .finally(() => { if (alive) setLoading(false); });
     }, 200);
     return () => { alive = false; clearTimeout(handle); };
-  }, [query, filter, page, reloadKey]);
+  }, [query, filter, page, reloadKey, refreshTick]);
 
   useEffect(() => {
     let alive = true;
     api.bookingStats().then((next) => { if (alive) setStats(next); }).catch(() => {});
     return () => { alive = false; };
-  }, [reloadKey]);
+  }, [reloadKey, refreshTick]);
 
-  useEffect(() => {
-    appRefreshListeners.add(reload);
-    return () => appRefreshListeners.delete(reload);
-  }, []);
 
   async function exportCsv() {
     setExporting(true);
@@ -3219,7 +3298,7 @@ function Bookings() {
             : <StateBlock variant="empty" icon={CalendarCheck} title="No bookings yet" body="Bookings appear here as customers make them." />)}
           {pageRows.map((booking) => (
             <div key={booking.id}>
-              <div className="table row bookings-monitor clickable" onClick={() => setOpenId(openId === booking.id ? null : booking.id)}>
+              <div className="table row bookings-monitor clickable" {...rowActivation(() => setOpenId(openId === booking.id ? null : booking.id), openId === booking.id)}>
                 <span className="mono ref-cell">{booking.ref}</span>
                 <span className="strong-cell">{booking.customer}</span>
                 <span>{booking.provider}</span>
@@ -3338,9 +3417,8 @@ function DisputeResolutionSheet({ booking, busy, onClose, onResolve }) {
   const needsReason = picked === "CANCEL";
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="dispute-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <button type="button" className="modal-close" onClick={onClose}><X size={18} /></button>
+    <ModalFrame onClose={onClose} label={`Payment dispute ${booking.ref}`} cardClassName="dispute-sheet">
+        <button type="button" className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
         <p className="eyebrow" style={{ color: "var(--danger-700)" }}>Payment dispute · {booking.ref}</p>
         <h2>{booking.customer} vs. {booking.provider}</h2>
         <p className="dispute-sub">{booking.service} · {booking.total} · {booking.date}</p>
@@ -3403,18 +3481,13 @@ function DisputeResolutionSheet({ booking, busy, onClose, onResolve }) {
             <Check size={15} /> {busy ? "Resolving…" : "Confirm resolution"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalFrame>
   );
 }
 
 /* ─────────────────────────── Reviews ─────────────────────────── */
 function downloadCsv(filename, header, records) {
-  const escape = (value) => {
-    const text = value == null ? "" : String(value);
-    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  };
-  const csv = [header.join(","), ...records.map((row) => row.map(escape).join(","))].join("\n");
+  const csv = toCsv(header, records); // AD-01: user text can never start a spreadsheet formula
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   const link = document.createElement("a");
   link.href = url;
@@ -3485,10 +3558,19 @@ function Reviews() {
         setBusyId(review.id);
         try {
           await runAction(() => api.setReviewVisibility(review.id, true), { success: "Review hidden" });
-          all.setData((current) => current.filter((entry) => entry.id !== review.id));
+          // AD-09: it stays in the list, marked hidden, so the next refresh and this view agree.
+          all.setData((current) => current.map((entry) => (entry.id === review.id ? { ...entry, hidden: true, status: "HIDDEN" } : entry)));
         } catch { /* toast shown */ } finally { setBusyId(null); }
       }
     });
+  }
+
+  async function restorePlainReview(review) {
+    setBusyId(review.id);
+    try {
+      await runAction(() => api.setReviewVisibility(review.id, false), { success: "Review restored" });
+      all.setData((current) => current.map((entry) => (entry.id === review.id ? { ...entry, hidden: false, status: "VISIBLE" } : entry)));
+    } catch { /* toast shown */ } finally { setBusyId(null); }
   }
 
   function exportCsv() {
@@ -3496,8 +3578,8 @@ function Reviews() {
       downloadCsv("reported-reviews.csv", ["Author", "Provider", "Rating", "Reason", "Hidden", "Comment", "Reported"],
         rows.map((r) => [r.from, r.to, r.rating, r.reason, r.hidden ? "yes" : "no", r.text, r.when]));
     } else {
-      downloadCsv("reviews.csv", ["Author", "Provider", "Rating", "Comment"],
-        rows.map((r) => [r.from, r.to, r.rating, r.text]));
+      downloadCsv("reviews.csv", ["Author", "Provider", "Rating", "Visibility", "Comment"],
+        rows.map((r) => [r.from, r.to, r.rating, r.hidden ? "hidden" : "visible", r.text]));
     }
   }
 
@@ -3526,6 +3608,7 @@ function Reviews() {
         onFilter={setFilter}
       />
       <ReadOnlyNote need="SUPPORT" />
+      <TruncatedNotice list={(isReported ? reports.data : all.data)} />
 
       {loading && <div className="review-list"><SkeletonRows cols={2} rows={3} /></div>}
       {error && !loading && (
@@ -3578,9 +3661,15 @@ function Reviews() {
                     </button>
                   </>
                 ) : (
-                  <button className="btn btn-danger sm" disabled={busyId === review.id} onClick={() => hidePlainReview(review)}>
-                    <EyeOff size={14} /> Hide review
-                  </button>
+                  review.hidden ? (
+                    <button className="btn btn-secondary sm" disabled={busyId === review.id} onClick={() => restorePlainReview(review)}>
+                      <Eye size={14} /> Restore review
+                    </button>
+                  ) : (
+                    <button className="btn btn-danger sm" disabled={busyId === review.id} onClick={() => hidePlainReview(review)}>
+                      <EyeOff size={14} /> Hide review
+                    </button>
+                  )
                 )}
               </div>
             )}
@@ -3604,22 +3693,76 @@ export function Safety() {
 
 // CR-19: how often the open SOS list reloads by itself.
 const SAFETY_REFRESH_MS = 15_000;
+// AD-05: a poll that has not answered within this long counts as failed, and the list is called stale once the
+// last good answer is older than STALE_AFTER_MS even if no poll reported an error (throttled background tab, hung request).
+const SAFETY_POLL_TIMEOUT_MS = 10_000;
+const SAFETY_STALE_AFTER_MS = SAFETY_REFRESH_MS * 3;
+
+function clockTime(ms) {
+  return ms ? new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+}
 
 function SafetyQueue({ status, setStatus }) {
   const { data, setData, error, loading, reload } = useLoad(() => api.safetyQueue(status), mock.safety);
+  // AD-05: when this list was last confirmed by the server, and whether polling is failing. A silent failure
+  // used to leave the old rows (or "No open SOS alerts") on screen as if they were current.
+  const [sync, setSync] = useState({ lastOk: null, failures: 0, lastError: "" });
+  const [clock, setClock] = useState(() => Date.now());
+  const pollRef = useRef({ seq: 0, inFlight: false });
+
+  // The first (or a manual) load counts as a confirmation too.
+  useEffect(() => {
+    if (!loading && !error) setSync({ lastOk: Date.now(), failures: 0, lastError: "" });
+  }, [loading, error, data]);
+
   // While the Open filter is shown, reload quietly (no skeleton, typed notes
-  // stay) every 15 s and whenever the sidebar badge count changes.
+  // stay) every 15 s and whenever the sidebar badge count changes. Polls never overlap and a result that
+  // arrives after a newer poll started is ignored, so an old answer cannot overwrite a newer one.
   useEffect(() => {
     if (status !== "OPEN") return undefined;
     let alive = true;
-    const refresh = () => api.safetyQueue("OPEN")
-      .then((rows) => { if (alive && rows) setData(rows); })
-      .catch((err) => { if (alive && err?.status === 401) onAuthExpired(); });
+    const poll = pollRef.current;
+    const fail = (message) => setSync((current) => ({ ...current, failures: current.failures + 1, lastError: message }));
+    const refresh = () => {
+      if (poll.inFlight) return Promise.resolve();
+      poll.inFlight = true;
+      const seq = ++poll.seq;
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error("The server did not answer in time."), { timeout: true })), SAFETY_POLL_TIMEOUT_MS);
+      });
+      return Promise.race([api.safetyQueue("OPEN"), timeout])
+        .then((rows) => {
+          if (!alive || seq !== poll.seq) return;
+          if (rows) setData(rows);
+          setSync({ lastOk: Date.now(), failures: 0, lastError: "" });
+        })
+        .catch((err) => {
+          if (!alive || err?.status === 401 || err?.stale) return; // an ended session is handled for the whole app
+          if (err?.timeout) poll.seq += 1; // a late answer to this one must not be applied
+          fail(err?.message || "Network error");
+        })
+        .finally(() => { clearTimeout(timer); poll.inFlight = false; });
+    };
     const timer = setInterval(refresh, SAFETY_REFRESH_MS);
+    const tick = setInterval(() => setClock(Date.now()), 5_000);
     const onBadge = (route) => { if (route === "safety") refresh(); };
+    const onOffline = () => fail("This browser is offline.");
+    const onOnline = () => { refresh(); };
     badgeChangeListeners.add(onBadge);
-    return () => { alive = false; clearInterval(timer); badgeChangeListeners.delete(onBadge); };
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      clearInterval(tick);
+      badgeChangeListeners.delete(onBadge);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+    };
   }, [status, setData]);
+  const stale = status === "OPEN" && !loading && !error
+    && (sync.failures > 0 || (sync.lastOk != null && clock - sync.lastOk > SAFETY_STALE_AFTER_MS));
   const [notes, setNotes] = useState({});
   const [busyId, setBusyId] = useState(null);
 
@@ -3642,8 +3785,24 @@ function SafetyQueue({ status, setStatus }) {
       <PageHeader
         eyebrow="Trust & safety"
         title="Safety (SOS)"
-        right={<Tag tone={status === "OPEN" && data.length ? "danger" : "plum"}>{status === "OPEN" ? `${data.length} open` : `${data.length} shown`}</Tag>}
+        right={(
+          <>
+            {status === "OPEN" && !loading && !error && (
+              <Tag tone={stale ? "danger" : "plum"}>{stale ? "Not live" : "Live"} · updated {clockTime(sync.lastOk)}</Tag>
+            )}
+            <Tag tone={status === "OPEN" && data.length ? "danger" : "plum"}>{status === "OPEN" ? `${data.length} open${stale ? " (as of last update)" : ""}` : `${data.length} shown`}</Tag>
+          </>
+        )}
       />
+      {stale && (
+        <div role="alert" data-testid="sos-stale-banner">
+          <InlineBanner tone="danger" title="This list is out of date"
+            body={`The server can't be reached${sync.lastError ? ` (${sync.lastError})` : ""}. Last confirmed at ${clockTime(sync.lastOk)}. New SOS alerts may not be shown, so do not rely on an empty list; check the on-call SMS and phone. Retrying every ${SAFETY_REFRESH_MS / 1000} seconds.`} />
+          <button className="btn btn-primary sm" style={{ marginTop: 8 }} onClick={() => { reload(); }}>
+            <RotateCw size={14} /> Retry now
+          </button>
+        </div>
+      )}
       {status === "OPEN" && !loading && !error && data.length > 0 && (() => {
         // DR-006: the oldest open alert is the one most at risk of being missed.
         const oldest = data.reduce((a, b) => (new Date(a.createdAt) <= new Date(b.createdAt) ? a : b));
@@ -3653,11 +3812,16 @@ function SafetyQueue({ status, setStatus }) {
         );
       })()}
       <ReadOnlyNote need="SUPPORT" />
+      <TruncatedNotice list={data} />
       <div className="policy-tabs">{chip("OPEN", "Open")}{chip("RESOLVED", "Resolved")}{chip("ALL", "All")}</div>
 
       {loading && <div className="review-list"><SkeletonRows cols={2} rows={2} /></div>}
       {error && !loading && <StateBlock variant="error" body={`Could not load SOS alerts: ${error}`} onAction={reload} />}
-      {!loading && !error && data.length === 0 && (
+      {!loading && !error && data.length === 0 && stale && (
+        <StateBlock variant="error" title="Can't confirm there are no open alerts"
+          body="The last update failed, so this empty list may be wrong. Retry, and check the on-call SMS." />
+      )}
+      {!loading && !error && data.length === 0 && !stale && (
         <StateBlock variant="empty" icon={Siren}
           title={status === "OPEN" ? "No open SOS alerts" : "Nothing here"}
           body={status === "OPEN" ? "New alerts appear here and in the bell, and on-call staff get an SMS." : "No SOS alerts match this filter."} />
@@ -3776,6 +3940,7 @@ function Moderation() {
     <section className="page-content">
       <PageHeader eyebrow="Content review" title="Photo moderation" />
       <ReadOnlyNote need="SUPPORT" />
+      <TruncatedNotice list={raw} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search provider, reason, image text…" />
       <div className="stack-list">
         {loading && <SkeletonRows cols={1} rows={3} />}
@@ -3860,6 +4025,7 @@ function ChatReports() {
         right={<Tag tone={data.length ? "danger" : "plum"}>{data.length} in queue</Tag>}
       />
       <ReadOnlyNote need="SUPPORT" />
+      <TruncatedNotice list={data} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search reporter, booking, reason, message…" />
 
       {loading && <div className="review-list"><SkeletonRows cols={2} rows={3} /></div>}
@@ -3942,15 +4108,18 @@ function Settlements() {
   const [busyId, setBusyId] = useState(null);
   const [detailFor, setDetailFor] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [refreshTick, refreshDone] = useRefreshSignal();
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     let alive = true;
+    let failed = false;
     setLoading(true);
     setError("");
     Promise.all([api.settlementOverview(), api.settlementProviders()])
       .then(([ov, list]) => { if (alive) { setOverview(ov); setRows(list); } })
       .catch((err) => {
+        failed = true;
         if (!alive) return;
         // 401 = the session is gone; 403 = signed in but without FINANCE.
         if (err?.status === 401) { onAuthExpired(); return; }
@@ -3958,9 +4127,10 @@ function Settlements() {
           ? "You don't have permission to view settlements."
           : err.message || "Could not load settlements.");
       })
-      .finally(() => { if (alive) setLoading(false); });
+      .finally(() => { if (alive) { setLoading(false); refreshDone(!failed); } });
     return () => { alive = false; };
-  }, [reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey, refreshTick]);
 
   async function exportLedger() {
     setExporting(true);
@@ -4000,6 +4170,7 @@ function Settlements() {
         </button>}
       />
       <ReadOnlyNote need="FINANCE" />
+      <TruncatedNotice list={rows} />
 
       <div className="settle-cards">
         <CommissionRateCard onSaved={() => setReloadKey((k) => k + 1)} />
@@ -4027,7 +4198,7 @@ function Settlements() {
             const info = SETTLEMENT_STATUS[row.status] || SETTLEMENT_STATUS.WITHIN_LIMIT;
             const owed = Number(row.balanceOwed) || 0;
             return (
-              <div className="table row settlements-rich clickable" key={row.providerId} onClick={() => setDetailFor(row.providerId)}>
+              <div className="table row settlements-rich clickable" key={row.providerId} {...rowActivation(() => setDetailFor(row.providerId))}>
                 <span className="strong-cell">{row.providerName}</span>
                 <span>
                   <span className="mono">{row.commissionPercent}%</span>
@@ -4299,19 +4470,25 @@ export function SettlementDetail({ providerId, onBack, onChanged }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [refreshTick, refreshDone] = useRefreshSignal();
 
   useEffect(() => {
     let alive = true;
+    let failed = false;
     setLoading(true);
+    setError(""); // AD-10: a retry that succeeds must not keep showing the earlier failure
     api.settlementDetail(providerId)
-      .then((d) => { if (alive) setDetail(d); })
-      .catch((err) => { if (alive) setError(err.message || "Could not load settlement detail."); })
-      .finally(() => { if (alive) setLoading(false); });
+      .then((d) => { if (alive) { setDetail(d); setError(""); } })
+      .catch((err) => { failed = true; if (alive) setError(err.message || "Could not load settlement detail."); })
+      .finally(() => { if (alive) { setLoading(false); refreshDone(!failed); } });
     return () => { alive = false; };
-  }, [providerId, reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId, reloadKey, refreshTick]);
 
   const refresh = () => { setReloadKey((k) => k + 1); onChanged && onChanged(); };
-  const [paidOut, setPaidOut] = useState(false);
+  // AD-03: confirming a payout settles ONE frozen report. Whether the provider still owes money is whatever the
+  // refreshed balance says, never a local "paid out" flag; this only remembers what was just confirmed.
+  const [lastPayout, setLastPayout] = useState(null);
 
   // CR-06: the dialog states the total the provider reported (or, with no
   // report, what is outstanding now) and the confirmation sends it back, so
@@ -4338,7 +4515,7 @@ export function SettlementDetail({ providerId, onBack, onChanged }) {
         setBusy(true);
         try {
           await runAction(() => api.confirmPayout(providerId, report.total), { success: "Payout confirmed" });
-          setPaidOut(true);
+          setLastPayout({ amount: Number(report.total || 0), count: report.entryCount });
           refresh();
         } catch { /* toast */ } finally { setBusy(false); }
       }
@@ -4373,7 +4550,7 @@ export function SettlementDetail({ providerId, onBack, onChanged }) {
     } catch { /* toast */ } finally { setBusy(false); }
   }
 
-  const settled = paidOut || (detail && Number(detail.totalOwed) <= 0 && detail.status === "SETTLED");
+  const settled = !!detail && Number(detail.totalOwed) <= 0;
   const info = SETTLEMENT_STATUS[settled ? "SETTLED" : detail?.status] || SETTLEMENT_STATUS.WITHIN_LIMIT;
 
   return (
@@ -4432,12 +4609,18 @@ export function SettlementDetail({ providerId, onBack, onChanged }) {
               <strong className="detail-figure" style={{ marginBottom: 14 }}>{money(detail.totalOwed)}</strong>
               {can("FINANCE") ? (
                 <>
+                  {lastPayout && (
+                    <p className="settle-confirmed"><CheckCircle2 size={16} /> Payout of EGP {lastPayout.amount.toFixed(2)} confirmed ({lastPayout.count} {lastPayout.count === 1 ? "entry" : "entries"})</p>
+                  )}
                   {settled ? (
-                    <p className="settle-confirmed"><CheckCircle2 size={16} /> Settlement confirmed</p>
+                    !lastPayout && <p className="settle-confirmed"><CheckCircle2 size={16} /> Nothing owed</p>
                   ) : (
-                    <button className="btn btn-primary full" disabled={busy || Number(detail.totalOwed) <= 0} onClick={confirmPayout}>
-                      <Banknote size={15} /> Confirm payout received
-                    </button>
+                    <>
+                      {lastPayout && <p className="muted" style={{ margin: "6px 0 10px" }}>Commission recorded since is still owed: {money(detail.totalOwed)}.</p>}
+                      <button className="btn btn-primary full" disabled={busy} onClick={confirmPayout}>
+                        <Banknote size={15} /> Confirm payout received
+                      </button>
+                    </>
                   )}
                   <button className="btn btn-ghost full" disabled={busy} onClick={remind} style={{ marginTop: 8 }}>Send reminder</button>
                   <div className="hr" />
@@ -4485,6 +4668,7 @@ function AuditLog() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [refreshTick, refreshDone] = useRefreshSignal();
 
   async function exportCsv() {
     setExporting(true);
@@ -4495,12 +4679,14 @@ function AuditLog() {
 
   useEffect(() => {
     let alive = true;
+    let failed = false;
     setLoading(true);
     setError("");
     const handle = setTimeout(() => {
       api.audit(query, page - 1, 20)
         .then((result) => { if (alive) { setItems(result.items); setTotalPages(result.totalPages || 1); } })
         .catch((err) => {
+          failed = true;
           if (!alive) return;
           // 401 = the session is gone; 403 = this admin lacks the permission.
           if (err?.status === 401) { setError("Session expired. Please sign in again."); onAuthExpired(); }
@@ -4508,10 +4694,11 @@ function AuditLog() {
           else setError(err.message || "Could not load the audit log.");
           setItems([]);
         })
-        .finally(() => { if (alive) setLoading(false); });
+        .finally(() => { if (alive) { setLoading(false); refreshDone(!failed); } });
     }, 200);
     return () => { alive = false; clearTimeout(handle); };
-  }, [query, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, page, refreshTick]);
 
   return (
     <section className="page-content">
@@ -4586,6 +4773,8 @@ function Policies() {
 
 /* module-level bridge so the header button can trigger the editor's publish */
 let __termsPublish = null;
+/** Test-only: what the page header's Publish button calls. */
+export function __triggerTermsPublishForTest() { if (__termsPublish) __termsPublish(); }
 function TermsPublishButton() {
   return (
     <button className="btn btn-primary sm" onClick={() => __termsPublish && __termsPublish()}>
@@ -4622,12 +4811,20 @@ export function TermsEditorPanel() {
   const [error, setError] = useState("");
   const [savedDraft, setSavedDraft] = useState(false);
   const [preview, setPreview] = useState(false);
+  // AD-02: which type the draft on screen belongs to, and which request is the current one. Switching tabs
+  // while a load is in flight used to let the slower answer overwrite the other tab's draft; Publish then sent
+  // that text under the type that was selected at click time.
+  const [loadedFor, setLoadedFor] = useState(null);
+  const loadSeq = useRef(0);
 
   function load(forType = type) {
+    const seq = ++loadSeq.current;
     setLoading(true);
+    setLoadedFor(null);
     setError("");
     api.termsVersions(forType)
       .then((list) => {
+        if (seq !== loadSeq.current) return; // a newer load (another type, or a reload) owns the screen
         setVersions(list);
         const live = list.find((v) => v.active) || list[0];
         const saved = readDraft(forType);
@@ -4635,9 +4832,10 @@ export function TermsEditorPanel() {
         setDraftAr(saved?.ar ?? live?.contentAr ?? "");
         setSavedDraft(!!saved);
         setNextVersion(bumpVersion(live?.version));
+        setLoadedFor(forType);
       })
-      .catch((err) => setError(err.message || "Could not load terms."))
-      .finally(() => setLoading(false));
+      .catch((err) => { if (seq === loadSeq.current) setError(err.message || "Could not load terms."); })
+      .finally(() => { if (seq === loadSeq.current) setLoading(false); });
   }
   useEffect(() => { load(type); }, [type]);
 
@@ -4656,7 +4854,9 @@ export function TermsEditorPanel() {
   const who = type === "PROVIDER_TERMS" ? "provider" : "customer";
 
   function publish() {
+    if (loading || loadedFor !== type) { toast("The policy is still loading. Wait for it to finish, then publish.", "error"); return; }
     if (!draft.trim()) { toast("The English text is empty.", "error"); return; }
+    const publishType = type; // the type, version and text the admin is looking at when they confirm
     setConfirm({
       title: `Publish ${who} terms v${nextVersion}?`,
       body: `It becomes the live ${who} version and every ${who} is asked to re-accept the next time they open the app.`
@@ -4666,8 +4866,8 @@ export function TermsEditorPanel() {
       tone: "plum",
       onConfirm: async (changeNote) => {
         try {
-          await runAction(() => api.publishTerms(nextVersion, draft, type, draftAr, changeNote), { success: `${who} terms v${nextVersion} published` });
-          writeDraft(type, null);
+          await runAction(() => api.publishTerms(nextVersion, draft, publishType, draftAr, changeNote), { success: `${who} terms v${nextVersion} published` });
+          writeDraft(publishType, null);
           load(type);
         } catch { /* toast */ }
       }
@@ -4788,7 +4988,7 @@ function SupportSettingsPanel() {
   const enabledCount = numbers.filter((n) => n.enabled && n.number.trim()).length;
   const validationError = enabledCount === 0
     ? "Add at least one enabled support number."
-    : (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "Enter a valid escalation email." : "");
+    : (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "Enter a valid support email." : "");
 
   async function save() {
     if (validationError) { toast(validationError, "error"); return; }
@@ -4854,10 +5054,10 @@ function SupportSettingsPanel() {
       <label className="stack-label">Support hours
         <input value={hours} disabled={!editable} onChange={(e) => setHours(e.target.value)} placeholder="Daily · 9:00 AM – 11:00 PM" />
       </label>
-      <label className="stack-label">Escalation email
+      <label className="stack-label">Public support email
         <input value={email} disabled={!editable} onChange={(e) => setEmail(e.target.value)} placeholder="urgent@aiwa.com" type="email" />
       </label>
-      <p className="rule-hint">The escalation email receives SOS incidents and payment disputes.</p>
+      <p className="rule-hint">Shown to users as the support contact. It does not receive SOS alerts or payment disputes: an SOS is texted to the on-call numbers configured on the server (SAFETY_ONCALL_PHONES) and appears in the Safety queue, and disputes appear in the Inbox and on Bookings.</p>
 
       {validationError && <InlineBanner tone="warn" title={validationError} />}
       <button className="btn btn-primary sm" disabled={saving || !editable || !!validationError} onClick={save} style={{ marginTop: 12 }}>
@@ -4988,9 +5188,8 @@ function AddAdminModal({ onClose, onCreate }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <button type="button" className="modal-close" onClick={onClose}><X size={18} /></button>
+    <ModalFrame onClose={onClose} label="Create admin user" as="form" cardClassName="modal-card" cardProps={{ onSubmit: submit }}>
+        <button type="button" className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
         <p className="eyebrow">Admin accounts</p>
         <h2>Create admin user</h2>
         <label>Full name<input value={form.fullName} onChange={(event) => update("fullName", event.target.value)} placeholder="e.g. Mona Farouk" required /></label>
@@ -5005,8 +5204,7 @@ function AddAdminModal({ onClose, onCreate }) {
           <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" disabled={loading}><UserPlus size={16} /> {loading ? "Creating…" : "Create admin"}</button>
         </div>
-      </form>
-    </div>
+    </ModalFrame>
   );
 }
 
@@ -5080,8 +5278,35 @@ function Stars({ value }) {
 // Global "reload every visible screen" broadcast — the header refresh button
 // fires this, and every useLoad on the page re-runs its fetch. No page-by-page
 // wiring needed; new screens get it for free.
+// AD-06: every screen that loads data subscribes through useRefreshSignal (useLoad does it for you), and
+// refreshApp() resolves once each of them has finished the fetch it triggered, with whether they all worked.
 const appRefreshListeners = new Set();
-export function refreshApp() { appRefreshListeners.forEach((fn) => { try { fn(); } catch {} }); }
+export function refreshApp() {
+  const runs = [...appRefreshListeners].map((fn) => {
+    try { return Promise.resolve(fn()).catch(() => false); } catch { return Promise.resolve(false); }
+  });
+  return Promise.all(runs).then((results) => results.every((ok) => ok !== false));
+}
+
+/**
+ * For a screen with its own loader: `tick` changes on every global refresh (put it in the load effect's
+ * dependencies) and the loader calls `done(true|false)` when that fetch ends, so the Refresh button can report
+ * the truth instead of "Refreshed" the moment it was clicked.
+ */
+function useRefreshSignal() {
+  const [tick, setTick] = useState(0);
+  const waiters = useRef([]);
+  useEffect(() => {
+    const listener = () => new Promise((resolve) => { waiters.current.push(resolve); setTick((n) => n + 1); });
+    appRefreshListeners.add(listener);
+    return () => {
+      appRefreshListeners.delete(listener);
+      waiters.current.splice(0).forEach((resolve) => resolve(true));
+    };
+  }, []);
+  const done = useCallback((ok) => { waiters.current.splice(0).forEach((resolve) => resolve(ok)); }, []);
+  return [tick, done];
+}
 
 function useLoad(loader, fallback) {
   const [data, setData] = useState(() => (USE_MOCKS ? fallback : emptyDataFor(fallback)));
@@ -5091,14 +5316,11 @@ function useLoad(loader, fallback) {
 
   // Subscribe to the global refresh — so any useLoad in the tree re-fetches
   // when the top-bar refresh button is clicked.
-  useEffect(() => {
-    const listener = () => setReloadKey((k) => k + 1);
-    appRefreshListeners.add(listener);
-    return () => appRefreshListeners.delete(listener);
-  }, []);
+  const [refreshTick, refreshDone] = useRefreshSignal();
 
   useEffect(() => {
     let alive = true;
+    let failed = false;
     setError("");
     setLoading(true);
     loader()
@@ -5109,6 +5331,7 @@ function useLoad(loader, fallback) {
         }
       })
       .catch((err) => {
+        failed = true;
         if (alive) {
           // 401 = the session is gone; 403 = signed in but not allowed here,
           // which must not sign the admin out (OPS-9).
@@ -5123,12 +5346,12 @@ function useLoad(loader, fallback) {
           setData(USE_MOCKS ? fallback : emptyDataFor(fallback));
         }
       })
-      .finally(() => { if (alive) setLoading(false); });
+      .finally(() => { if (alive) { setLoading(false); refreshDone(!failed); } });
     return () => {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadKey]);
+  }, [reloadKey, refreshTick]);
 
   return { data, setData, error, loading, reload: () => setReloadKey((key) => key + 1) };
 }
