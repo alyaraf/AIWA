@@ -519,6 +519,7 @@ public class AuthController {
                 .providerProfileId(provider == null ? null : provider.getId())
                 .providerStatus(provider == null ? null : provider.getVerificationStatus())
                 .providerNote(provider == null ? null : provider.getRejectionReason())
+                .providerOnboarding(com.aiwa.util.ProviderOnboarding.stageOf(u, provider))
                 .id(u.getId())
                 .fullName(u.getFullName())
                 .email(u.getEmail())

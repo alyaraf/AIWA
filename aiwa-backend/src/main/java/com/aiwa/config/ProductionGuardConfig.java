@@ -70,6 +70,7 @@ public class ProductionGuardConfig {
         }
         if ("external".equalsIgnoreCase(smsProvider)) {
             if (prop("aiwa.sms.api-url").isEmpty()) problems.add("SMS_API_URL must be configured when SMS_PROVIDER=external");
+            requireSafeGatewayUrl(problems, "SMS_API_URL", prop("aiwa.sms.api-url"));
             // R2-14: without the key every send fails at send time (sign-up codes, SOS).
             if (prop("aiwa.sms.api-key").isEmpty()) problems.add("SMS_API_KEY must be configured when SMS_PROVIDER=external");
         }
@@ -94,6 +95,7 @@ public class ProductionGuardConfig {
         }
         if ("http".equalsIgnoreCase(emailProvider)) {
             if (prop("aiwa.email.api-url").isEmpty()) problems.add("EMAIL_API_URL must be configured when EMAIL_PROVIDER=http");
+            requireSafeGatewayUrl(problems, "EMAIL_API_URL", prop("aiwa.email.api-url"));
             if (prop("aiwa.email.api-key").isEmpty()) problems.add("EMAIL_API_KEY must be configured when EMAIL_PROVIDER=http");
         }
 
@@ -115,6 +117,58 @@ public class ProductionGuardConfig {
 
         log.info("Production guard passed: profiles=[{}] sms={} email={} push={}",
                 profiles, smsProvider, emailProvider, pushProvider);
+    }
+
+    /**
+     * P-02: a configured gateway must be an https URL with a real host: no credentials in the URL, no loopback,
+     * link-local or private literal address, and, when AIWA_GATEWAY_ALLOWED_HOSTS lists hosts (comma separated;
+     * a leading dot allows subdomains), only those.
+     */
+    private void requireSafeGatewayUrl(List<String> problems, String name, String url) {
+        if (url.isEmpty()) return; // "must be configured" is reported by the caller
+        java.net.URI uri;
+        try {
+            uri = new java.net.URI(url);
+        } catch (java.net.URISyntaxException e) {
+            problems.add(name + " is not a valid URL");
+            return;
+        }
+        String host = uri.getHost();
+        if (!"https".equalsIgnoreCase(uri.getScheme())) {
+            problems.add(name + " must use https");
+        }
+        if (host == null || host.isBlank()) {
+            problems.add(name + " must include a host name");
+            return;
+        }
+        if (uri.getUserInfo() != null) {
+            problems.add(name + " must not contain credentials");
+        }
+        String h = host.toLowerCase();
+        if (h.equals("localhost") || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")
+                || isPrivateLiteral(h)) {
+            problems.add(name + " must not point at a local or private address");
+        }
+        String allowed = prop("aiwa.gateway.allowed-hosts");
+        if (!allowed.isEmpty()) {
+            boolean ok = Arrays.stream(allowed.split(",")).map(String::trim).map(String::toLowerCase)
+                    .filter(a -> !a.isEmpty())
+                    .anyMatch(a -> a.startsWith(".") ? h.endsWith(a) : h.equals(a));
+            if (!ok) problems.add(name + " host is not in AIWA_GATEWAY_ALLOWED_HOSTS");
+        }
+    }
+
+    private static boolean isPrivateLiteral(String host) {
+        String h = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
+        boolean v4 = h.matches("\\d{1,3}(\\.\\d{1,3}){3}");
+        if (!v4 && !h.contains(":")) return false;
+        try {
+            java.net.InetAddress a = java.net.InetAddress.getByName(h); // a literal: no DNS lookup
+            return a.isAnyLocalAddress() || a.isLoopbackAddress() || a.isLinkLocalAddress() || a.isSiteLocalAddress()
+                    || a.isMulticastAddress() || (a.getAddress().length == 16 && (a.getAddress()[0] & 0xFE) == 0xFC);
+        } catch (java.net.UnknownHostException e) {
+            return true;
+        }
     }
 
     private String prop(String key) {

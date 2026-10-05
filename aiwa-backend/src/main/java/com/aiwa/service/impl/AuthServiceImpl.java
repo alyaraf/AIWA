@@ -380,9 +380,10 @@ public class AuthServiceImpl {
 
     /** Tokens issued before the account's session cut-off (reset, suspension, phone change) are refused. */
     private void requireIssuedAfterCutoff(User user, String token) {
-        if (user.getTokensValidAfter() == null) return;
+        java.time.Instant cutoff = user.effectiveTokensValidAfter();
+        if (cutoff == null) return;
         Instant issued = jwtUtils.getIssuedAt(token);
-        if (issued == null || issued.isBefore(user.getTokensValidAfter())) {
+        if (issued == null || issued.isBefore(cutoff)) {
             throw new InvalidTokenException("auth.error.token_invalid");
         }
     }
@@ -500,6 +501,7 @@ public class AuthServiceImpl {
                 .providerProfileId(provider == null ? null : provider.getId())
                 .providerStatus(provider == null ? null : provider.getVerificationStatus())
                 .providerNote(provider == null ? null : provider.getRejectionReason())
+                .providerOnboarding(com.aiwa.util.ProviderOnboarding.stageOf(u, provider))
                 .id(u.getId())
                 .fullName(u.getFullName())
                 .email(u.getEmail())

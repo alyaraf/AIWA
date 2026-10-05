@@ -121,6 +121,18 @@ public class User extends BaseEntity {
         return tempPasswordExpiresAt != null && !tempPasswordExpiresAt.isAfter(java.time.Instant.now());
     }
 
+    /**
+     * P-06: a session started with a temporary password must not outlive it. Once the temporary password has
+     * expired without the user choosing their own, every token issued before that instant is refused as well,
+     * so the already-issued access/refresh pair dies at expiry rather than at its normal lifetime. The user
+     * then has to sign in again, which the expired password no longer allows: they use "forgot password".
+     */
+    public java.time.Instant effectiveTokensValidAfter() {
+        if (!hasExpiredTempPassword()) return tokensValidAfter;
+        return tokensValidAfter == null || tempPasswordExpiresAt.isAfter(tokensValidAfter)
+                ? tempPasswordExpiresAt : tokensValidAfter;
+    }
+
     // ── Notification preferences (channels + quiet hours) ─────────────────────
     @Builder.Default
     private boolean notifyPush = true;

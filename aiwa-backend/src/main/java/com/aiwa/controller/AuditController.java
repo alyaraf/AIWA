@@ -62,7 +62,11 @@ public class AuditController {
     static String cell(String v) {
         if (v == null) return "";
         String s = v;
-        if (!s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0) s = "'" + s;
+        // AD-01: a formula can hide behind leading whitespace or control characters, which spreadsheets skip.
+        int first = 0;
+        while (first < s.length() && (s.charAt(first) <= ' ' || s.charAt(first) == ' ' || s.charAt(first) == '﻿')) first++;
+        boolean startsFormula = first < s.length() && "=+-@".indexOf(s.charAt(first)) >= 0;
+        if (!s.isEmpty() && (startsFormula || s.charAt(0) == '\t' || s.charAt(0) == '\r')) s = "'" + s;
         if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
             s = "\"" + s.replace("\"", "\"\"") + "\"";
         }

@@ -51,14 +51,18 @@ public class AdminInboxController {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     @Operation(summary = "Recent admin-attention items across the whole app, newest first (ADMIN)")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.InboxItemDto>>> inbox(
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(defaultValue = "20") int limit,
+            org.springframework.security.core.Authentication auth) {
+        // B-04: every source is shown only to admins entitled to read it (SUPER_ADMIN holds SUPPORT and FINANCE).
+        boolean support = can(auth, "PERM_SUPPORT");
+        boolean finance = can(auth, "PERM_FINANCE");
         limit = Math.max(1, Math.min(limit, 100));
         int perSource = Math.max(1, Math.min(limit, 20));
         List<ApiResponse.InboxItemDto> items = new ArrayList<>();
 
         // Open SOS alerts — always listed first regardless of age.
         List<ApiResponse.InboxItemDto> sos = new ArrayList<>();
-        safetyRepo.findByTypeAndResolvedOrderByCreatedAtDesc(com.aiwa.enums.SafetyEventType.SOS, false,
+        if (support) safetyRepo.findByTypeAndResolvedOrderByCreatedAtDesc(com.aiwa.enums.SafetyEventType.SOS, false,
                         PageRequest.of(0, perSource))
                 .forEach(e -> sos.add(ApiResponse.InboxItemDto.builder()
                         .id("sos-" + e.getId())
@@ -70,7 +74,7 @@ public class AdminInboxController {
                         .build()));
 
         // Complaints: users filing complaints against providers/customers.
-        complaintRepo.findByStatusOrderByCreatedAtDesc(ComplaintStatus.OPEN, PageRequest.of(0, perSource))
+        if (support) complaintRepo.findByStatusOrderByCreatedAtDesc(ComplaintStatus.OPEN, PageRequest.of(0, perSource))
                 .forEach(c -> items.add(ApiResponse.InboxItemDto.builder()
                         .id("complaint-" + c.getId())
                         .kind("COMPLAINT")
@@ -85,7 +89,7 @@ public class AdminInboxController {
                         .build()));
 
         // Provider signups awaiting verification.
-        providerRepo.findByVerificationStatus(VerificationStatus.PENDING_VERIFICATION,
+        if (support) providerRepo.findByVerificationStatus(VerificationStatus.PENDING_VERIFICATION,
                 PageRequest.of(0, perSource))
                 .forEach(p -> items.add(ApiResponse.InboxItemDto.builder()
                         .id("verification-" + p.getId())
@@ -98,7 +102,7 @@ public class AdminInboxController {
 
         // Moderation queue — reported reviews (targetType REVIEW) and reported
         // chat messages (targetType CHAT_MESSAGE). Same status enum, one query.
-        moderationRepo.findByStatusOrderByCreatedAtDesc(ModerationStatus.OPEN, PageRequest.of(0, perSource))
+        if (support) moderationRepo.findByStatusOrderByCreatedAtDesc(ModerationStatus.OPEN, PageRequest.of(0, perSource))
                 .forEach(m -> {
                     boolean isChat = m.getTargetType() == ModerationTargetType.CHAT_MESSAGE;
                     // Route notes:
@@ -125,7 +129,7 @@ public class AdminInboxController {
                 });
 
         // Disputed bookings — customer says they didn't pay, or something's wrong.
-        bookingRepo.findByPaymentStatusOrderByCreatedAtDesc(PaymentStatus.DISPUTED, PageRequest.of(0, perSource)).stream()
+        if (support || finance) bookingRepo.findByPaymentStatusOrderByCreatedAtDesc(PaymentStatus.DISPUTED, PageRequest.of(0, perSource)).stream()
                 .limit(perSource)
                 .forEach(b -> items.add(ApiResponse.InboxItemDto.builder()
                         .id("dispute-" + b.getId())
@@ -139,7 +143,7 @@ public class AdminInboxController {
                         .build()));
 
         // AU-03: live bookings a day past their slot that the sweep flagged.
-        bookingRepo.findByClosureFlaggedAtIsNotNullAndStatusInOrderByClosureFlaggedAtDesc(
+        if (support || finance) bookingRepo.findByClosureFlaggedAtIsNotNullAndStatusInOrderByClosureFlaggedAtDesc(
                         List.of(BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.ARRIVED),
                         PageRequest.of(0, perSource))
                 .forEach(b -> items.add(ApiResponse.InboxItemDto.builder()
@@ -154,7 +158,7 @@ public class AdminInboxController {
 
         // Commission payments providers reported — finance confirms them on
         // Settlements (PATCH /provider/settlement/pay only records the report).
-        providerRepo.findBySettlementReportedAtIsNotNullOrderBySettlementReportedAtAsc(PageRequest.of(0, perSource))
+        if (finance) providerRepo.findBySettlementReportedAtIsNotNullOrderBySettlementReportedAtAsc(PageRequest.of(0, perSource))
                 .forEach(p -> items.add(ApiResponse.InboxItemDto.builder()
                         .id("settlement-" + p.getId())
                         .kind("SETTLEMENT_REPORTED")
@@ -172,5 +176,9 @@ public class AdminInboxController {
         return ResponseEntity.ok(ApiResponse.Success.of(
                 sos.size() > limit ? sos.subList(0, limit) : sos
         ));
+    }
+
+    private static boolean can(org.springframework.security.core.Authentication auth, String authority) {
+        return auth != null && auth.getAuthorities().stream().anyMatch(a -> authority.equals(a.getAuthority()));
     }
 }

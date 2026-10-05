@@ -158,4 +158,26 @@ class ProductionGuardConfigTest {
         // The guard must not be prod-only, or a forgotten profile flag skips it.
         assertThat(ProductionGuardConfig.class.getAnnotation(Profile.class).value()).containsExactly("!local & !test");
     }
+
+    /** P-02: a configured SMS/e-mail gateway has to be a public https host. */
+    @Test
+    void refusesGatewayUrlsThatAreNotPublicHttps() {
+        for (String bad : new String[]{"http://sms.example.com", "https://localhost/send", "https://127.0.0.1/send",
+                "https://10.0.0.5/send", "https://192.168.1.9/x", "https://169.254.169.254/latest", "https://[::1]/x",
+                "https://user:pw@sms.example.com", "https://db.internal/x", "not a url"}) {
+            assertThatThrownBy(() -> validate(prodEnv().withProperty("aiwa.sms.api-url", bad), keys()))
+                    .as(bad).isInstanceOf(IllegalStateException.class).hasMessageContaining("SMS_API_URL");
+            assertThatThrownBy(() -> validate(prodEnv().withProperty("aiwa.email.api-url", bad), keys()))
+                    .as(bad).isInstanceOf(IllegalStateException.class).hasMessageContaining("EMAIL_API_URL");
+        }
+    }
+
+    @Test
+    void anOptionalHostAllowListIsEnforced() {
+        MockEnvironment listed = prodEnv().withProperty("aiwa.gateway.allowed-hosts", "sms.example.com, .mailer.test");
+        listed.withProperty("aiwa.email.api-url", "https://eu.mailer.test/v1");
+        assertThatCode(() -> validate(listed, keys())).doesNotThrowAnyException();
+        assertThatThrownBy(() -> validate(prodEnv().withProperty("aiwa.gateway.allowed-hosts", "other.example.org"), keys()))
+                .hasMessageContaining("AIWA_GATEWAY_ALLOWED_HOSTS");
+    }
 }

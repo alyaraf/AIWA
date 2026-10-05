@@ -3,8 +3,11 @@ package com.aiwa.security;
 /**
  * Method-security expressions for the admin permission tiers.
  *
- * <p>Every admin (even one with no permissions) may call read-only endpoints
- * ({@link #ANY_ADMIN}). Mutations are gated by capability:
+ * <p><b>Read policy (audit B-04).</b> {@link #ANY_ADMIN} is reserved for reads that carry no personal data
+ * (platform statistics, rules, commission rates, policy documents, verification counts). Anything that exposes
+ * people or incidents &mdash; SOS events (positions, notes, phones), reported chat content, reviews, flags,
+ * staff history and the mixed inbox &mdash; needs {@link #SUPPORT} (the inbox filters each source by
+ * capability). An enrolled MFA proves who the admin is, not what they may read. Mutations are gated by capability:
  * <ul>
  *   <li>{@link #SUPPORT} — complaints, flags, warnings, content moderation,
  *       provider verification, customer/provider account suspension.</li>

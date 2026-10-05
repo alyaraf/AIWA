@@ -213,4 +213,68 @@ class FileStorageDecodeLimitsTest {
         }
         throw new IllegalStateException("no SOF marker " + Integer.toHexString(marker));
     }
+
+    // ---- B-01 (audit round 3): scanline allocation is bounded before decoding -------------------------------
+
+    @Test
+    void aSkinnyPngHeaderDeclaring20MillionColumnsIsRefusedBeforeAnyDecodeAllocation() {
+        byte[] header = pngHeaderOnly(20_000_000, 1);
+        assertThatThrownBy(() -> storage.storePublic(new MockMultipartFile("i", "a.png", "image/png", header), "avatars"))
+                .isInstanceOf(BusinessException.class).hasMessage("upload.error.image_too_large");
+        assertThat(Files.exists(tmp.resolve("public"))).as("nothing stored").isFalse();
+    }
+
+    @Test
+    void anImageWiderThanTheDimensionCeilingIsRefusedEvenWhenItsAreaIsSmall() {
+        byte[] header = pngHeaderOnly(16_385, 1);
+        assertThatThrownBy(() -> storage.storePublic(new MockMultipartFile("i", "a.png", "image/png", header), "avatars"))
+                .isInstanceOf(BusinessException.class).hasMessage("upload.error.image_too_large");
+    }
+
+    @Test
+    void theWorkingMemoryEstimateGrowsWithWidthAndShrinksWithSubsampling() {
+        assertThat(FileStorageServiceImpl.estimatedDecodeBytes(20_000_000, 1, 9766)).isGreaterThan(128L * 1024 * 1024);
+        assertThat(FileStorageServiceImpl.estimatedDecodeBytes(4000, 3000, 1)).isLessThan(128L * 1024 * 1024);
+        assertThat(FileStorageServiceImpl.estimatedDecodeBytes(14_000, 14_000, 6))
+                .isLessThan(FileStorageServiceImpl.estimatedDecodeBytes(14_000, 14_000, 1));
+    }
+
+    @Test
+    void anOrdinaryLargePhotoStillStores() throws Exception {
+        byte[] jpg = baselineJpeg(3000, 2000);
+        assertThat(storage.storePublic(new MockMultipartFile("i", "a.jpg", "image/jpeg", jpg), "avatars")).isNotBlank();
+    }
+
+    /** Signature + a valid IHDR + IEND only (no pixel data), like the 66-byte probe in the audit. */
+    private static byte[] pngHeaderOnly(int width, int height) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.writeBytes(new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
+        byte[] ihdr = new byte[13];
+        putInt(ihdr, 0, width);
+        putInt(ihdr, 4, height);
+        ihdr[8] = 8;  // bit depth
+        ihdr[9] = 6;  // RGBA
+        chunk(out, "IHDR", ihdr);
+        chunk(out, "IEND", new byte[0]);
+        return out.toByteArray();
+    }
+
+    private static void putInt(byte[] b, int at, int v) {
+        b[at] = (byte) (v >>> 24); b[at + 1] = (byte) (v >>> 16); b[at + 2] = (byte) (v >>> 8); b[at + 3] = (byte) v;
+    }
+
+    private static void chunk(ByteArrayOutputStream out, String type, byte[] data) {
+        byte[] len = new byte[4];
+        putInt(len, 0, data.length);
+        out.writeBytes(len);
+        byte[] t = type.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        out.writeBytes(t);
+        out.writeBytes(data);
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(t);
+        crc.update(data);
+        byte[] c = new byte[4];
+        putInt(c, 0, (int) crc.getValue());
+        out.writeBytes(c);
+    }
 }

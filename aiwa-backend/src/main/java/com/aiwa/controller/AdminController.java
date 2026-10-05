@@ -5,7 +5,6 @@ import com.aiwa.entity.Booking;
 import com.aiwa.entity.Complaint;
 import com.aiwa.entity.ProviderProfile;
 import com.aiwa.entity.Review;
-import com.aiwa.entity.SavedAddress;
 import com.aiwa.entity.StaffMember;
 import com.aiwa.entity.User;
 import com.aiwa.enums.BookingStatus;
@@ -165,6 +164,7 @@ public class AdminController {
     }
 
     @GetMapping("/reviews")
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT)
     @Operation(summary = "List all reviews for admin moderation")
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ReviewDto>>> reviews(
@@ -177,6 +177,7 @@ public class AdminController {
     }
 
     @GetMapping("/flags")
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT)
     @Operation(summary = "List flagged complaints for admin review")
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ComplaintDto>>> flags(
@@ -200,7 +201,8 @@ public class AdminController {
                 .bookingType(b.getBookingType())
                 .estimatedArrivalMinutes(b.getEstimatedArrivalMinutes())
                 .staffMember(b.getStaffMember() != null ? toStaffDto(b.getStaffMember()) : null)
-                .savedAddress(b.getSavedAddress() != null ? toAddressDto(b.getSavedAddress()) : null)
+                .savedAddress(com.aiwa.service.impl.BookingPrivacy.destinationOf(b))
+                .destinationAmendedAt(b.getDestinationAmendedAt())
                 .homeService(b.isHomeService())
                 .status(b.getStatus())
                 .paymentStatus(b.getPaymentStatus())
@@ -223,7 +225,8 @@ public class AdminController {
                 .provider(toProviderSummary(r.getProvider()))
                 .rating(r.getRating())
                 .comment(r.getComment())
-                .quickTags(r.getQuickTags())
+                // copied inside the transaction: a lazy collection must not reach the JSON writer (B-06)
+                .quickTags(r.getQuickTags() == null ? null : new java.util.ArrayList<>(r.getQuickTags()))
                 .direction(r.getDirection())
                 .hidden(r.isHidden())
                 .createdAt(r.getCreatedAt())
@@ -313,14 +316,4 @@ public class AdminController {
                 .build();
     }
 
-    private ApiResponse.SavedAddressDto toAddressDto(SavedAddress a) {
-        return ApiResponse.SavedAddressDto.builder()
-                .id(a.getId())
-                .label(a.getLabel())
-                .addressLine(a.getAddressLine())
-                .latitude(a.getLatitude())
-                .longitude(a.getLongitude())
-                .defaultAddress(a.isDefaultAddress())
-                .build();
-    }
 }

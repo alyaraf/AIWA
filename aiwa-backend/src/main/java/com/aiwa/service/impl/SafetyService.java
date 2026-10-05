@@ -465,7 +465,7 @@ public class SafetyService {
             try {
                 smsService.send(phone, text);
             } catch (RuntimeException e) {
-                log.warn("Safety SMS to {} failed: {}", mask(phone), e.getMessage());
+                log.warn("Safety SMS to {} failed: {}", mask(phone), com.aiwa.util.LogSafe.scrub(e.getMessage()));
             }
         }));
         if (TransactionSynchronizationManager.isSynchronizationActive()) {

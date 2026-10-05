@@ -144,4 +144,34 @@ class AdminReadExportRbacApiTest {
                 .param("expectedAmount", "10").param("reference", "TX1")
                 .header("Authorization", support)).andExpect(status().isForbidden());
     }
+
+    /** B-04: SOS, reported chat, reviews, flags and staff history need SUPPORT; an enrolled admin with no capability does not. */
+    @Test
+    void sensitiveOperationalReadsNeedSupport() throws Exception {
+        String none = admin();
+        String finance = admin(AdminPermission.FINANCE);
+        String support = admin(AdminPermission.SUPPORT);
+        String superAdmin = admin(AdminPermission.SUPER_ADMIN);
+        for (String path : List.of("/admin/safety", "/admin/chat/moderation", "/admin/reviews",
+                "/admin/reviews/moderation", "/admin/flags", "/admin/providers/1/staff")) {
+            forbidden(path, none);
+            forbidden(path, finance);
+        }
+        for (String path : List.of("/admin/safety", "/admin/chat/moderation", "/admin/reviews",
+                "/admin/reviews/moderation", "/admin/flags")) {
+            allowed(path, support);
+            allowed(path, superAdmin);
+        }
+        // staff of an unknown provider is a 404 for a Support admin, i.e. it passed the permission gate
+        mvc.perform(get("/admin/providers/999999/staff").header("Authorization", support))
+                .andExpect(status().isNotFound());
+    }
+
+    /** B-04: the mixed inbox only lists the sources the caller may read. */
+    @Test
+    void inboxIsEmptyForAnAdminWithoutACapability() throws Exception {
+        mvc.perform(get("/admin/inbox").header("Authorization", admin()))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.data").isEmpty());
+    }
 }

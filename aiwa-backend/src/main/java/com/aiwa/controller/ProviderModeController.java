@@ -73,6 +73,25 @@ public class ProviderModeController {
                 providerService.updateServiceRadius(resolveUserId(userDetails), clear ? null : km));
     }
 
+    /**
+     * Gap (in minutes, 0-60) kept between two home visits. A narrow update (audit M-06): the schedule screen used to
+     * send the whole business profile just to change this number, which silently put back an older business name,
+     * bio or address if those had been edited elsewhere in the meantime.
+     */
+    @PatchMapping("/travel-buffer")
+    public ApiResponse.Success<Void> updateTravelBuffer(
+            @RequestParam int minutes,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        if (minutes < 0 || minutes > 60) {
+            throw new com.aiwa.exception.BusinessException("provider.travel_buffer.invalid");
+        }
+        ProviderProfile provider = providerRepo.findByUserId(resolveUserId(userDetails))
+                .orElseThrow(() -> new ResourceNotFoundException("Provider profile not found"));
+        provider.setTravelBufferMinutes(minutes);
+        providerRepo.save(provider);
+        return ApiResponse.Success.of("Travel buffer updated", null);
+    }
+
     private Long resolveUserId(UserDetails ud) {
         Long id = com.aiwa.security.AiwaUserDetails.idOf(ud);
         if (id != null) return id;

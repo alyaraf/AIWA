@@ -39,13 +39,10 @@ import java.util.Set;
 public class ExternalSmsService implements SmsService {
 
     static final String SENT_METRIC = "aiwa.sms.sent";
-    private static final Set<String> FAILED_STATUSES =
-            Set.of("error", "failed", "failure", "fail", "rejected", "refused", "undelivered");
 
     private final RestTemplate restTemplate;
     /** AU-09: sign-up and reset codes run on a request thread, so they give up much sooner than an SOS text. */
     private final RestTemplate otpRestTemplate;
-    private final ObjectMapper json = new ObjectMapper();
     private MeterRegistry meterRegistry;
 
     @Value("${aiwa.sms.api-url:}")
@@ -98,13 +95,13 @@ public class ExternalSmsService implements SmsService {
             response = template.postForEntity(apiUrl, new HttpEntity<>(body, headers), String.class);
         } catch (RestClientException e) {
             count(kind, "error");
-            log.error("SMS gateway error for …{}: {}", tail(phone), e.getMessage());
+            log.error("SMS gateway error for …{}: {}", tail(phone), com.aiwa.util.LogSafe.scrub(e.getMessage()));
             throw new BusinessException("otp.error.send_failed");
         }
         String refusal = refusal(response.getBody());
         if (refusal != null) {
             count(kind, "refused");
-            log.error("SMS gateway refused the text to …{}: {}", tail(phone), refusal);
+            log.error("SMS gateway refused the text to …{}: {}", tail(phone), com.aiwa.util.LogSafe.scrub(refusal));
             throw new BusinessException("otp.error.send_failed");
         }
         count(kind, "ok");
@@ -112,41 +109,7 @@ public class ExternalSmsService implements SmsService {
 
     /** The reason a 2xx body reports a refusal, or null when it doesn't (or isn't JSON). */
     String refusal(String body) {
-        if (body == null || body.isBlank()) return null;
-        JsonNode root;
-        try {
-            root = json.readTree(body);
-        } catch (Exception notJson) {
-            return null;
-        }
-        if (root == null || !root.isObject()) return null;
-        for (String flag : new String[]{"success", "ok"}) {
-            JsonNode v = root.get(flag);
-            if (v != null && v.isBoolean() && !v.asBoolean()) return flag + "=false" + detail(root);
-        }
-        JsonNode status = root.get("status");
-        if (status != null && status.isTextual()
-                && FAILED_STATUSES.contains(status.asText().trim().toLowerCase(Locale.ROOT))) {
-            return "status=" + status.asText() + detail(root);
-        }
-        JsonNode error = root.get("error");
-        if (error != null && !error.isNull() && !(error.isTextual() && error.asText().isBlank())
-                && !(error.isBoolean() && !error.asBoolean())) {
-            return "error=" + truncate(error.toString());
-        }
-        return null;
-    }
-
-    private static String detail(JsonNode root) {
-        for (String key : new String[]{"message", "error", "reason"}) {
-            JsonNode v = root.get(key);
-            if (v != null && !v.isNull()) return " (" + truncate(v.asText(v.toString())) + ")";
-        }
-        return "";
-    }
-
-    private static String truncate(String s) {
-        return s.length() > 200 ? s.substring(0, 200) : s;
+        return GatewayRefusal.of(body);
     }
 
     private void count(String kind, String result) {

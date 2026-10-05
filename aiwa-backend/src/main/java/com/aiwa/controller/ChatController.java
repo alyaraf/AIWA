@@ -129,7 +129,7 @@ public class ChatController {
 
     // ── Admin moderation (mirrors the reported-reviews queue) ───────────────
 
-    @PreAuthorize(com.aiwa.security.Perms.ANY_ADMIN)
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT)
     @GetMapping("/admin/chat/moderation")
     @Operation(summary = "Reported chat messages awaiting moderation, with the report reason (ADMIN)")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)

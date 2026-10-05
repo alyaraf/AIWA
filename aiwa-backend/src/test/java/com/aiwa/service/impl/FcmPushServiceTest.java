@@ -47,4 +47,29 @@ class FcmPushServiceTest {
         assertThatThrownBy(() -> FcmPushService.parseServiceAccount(json, "b", new ObjectMapper()))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("PKCS#8");
     }
+
+    /** B-08: one rejected push is one failed outcome, not two. */
+    @Test
+    void aRejectedPushCountsOnce() {
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        org.springframework.web.client.RestTemplate rest = new org.springframework.web.client.RestTemplate();
+        org.springframework.test.web.client.MockRestServiceServer server =
+                org.springframework.test.web.client.MockRestServiceServer.bindTo(rest).build();
+        server.expect(org.springframework.test.web.client.match.MockRestRequestMatchers.anything())
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                        .withStatus(org.springframework.http.HttpStatus.FORBIDDEN).body("{\"error\":\"denied\"}"));
+        FcmPushService push = new FcmPushService(new org.springframework.boot.web.client.RestTemplateBuilder(),
+                new ObjectMapper(), org.mockito.Mockito.mock(PushDeviceService.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(push, "restTemplate", rest);
+        org.springframework.test.util.ReflectionTestUtils.setField(push, "account",
+                new FcmPushService.ServiceAccount("aiwa-test", "x@y", null, FcmPushService.DEFAULT_TOKEN_URI));
+        org.springframework.test.util.ReflectionTestUtils.setField(push, "cachedToken", "t");
+        org.springframework.test.util.ReflectionTestUtils.setField(push, "cachedTokenExpiry", Instant.now().plusSeconds(600));
+        push.setMeterRegistry(registry);
+
+        push.send("device-token-123456", com.aiwa.enums.DevicePlatform.ANDROID, "t", "b", Map.of());
+
+        assertThat(registry.counter("aiwa.push.sent", "result", "rejected").count()).isEqualTo(1.0);
+    }
 }

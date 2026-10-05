@@ -53,12 +53,19 @@ public class HttpEmailService implements EmailService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(apiKey);
+        org.springframework.http.ResponseEntity<String> response;
         try {
-            restTemplate.postForEntity(apiUrl,
+            response = restTemplate.postForEntity(apiUrl,
                     new HttpEntity<>(Map.of("from", from, "to", to, "subject", subject, "text", text), headers),
                     String.class);
         } catch (RestClientException e) {
-            log.error("Email gateway error: {}", e.getMessage());
+            log.error("Email gateway error: {}", com.aiwa.util.LogSafe.scrub(e.getMessage()));
+            throw new BusinessException("otp.error.send_failed");
+        }
+        // P-07: some gateways answer 200 and report the refusal in the body.
+        String refusal = GatewayRefusal.of(response.getBody());
+        if (refusal != null) {
+            log.error("Email gateway refused the message: {}", com.aiwa.util.LogSafe.scrub(refusal));
             throw new BusinessException("otp.error.send_failed");
         }
     }

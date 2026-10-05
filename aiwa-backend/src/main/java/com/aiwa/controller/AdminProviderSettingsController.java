@@ -54,7 +54,7 @@ public class AdminProviderSettingsController {
      * admin-only view with full history.
      */
     @GetMapping("/staff")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT)
     @Transactional(readOnly = true)
     @Operation(summary = "List this provider's staff, including inactive/departed ones (ADMIN)")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.StaffMemberDto>>> staff(

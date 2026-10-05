@@ -97,6 +97,8 @@ public class ApiResponse {
         private VerificationStatus providerStatus;
         /** Admin's rejection reason or "more info" request while not approved. */
         private String providerNote;
+        /** NO_PROFILE | NEEDS_DOCUMENTS | SUBMITTED for a provider, null otherwise (M-05: resumable sign-up). */
+        private String providerOnboarding;
         private Long bookingCount;
         /** Reviews this user has written (customer profile stats tile). */
         private Long reviewCount;
@@ -291,7 +293,9 @@ public class ApiResponse {
         private BookingType bookingType;
         private Integer estimatedArrivalMinutes;
         private StaffMemberDto staffMember;
+        /** The destination as agreed for this booking (a snapshot, not the live saved address). */
         private SavedAddressDto savedAddress;
+        private java.time.Instant destinationAmendedAt;
         private boolean homeService;
         private BookingStatus status;
         private PaymentStatus paymentStatus;

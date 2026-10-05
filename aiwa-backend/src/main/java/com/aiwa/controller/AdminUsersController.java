@@ -432,7 +432,7 @@ public class AdminUsersController {
             try {
                 emailService.send(oldEmail, "Your AIWA sign-in details changed", text);
             } catch (RuntimeException e) {
-                log.warn("Contact-change email to the old address failed: {}", e.getMessage());
+                log.warn("Contact-change email to the old address failed: {}", com.aiwa.util.LogSafe.scrub(e.getMessage()));
             }
         }
     }
@@ -494,7 +494,7 @@ public class AdminUsersController {
                 String at = u.getEmail().indexOf('@') > 0 ? u.getEmail().substring(u.getEmail().indexOf('@')) : "";
                 return java.util.Map.of("delivery", "EMAIL", "sentTo", u.getEmail().charAt(0) + "***" + at);
             } catch (RuntimeException e) {
-                log.warn("Temporary password email failed for user {}: {}", u.getId(), e.getMessage());
+                log.warn("Temporary password email failed for user {}: {}", u.getId(), com.aiwa.util.LogSafe.scrub(e.getMessage()));
             }
         }
         throw new BusinessException(u.getPhone() == null && u.getEmail() == null

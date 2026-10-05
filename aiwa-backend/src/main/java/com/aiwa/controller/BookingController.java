@@ -198,6 +198,16 @@ public class BookingController {
                 bookingService.reschedule(resolveUserId(userDetails), id, request)));
     }
 
+    @PatchMapping("/{id}/destination")
+    @Operation(summary = "Customer moves a home visit to another saved address (provider must confirm again)")
+    public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> amendDestination(
+            @PathVariable Long id,
+            @Valid @RequestBody com.aiwa.dto.request.AmendDestinationRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ApiResponse.Success.of("Destination updated",
+                bookingService.amendDestination(resolveUserId(userDetails), id, request.getSavedAddressId())));
+    }
+
     @PatchMapping("/{id}/propose-time")
     @Operation(summary = "Provider proposes an alternative slot for a PENDING booking")
     public ResponseEntity<ApiResponse.Success<ApiResponse.BookingDto>> proposeTime(

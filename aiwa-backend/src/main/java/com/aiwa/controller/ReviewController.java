@@ -84,7 +84,7 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.Success.of(hidden ? "Review hidden" : "Review restored", dto));
     }
 
-    @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.ANY_ADMIN)
+    @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT)
     @GetMapping("/admin/reviews/moderation")
     @Operation(summary = "Reported reviews awaiting moderation, with the report reason (ADMIN)")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)

@@ -11,5 +11,6 @@ public interface SavedProviderRepository extends JpaRepository<SavedProvider, Lo
     List<SavedProvider> findByUserIdOrderByCreatedAtDesc(Long userId);
     Optional<SavedProvider> findByUserIdAndProviderId(Long userId, Long providerId);
     boolean existsByUserIdAndProviderId(Long userId, Long providerId);
+    @org.springframework.transaction.annotation.Transactional
     void deleteByUserIdAndProviderId(Long userId, Long providerId);
 }

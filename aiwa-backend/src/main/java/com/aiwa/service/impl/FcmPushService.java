@@ -89,7 +89,7 @@ public class FcmPushService implements PushNotificationService {
             sa = account();
             accessToken = accessToken(sa);
         } catch (RuntimeException | IOException e) {
-            log.error("Push not sent — FCM credentials unusable: {}", e.getMessage());
+            log.error("Push not sent — FCM credentials unusable: {}", com.aiwa.util.LogSafe.scrub(e.getMessage()));
             count("credentials");
             return;
         }
@@ -121,13 +121,12 @@ public class FcmPushService implements PushNotificationService {
             } else if (status == 401) {
                 invalidateAccessToken();
             }
-            count(status == 404 || err.contains("UNREGISTERED") ? "unregistered" : "rejected");
             log.warn("FCM rejected push to token …{}: {}", tail(deviceToken), e.getStatusCode());
             count(status == 404 || err.contains("UNREGISTERED") ? "unregistered" : "rejected");
         } catch (RestClientException e) {
             // A push failure must never break the caller — the in-app notification
             // was already recorded; this is only the best-effort real-time nudge.
-            log.warn("FCM push failed for token …{}: {}", tail(deviceToken), e.getMessage());
+            log.warn("FCM push failed for token …{}: {}", tail(deviceToken), com.aiwa.util.LogSafe.scrub(e.getMessage()));
             count("error");
         }
     }
@@ -148,7 +147,7 @@ public class FcmPushService implements PushNotificationService {
         try {
             pushDevices.forget(deviceToken);
         } catch (RuntimeException e) {
-            log.warn("Could not clear a dead push token: {}", e.getMessage());
+            log.warn("Could not clear a dead push token: {}", com.aiwa.util.LogSafe.scrub(e.getMessage()));
         }
     }
 

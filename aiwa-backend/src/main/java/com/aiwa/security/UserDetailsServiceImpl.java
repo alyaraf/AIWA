@@ -67,7 +67,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 user.hasExpiredTempPassword() ? EXPIRED_PASSWORD_HASH : user.getPassword(),
                 user.isActive(),
                 authorities,
-                user.getTokensValidAfter()
+                user.effectiveTokensValidAfter()
         );
     }
 }

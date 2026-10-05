@@ -88,6 +88,18 @@ public class FileStorageServiceImpl {
     @Value("${aiwa.storage.public-max-progressive-pixels:25000000}")
     private long maxProgressivePixels = 25_000_000L;
 
+    /**
+     * Largest declared width or height accepted for a public image. The pixel ceiling alone does not bound the
+     * decoder: JDK PNG/JPEG readers allocate scanline buffers for the full source width even when subsampling, so a
+     * 20,000,000 x 1 header passes an area check and still exhausts the heap (audit B-01).
+     */
+    @Value("${aiwa.storage.public-max-image-dimension:16384}")
+    private int maxImageDimension = 16384;
+
+    /** Upper bound for the estimated working memory (scanlines plus the subsampled destination) of one decode. */
+    @Value("${aiwa.storage.public-max-decode-working-bytes:134217728}")
+    private long maxDecodeWorkingBytes = 128L * 1024 * 1024;
+
     /** Public-image decodes allowed at the same time; the others wait (at most {@link #decodeWaitMillis}) for a slot. */
     private Semaphore decodeSlots = new Semaphore(2, true);
 
@@ -229,7 +241,13 @@ public class FileStorageServiceImpl {
                 try {
                     reader.setInput(in, true, true);
                     int width = reader.getWidth(0), height = reader.getHeight(0); // header only, no pixel decode
-                    if ((long) width * height > maxImagePixels) {
+                    if (width <= 0 || height <= 0 || (long) width * height > maxImagePixels) {
+                        throw new BusinessException("upload.error.image_too_large");
+                    }
+                    // B-01: bound every dimension and the decoder's working memory before reader.read allocates.
+                    int subsampling = Math.max(1, Math.max(width, height) / maxImageSide);
+                    if (width > maxImageDimension || height > maxImageDimension
+                            || estimatedDecodeBytes(width, height, subsampling) > maxDecodeWorkingBytes) {
                         throw new BusinessException("upload.error.image_too_large");
                     }
                     // H-3, second guard: ask the decoder itself, so a header our marker walk reads
@@ -239,7 +257,7 @@ public class FileStorageServiceImpl {
                     }
                     ImageReadParam param = reader.getDefaultReadParam();
                     // Decode a subsampled copy of very large images so the decode itself stays bounded.
-                    int sub = Math.max(1, Math.max(width, height) / maxImageSide);
+                    int sub = subsampling;
                     param.setSourceSubsampling(sub, sub, 0, 0);
                     final byte[] bytes = data;
                     return withDecodeSlot(() -> {
@@ -256,6 +274,17 @@ public class FileStorageServiceImpl {
         } catch (IOException | RuntimeException e) {
             return undecodable(data, ext, e.toString());
         }
+    }
+
+    /**
+     * Rough upper bound of the heap one decode needs: a few full-width scanline buffers (up to 16 bytes per pixel
+     * for 16-bit RGBA with filter/previous-row copies) plus the subsampled destination raster (4 bytes per pixel).
+     */
+    static long estimatedDecodeBytes(int width, int height, int subsampling) {
+        long scanlines = 4L * 16L * width;
+        long destination = 4L * (((long) width + subsampling - 1) / subsampling)
+                * (((long) height + subsampling - 1) / subsampling);
+        return scanlines + destination;
     }
 
     /**

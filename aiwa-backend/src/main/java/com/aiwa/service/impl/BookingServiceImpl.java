@@ -280,12 +280,7 @@ public class BookingServiceImpl {
         // must be inside the radius the provider said they travel, when they set one.
         if (Boolean.TRUE.equals(req.getHomeService())) {
             if (savedAddress == null) throw new BusinessException("booking.error.address_required");
-            if (provider.getServiceRadiusKm() != null && provider.getLatitude() != null && provider.getLongitude() != null
-                    && savedAddress.getLatitude() != null && savedAddress.getLongitude() != null
-                    && GeoUtils.distanceKm(provider.getLatitude(), provider.getLongitude(),
-                            savedAddress.getLatitude(), savedAddress.getLongitude()) > provider.getServiceRadiusKm()) {
-                throw new BusinessException("booking.error.outside_service_radius");
-            }
+            requireInsideServiceRadius(provider, savedAddress);
         }
         // AU-19 (owner rule 2026-10-04): no new booking on out-of-date terms; the app
         // answers this code with its re-accept screen.
@@ -344,6 +339,10 @@ public class BookingServiceImpl {
                 .service(service)
                 .staffMember(staffMember)
                 .savedAddress(savedAddress)
+                .destinationLabel(savedAddress == null ? null : savedAddress.getLabel())
+                .destinationAddress(savedAddress == null ? null : savedAddress.getAddressLine())
+                .destinationLatitude(savedAddress == null ? null : savedAddress.getLatitude())
+                .destinationLongitude(savedAddress == null ? null : savedAddress.getLongitude())
                 .bookingDate(bookingDate)
                 .startTime(startTime)
                 .endTime(endTime)
@@ -1762,18 +1761,24 @@ public class BookingServiceImpl {
                           || p.getServices().stream().anyMatch(
                                 s -> s.isActive() && s.getCategory() == service.getCategory()))
                 .limit(3)
-                .map(p -> ApiResponse.ProviderSummaryDto.builder()
-                        .id(p.getId())
-                        .businessName(p.getBusinessName())
-                        .ownerName(p.getUser().getFullName())
-                        .address(p.getAddress())
-                        .latitude(p.getLatitude())
-                        .longitude(p.getLongitude())
-                        .averageRating(p.getAverageRating())
-                        .totalReviews(p.getTotalReviews())
-                        .primaryCategory(p.getPrimaryCategory())
-                        .verificationStatus(p.getVerificationStatus())
-                        .build())
+                .map(p -> {
+                    // B-02: suggestions are discovery results, so a home provider's exact place is never shown.
+                    ApiResponse.ProviderSummaryDto dto = ApiResponse.ProviderSummaryDto.builder()
+                            .id(p.getId())
+                            .businessName(p.getBusinessName())
+                            .ownerName(p.getUser().getFullName())
+                            .address(p.getAddress())
+                            .latitude(p.getLatitude())
+                            .longitude(p.getLongitude())
+                            .averageRating(p.getAverageRating())
+                            .totalReviews(p.getTotalReviews())
+                            .primaryCategory(p.getPrimaryCategory())
+                            .providerType(p.getProviderType())
+                            .verificationStatus(p.getVerificationStatus())
+                            .build();
+                    ProviderServiceImpl.hideHomeLocation(dto);
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -1838,6 +1843,71 @@ public class BookingServiceImpl {
         return toDto(booking);
     }
 
+
+    // ── DESTINATION AMENDMENT (B-05) ───────────────────────────────────────────
+
+    /**
+     * Moves a home visit to another of the customer's own saved addresses. The destination is a snapshot on the
+     * booking, so editing a saved address never does this silently; this is the explicit path. The new place gets
+     * the same service-radius check as a new booking, an accepted visit goes back to PENDING so the provider
+     * confirms the new place (as with a reschedule, and with the same late-change cutoff), and the provider is
+     * notified. The travel fee is the provider's flat fee, so there is nothing to requote.
+     */
+    @Transactional
+    public ApiResponse.BookingDto amendDestination(Long customerId, Long bookingId, Long savedAddressId) {
+        Booking booking = bookingRepo.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking", bookingId));
+        if (!booking.getCustomer().getId().equals(customerId))
+            throw new BusinessException("booking.error.only_customer_reschedule");
+        if (!booking.isHomeService())
+            throw new BusinessException("booking.error.destination_home_service_only");
+        if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.ACCEPTED)
+            throw new BusinessException("booking.error.reschedule_requires_pending_or_accepted");
+        if (booking.getStatus() == BookingStatus.ACCEPTED) {
+            enforceCustomerCancellationCutoff(booking);
+        }
+        SavedAddress address = savedAddressRepo.findById(savedAddressId)
+                .orElseThrow(() -> new ResourceNotFoundException("Saved address", savedAddressId));
+        if (!address.getUser().getId().equals(customerId) || address.isArchived())
+            throw new BusinessException("booking.error.address_wrong_customer");
+        ProviderProfile provider = providerRepo.findByIdForUpdate(booking.getProvider().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", booking.getProvider().getId()));
+        requireInsideServiceRadius(provider, address);
+
+        booking.snapshotDestination(address);
+        booking.setDestinationBackfilled(false);
+        booking.setDestinationAmendedAt(Instant.now());
+        if (booking.getStatus() == BookingStatus.ACCEPTED) {
+            booking.setStatus(BookingStatus.PENDING);
+            booking.setCheckedInAt(null);
+            booking.setAwaitingSince(LocalDateTime.now());
+            booking.setWaitingSinceInstant(Instant.now());
+            booking.setReminderSentAt(null);
+        }
+        bookingRepo.save(booking);
+
+        notificationService.send(
+                provider.getUser().getId(),
+                NotificationType.BOOKING_CREATED,
+                "Booking address changed",
+                "تم تغيير عنوان الحجز",
+                booking.getCustomer().getFullName() + " changed the visit address for " + booking.getBookingDate()
+                        + ". Please review and confirm.",
+                booking.getCustomer().getFullName() + " غيّر عنوان الزيارة في " + booking.getBookingDate()
+                        + ". يرجى المراجعة والتأكيد.",
+                booking.getId(), provider.getId());
+        return toDto(booking);
+    }
+
+    /** M-1 / B-05: a home visit must be inside the radius the provider said they travel, when they set one. */
+    private static void requireInsideServiceRadius(ProviderProfile provider, SavedAddress address) {
+        if (provider.getServiceRadiusKm() != null && provider.getLatitude() != null && provider.getLongitude() != null
+                && address.getLatitude() != null && address.getLongitude() != null
+                && GeoUtils.distanceKm(provider.getLatitude(), provider.getLongitude(),
+                        address.getLatitude(), address.getLongitude()) > provider.getServiceRadiusKm()) {
+            throw new BusinessException("booking.error.outside_service_radius");
+        }
+    }
     /**
      * Tell the right person about a status change. Provider-driven transitions go
      * to the customer; a customer cancellation goes to the provider (before, the
@@ -1912,7 +1982,7 @@ public class BookingServiceImpl {
         return ApiResponse.BookingDto.builder()
                 .id(b.getId())
                 .customer(toCustomerDto(b))
-                .provider(toProviderSummary(b.getProvider()))
+                .provider(BookingPrivacy.applyLocationPolicy(toProviderSummary(b.getProvider()), b.getStatus()))
                 .service(toServiceDto(b.getService()))
                 .bookingDate(b.getBookingDate())
                 .startTime(b.getStartTime())
@@ -1920,7 +1990,8 @@ public class BookingServiceImpl {
                 .bookingType(b.getBookingType())
                 .estimatedArrivalMinutes(b.getEstimatedArrivalMinutes())
                 .staffMember(b.getStaffMember() != null ? toStaffDto(b.getStaffMember()) : null)
-                .savedAddress(b.getSavedAddress() != null ? toAddressDto(b.getSavedAddress()) : null)
+                .savedAddress(BookingPrivacy.destinationOf(b))
+                .destinationAmendedAt(b.getDestinationAmendedAt())
                 .homeService(b.isHomeService())
                 .status(b.getStatus())
                 .paymentStatus(b.getPaymentStatus())
@@ -1952,13 +2023,7 @@ public class BookingServiceImpl {
      * never accepted (or long after the visit).
      */
     private ApiResponse.UserDto toCustomerDto(Booking b) {
-        User u = b.getCustomer();
-        boolean contact = CONTACT_VISIBLE.contains(b.getStatus());
-        return ApiResponse.UserDto.builder().id(u.getId()).fullName(u.getFullName())
-                .email(contact ? u.getEmail() : null)
-                .phone(contact ? u.getPhone() : null)
-                .profileImageUrl(u.getProfileImageUrl())
-                .role(u.getRole()).gender(u.getGender()).active(u.isActive()).build();
+        return BookingPrivacy.customerFor(b.getCustomer(), b.getStatus());
     }
 
     private ApiResponse.ProviderSummaryDto toProviderSummary(ProviderProfile p) {
@@ -2021,14 +2086,4 @@ public class BookingServiceImpl {
         return provider ? toProviderDto(b) : toDto(b);
     }
 
-    private ApiResponse.SavedAddressDto toAddressDto(SavedAddress a) {
-        return ApiResponse.SavedAddressDto.builder()
-                .id(a.getId())
-                .label(a.getLabel())
-                .addressLine(a.getAddressLine())
-                .latitude(a.getLatitude())
-                .longitude(a.getLongitude())
-                .defaultAddress(a.isDefaultAddress())
-                .build();
-    }
 }

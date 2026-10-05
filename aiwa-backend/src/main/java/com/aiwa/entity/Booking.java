@@ -45,6 +45,31 @@ public class Booking extends BaseEntity {
     @JoinColumn(name = "saved_address_id")
     private SavedAddress savedAddress;
 
+    /**
+     * B-05: the destination as agreed when the booking was made (or last amended). Display and history read these,
+     * never the live {@link #savedAddress}, which the customer may edit later.
+     */
+    @Column(length = 255)
+    private String destinationLabel;
+    @Column(length = 255)
+    private String destinationAddress;
+    private Double destinationLatitude;
+    private Double destinationLongitude;
+    /** True when the snapshot was copied from the saved address by migration V34 (original text was not recorded). */
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean destinationBackfilled = false;
+    private java.time.Instant destinationAmendedAt;
+
+    /** Copies the visit destination from a saved address onto this booking. */
+    public void snapshotDestination(SavedAddress a) {
+        this.savedAddress = a;
+        this.destinationLabel = a == null ? null : a.getLabel();
+        this.destinationAddress = a == null ? null : a.getAddressLine();
+        this.destinationLatitude = a == null ? null : a.getLatitude();
+        this.destinationLongitude = a == null ? null : a.getLongitude();
+    }
+
     @Column(nullable = false)
     private LocalDate bookingDate;
 

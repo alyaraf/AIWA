@@ -405,21 +405,6 @@ public class ProviderServiceImpl {
                 .build();
     }
 
-    private ApiResponse.UserDto toUserDto(User u) {
-        return ApiResponse.UserDto.builder()
-                .id(u.getId())
-                .fullName(u.getFullName())
-                .email(u.getEmail())
-                .phone(u.getPhone())
-                .role(u.getRole())
-                .gender(u.getGender())
-                .profileImageUrl(u.getProfileImageUrl())
-                .preferredLanguage(u.getPreferredLanguage())
-                .termsAccepted(u.isTermsAccepted())
-                .active(u.isActive())
-                .build();
-    }
-
     private ApiResponse.StaffMemberDto toStaffDto(StaffMember s) {
         return ApiResponse.StaffMemberDto.builder()
                 .id(s.getId())
@@ -435,7 +420,7 @@ public class ProviderServiceImpl {
     private ApiResponse.BookingDto toBookingDto(Booking b) {
         return ApiResponse.BookingDto.builder()
                 .id(b.getId())
-                .customer(toUserDto(b.getCustomer()))
+                .customer(BookingPrivacy.customerFor(b.getCustomer(), b.getStatus()))
                 .provider(ApiResponse.ProviderSummaryDto.builder()
                         .id(b.getProvider().getId())
                         .businessName(b.getProvider().getBusinessName())

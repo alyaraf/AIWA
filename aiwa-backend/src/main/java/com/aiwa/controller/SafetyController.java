@@ -65,7 +65,7 @@ public class SafetyController {
     // ── Admin SOS queue ───────────────────────────────────────────────────────
 
     @GetMapping("/admin/safety")
-    @PreAuthorize(com.aiwa.security.Perms.ANY_ADMIN)
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT)
     @Operation(summary = "SOS queue — status OPEN (default) | RESOLVED | ALL (ADMIN)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.AdminSafetyEventDto>>> queue(
             @RequestParam(defaultValue = "OPEN") String status,

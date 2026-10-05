@@ -70,6 +70,7 @@ public class SavedController {
     }
 
     @DeleteMapping("/{providerId}")
+    @org.springframework.transaction.annotation.Transactional
     @Operation(summary = "Unsave (un-heart) a provider")
     public ResponseEntity<ApiResponse.Success<Void>> unsave(
             @PathVariable Long providerId,

@@ -56,14 +56,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 // account (isActive=false → enabled=false) must not be authenticated,
                 // even when it presents a technically-valid, unexpired JWT.
                 if (!sessionCurrent) {
-                    log.warn("Rejected token issued before the session cut-off for {}", identifier);
+                    log.warn("Rejected token issued before the session cut-off for user #{}", userId);
                 } else if (userDetails.isEnabled() && userDetails.isAccountNonLocked()) {
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 } else {
-                    log.warn("Rejected request for disabled account: {}", identifier);
+                    log.warn("Rejected request for disabled account user #{}", userId);
                 }
             }
         } catch (Exception e) {

@@ -1,0 +1,169 @@
+ActivityBookingDto: amount, counterparty, createdAt, date, id, paymentStatus, reference, service, status
+ActivityComplaintDto: createdAt, flagged, id, status, subject
+ActivityReviewDto: comment, createdAt, hidden, id, providerName, rating
+AdminDashboardDto: approvedProviders, bookingsLast30Days, bookingsLast7Days, bookingsPrevious30Days, bookingsPrevious7Days, bookingsToday, completedBookings, highPriorityComplaints, newCustomersLast30Days, newCustomersPrevious30Days, openComplaints, openDisputes, openSos, overdueSettlements, pendingVerification, providersVerifiedLast30Days, rejectedProviders, revenueLast30Days, revenuePrevious30Days, suspendedProviders, totalBookings, totalCustomers, totalProviders, totalRevenue
+AdminSafetyEventDto: actorId, actorName, actorPhone, actorRole, address, bookingId, bookingStatus, createdAt, customerName, customerPhone, deliveries, homeService, id, latitude, locationAccuracy, locationTime, longitude, notes, providerName, providerPhone, resolutionNotes, resolved, resolvedAt, resolvedByName
+AmendDestinationRequest: savedAddressId
+AuditLogDto: action, actor, createdAt, id, ipAddress, target
+AuthResponse: accessToken, mfaRequired, mfaToken, refreshToken, tokenType, user
+AvailabilityDto: available, dayOfWeek, endTime, id, slotDurationMinutes, staffMemberId, startTime
+AvailabilityRequest: available, dayOfWeek, endTime, slotDurationMinutes, staffMemberId, startTime
+BookingAnalyticsPointDto: cancelled, completed, date, total
+BookingContactDto: bookingId, name, phone, role
+BookingDto: bookingDate, bookingType, cancellationReason, cancelledAt, cancelledBy, checkedInAt, commissionAmount, completionNote, createdAt, customer, destinationAmendedAt, endTime, estimatedArrivalMinutes, homeService, id, notes, paymentMethod, paymentStatus, penaltyApplied, proposalExpiresAt, proposedDate, proposedStartTime, provider, rejectionReason, reviewed, savedAddress, service, staffMember, startTime, status, totalPrice, travelFee, travelFeeQuote, travelFeeQuoteStatus
+BookingRequest: bookingDate, bookingType, homeService, notes, paymentMethod, providerId, savedAddressId, serviceId, staffMemberId, startTime
+BookingRulesDto: cancellationCutoffHours, providerCancelPenaltyPercent, responseWindowMinutes
+BookingWithAlternativesDto: alternativeProviders, booking
+ChangePhone: code, currentPassword, phone
+ChatMessageDto: bookingId, createdAt, id, message, readByRecipient, removed, sender, type
+ChatMessageRequest: message
+ChatModerationDto: bookingId, createdAt, message, messageId, moderationCaseId, reason, removed, senderName
+CommissionLedgerDto: bookingAmount, bookingId, commissionAmount, commissionPercent, createdAt, id, providerId, settledAt, status
+CommissionSettingDto: commissionPercent
+ComplaintDto: adminNotes, bookingId, category, createdAt, description, flagged, id, priority, reporterName, status, targetProviderId, targetProviderName, targetProviderOwnerUserId, targetUserId, targetUserName
+ConfirmIdentity: code, password
+CreateAdmin: email, fullName, password, permissions, phone
+CurrentPassword: currentPassword
+DashboardDto: averageRating, completedBookings, confirmedBookings, pendingBookings, todayBookings, totalBookings, totalClients, totalRevenue, totalReviews
+EditUser: email, fullName, phone
+EnableTotp: code
+FreeTextBody: empty
+GalleryImageDto: createdAt, hidden, id, url
+InboxItemDto: body, createdAt, id, kind, targetRoute, title
+LedgerEntryDto: bookingAmount, bookingId, commissionAmount, commissionPercent, createdAt, customerName, id, serviceName, settledAt, status
+Line: displayNumber, enabled, label, number, primary
+Login: identifier, password
+Logout: refreshToken
+ModerationCaseDto: adminNotes, createdAt, id, imageHidden, imageUrl, providerId, providerName, reason, status, targetId, targetType
+ModerationRequest: adminNotes, reason, targetId, targetType
+NotificationDto: bodyAr, bodyEn, createdAt, id, read, relatedBookingId, relatedProviderId, titleAr, titleEn, type
+NotificationPreferencesDto: muteAll, notifyEmail, notifyPush, notifySms, notifyWhatsapp, quietHoursEnd, quietHoursStart
+PageAdminSafetyEventDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageAuditLogDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageBookingDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageChatModerationDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageCommissionLedgerDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageComplaintDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageModerationCaseDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageNotificationDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageProviderSummaryDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageProviderVerificationDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageReviewDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageReviewModerationDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageSettlementRowDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageUserDto: content, empty, first, last, number, numberOfElements, pageable, size, sort, totalElements, totalPages
+PageableObject: offset, pageNumber, pageSize, paged, sort, unpaged
+ProviderDetailDto: address, availabilities, averageRating, bio, businessName, busyNow, distanceKm, gallery, galleryImages, homeServiceTravelFee, id, latitude, longitude, offlineMode, openNow, owner, primaryCategory, providerType, serviceRadiusKm, services, settlementPaused, staffMembers, startingPrice, totalReviews, travelBufferMinutes, vacationMode, verificationStatus, verifiedAt
+ProviderProfileRequest: address, bio, businessName, latitude, longitude, primaryCategory, providerType, serviceRadiusKm, travelBufferMinutes
+ProviderSettingsDto: cancellationCutoffHoursOverride, commissionOverridePercent, effectiveCancellationCutoffHours, effectiveCommissionPercent, effectiveProviderCancelPenaltyPercent, effectiveResponseWindowMinutes, homeServiceTravelFee, platformCancellationCutoffHours, platformCommissionPercent, platformProviderCancelPenaltyPercent, platformResponseWindowMinutes, providerCancelPenaltyPercentOverride, providerId, providerName, responseWindowMinutesOverride
+ProviderSummaryDto: address, averageRating, businessName, busyNow, distanceKm, id, latitude, longitude, offlineMode, openNow, ownerName, primaryCategory, profileImageUrl, providerType, saved, settlementPaused, startingPrice, totalReviews, vacationMode, verificationStatus, verifiedAt
+ProviderVerificationDto: acceptedTermsVersion, businessName, city, galleryCount, id, latitude, longitude, maxServicePrice, minServicePrice, nationalIdBackPath, nationalIdFrontPath, ownerEmail, ownerName, ownerPhone, primaryCategory, rejectionReason, selfiePath, serviceCount, submittedAt, termsAcceptedAt, verificationNote, verificationStatus
+RefreshToken: refreshToken
+Register: email, fullName, gender, password, phone, preferredLanguage, role, verificationReceipt
+RescheduleRequest: bookingDate, reason, startTime
+ResetPassword: code, email, newPassword, phone, singleDestination
+ReviewDto: bookingId, comment, createdAt, direction, hidden, id, provider, quickTags, rating, repliedAt, reply, serviceName, user
+ReviewModerationDto: authorName, comment, createdAt, hidden, moderationCaseId, providerName, rating, reason, reviewId
+ReviewRequest: bookingId, comment, direction, quickTags, rating
+SafetyEventDto: actor, bookingId, contactsFailed, contactsPending, contactsTexted, createdAt, id, latitude, locationAccuracy, locationTime, longitude, notes, resolutionNotes, resolved, resolvedAt, resolvedByName, supportAlerted, type
+SafetyEventRequest: latitude, locationAccuracy, locationTime, longitude, notes, type
+SavedAddressDto: addressLine, defaultAddress, id, label, latitude, longitude
+SavedAddressRequest: addressLine, defaultAddress, label, latitude, longitude
+SendOtp: email, phone, singleDestination
+ServiceDto: active, category, description, durationMinutes, id, name, price, pricingType, transportIncluded
+ServiceRequest: category, description, durationMinutes, name, price, pricingType, transportIncluded
+SettlementDetailDto: accountSuspended, commissionOverridePercent, commissionPercent, dueDate, entries, paymentReportedAt, platformCommissionPercent, providerId, providerName, settlementPaused, status, totalOwed
+SettlementOverviewDto: commissionPercent, providerCount, totalOwed
+SettlementRowDto: accountSuspended, balanceOwed, commissionOverridePercent, commissionPercent, dueDate, grossAmount, paymentReportedAt, platformCommissionPercent, providerId, providerName, settlementPaused, status
+SettlementSummaryDto: balanceLimit, commissionPercent, dueAmount, dueDate, entries, overdueAmount, owedAmount, paymentReportedAt, providerId, settlementPaused, status
+SortObject: empty, sorted, unsorted
+SosDeliveryDto: attempts, lastError, phone, recipientKind, status, updatedAt
+StaffMemberDto: active, fullName, id, phone, providerId, serviceIds, skills, title
+StaffMemberRequest: active, fullName, phone, serviceIds, skills, title
+StreamingResponseBody: 
+SuccessAdminDashboardDto: data, message, success
+SuccessAdminSafetyEventDto: data, message, success
+SuccessAuthResponse: data, message, success
+SuccessAvailabilityDto: data, message, success
+SuccessBookingContactDto: data, message, success
+SuccessBookingDto: data, message, success
+SuccessBookingRulesDto: data, message, success
+SuccessBookingWithAlternativesDto: data, message, success
+SuccessBoolean: data, message, success
+SuccessChatMessageDto: data, message, success
+SuccessCommissionLedgerDto: data, message, success
+SuccessCommissionSettingDto: data, message, success
+SuccessComplaintDto: data, message, success
+SuccessDashboardDto: data, message, success
+SuccessListAvailabilityDto: data, message, success
+SuccessListBookingAnalyticsPointDto: data, message, success
+SuccessListChatMessageDto: data, message, success
+SuccessListGalleryImageDto: data, message, success
+SuccessListInboxItemDto: data, message, success
+SuccessListProviderSummaryDto: data, message, success
+SuccessListSafetyEventDto: data, message, success
+SuccessListSavedAddressDto: data, message, success
+SuccessListServiceDto: data, message, success
+SuccessListStaffMemberDto: data, message, success
+SuccessListString: data, message, success
+SuccessListTermsPolicyDto: data, message, success
+SuccessListTimeSlotDto: data, message, success
+SuccessListTrustedContactDto: data, message, success
+SuccessLong: data, message, success
+SuccessMapStringBoolean: data, message, success
+SuccessMapStringObject: data, message, success
+SuccessMapStringString: data, message, success
+SuccessModerationCaseDto: data, message, success
+SuccessNotificationDto: data, message, success
+SuccessNotificationPreferencesDto: data, message, success
+SuccessPageAdminSafetyEventDto: data, message, success
+SuccessPageAuditLogDto: data, message, success
+SuccessPageBookingDto: data, message, success
+SuccessPageChatModerationDto: data, message, success
+SuccessPageCommissionLedgerDto: data, message, success
+SuccessPageComplaintDto: data, message, success
+SuccessPageModerationCaseDto: data, message, success
+SuccessPageNotificationDto: data, message, success
+SuccessPageProviderSummaryDto: data, message, success
+SuccessPageProviderVerificationDto: data, message, success
+SuccessPageReviewDto: data, message, success
+SuccessPageReviewModerationDto: data, message, success
+SuccessPageSettlementRowDto: data, message, success
+SuccessPageUserDto: data, message, success
+SuccessProviderDetailDto: data, message, success
+SuccessProviderSettingsDto: data, message, success
+SuccessReviewDto: data, message, success
+SuccessSafetyEventDto: data, message, success
+SuccessSavedAddressDto: data, message, success
+SuccessServiceDto: data, message, success
+SuccessSettlementDetailDto: data, message, success
+SuccessSettlementOverviewDto: data, message, success
+SuccessSettlementSummaryDto: data, message, success
+SuccessStaffMemberDto: data, message, success
+SuccessSupportContactDto: data, message, success
+SuccessTermsPolicyDto: data, message, success
+SuccessTrustedContactDto: data, message, success
+SuccessTwoFactorSetupDto: data, message, success
+SuccessUserActivityDto: data, message, success
+SuccessUserDto: data, message, success
+SuccessVerificationCountsDto: data, message, success
+SuccessVoid: data, message, success
+SupportContactDto: availabilityHoursAr, availabilityHoursEn, numbers, supportEmail, whatsappEnabled, whatsappNumber, whatsappNumberDisplay
+SupportNumberDto: displayNumber, enabled, label, number, primary
+SupportSettingsRequest: availabilityHoursAr, availabilityHoursEn, numbers, supportEmail, whatsappEnabled
+TermsPolicyDto: active, changeNote, contentAr, contentEn, createdAt, id, pdfUrl, publishedBy, type, version
+TimeSlotDto: booked, endTime, startTime
+TrustedContactDto: createdAt, id, name, phone, relationship
+TrustedContactRequest: name, phone, relationship
+TwoFactorSetupDto: otpAuthUri, secret
+UpdateLanguage: preferredLanguage
+UpdateNotificationPreferencesRequest: clearQuietHours, muteAll, notifyEmail, notifyPush, notifySms, notifyWhatsapp, quietHoursEnd, quietHoursStart
+UpdatePreferencesRequest: clearSearchArea, searchAreaLabel, searchAreaLatitude, searchAreaLongitude, searchRadiusMaxKm, searchRadiusMinKm
+UpdateProfileRequest: currentPassword, email, fullName, profileImageUrl
+UpdatePushTokenRequest: platform, token
+UserActivityDto: bookings, complaints, reviews
+UserDto: acceptedTermsVersion, active, bookingCount, createdAt, email, fullName, gender, id, pendingEmail, permissions, phone, preferredLanguage, profileImageUrl, providerNote, providerOnboarding, providerProfileId, providerStatus, reviewCount, role, searchAreaLabel, searchAreaLatitude, searchAreaLongitude, termsAccepted, termsAcceptedAt, termsUpToDate
+VerificationCountsDto: approved, pending, rejected, suspended
+VerifyEmail: code
+VerifyMfa: code, mfaToken
+VerifyOtp: code, email, phone, singleDestination
