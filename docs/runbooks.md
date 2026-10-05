@@ -189,6 +189,10 @@ Send a test once after setup:
 Also set up an outside uptime check (UptimeRobot, Better Stack) on
 `https://<API_DOMAIN>/api/actuator/health`: it still works when the whole server is down.
 
+Turn on the monitor's **SSL certificate expiry** warning (14 days) for the API, admin and site domains too: Caddy renews
+automatically, but a failed renewal (DNS change, port 80 blocked) is only visible from outside until the certificate lapses.
+The stack itself watches Redis (`RedisDown`), disk, memory, the database pool and the backup copies.
+
 ## Load smoke test before launch
 
 `deploy/loadtest/smoke.js` is a k6 script for the public read paths (health, nearby, search). Run it against staging only:

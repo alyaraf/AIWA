@@ -41,6 +41,9 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         return toDetails(user, current);
     }
 
+    /** Shaped like a BCrypt hash so the encoder compares and fails quietly; no password produces it. */
+    private static final String EXPIRED_PASSWORD_HASH = "$2a$10$" + "A".repeat(53);
+
     private UserDetails toDetails(User user, String identifier) {
         List<GrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
@@ -60,7 +63,8 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         return new AiwaUserDetails(
                 user.getId(),
                 identifier,
-                user.getPassword(),
+                // F-17: an expired temporary password no longer matches anything (an unusable bcrypt-shaped value).
+                user.hasExpiredTempPassword() ? EXPIRED_PASSWORD_HASH : user.getPassword(),
                 user.isActive(),
                 authorities,
                 user.getTokensValidAfter()

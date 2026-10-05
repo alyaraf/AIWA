@@ -43,6 +43,10 @@ public class AdminUsersController {
     private final com.aiwa.service.impl.AccountDeletionService accountDeletion;
     private final com.aiwa.service.impl.BookingServiceImpl bookingService;
 
+    /** F-17: how long a temporary password issued by support keeps working. */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.auth.temp-password-hours:24}")
+    private long tempPasswordHours = 24;
+
     @GetMapping
     @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT_OR_FINANCE)
     @Operation(summary = "List all users — filter by role, search by name/phone/email")
@@ -453,6 +457,8 @@ public class AdminUsersController {
         }
         String temp = generateTempPassword();
         target.setPassword(passwordEncoder.encode(temp));
+        // F-17: the temporary password stops working after a day; the user then sets their own (forgot password).
+        target.setTempPasswordExpiresAt(java.time.Instant.now().plus(java.time.Duration.ofHours(tempPasswordHours)));
         // Sessions opened with the old password (possibly by whoever locked the user out) end now.
         target.setTokensValidAfter(java.time.Instant.now());
         userRepo.save(target);
@@ -472,7 +478,7 @@ public class AdminUsersController {
 
     /** SMS to the phone, else email to the address. Returns {delivery, sentTo}; throws when neither works. */
     private java.util.Map<String, String> deliverTemporaryPassword(User u, String temp) {
-        String text = "AIWA: your temporary password is " + temp + ". Sign in and change it now. "
+        String text = "AIWA: your temporary password is " + temp + ". It works for " + tempPasswordHours + " hours: sign in, then set your own password with Forgot password. "
                 + "If you did not ask for a reset, contact AIWA support.";
         if (u.getPhone() != null && smsService != null) {
             try {

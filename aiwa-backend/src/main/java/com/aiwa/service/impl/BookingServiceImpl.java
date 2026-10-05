@@ -29,6 +29,20 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BookingServiceImpl {
 
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMeterRegistry(io.micrometer.core.instrument.MeterRegistry registry) {
+        this.meterRegistry = registry;
+    }
+
+    /** F-06: aiwa.booking.completed{cash}, for the CashNotCollectedRateHigh alert (commission avoidance shows up as a rising share). */
+    private void countCompletion(boolean cashCollected) {
+        if (meterRegistry != null) {
+            meterRegistry.counter("aiwa.booking.completed", "cash", cashCollected ? "collected" : "not_collected").increment();
+        }
+    }
+
     private final BookingRepository bookingRepo;
     private final UserRepository userRepo;
     private final ProviderProfileRepository providerRepo;
@@ -769,6 +783,7 @@ public class BookingServiceImpl {
             booking.setCompletionNote(n.length() > 500 ? n.substring(0, 500) : n);
         }
 
+        countCompletion(cashCollected);
         if (cashCollected) {
             booking.setPaymentStatus(PaymentStatus.CASH_CONFIRMED);
             bookingRepo.save(booking);

@@ -170,3 +170,14 @@ token is memory-only; `localStorage` keeps only a non-secret session hint. Cooki
 Backend: 410 tests pass (incl. `AdminRefreshCookieApiTest`); admin: 120 tests pass; checked in a real browser (sign-in, reload
 restore, CSRF 403, logout then 401). Details: `docs/admin-session-hardening.md`. Deploy note: admins sign in once more after the
 upgrade; admin and API must stay on the same registrable domain.
+
+### Remaining items pass (same day)
+
+Done: F-17 (temporary passwords expire after 24 h, migration V33), F-18 (all GitHub Actions pinned to commit SHAs; fixed a wrong
+Trivy tag), F-06 (cash-not-collected metric + alert), F-07 (RedisDown alert via redis-exporter; certificate expiry via the outside
+uptime monitor), F-20 (APNs production entitlement for Release/Profile builds). Backend 411 tests, 0 failures.
+
+Left for you (cannot be done in the repo): F-02 operations (bucket, `deploy/secrets/rclone.conf`, off-server key copies, restore
+drill), F-09 signed `docs/launch-signoff.md`, the `NVD_API_KEY` repository secret, `ADMIN_ALLOWED_IPS`, staging checks
+(`open-in-view: false`, k6, compose smoke), Flutter/device/iOS-archive/provider-sandbox tests. F-16 (lockout reveals an account
+exists) is an accepted trade-off. New deploy note: Flyway migration V33 runs on the next start.

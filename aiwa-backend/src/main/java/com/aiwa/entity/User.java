@@ -111,6 +111,16 @@ public class User extends BaseEntity {
      */
     private java.time.Instant tokensValidAfter;
 
+    /**
+     * F-17: set when support issues a temporary password; sign-in with the current password stops working at
+     * this instant. Cleared when the user chooses their own password. Null = no expiry.
+     */
+    private java.time.Instant tempPasswordExpiresAt;
+
+    public boolean hasExpiredTempPassword() {
+        return tempPasswordExpiresAt != null && !tempPasswordExpiresAt.isAfter(java.time.Instant.now());
+    }
+
     // ── Notification preferences (channels + quiet hours) ─────────────────────
     @Builder.Default
     private boolean notifyPush = true;

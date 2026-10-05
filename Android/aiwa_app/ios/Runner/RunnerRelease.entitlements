@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- F-20: Release and Profile builds use this file (APNs production); Debug uses Runner.entitlements (sandbox).
+	     The two files must otherwise stay identical. -->
+	<key>aps-environment</key>
+	<string>production</string>
+	<!-- FE-13 / R2-21: https share links open the app. The domain comes from
+	     APP_LINK_DOMAIN in ios/Flutter/Signing.xcconfig. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:$(APP_LINK_DOMAIN)</string>
+	</array>
+</dict>
+</plist>

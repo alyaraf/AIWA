@@ -186,3 +186,29 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: "No off-server backup status: the offsite container is down or has never completed a copy"
+
+      # F-07: Redis is down (redis_exporter). OTP codes answer 503 and rate limits fall back to per-process counters.
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Redis is not answering: sign-up/reset codes fail with 503 and rate limiting is degraded; check the redis container"
+
+      - alert: RedisMetricsMissing
+        expr: absent(redis_up)
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "No Redis metrics: redis-exporter is down, so a Redis outage would not alert"
+
+      # F-06: more than 20% of completed bookings in 6 h were closed by the provider as "cash not collected"
+      # (no commission is charged for those). Needs at least 10 completions to avoid noise.
+      - alert: CashNotCollectedRateHigh
+        expr: >
+          sum(increase(aiwa_booking_completed_total{cash="not_collected"}[6h]))
+          / clamp_min(sum(increase(aiwa_booking_completed_total[6h])), 1) > 0.2
+          and sum(increase(aiwa_booking_completed_total[6h])) >= 10
+        labels: { severity: warning }
+        annotations:
+          summary: "Over 20% of recent completed bookings were closed as cash not collected; review the disputes queue for commission avoidance"

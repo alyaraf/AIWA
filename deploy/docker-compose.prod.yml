@@ -261,6 +261,18 @@ services:
       - ./monitoring/alertmanager-entrypoint.sh:/alertmanager-entrypoint.sh:ro
       - alertmanager_data:/alertmanager
 
+  # F-07: lets Prometheus see Redis go down (RedisDown alert).
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    restart: unless-stopped
+    mem_limit: 64m
+    logging: *default-logging
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis: { condition: service_healthy }
+
   redis:
     image: redis:7.4.11-alpine
     restart: unless-stopped

@@ -294,6 +294,7 @@ public class AuthServiceImpl {
         }
 
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
+        user.setTempPasswordExpiresAt(null); // F-17: the user chose their own password
         user.setTokensValidAfter(Instant.now());
         userRepository.save(user);
         userRepository.clearLoginAttempts(user.getId()); // the owner proved themselves by OTP: lift a sign-in lock
@@ -418,7 +419,7 @@ public class AuthServiceImpl {
     /** One counted guess at the current password (CR-01): a missing or wrong one is refused. */
     private void requirePasswordGuess(User user, String password) {
         claimSignInAttempt(user);
-        if (password == null || !passwordEncoder.matches(password, user.getPassword())) {
+        if (password == null || user.hasExpiredTempPassword() || !passwordEncoder.matches(password, user.getPassword())) {
             throw new BusinessException("auth.error.wrong_password");
         }
     }

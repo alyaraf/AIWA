@@ -111,4 +111,36 @@ class SupportResetLiftsSignInLockApiTest {
 
         assertThat(loginStatus(locked, temporary)).as("the temporary password works at once").isEqualTo(200);
     }
+
+    /** F-17: the temporary password works for a day, then stops; a normal password never expires. */
+    @Test
+    void aTemporaryPasswordExpires() throws Exception {
+        User support = user(UserRole.ADMIN, Set.of(AdminPermission.SUPPORT));
+        String supportToken = json.readTree(mvc.perform(fromNewIp(post("/auth/login"),
+                        Map.of("identifier", support.getEmail(), "password", PASSWORD)))
+                .andReturn().getResponse().getContentAsString()).get("data").get("accessToken").asText();
+        User customer = user(UserRole.CUSTOMER, Set.of());
+
+        mvc.perform(post("/admin/users/" + customer.getId() + "/reset-password").header("Authorization", "Bearer " + supportToken));
+        org.mockito.ArgumentCaptor<String> text = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(emailService, org.mockito.Mockito.atLeastOnce()).send(
+                org.mockito.ArgumentMatchers.eq(customer.getEmail()), org.mockito.ArgumentMatchers.anyString(), text.capture());
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("Aiwa-[A-Za-z0-9]{8}").matcher(text.getValue());
+        assertThat(m.find()).isTrue();
+        String temporary = m.group();
+
+        User stored = userRepo.findById(customer.getId()).orElseThrow();
+        assertThat(stored.getTempPasswordExpiresAt()).isAfter(java.time.Instant.now().plus(java.time.Duration.ofHours(23)));
+        assertThat(text.getValue()).contains("24 hours");
+        assertThat(loginStatus(customer, temporary)).isEqualTo(200);
+
+        stored.setTempPasswordExpiresAt(java.time.Instant.now().minusSeconds(5));
+        userRepo.save(stored);
+        assertThat(loginStatus(customer, temporary)).as("expired").isEqualTo(401);
+
+        // a password nobody issued temporarily is unaffected
+        User plain = user(UserRole.CUSTOMER, Set.of());
+        assertThat(plain.hasExpiredTempPassword()).isFalse();
+        assertThat(loginStatus(plain, PASSWORD)).isEqualTo(200);
+    }
 }
