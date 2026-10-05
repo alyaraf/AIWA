@@ -44,6 +44,30 @@ class AdminUsersControllerTest {
             new AdminUsersController(userRepo, providerRepo, bookingRepo, reviewRepo, complaintRepo, encoder, notificationService, auditService, accountDeletion,
                     mock(com.aiwa.service.impl.BookingServiceImpl.class));
 
+    {
+        // F-03: changing a sign-in contact is a super-admin action; "admin@x.com" is that admin in these tests.
+        when(userRepo.findByLogin("admin@x.com")).thenReturn(Optional.of(User.builder().id(900L).email("admin@x.com")
+                .role(UserRole.ADMIN).active(true)
+                .adminPermissions(new java.util.HashSet<>(Set.of(AdminPermission.SUPER_ADMIN))).build()));
+    }
+
+    @Test
+    void aSupportAdminCannotMoveAUsersSignInContact() {
+        User customer = User.builder().id(3L).fullName("Layla").email("layla@x.com").phone("+201000000001")
+                .role(UserRole.CUSTOMER).active(true).build();
+        User support = User.builder().id(901L).email("sup@x.com").role(UserRole.ADMIN).active(true)
+                .adminPermissions(new java.util.HashSet<>(Set.of(AdminPermission.SUPPORT))).build();
+        when(userRepo.findById(3L)).thenReturn(Optional.of(customer));
+        when(userRepo.findByLogin("sup@x.com")).thenReturn(Optional.of(support));
+        when(userRepo.countActiveSuperAdmins()).thenReturn(1L);
+
+        assertThatThrownBy(() -> controller.editUser(3L, editReq(null, null, "01099999999"), principal("sup@x.com")))
+                .hasMessageContaining("SUPER_ADMIN");
+        assertThatThrownBy(() -> controller.editUser(3L, editReq(null, "evil@x.com", null), principal("sup@x.com")))
+                .hasMessageContaining("SUPER_ADMIN");
+        verify(userRepo, never()).save(any());
+    }
+
     private UserDetails principal(String username) {
         return new org.springframework.security.core.userdetails.User(
                 username, "pw", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));

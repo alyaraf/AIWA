@@ -8,6 +8,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    # F-08: no database connection is held for the whole request. Lazy relations are mapped inside
+    # transactions (the whole test suite runs with this off). Check on staging before launch.
+    open-in-view: false
   flyway:
     enabled: true
 

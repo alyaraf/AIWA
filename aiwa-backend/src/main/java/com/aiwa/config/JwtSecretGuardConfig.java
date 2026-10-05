@@ -32,6 +32,11 @@ public class JwtSecretGuardConfig {
 
     @PostConstruct
     public void validateJwtSecret() {
+        // F-14: HS256 needs at least 32 bytes; a short secret would otherwise fail on the first login, not at startup.
+        if (jwtSecret == null || jwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException("Refusing to start with profile '" + activeProfile
+                    + "': JWT_SECRET must be at least 32 bytes long (openssl rand -base64 48).");
+        }
         if (DEFAULT_JWT_SECRET.equals(jwtSecret)) {
             throw new IllegalStateException(
                     "Refusing to start with profile '" + activeProfile + "': JWT_SECRET is still the checked-in "

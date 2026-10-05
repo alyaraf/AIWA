@@ -287,11 +287,25 @@ public class SettlementController {
     @PatchMapping("/admin/settlements/{id}/settle")
     @PreAuthorize(Perms.FINANCE)
     @org.springframework.transaction.annotation.Transactional
-    public ResponseEntity<ApiResponse.Success<ApiResponse.CommissionLedgerDto>> settle(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse.Success<ApiResponse.CommissionLedgerDto>> settle(
+            @PathVariable Long id,
+            @RequestParam(required = false) BigDecimal expectedAmount,
+            @RequestParam(required = false) String reference) {
         CommissionLedgerEntry entry = ledgerRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ledger entry", id));
+        // F-06: one FINANCE click must not forgive commission. The amount received and the payment
+        // reference (bank transfer / wallet receipt) are required, like confirm-payout's expectedAmount.
+        if (expectedAmount == null) {
+            throw new com.aiwa.exception.BusinessException("settlement.error.amount_required");
+        }
+        if (reference == null || reference.isBlank() || reference.trim().length() > 100) {
+            throw new com.aiwa.exception.BusinessException("A payment reference (1-100 characters) is required");
+        }
         if (!OUTSTANDING.contains(entry.getStatus())) {
             throw new com.aiwa.exception.BusinessException("settlement.error.not_outstanding");
+        }
+        if (entry.getCommissionAmount().compareTo(expectedAmount) != 0) {
+            throw new com.aiwa.exception.BusinessException("settlement.error.amount_mismatch");
         }
         entry.setStatus(LedgerEntryStatus.SETTLED);
         entry.setSettledAt(LocalDateTime.now());
@@ -304,7 +318,7 @@ public class SettlementController {
             provider.setSettlementReportedAt(null);
         }
         providerRepo.save(provider);
-        auditService.record("SETTLEMENT_CONFIRMED", "ledger #" + entry.getId());
+        auditService.record("SETTLEMENT_CONFIRMED", "ledger #" + entry.getId() + " · EGP " + expectedAmount + " · ref " + reference.trim());
         notificationService.send(provider.getUser().getId(), NotificationType.SETTLEMENT_CONFIRMED,
                 "Settlement confirmed", "تم تأكيد التسوية",
                 "Settlement was confirmed for ledger entry #" + entry.getId(),

@@ -44,6 +44,7 @@ public class AdminUsersController {
     private final com.aiwa.service.impl.BookingServiceImpl bookingService;
 
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT_OR_FINANCE)
     @Operation(summary = "List all users — filter by role, search by name/phone/email")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.UserDto>>> listUsers(
@@ -118,6 +119,7 @@ public class AdminUsersController {
     }
 
     @GetMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT_OR_FINANCE)
     @Operation(summary = "Get user detail by ID")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<ApiResponse.UserDto>> getUser(@PathVariable Long id) {
@@ -127,6 +129,7 @@ public class AdminUsersController {
     }
 
     @GetMapping("/{id}/activity")
+    @org.springframework.security.access.prepost.PreAuthorize(com.aiwa.security.Perms.SUPPORT_OR_FINANCE)
     @Operation(summary = "Recent bookings, reviews and complaints for one account (ADMIN)")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<ApiResponse.UserActivityDto>> activity(@PathVariable Long id) {
@@ -353,6 +356,15 @@ public class AdminUsersController {
         // CR-02: a number saved as 010… was never found by sign-in or reset, which look up +2010….
         String email = email(request.getEmail());
         String phone = com.aiwa.util.Identifiers.normalizePhone(request.getPhone());
+
+        // F-03: the sign-in contact is where a temporary password or an OTP reset goes, so moving it
+        // is account-takeover capable. Support may fix a name; changing email or phone is a
+        // super-admin action (the owner and the old contacts are also told, below).
+        boolean contactChange = (email != null && !email.equalsIgnoreCase(target.getEmail() == null ? "" : target.getEmail()))
+                || (phone != null && !phone.equals(target.getPhone()));
+        if (contactChange) {
+            requireSuperAdmin(resolveUser(userDetails));
+        }
 
         if (name != null && !name.equals(target.getFullName())) {
             target.setFullName(name);

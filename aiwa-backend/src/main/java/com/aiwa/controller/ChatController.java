@@ -40,6 +40,7 @@ public class ChatController {
     private com.aiwa.service.impl.AccountRateLimiter limiter;
 
     @GetMapping("/bookings/{bookingId}/chat")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.ChatMessageDto>>> list(
             @PathVariable Long bookingId,
             @RequestParam(required = false) Long afterId,
@@ -54,6 +55,7 @@ public class ChatController {
     }
 
     @PostMapping("/bookings/{bookingId}/chat")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<ApiResponse.ChatMessageDto>> send(
             @PathVariable Long bookingId,
             @Valid @RequestBody ChatMessageRequest request,
@@ -90,6 +92,7 @@ public class ChatController {
 
     @PostMapping("/bookings/{bookingId}/chat/{messageId}/report")
     @Operation(summary = "Report an abusive/inappropriate chat message (either party to the booking)")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse.Success<Void>> report(
             @PathVariable Long bookingId,
             @PathVariable Long messageId,

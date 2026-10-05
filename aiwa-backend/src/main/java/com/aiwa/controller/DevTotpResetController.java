@@ -35,6 +35,18 @@ public class DevTotpResetController {
 
     private final UserRepository userRepo;
 
+    /** F-10: the unauthenticated reset may only exist next to a throwaway in-memory database. */
+    @org.springframework.beans.factory.annotation.Value("${spring.datasource.url:}")
+    private String datasourceUrl;
+
+    @jakarta.annotation.PostConstruct
+    void refuseOutsideAnInMemoryDatabase() {
+        if (!datasourceUrl.startsWith("jdbc:h2:mem:")) {
+            throw new IllegalStateException("The local profile (unauthenticated /dev/2fa/reset, H2 console, demo admin) "
+                    + "must only run on an in-memory H2 database, not on '" + datasourceUrl.replaceAll("//.*@?", "//…") + "'");
+        }
+    }
+
     @PostMapping("/reset")
     @Transactional
     @Operation(summary = "Wipe 2FA for the account with this email/phone — local dev only, does not issue any code")

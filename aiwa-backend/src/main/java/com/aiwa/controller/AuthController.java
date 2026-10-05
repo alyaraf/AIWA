@@ -66,7 +66,6 @@ public class AuthController {
             @Valid @RequestBody AuthRequest.Register request) {
         ApiResponse.AuthResponse auth = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString())
                 .body(ApiResponse.Success.of("Registration successful", auth));
     }
 
@@ -88,10 +87,7 @@ public class AuthController {
             throw e;
         }
         countLogin(auth.isMfaRequired() ? "mfa_required" : "ok");
-        ResponseEntity.BodyBuilder response = ResponseEntity.ok();
-        if (auth.getAccessToken() != null) {
-            response.header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString());
-        }
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok(); // F-11: no access-token cookie is issued; the apps use the Bearer header
         return response.body(ApiResponse.Success.of(auth));
     }
 
@@ -101,7 +97,6 @@ public class AuthController {
             @Valid @RequestBody AuthRequest.RefreshToken request) {
         ApiResponse.AuthResponse auth = authService.refreshToken(request.getRefreshToken());
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString())
                 .body(ApiResponse.Success.of(auth));
     }
 
@@ -211,7 +206,6 @@ public class AuthController {
             @AuthenticationPrincipal UserDetails userDetails) {
         ApiResponse.AuthResponse auth = authService.confirmEmail(userDetails.getUsername(), request.getCode());
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString())
                 .body(ApiResponse.Success.of("Email confirmed", auth));
     }
 
@@ -223,7 +217,6 @@ public class AuthController {
             @AuthenticationPrincipal UserDetails userDetails) {
         ApiResponse.AuthResponse auth = authService.changePhone(userDetails.getUsername(), request);
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString())
                 .body(ApiResponse.Success.of("Phone number updated", auth));
     }
 
@@ -387,20 +380,9 @@ public class AuthController {
             @Valid @RequestBody AuthRequest.VerifyMfa request) {
         ApiResponse.AuthResponse auth = authService.verifyMfa(request.getMfaToken(), request.getCode());
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildAccessTokenCookie(auth).toString())
                 .body(ApiResponse.Success.of(auth));
     }
 
-    private ResponseCookie buildAccessTokenCookie(ApiResponse.AuthResponse auth) {
-        long maxAgeSeconds = Math.max(1, jwtUtils.getRemainingValidityMillis(auth.getAccessToken()) / 1000);
-        return ResponseCookie.from(ACCESS_TOKEN_COOKIE, auth.getAccessToken())
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(maxAgeSeconds)
-                .build();
-    }
 
     private ResponseCookie clearAccessTokenCookie() {
         return ResponseCookie.from(ACCESS_TOKEN_COOKIE, "")

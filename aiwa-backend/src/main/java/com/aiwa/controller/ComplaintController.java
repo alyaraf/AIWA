@@ -60,7 +60,7 @@ public class ComplaintController {
     }
 
     @GetMapping("/admin/complaints")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.SUPPORT)
     @Operation(summary = "List all complaints (ADMIN)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ComplaintDto>>> adminList(
             @RequestParam(required = false) ComplaintStatus status,

@@ -188,7 +188,7 @@ public class ReviewServiceImpl {
                         .build())
                 .rating(r.getRating())
                 .comment(r.getComment())
-                .quickTags(r.getQuickTags())
+                .quickTags(r.getQuickTags() == null ? null : new java.util.ArrayList<>(r.getQuickTags())) // copied inside the transaction (no lazy collection reaches the JSON writer)
                 .direction(r.getDirection())
                 .hidden(r.isHidden())
                 .bookingId(b != null ? b.getId() : null)

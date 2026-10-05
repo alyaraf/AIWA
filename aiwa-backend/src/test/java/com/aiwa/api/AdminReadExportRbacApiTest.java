@@ -118,4 +118,30 @@ class AdminReadExportRbacApiTest {
             allowed(path, admin(AdminPermission.FINANCE));
         }
     }
+
+    /** F-04: user lists, details and the complaint/verification/moderation queues hold PII; an admin with no permission is refused. */
+    @Test
+    void personalDataReadsNeedSupportOrFinance() throws Exception {
+        String none = admin();
+        for (String path : List.of("/admin/users", "/admin/complaints", "/admin/verification/pending",
+                "/admin/verification?status=APPROVED", "/admin/moderation")) {
+            forbidden(path, none);
+        }
+        allowed("/admin/users", admin(AdminPermission.FINANCE));
+        for (String path : List.of("/admin/users", "/admin/complaints", "/admin/verification/pending", "/admin/moderation")) {
+            allowed(path, admin(AdminPermission.SUPPORT));
+        }
+    }
+
+    /** F-06: settling one ledger entry needs the amount and a payment reference. */
+    @Test
+    void settlingASingleEntryNeedsAmountAndReference() throws Exception {
+        String finance = admin(AdminPermission.FINANCE);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/admin/settlements/999999/settle")
+                .header("Authorization", finance)).andExpect(status().isNotFound());
+        String support = admin(AdminPermission.SUPPORT);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/admin/settlements/1/settle")
+                .param("expectedAmount", "10").param("reference", "TX1")
+                .header("Authorization", support)).andExpect(status().isForbidden());
+    }
 }

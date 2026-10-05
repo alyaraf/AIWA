@@ -129,6 +129,12 @@ public class OtpServiceImpl {
 
     public void sendEmailOtp(String email) {
         String id = normalizeEmail(email);
+        // F-15: email codes count against the same global hourly/daily ceiling as SMS (and its alert),
+        // so the endpoint cannot be used to mail unlimited different addresses.
+        whileRedisIsUp(() -> {
+            requireGlobalBudget();
+            return null;
+        });
         String code = issue(id);
         emailService.send(id, "Your AIWA verification code",
                 "Your AIWA verification code is " + code + ". It expires in " + OTP_TTL_MINUTES

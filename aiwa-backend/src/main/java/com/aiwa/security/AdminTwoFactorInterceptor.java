@@ -1,6 +1,5 @@
 package com.aiwa.security;
 
-import com.aiwa.enums.AdminPermission;
 import com.aiwa.enums.UserRole;
 import com.aiwa.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,7 +15,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * E-1 / AU-09 (owner rule 2026-10-04): a SUPER_ADMIN or FINANCE admin must turn on
+ * E-1 / AU-09 / F-03: every admin (SUPER_ADMIN, FINANCE, SUPPORT or none) must turn on
  * two-factor sign-in before using the API as an admin. Until then every call except
  * /auth/** (profile, 2FA setup, which the panel needs to walk them through the setup)
  * answers 403 with code {@value #CODE}. SA-01: this covers every route, not only
@@ -52,8 +51,6 @@ public class AdminTwoFactorInterceptor implements HandlerInterceptor, WebMvcConf
         var user = id != null ? userRepo.findById(id) : userRepo.findByLogin(ud.getUsername());
         if (user.isEmpty() || user.get().getRole() != UserRole.ADMIN || user.get().isTotpEnabled()) return true;
         var u = user.get();
-        boolean sensitive = u.hasPermission(AdminPermission.SUPER_ADMIN) || u.hasPermission(AdminPermission.FINANCE);
-        if (!sensitive) return true;
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");

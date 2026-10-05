@@ -1179,6 +1179,21 @@ public class BookingServiceImpl {
                 null, provider.getId()));
     }
 
+
+    /** F-06: a settled commission whose payment was lost is money owed back; finance is told, not just the log. */
+    private void notifyAdminsOfRefundDue(Booking booking, CommissionLedgerEntry entry) {
+        userRepo.findByRoleAndActive(UserRole.ADMIN, true).forEach(admin ->
+                notificationService.send(
+                        admin.getId(),
+                        NotificationType.PAYMENT_DISPUTED,
+                        "Refund due to provider",
+                        "مبلغ مستحق الرد للمزود",
+                        "Booking #" + booking.getId() + " lost its payment after its commission (EGP "
+                                + entry.getCommissionAmount() + ", ledger #" + entry.getId() + ") was settled. Refund it to the provider.",
+                        "فقد الحجز رقم " + booking.getId() + " دفعته بعد تسوية العمولة (رقم " + entry.getId() + "). يجب رد العمولة للمزود.",
+                        booking.getId(), booking.getProvider().getId()
+                ));
+    }
     private void notifyAdminsOfDispute(Booking booking) {
         userRepo.findByRoleAndActive(UserRole.ADMIN, true).forEach(admin ->
                 notificationService.send(
@@ -1648,6 +1663,7 @@ public class BookingServiceImpl {
             } else if (entry.getStatus() == LedgerEntryStatus.SETTLED) {
                 log.warn("Booking #{} lost its payment after its commission was settled (ledger #{}): refund it to the provider",
                         booking.getId(), entry.getId());
+                notifyAdminsOfRefundDue(booking, entry);
             }
         });
     }

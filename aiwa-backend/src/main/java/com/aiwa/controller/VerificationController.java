@@ -91,7 +91,7 @@ public class VerificationController {
     // ── Admin: review queue ───────────────────────────────────────────────────
 
     @GetMapping("/admin/verification/pending")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.SUPPORT)
     @Operation(summary = "List providers pending verification (ADMIN)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ProviderVerificationDto>>> pending(
             @RequestParam(defaultValue = "0") int page,
@@ -101,7 +101,7 @@ public class VerificationController {
     }
 
     @GetMapping("/admin/verification")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.SUPPORT)
     @Operation(summary = "List providers by verification status (ADMIN)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ProviderVerificationDto>>> byStatus(
             @RequestParam VerificationStatus status,

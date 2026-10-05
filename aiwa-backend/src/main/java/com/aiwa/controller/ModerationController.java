@@ -32,6 +32,7 @@ public class ModerationController {
     private final com.aiwa.service.impl.AuditService auditService;
 
     @GetMapping
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT)
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.ModerationCaseDto>>> list(
             @RequestParam(defaultValue = "OPEN") ModerationStatus status,

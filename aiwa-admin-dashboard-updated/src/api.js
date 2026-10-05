@@ -1,7 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
 // Mock mode only when explicitly asked for (VITE_USE_MOCKS=true); a build that
 // forgets the flag talks to the real API instead of accepting any login (OPS-8).
-const USE_MOCKS = String(import.meta.env.VITE_USE_MOCKS ?? "false") === "true";
+const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true"; // F-21: a literal comparison, so a normal build drops the mock code
 
 const TOKEN_KEY = "aiwa_admin_access_token";
 const REFRESH_KEY = "aiwa_admin_refresh_token";
@@ -339,7 +339,7 @@ export const api = {
   moderationAction: (id, payload) => request(`/admin/moderation/${id}/action?status=${encodeURIComponent(payload.status)}`, { method: "PATCH", body: JSON.stringify({ notes: payload.notes || "" }) }),
   // DR-028: these lists are paged on the server; walk every page.
   settlements: () => requestAllPages("/admin/settlements").then((items) => items.map(normalizeSettlement)),
-  settle: (id) => request(`/admin/settlements/${id}/settle`, { method: "PATCH" }),
+  settle: (id, expectedAmount, reference) => request(`/admin/settlements/${id}/settle?expectedAmount=${encodeURIComponent(expectedAmount)}&reference=${encodeURIComponent(reference)}`, { method: "PATCH" }),
   settlementOverview: () => request("/admin/settlements/overview"),
   settlementProviders: () => requestAllPages("/admin/settlements/providers"),
   settlementDetail: (providerId) => request(`/admin/settlements/provider/${providerId}`),

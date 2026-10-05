@@ -27,7 +27,7 @@ public class JwtUtils {
     private long adminRefreshExpiration = 28_800_000L;
 
     private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /**

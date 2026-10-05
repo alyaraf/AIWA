@@ -713,7 +713,7 @@ class ApiFlowIntegrationTest {
     @Test
     void aPhoneSavedBySupportInLocalFormatStillSignsInAndResets() throws Exception {
         User u = user(UserRole.CUSTOMER);
-        String support = login(user(UserRole.ADMIN, AdminPermission.SUPPORT));
+        String support = login(user(UserRole.ADMIN, AdminPermission.SUPER_ADMIN));
         String e164 = uniquePhone();                           // +2010XXXXXXXX
         String local = "0" + e164.substring(3);                // 010XXXXXXXX
 

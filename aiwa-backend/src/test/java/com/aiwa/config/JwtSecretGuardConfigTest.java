@@ -39,6 +39,13 @@ class JwtSecretGuardConfigTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+
+    @Test
+    void aShortJwtSecretIsRefusedAtStartup() {
+        assertThatThrownBy(() -> guardWith("too-short", "prod").validateJwtSecret())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("32 bytes");
+    }
     @Test
     void startsFineWithARealSecretConfigured() {
         assertThatCode(() -> guardWith("a-long-random-production-secret-value", "prod").validateJwtSecret())

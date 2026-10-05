@@ -90,10 +90,14 @@ class AdminTwoFactorApiTest {
                 .andExpect(jsonPath("$.code").value("auth.error.admin_2fa_required"));
     }
 
+    // F-03: SUPPORT can read ID documents and edit accounts, so it needs two-factor sign-in too.
     @Test
-    void supportAdminsAreNotAffected() throws Exception {
-        mvc.perform(get("/admin/users").header("Authorization", admin(false, AdminPermission.SUPPORT)))
-                .andExpect(status().isOk());
+    void supportAndPermissionlessAdminsAreRefusedToo() throws Exception {
+        for (String token : List.of(admin(false, AdminPermission.SUPPORT), admin(false))) {
+            mvc.perform(get("/admin/users").header("Authorization", token))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("auth.error.admin_2fa_required"));
+        }
     }
 
     // SA-01: the requirement covers every route an admin capability lives on, not just /admin/**.

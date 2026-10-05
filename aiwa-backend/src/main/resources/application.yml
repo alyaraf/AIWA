@@ -59,6 +59,8 @@ spring:
     # (the local profile); with it off, those endpoints throw
     # LazyInitializationException in production only. Keep the tested behaviour
     # until those mappings are moved into @Transactional services.
+    # F-08: the prod and test profiles now set this to false (the 404-test suite passes without it);
+    # only the dev/local defaults keep it on.
     open-in-view: true
 
   flyway:
