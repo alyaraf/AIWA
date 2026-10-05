@@ -1,0 +1,11 @@
+Header: 20000000 x 1; payload bytes=66
+Same application subsampling=9765; max heap=134217728
+Exception in thread "main" javax.imageio.IIOException: Caught exception during read: 
+	at java.desktop/com.sun.imageio.plugins.png.PNGImageReader.read(PNGImageReader.java:1851)
+	at PngDecodeProbe.main(PngDecodeProbe.java:35)
+Caused by: java.lang.OutOfMemoryError: Java heap space
+	at java.desktop/com.sun.imageio.plugins.png.PNGImageReader.decodePass(PNGImageReader.java:1140)
+	at java.desktop/com.sun.imageio.plugins.png.PNGImageReader.decodeImage(PNGImageReader.java:1378)
+	at java.desktop/com.sun.imageio.plugins.png.PNGImageReader.readImage(PNGImageReader.java:1518)
+	at java.desktop/com.sun.imageio.plugins.png.PNGImageReader.read(PNGImageReader.java:1844)
+	... 1 more

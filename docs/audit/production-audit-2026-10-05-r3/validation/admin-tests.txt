@@ -1,0 +1,22 @@
+
+ RUN  v4.1.11 C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/aiwa-admin-dashboard-updated
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+
+ Test Files  20 passed (20)
+      Tests  120 passed (120)
+   Start at  15:30:26
+   Duration  11.16s (transform 3.78s, setup 19.02s, import 7.40s, tests 6.53s, environment 95.97s)
+

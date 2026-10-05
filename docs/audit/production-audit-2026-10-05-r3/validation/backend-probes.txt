@@ -1,0 +1,7 @@
+ADMIN_REVIEWS: JsonMappingException: failed to lazily initialize a collection of role: com.aiwa.entity.Review.quickTags: could not initialize proxy - no Session (through reference chain: com.aiwa.dto.response.ApiResponse$Success["data"]->java.util.Collections$UnmodifiableRandomAccessList[0]->com.aiwa.dto.response.ApiResponse$ReviewDto["quickTags"]) -> LazyInitializationException: failed to lazily initialize a collection of role: com.aiwa.entity.Review.quickTags: could not initialize proxy - no Session
+UNSAVE: InvalidDataAccessApiUsageException: No EntityManager with actual transaction available for current thread - cannot reliably process 'remove' call -> TransactionRequiredException: No EntityManager with actual transaction available for current thread - cannot reliably process 'remove' call
+PENDING_DASHBOARD_PII: email=customer@audit.invalid; phone=+201000000111
+PENDING_HOME_LOCATION: Synthetic private home / 30.123456
+EXISTING_BOOKING_DESTINATION_MUTATED: Changed far away fixture / 35.0
+PERMISSIONLESS_ADMIN_SOS_READ: notes=Synthetic confidential incident; actorPhone=+201000000111; latitude=30.123456
+Fixture database: H2 memory only; repository project files unchanged

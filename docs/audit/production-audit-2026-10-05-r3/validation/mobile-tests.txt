@@ -1,0 +1,14 @@
+00:19 +166: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/widgets/profile_security_flows_test.dart: edit profile phone change sends the current password with the code
+00:19 +167: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/widgets/profile_security_flows_test.dart: edit profile phone change sends the current password with the code
+00:19 +168: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/widgets/profile_security_flows_test.dart: edit profile phone change sends the current password with the code
+00:19 +169: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: tracking_female_en
+00:19 +170: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: tracking_female_en
+00:19 +171: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: tracking_female_en
+00:19 +172: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: tracking_female_en
+00:19 +173: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/widgets/profile_security_flows_test.dart: delete account asks for the password; a wrong one keeps the sheet open
+00:19 +174: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: home_female_ar
+00:20 +175: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: provider_female_ar
+00:20 +176: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: booking_female_ar
+00:21 +177: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: tracking_female_ar
+00:21 +178: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work/snapshot/Android/aiwa_app/test/goldens/screens_golden_test.dart: (tearDownAll)
+00:21 +178: All tests passed!

@@ -1,3 +1,139 @@
+# AIWA Handoff — current status
+
+Last updated: 2026-10-05, after the round 3 remediation.
+Project: `D:\AIWA PROJECT\AIWA`; branch: `main`. Audit baseline `ac67446495a22ce11b8f2071d0f1599f3c0cdee4`; the remediation is
+**uncommitted work in the tree** (review the diff, then commit in whatever grouping you prefer).
+
+## Read this first
+
+- [Remediation record](docs/audit/production-audit-2026-10-05-r3/remediation.md): every finding and potential risk with status, fix,
+  files, tests and what is still waiting on something external. This is the current truth.
+- [Round 3 audit report](docs/audit/production-audit-2026-10-05-r3/audit.md): the original findings, kept unchanged as history.
+- [Verification log](docs/audit/production-audit-2026-10-05-r3/validation/remediation-results.md): commands and results.
+- [Launch sign-off](docs/launch-signoff.md): 34 gates (24–34 added by this pass), all still open. Fill in owner/date/evidence.
+
+**Production: not ready.** The repository-actionable defects are fixed and tested; the evidence that decides launch (staging,
+devices, providers, cloud, CI, load) does not exist yet. See "Production-readiness decision" in the remediation record.
+
+## What changed (summary)
+
+| Area | Resolved |
+| --- | --- |
+| Backend | B-01 image decode bounds; B-02/B-03 shared privacy projections; B-04 admin read matrix + filtered inbox; B-05 booking destination snapshot (V34) + amend endpoint; B-06 review serialization; B-07 unsave transaction; B-08 metric; I-06 log hygiene; P-01 profile mix guard; P-02 gateway URL rules; P-06 temporary-password sessions end at expiry; P-07 e-mail refusal in body; M-05 server onboarding stage; M-06 travel-buffer endpoint; CSV neutralization; API contract snapshot |
+| Flutter | M-01 session-safe transport/state; M-02 live-status query; M-03 multipart replay; M-04 identity kept on transient errors; M-05 resumable provider setup; M-06 narrow buffer update; M-07 full policy shown and version pinned; M-08 deferred booking; M-09 local-notification launch; M-10/M-11 paging races |
+| Admin dashboard | AD-01 CSV; AD-02 policy race; AD-03 balances; AD-04/P-03/P-04 one transport, idle limit, stale-answer guard; AD-05 SOS stale state; AD-06 refresh contract; AD-07 partial operations; AD-08 capability matrix; AD-09 hidden reviews; AD-10; AD-11 accessible dialogs and rows; AD-12 copy; AD-13 truncation notice |
+| Infrastructure | I-01 disk alerts + promtool tests; I-02 staged restore with paired rollback; I-03 backup manifest + reconciliation report; I-04 local-only compose and docs; I-05 retention policy written; P-05 admin Docker guards; CI jobs for rules, backup/restore suites and SBOM |
+
+## Validation actually completed
+
+Backend **483** tests (baseline 411), admin **164** tests + build, Flutter **analyze clean / 221** tests, backup harness **32**,
+staged-uploads failure injection **33**, restore flow **23**. A real-browser pass (mock mode) confirmed the dialog, keyboard-row
+and stale-SOS behavior and found one crash that is now covered by a smoke test.
+
+Not verified here: PostgreSQL/Redis (Docker Desktop would not start), promtool, any CI job, `npm audit` (endpoint error),
+devices, providers, cloud/bucket, k6, deployed behavior. Exact reasons in the verification log.
+
+## Open items for you (exact inputs needed)
+
+1. **Staging deploy** of backend + dashboard together (the admin read matrix returns 403 to admins without SUPPORT; a new mobile
+   build needs the new backend). Run Flyway **V34 on a copy of production data first** and read `destination_backfilled`.
+2. **Docker**: start Docker Desktop (or use CI) to run `promtool test rules`, `deploy/restore_test.sh` and the compose stack;
+   `docker compose up -d backup` before the first restore (new mounted scripts).
+3. **Off-site bucket**: lifecycle (30 days), versioning/object lock, write-only key, escrow owners (runbooks, "Off-site retention policy"); then the
+   off-site-only restore drill.
+4. **Devices/browsers**: the checks in gates 29 and 30. **Providers**: SMS, e-mail, FCM sandbox sends and a real SOS route (gates 15, 21).
+5. **CI**: push, confirm every job is green (including `monitoring-rules`, `backup-restore`, `sbom`), set `NVD_API_KEY`.
+6. **Decisions**: the "live states only" location rule (B-02), the temporary-password session rule (P-06), whether a forced
+   password change is wanted, and a mobile screen for the destination amendment API (B-05).
+7. Not started on purpose (refactors / capacity work): splitting `BookingServiceImpl`, typed provider contracts, modular admin pages,
+   server-side paging for the admin queues (the 50-page cap now announces itself), an HA/storage plan from measured load.
+
+## Notes for the next developer
+
+- Environment: JDK 17 at `C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot`, Node 20 at
+  `%LOCALAPPDATA%\nvm\v20.20.2` (the default `node` is 12), Flutter `D:\tools\flutter`, `PUB_CACHE=D:\tools\pubcache`.
+  Do not run Maven and Vitest at the same time on this machine.
+- After a deliberate API change, regenerate the contract: `mvn test -Dtest=ApiContractSnapshotTest -Dapi.contract.update=true`
+  and review the diff of `aiwa-backend/src/test/resources/api-contract/` with the mobile and dashboard changes it implies.
+- Shell scripts and generated text in this repo are easy to corrupt with backslash handling in some tools; check the diff.
+
+
+---
+
+## Previous status (audit round 3, before remediation; kept as history)
+
+Last updated: 2026-10-05, production audit round 3.
+Project: `D:\AIWA PROJECT\AIWA`; branch: `main`.
+Audited application commit: `ac67446495a22ce11b8f2071d0f1599f3c0cdee4`.
+This audit began at `2bceba5` and incorporated the concurrent `ac67446` commit before final validation.
+
+## Read this current status first
+
+Complete audit artifact: [Round 3 report](docs/audit/production-audit-2026-10-05-r3/audit.md).
+Supporting artifacts: [181-handler API inventory](docs/audit/production-audit-2026-10-05-r3/api-inventory.md),
+[API business/ownership flows](docs/audit/production-audit-2026-10-05-r3/api-flows.md),
+[coverage and validation](docs/audit/production-audit-2026-10-05-r3/coverage.md),
+[dashboard evidence](docs/audit/production-audit-2026-10-05-r3/dashboard.md).
+
+That pass changed documentation only; the remediation above was authorized afterwards.
+
+## Launch recommendation and fresh priorities
+
+**Production: not ready.** No confirmed Critical issue, but new High findings and operational gates remain.
+Controlled staging validation is the next step; passing suites do not remove these defects.
+
+1. **B-01 High:** public-image normalization admits extremely wide PNG scanline allocations despite subsampling;
+   bounded JDK17 probe reproduced heap exhaustion. Add dimension/working-memory caps before decoding.
+2. **B-02/B-03 High:** booking/alternative summaries leak an individual home provider's exact location before acceptance;
+   provider dashboard exposes customer email/phone outside CONTACT_VISIBLE states. Use shared audience/state projections.
+3. **B-04 High:** any ADMIN, including no-SUPPORT/Finance, can read sensitive SOS/chat/review/flag/staff data.
+   This is confirmed exposure and inconsistent least-privilege scope; current broad-read annotations permit it.
+   Decide and enforce a consistent read capability policy rather than assuming MFA supplies entitlement.
+4. **B-05 High:** editing a saved address silently changes existing booking destination/history without radius/requote/consent.
+   Store an immutable booking address snapshot and define explicit amendments.
+5. **M-01 High:** successful old profile responses can cache/emit the previous identity after logout/account switch.
+   Session generation must protect success/cache/Bloc state, not only refresh/401 retry.
+6. **AD-05 High:** SOS polling silently swallows network/503 failures and keeps an apparently current empty list.
+   Show last-sync/stale/offline state and prove actual on-call channels.
+7. **I-02 High:** restore deletes live uploads before extraction; extraction failure leaves lost/partial files and stopped backend.
+   Stage/verify/swap volumes with paired DB/files rollback and failure-injection tests.
+8. **B-06/B-07 Medium, reproduced:** admin reviews fail lazy quickTags serialization with OSIV=false; unsave lacks a transaction.
+9. Additional mobile/admin/infra findings, exact source locations, reproduction steps and P0–P3 roadmap are in the report.
+   Disk alert selectors incorrectly match mountpoint /host rather than exported host labels; offsite restore/key escrow/retention,
+   provider/device/release archive, CI/NVD and measured load gates still lack current operational evidence.
+
+## Validation actually completed in this pass
+
+All commands used an isolated audit snapshot and synthetic data; original source/build outputs were not modified.
+
+- Backend (JDK17.0.19): **411 tests, 0 failures, 0 errors, 0 skipped**, BUILD SUCCESS.
+- Admin (Node20.20.2): **120 tests / 20 files pass**, production build succeeds, npm audit **0 reported vulnerabilities**.
+- Flutter installed at **D:\tools\flutter** (3.47.5, Dart3.13.4; cache D:\tools\pubcache):
+  **analyze: no issues; 178 tests pass**, including English/Arabic goldens. Earlier SDK-missing note is obsolete.
+- Backup fake-Docker shell harness: **31 pass, 0 fail**; NTFS permission-mode assertion skipped.
+- Isolated H2 probes reproduced review/unsave failures, pending location/contact disclosure, mutable destination and broad SOS read.
+- Isolated JDK image probe reproduced decoder OOM with a synthetic 66-byte PNG header, not a live API attack.
+
+Not verified here: deployed PostgreSQL/Redis concurrency/migrations and data, actual GitHub CI/NVD/image scans,
+Android/iOS devices/signed archives, real SMS/email/FCM, staging compose/rollback/k6/soak, delivered alerts,
+cloud IAM/offsite-only restore/key custody/retention, new admin browser/accessibility/session ordering,
+complete Git-history/ignored-secret/compiled-artifact secret scan. See coverage.md for exact boundaries and evidence.
+
+## Historical fixes checked as present
+
+F-05 memory-only access and HttpOnly/Secure/SameSite refresh cookie; default mandatory admin MFA; narrowed user/contact/finance/audit
+controls; production encryption guards; OSIV=false in production/test; expected settlement amounts/references and payout freeze;
+commission snapshots; required immutable offsite copy; local rate-limit fallback; SHA-pinned actions; V33 temporary-password expiry;
+Redis/cash alerts; production APNs Release/Profile entitlement. Deployed operation is still a launch-gate check.
+Expiry does not by itself force password change or shorten already-issued sessions; document that separate policy.
+
+## Historical handoff retained below
+
+The following content records earlier audits and implementation passes. Its old "current", "remaining" and tooling claims
+must not override the round3 report or the current status above. It is retained for provenance and prior fix context.
+
+---
+
 # AIWA Handoff
 
 Last updated: 2026-10-05 (audit round 2, after the S-01..S-11 fixes)

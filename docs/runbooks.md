@@ -63,9 +63,41 @@ ls -1t backups/db | head          # newest first
 ./restore.sh backups/db/aiwa-20261001-020000.dump backups/uploads/uploads-20261001-020000.tar.gz
 ```
 
-It asks you to type RESTORE, stops the backend, replaces the database (and the
-uploads, if you pass the tarball), and starts the backend again. Anything written
-after that backup is lost, so note the time and tell affected users.
+What it does, in this order (audit I-02): it decrypts and checks every input and test-restores the dump into a
+scratch database; **extracts the uploads tarball into a staging directory inside the uploads volume and verifies
+it, before anything live is touched** (a full disk or a damaged archive stops here: nothing was changed); asks you
+to type RESTORE; stops the backend; takes a **safety copy of the live database**
+(`backups/pre-restore-<id>.dump`); restores the database in one transaction; swaps the uploads with atomic renames
+that keep the previous files in `.restore-previous-<id>`; starts the backend; and prints a reconciliation report.
+
+If a step fails the pair is put back together, never left half-done:
+
+| Failure | Result |
+| --- | --- |
+| extraction / disk space | nothing changed, backend never stopped |
+| database restore | database rolled back (single transaction), staging removed, backend started |
+| uploads swap | the swap undoes its own renames, the database is restored from the safety copy, backend started |
+| the database cannot be put back either | backend stays **stopped** on purpose; the message names the safety dump and says the old uploads are intact |
+
+Afterwards check the app, then free the retained copy:
+`docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh purge <id>`.
+To undo a whole restore instead, restore the safety dump with `restore.sh` and run
+`uploads_swap.sh rollback <id>`. Anything written after the restored backup is lost: note the time and tell affected
+users. The failure paths are tested without Docker by `deploy/backup/uploads_swap_test.sh` (injects a failure at every
+rename) and `deploy/restore_flow_test.sh` (the order of `restore.sh` with a fake docker); both run in CI.
+
+### Backup consistency (audit I-03)
+
+The database dump and the uploads tarball are **two snapshots of a live system**, not one transaction. The order is the
+guarantee: the dump is taken first, then the tarball, so every file the dump points at that still existed when tar ran is
+in the tarball. The two differences that can occur: a file deleted between the snapshots (the restored database
+points at a file that is not there: *missing*) and a file uploaded between them (in the tarball, not in the database:
+*orphan*, harmless). `backup/manifest/snapshot-<stamp>.json` records when each half was taken, and after every restore
+`restore.sh` prints `reconcile: N database references checked, M missing, K orphan files` and lists each missing path
+(`backup/reconcile_uploads.sh`; the references come from `backup/uploads_references.sql`: avatars, gallery, ID
+documents and selfies). A missing image shows as a broken picture until the owner uploads it again; it is never
+fatal. If a stricter guarantee is ever needed: stop the backend for the minutes the backup takes, or snapshot the
+volume at the filesystem level, then take both halves from the snapshot.
 
 Test a restore on a copy every month. A backup you've never restored is a guess.
 
@@ -142,6 +174,23 @@ How it behaves: `rclone copy --immutable` (never `sync`: a wiped or encrypted lo
 mirrored over the remote, and an existing remote file is never rewritten), only `*.enc` files are sent,
 and `rclone check` proves the copy before `aiwa_offsite_last_success_timestamp_seconds` moves.
 Alerts: **OffsiteBackupStale** (copy older than 26 h) and **OffsiteBackupMetricsMissing**.
+
+### Off-site retention policy (audit I-05)
+
+`offsite.sh` copies and proves; it cannot enforce what the *bucket* keeps, and it never deletes remote files. The
+privacy policy promises that off-site copies are gone within 30 days, so the bucket needs, and the launch sign-off
+(gate 28) records:
+
+- **Expiry**: a lifecycle rule that deletes objects (and non-current versions) after **30 days**. Not shorter than
+  `BACKUP_KEEP_DAYS` (14), so a month-old problem can still be restored; not longer than the policy says.
+- **Versioning or object lock** with a retention **no longer than the expiry**, and a write-only (or write + list) key on
+  the server, so a compromised server can neither delete nor rewrite earlier backups.
+- **Access**: a separate read key kept with the escrowed secrets, used only by the restore drill and a real restore.
+- **Key escrow owner**: who holds `BACKUP_KEY_FILE` and `DOCUMENT_ENCRYPTION_KEY` outside the server (two people).
+- Do not delete immutable backups by hand to "fix" the numbers; change the lifecycle rule and wait.
+
+Evidence for the sign-off: a screenshot or CLI output of the lifecycle rule, the versioning/lock setting and the key's
+permissions, and a successful restore drill from the bucket alone.
 Set `OFFSITE_HEARTBEAT_URL` for an external "no ping" alert too.
 
 ### Keys: store them off the server
@@ -176,6 +225,15 @@ Out of memory (`HeapNearlyFull` first): give the server more RAM or lower traffi
 spikes; the container restarts itself on OutOfMemoryError. Database unreachable:
 `dc logs postgres`. Nothing obvious: roll back to the previous release
 (`docs/release.md`, "Releasing and rolling back").
+
+## Alert rules are tested
+
+`deploy/monitoring/alerts_test.yml` unit-tests `alerts.yml` with promtool, using the label shape node-exporter really
+emits (it strips the `--path.rootfs=/host` prefix, so the host root is `mountpoint="/"`; the old `/host` selector
+never matched and `HostDiskLow` could not fire, audit I-01). CI runs it in the `monitoring-rules` job; locally:
+`docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus:v2.54.1 test rules alerts_test.yml`
+from `deploy/monitoring`. A passing unit test proves the rule, not the delivery: gate 26 still needs a real
+low-disk alert received on staging.
 
 ## Getting paged by alerts
 

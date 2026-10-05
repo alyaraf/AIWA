@@ -1,0 +1,33 @@
+ok   success exits 0
+ok   success writes a fresh timestamp
+ok   pg_dump failure exits non-zero
+ok   pg_dump failure keeps the old timestamp
+ok   tar failure exits non-zero
+ok   tar failure keeps the old timestamp
+ok   encrypted run exits 0
+ok   encrypted: one .enc dump and one .enc tarball, no plaintext
+ok   encrypted metric is 1
+ok   dump decrypts to the same bytes
+ok   uploads tarball decrypts to the same bytes
+ok   no key, no opt-out: exits non-zero
+ok   no key, no opt-out: writes no backup and no success metric
+ok   no key, no opt-out: says BACKUP FAILED
+ok   no key: exits 0 and stores plain files
+ok   no key: encrypted metric is 0
+ok   no key: logs a warning
+ok   key path is a directory: runs unencrypted
+ok   blank key: runs unencrypted, metric 0
+ok   restore, wrong key: fails and leaves uploads and database alone
+ok   restore, wrong key on the dump: fails before anything is touched
+ok   restore, no openssl: fails and leaves uploads alone
+ok   restore, key file missing: fails and leaves uploads alone
+ok   restore, corrupt tarball: fails and leaves uploads alone
+ok   restore, corrupt dump: fails and leaves uploads alone
+ok   restore, dump that fails the scratch restore: fails and leaves everything alone
+ok   restore, right key: replaces database and uploads
+ok   restore, plain files need no key
+ok   restore, temp files: still restores with TMPDIR set
+ok   restore, temp files: runs with umask 077 even when the caller's is 022
+ok   restore, temp files: the temp dir is made under TMPDIR
+skip restore, temp files: modes 600/700 (this file system ignores chmod, e.g. NTFS; the umask check above covers it)
+31 passed, 0 failed

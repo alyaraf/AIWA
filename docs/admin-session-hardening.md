@@ -47,3 +47,24 @@ is 403, and after logout a refresh is 401.
 An XSS in the admin origin can still call the API with the in-memory access token while the page is open (15 minutes at
 most), but it can no longer steal a token that outlives the page. Keep the CSP, the dependency audit gate, mandatory 2FA
 for every admin and the idle sign-out.
+
+## Round 3 additions (2026-10-05: AD-04, P-03, P-04)
+
+- **One session-end signal.** `api.js` exports `onSessionEnded`; the App subscribes and drops every view (sets the
+  session to null) when the idle limit passes or the server rejects a session and its refresh. Before, only the request that
+  noticed learned about it, and a screen that swallowed the error kept the previous admin's rows on screen.
+- **Idle limit everywhere.** Every request, document image and CSV export goes through the same checks (`request`,
+  `authedBlobFetch`): idle limit, one refresh-and-retry on 401, generation check. A timer (15 s), tab focus and
+  `visibilitychange` also call `enforceIdleLimit()`, so an abandoned workstation clears without any request.
+- **Late answers are dropped (P-04).** A response that arrives after the session changed (sign-out, expiry, another tab
+  signing in as someone else) is discarded with `code: "SESSION_CHANGED"` / `stale: true` and status 0 (never 401, so it
+  cannot end the new session). Nothing from the previous session is shown or cached.
+- **Sign-out and sign-in take turns (P-03).** The logout response clears the refresh cookie; a slow logout that finished
+  after the next sign-in had set its cookie would clear the new one. `login` now waits for a sign-out still in flight.
+  Server side nothing changed: the cookie is still cleared by `POST /auth/logout`.
+- A leftover idle record from an old session does not block a new sign-in; it is cleared.
+
+Tests: `api.session-integrity.test.js` (stale success after sign-out and after sign-in, logout/login ordering, idle blob
+helpers, rejected refresh, truncation, review DTO), `api.idle-timeout`, `api.cross-tab-refresh`. Checked in a real browser
+(Vite dev server in mock mode): Escape and focus on dialogs, keyboard Bookings rows, the stale SOS banner on `offline`.
+**Not** checked: a real two-tab cookie scenario against the deployed API (launch gate 29).

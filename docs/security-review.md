@@ -81,3 +81,31 @@ E-1 closes when every box is ticked.
 |------|----------|----|
 | 2026-10-04 | 2FA is required for SUPER_ADMIN and FINANCE admins and enforced at the API (not just the panel). | Owner |
 | | | |
+
+## Decisions recorded in remediation round 3 (2026-10-05)
+
+- **Admin read capability matrix (B-04).** `ANY_ADMIN` is limited to reads without personal data (statistics, platform
+  rules, commission rates, policy documents, verification counts). SOS events, reported chat, reviews, flags, staff
+  history and the mixed inbox need **SUPPORT** (SUPER_ADMIN holds it implicitly). The inbox returns only the sources the
+  caller may read: SOS, complaints, verifications and reports need SUPPORT; disputes and "needs closing" need SUPPORT or
+  FINANCE; reported commission payments need FINANCE. The dashboard mirrors the matrix (`NAV_REQUIRES`, `canManageTarget`).
+  MFA proves who the admin is, not what they may read. Tests: `AdminReadExportRbacApiTest`, `navPermissions.test.js`.
+- **Privacy projections (B-02/B-03).** One place decides what a booking shows about the other party
+  (`BookingPrivacy`): customer email/phone and a home provider's exact address and pin only while the visit is live
+  (ACCEPTED, ON_THE_WAY, ARRIVED, IN_PROGRESS). PENDING and every terminal state, suggestions of other providers, and the
+  provider dashboard get the public projection. Venues (SHOP) keep their exact address.
+- **Temporary-password sessions (P-06).** A session started with a temporary password ends when that password expires:
+  once it has expired without the user choosing their own, every token issued before that instant is refused
+  (`User.effectiveTokensValidAfter`), including refresh. The user then signs in again with "forgot password". The 24-hour
+  expiry itself (V33) is unchanged. Test: `TempPasswordSessionApiTest`. A forced password-change screen remains a
+  product decision.
+- **Profiles (P-01).** `ProfileIsolationGuard` refuses to start with `prod` combined with `local` or `test`, which
+  would switch the production guard off and enable the demo seeder and dev 2FA reset.
+- **Gateways (P-02).** `SMS_API_URL` / `EMAIL_API_URL` must be public https URLs without credentials, not
+  localhost/private/link-local, and, when `AIWA_GATEWAY_ALLOWED_HOSTS` is set, on that list. Resolved-URL checks on
+  staging remain a gate (32).
+- **Provider acceptance (P-07).** A gateway that answers 200 and reports failure in the body (`success:false`,
+  `status:"failed"`, an `error` object) is treated as refused for e-mail as well as SMS (`GatewayRefusal`). Whether the
+  real provider uses those conventions is verified only by a sandbox send (gate 21).
+- **Logs (I-06).** Rejected-session warnings carry the opaque user id, not the e-mail/phone; provider/driver messages
+  pass through `LogSafe.scrub` (e-mail, phone numbers, bearer/secret values, control characters, length).

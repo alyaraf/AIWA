@@ -29,3 +29,14 @@ nothing is left as an unticked box. Fill this in; empty cells mean the gate is o
 | 21 | Provider sandbox checks: SMS, email, FCM | | | | |
 | 22 | `open-in-view` decision (documented traffic ceiling, or disabled and load tested) | | | | |
 | 23 | Admin session storage decision (cookie/BFF migration, or accepted risk with 2FA + idle timeout) | | | | |
+| 24 | Staged restore drill on staging: normal restore, then fill the uploads volume / kill the extraction and confirm the live files, database and backend end up as before (runbooks, "Restoring") | | | | |
+| 25 | After a restore from a live system, the reconciliation report (`reconcile:` line of `restore.sh`) was read and any MISSING files explained | | | | |
+| 26 | `monitoring-rules` CI job green and `HostDiskLow` fired and was delivered on staging (the disk selector is now `mountpoint="/"`, audit I-01) | | | | |
+| 27 | Migration V34 (booking destination snapshot) rehearsed on a copy of production data: row counts, `destination_backfilled` share, app rollback to the previous release | | | | |
+| 28 | Off-site policy approved and configured in the bucket: expiry (default 30 days) and versioning/object lock, least-privilege keys, key escrow owner (runbooks, "Off-site retention policy") | | | | |
+| 29 | Admin dashboard checked in real browsers: session end/idle across tabs, logout then login ordering, screen-reader pass of dialogs and Bookings (audit AD-04, AD-11, P-03, P-04) | | | | |
+| 30 | Mobile checked on Android and iOS devices: account switch with a slow network, expired-token upload, kill during provider onboarding then resume, local-notification cold launch (audit M-01, M-03, M-05, M-09) | | | | |
+| 31 | Admin read matrix verified on staging with enrolled accounts: no permission, Finance, Support, Super admin against SOS, reported chat, reviews, flags, staff, inbox (audit B-04) | | | | |
+| 32 | Resolved production configuration printed on staging: active profiles contain only `prod`, gateway URLs are public https (audit P-01, P-02) | | | | |
+| 33 | Temporary-password session policy accepted: a session started with a temporary password ends when it expires (audit P-06) | | | | |
+| 34 | SBOM artifact produced by CI and kept with the release (roadmap P3) | | | | |
