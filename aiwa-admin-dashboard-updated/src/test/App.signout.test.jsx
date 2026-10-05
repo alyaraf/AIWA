@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import App from "../App.jsx";
+import * as apiModule from "../api.js";
 
 // These tests render the whole <App> (5000+ lines); the first render in a file
 // costs seconds of cold JIT when vitest runs every file in parallel. A real
@@ -13,8 +14,7 @@ vi.setConfig({ testTimeout: 20_000 });
  * never noticed that another tab had signed out or in.
  */
 
-const TOKEN = "aiwa_admin_access_token";
-const REFRESH = "aiwa_admin_refresh_token";
+const SESSION = "aiwa_admin_session";
 const ME = { id: 7, fullName: "Nour Support", role: "ADMIN", permissions: ["SUPPORT"] };
 
 function res(status, body) {
@@ -33,8 +33,7 @@ function routeFetch(logout) {
 }
 
 beforeEach(() => {
-  window.localStorage.setItem(TOKEN, "access");
-  window.localStorage.setItem(REFRESH, "refresh");
+  apiModule.setTokens({ accessToken: "access" }); // F-05: access token in memory, refresh token an HttpOnly cookie
 });
 afterEach(() => { vi.useRealTimers(); });
 
@@ -47,12 +46,13 @@ describe("<App> — CR-18 sign-out", () => {
     fireEvent.click(screen.getByRole("button", { name: /Logout/ }));
 
     expect(await screen.findByText("Sign in to dashboard")).toBeInTheDocument();
-    expect(window.localStorage.getItem(TOKEN)).toBeNull();
-    expect(window.localStorage.getItem(REFRESH)).toBeNull();
-    // The server was still told, with the tokens read before they were cleared.
+    expect(apiModule.getAccessToken()).toBeNull();
+    expect(window.localStorage.getItem(SESSION)).toBeNull();
+    // The server was still told: bearer read before it was cleared, and the refresh cookie travels with credentials.
     const call = fetchSpy.mock.calls.find(([u]) => String(u).endsWith("/auth/logout"));
     expect(call[1].headers.Authorization).toBe("Bearer access");
-    expect(JSON.parse(call[1].body)).toEqual({ refreshToken: "refresh" });
+    expect(call[1].credentials).toBe("include");
+    expect(call[1].body).toBe("{}");
   });
 
   it("gives up on the server call after a few seconds", async () => {
@@ -78,30 +78,30 @@ describe("<App> — CR-18 other tabs", () => {
     render(<App />);
     await screen.findByText(/Nour Support/);
 
-    window.localStorage.removeItem(TOKEN);
-    window.localStorage.removeItem(REFRESH);
-    act(() => { window.dispatchEvent(new StorageEvent("storage", { key: TOKEN, oldValue: "access", newValue: null })); });
+    window.localStorage.removeItem(SESSION);
+    act(() => { window.dispatchEvent(new StorageEvent("storage", { key: SESSION, oldValue: "hint", newValue: null })); });
 
     expect(await screen.findByText("Sign in to dashboard")).toBeInTheDocument();
   });
 
-  it("reloads the profile when another tab signs in with new tokens", async () => {
+  it("reloads the profile when another tab signs in", async () => {
     const fetchSpy = routeFetch(() => res(200, {}));
     render(<App />);
     await screen.findByText(/Nour Support/);
     const meCalls = () => fetchSpy.mock.calls.filter(([u]) => String(u).endsWith("/auth/me")).length;
     expect(meCalls()).toBe(1);
 
-    window.localStorage.setItem(TOKEN, "other-tab-access");
-    act(() => { window.dispatchEvent(new StorageEvent("storage", { key: TOKEN, oldValue: "access", newValue: "other-tab-access" })); });
+    window.localStorage.setItem(SESSION, "other-tab-session");
+    act(() => { window.dispatchEvent(new StorageEvent("storage", { key: SESSION, oldValue: "hint", newValue: "other-tab-session" })); });
 
     await waitFor(() => expect(meCalls()).toBe(2));
     expect(screen.queryByText("Sign in to dashboard")).not.toBeInTheDocument();
   });
 
-  it("drops a refresh that was in flight when another tab changed the tokens", async () => {
+  it("drops a refresh that was in flight when another tab signed out", async () => {
     vi.resetModules();
-    const { api } = await import("../api.js");
+    const fresh = await import("../api.js");
+    const { api } = fresh;
     let finishRefresh;
     vi.spyOn(globalThis, "fetch")
       .mockImplementationOnce(async () => res(401, { message: "expired" }))
@@ -111,13 +111,12 @@ describe("<App> — CR-18 other tabs", () => {
     await waitFor(() => expect(finishRefresh).toBeTypeOf("function"));
 
     // Another tab signs out while this tab's refresh is in flight.
-    window.localStorage.removeItem(TOKEN);
-    window.localStorage.removeItem(REFRESH);
-    window.dispatchEvent(new StorageEvent("storage", { key: TOKEN, oldValue: "access", newValue: null }));
-    finishRefresh(res(200, { data: { accessToken: "late-access", refreshToken: "late-refresh" } }));
+    window.localStorage.removeItem(SESSION);
+    window.dispatchEvent(new StorageEvent("storage", { key: SESSION, oldValue: "hint", newValue: null }));
+    finishRefresh(res(200, { data: { accessToken: "late-access" } }));
     await pending;
 
-    expect(window.localStorage.getItem(TOKEN)).toBeNull();
-    expect(window.localStorage.getItem(REFRESH)).toBeNull();
+    expect(fresh.getAccessToken()).toBeNull();
+    expect(window.localStorage.getItem(SESSION)).toBeNull();
   });
 });

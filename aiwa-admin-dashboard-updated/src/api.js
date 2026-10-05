@@ -3,63 +3,80 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080
 // forgets the flag talks to the real API instead of accepting any login (OPS-8).
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true"; // F-21: a literal comparison, so a normal build drops the mock code
 
-const TOKEN_KEY = "aiwa_admin_access_token";
-const REFRESH_KEY = "aiwa_admin_refresh_token";
+// F-05: no credential is readable from JavaScript that outlives the page.
+//  - The short-lived (15 min) ACCESS token lives only in this module's memory.
+//  - The REFRESH token is an HttpOnly, Secure, SameSite=Strict cookie that the backend sets and the
+//    browser sends to /auth/* (fetch with credentials: "include" + the X-Requested-With header). Script cannot read it.
+//  - localStorage keeps only a non-secret "a session exists" hint (a random id), so a reload knows
+//    whether to try restoring the session and other tabs learn about sign-in / sign-out.
+// Reload: no access token in memory, hint present -> the first request gets 401, refreshes through
+// the cookie and retries (or the login screen shows when the cookie is gone).
+
+const SESSION_KEY = "aiwa_admin_session";
+// Before F-05 the tokens themselves were stored under these keys. They are removed on load so a token
+// left behind by an older build does not sit in the browser for longer than the upgrade.
+const LEGACY_TOKEN_KEYS = ["aiwa_admin_access_token", "aiwa_admin_refresh_token"];
+try { LEGACY_TOKEN_KEYS.forEach((key) => window.localStorage.removeItem(key)); } catch { /* storage unavailable */ }
+
+// CSRF defence in depth: the backend refuses a cookie-based refresh without this header (a cross-site
+// page cannot add it without a CORS preflight the API refuses).
+const CSRF_HEADERS = { "X-Requested-With": "aiwa-admin" };
+
+let accessToken = null;
 
 export function getAccessToken() {
-  return window.localStorage.getItem(TOKEN_KEY);
+  return accessToken;
+}
+
+function sessionHint() {
+  try { return !!window.localStorage.getItem(SESSION_KEY); } catch { return false; }
+}
+
+/** True while an admin is (or, after a reload, may still be) signed in. The hint holds no secret. */
+export function hasSession() {
+  return !!accessToken || sessionHint();
 }
 
 // Bumped when a session ends (sign-out, expiry) or a new one starts (sign-in).
-// A refresh that was in flight across that change must not store its tokens
+// A refresh that was in flight across that change must not store its token
 // (DR-003): it used to sign an admin who had just signed out straight back in.
 let sessionGeneration = 0;
 
-function writeTokens(tokens) {
-  if (tokens?.accessToken) window.localStorage.setItem(TOKEN_KEY, tokens.accessToken);
-  if (tokens?.refreshToken) window.localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
-}
-
-/** Tokens of a new sign-in. */
+/** The access token of a new sign-in (the refresh token arrives as a cookie). */
 export function setTokens(tokens) {
   sessionGeneration += 1;
-  writeTokens(tokens);
+  if (tokens?.accessToken) accessToken = tokens.accessToken;
+  try { window.localStorage.setItem(SESSION_KEY, `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`); } catch { /* storage unavailable */ }
   markActive();
 }
 
 export function clearTokens() {
   sessionGeneration += 1;
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(REFRESH_KEY);
-  window.localStorage.removeItem(IDLE_KEY);
+  accessToken = null;
+  try {
+    window.localStorage.removeItem(SESSION_KEY);
+    window.localStorage.removeItem(IDLE_KEY);
+  } catch { /* storage unavailable */ }
 }
 
-// CR-18: another tab ended the session this tab holds (signed out, or signed in
-// as someone else): a refresh this tab had in flight carries the old session and
-// must not write over that. A mere refresh by the other tab (same user, new
-// tokens) is not that: this tab adopts the tokens from storage and carries on.
-function subjectOf(jwt) {
-  try { return JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub ?? null; } catch { return null; }
-}
-
+// CR-18: another tab ended the session this tab holds (signed out) or started a different one
+// (signed in): what this tab has in flight carries the old session and must not write over it.
+// After a sign-in elsewhere this tab drops its access token and gets one for the new session
+// through the shared cookie; a sign-out ends it here too.
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
-    if (event.key !== null && event.key !== TOKEN_KEY && event.key !== REFRESH_KEY) return;
-    const removed = event.key === null || event.newValue === null;
-    // ponytail: opaque (non-JWT) tokens give no subject, so only a removal ends the session then.
-    const userChanged = event.key === TOKEN_KEY && !removed
-      && subjectOf(event.oldValue ?? "") !== null && subjectOf(event.oldValue) !== subjectOf(event.newValue);
-    if (removed || userChanged) sessionGeneration += 1;
+    if (event.key !== null && event.key !== SESSION_KEY) return;
+    sessionGeneration += 1;
+    accessToken = null;
   });
 }
 
-/** localStorage key names, for the App's cross-tab listener. */
-export const TOKEN_STORAGE_KEYS = [TOKEN_KEY, REFRESH_KEY];
+/** localStorage key names the App's cross-tab listener watches. */
+export const TOKEN_STORAGE_KEYS = [SESSION_KEY];
 
-// S-04 (incremental step): the tokens still live in localStorage (see docs/admin-session-hardening.md
-// for the HttpOnly-cookie migration), so an unattended browser profile must not stay signed in.
-// After VITE_ADMIN_IDLE_MINUTES (default 30; 0 turns it off) without a click or keypress the next API
-// call, or the next poll of an open panel, drops the tokens and the admin signs in again.
+// S-04: an unattended browser must not stay signed in. After VITE_ADMIN_IDLE_MINUTES (default 30; 0
+// turns it off) without a click or keypress the next API call, or the next poll of an open panel,
+// ends the session and the admin signs in again (with 2FA).
 const IDLE_KEY = "aiwa_admin_last_activity";
 const IDLE_MS = (() => {
   const minutes = Number(import.meta.env.VITE_ADMIN_IDLE_MINUTES ?? 30);
@@ -82,7 +99,7 @@ if (typeof window !== "undefined" && IDLE_MS) {
   let lastWrite = 0;
   const onUserActivity = () => {
     const now = Date.now();
-    if (now - lastWrite < 10_000 || !getAccessToken() || sessionIdleExpired(now)) return;
+    if (now - lastWrite < 10_000 || !hasSession() || sessionIdleExpired(now)) return;
     lastWrite = now;
     markActive();
   };
@@ -94,21 +111,21 @@ if (typeof window !== "undefined" && IDLE_MS) {
 const SIGN_OUT_TIMEOUT_MS = 3000;
 
 /**
- * Signs out: the local tokens go first (so a stalled connection cannot keep the
- * admin signed in), then the server is told on a best-effort basis with the
- * tokens read before they were cleared, giving up after a few seconds.
+ * Signs out: the local session goes first (so a stalled connection cannot keep the admin signed in),
+ * then the server is told on a best-effort basis (it revokes the refresh cookie's token and clears
+ * the cookie), giving up after a few seconds.
  */
 function signOut() {
-  const accessToken = getAccessToken();
-  const refreshToken = window.localStorage.getItem(REFRESH_KEY);
+  const token = getAccessToken();
+  const hadSession = hasSession();
   clearTokens();
-  if (USE_MOCKS || !(accessToken || refreshToken)) return Promise.resolve();
+  if (USE_MOCKS || !hadSession) return Promise.resolve();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SIGN_OUT_TIMEOUT_MS);
-  const headers = { "Content-Type": "application/json" };
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const headers = { "Content-Type": "application/json", ...CSRF_HEADERS };
+  if (token) headers.Authorization = `Bearer ${token}`;
   return fetch(`${API_BASE_URL}/auth/logout`, {
-    method: "POST", headers, signal: controller.signal, body: JSON.stringify({ refreshToken })
+    method: "POST", headers, credentials: "include", signal: controller.signal, body: "{}"
   }).catch(() => {}).finally(() => clearTimeout(timer));
 }
 
@@ -129,41 +146,44 @@ let refreshInFlight = null;
 // backend outage signs every admin out.
 let refreshFailedTransiently = false;
 
+// The refresh token is single-use and shared by every tab through the cookie, so tabs take turns
+// (Web Locks). Without the API the refreshes simply run as before: a loser sees 401 and signs in again.
+function withRefreshLock(call) {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  return locks?.request ? locks.request("aiwa-admin-refresh", call) : call();
+}
+
 function refreshAccessToken() {
   if (refreshInFlight) return refreshInFlight;
+  if (!hasSession()) return Promise.resolve(false);
 
-  const storedRefreshToken = window.localStorage.getItem(REFRESH_KEY);
-  if (!storedRefreshToken) return Promise.resolve(false);
   refreshFailedTransiently = false;
   const generation = sessionGeneration;
-  // Another tab refreshed first (it rotated the refresh token, so ours is
-  // rejected): its tokens in storage are the answer, not a sign-out.
-  const adoptedFromOtherTab = () => generation === sessionGeneration
-    && window.localStorage.getItem(REFRESH_KEY) !== storedRefreshToken && !!getAccessToken();
 
-  refreshInFlight = fetch(`${API_BASE_URL}/auth/refresh`, {
+  refreshInFlight = withRefreshLock(() => fetch(`${API_BASE_URL}/auth/refresh`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken: storedRefreshToken })
-  })
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...CSRF_HEADERS },
+    body: "{}"
+  }))
     .then(async (response) => {
       const text = await response.text();
       let data = null;
       try { data = text ? JSON.parse(text) : null; } catch { data = null; }
       if (!response.ok) {
         if (response.status !== 401 && response.status !== 403) refreshFailedTransiently = true;
-        return adoptedFromOtherTab();
+        return false;
       }
       const tokens = unwrap(data);
-      if (!tokens?.accessToken) return adoptedFromOtherTab();
-      // Signed out (or in as someone else) while this was in flight: drop it.
+      if (!tokens?.accessToken) return false;
+      // Signed out (or in again) while this was in flight: drop it.
       if (generation !== sessionGeneration) return false;
-      writeTokens(tokens);
+      accessToken = tokens.accessToken;
       return true;
     })
     .catch(() => {
       refreshFailedTransiently = true;
-      return adoptedFromOtherTab();
+      return false;
     })
     .finally(() => { refreshInFlight = null; });
 
@@ -172,7 +192,7 @@ function refreshAccessToken() {
 
 async function request(path, options = {}, isRetryAfterRefresh = false) {
   if (USE_MOCKS) return mockRequest(path, options);
-  if (getAccessToken() && sessionIdleExpired()) clearTokens();
+  if (hasSession() && sessionIdleExpired()) clearTokens();
 
   const headers = new Headers(options.headers || {});
   if (!(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
@@ -181,7 +201,10 @@ async function request(path, options = {}, isRetryAfterRefresh = false) {
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const generation = sessionGeneration;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  // /auth/* is where the refresh cookie is set and sent (F-05); it needs credentials and the CSRF header.
+  const authPath = path.startsWith("/auth/");
+  if (authPath) Object.entries(CSRF_HEADERS).forEach(([name, value]) => headers.set(name, value));
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, ...(authPath ? { credentials: "include" } : {}) });
   const text = await response.text();
   // A proxy error page (HTML 502/504) is not JSON; keep the status instead of
   // surfacing "Unexpected token <".

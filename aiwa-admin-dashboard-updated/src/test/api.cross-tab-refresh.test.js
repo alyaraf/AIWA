@@ -1,16 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
- * CR-18 (admin) follow-up: the cross-tab storage listener must tell another
- * tab's REFRESH (new tokens, same session) from its SIGN-OUT (tokens removed) or
- * a different user signing in. Only the last two end this tab's session; a
- * refresh used to bump the session generation too, so a request in flight on
- * an expired token was thrown unretried and App's onAuthExpired then wiped the
- * other tab's fresh tokens (both tabs signed out).
+ * CR-18 (admin), reworked for F-05. Tabs share the refresh cookie but each holds its own in-memory
+ * access token, so a refresh by another tab needs no adoption: this tab keeps its token or refreshes
+ * through the cookie. What a tab must notice is another tab's SIGN-OUT or a NEW sign-in, both of which
+ * change the non-secret session hint in localStorage. Then whatever this tab has in flight belongs to
+ * the old session and must not write over the new one.
  */
 
-const TOKEN = "aiwa_admin_access_token";
-const REFRESH = "aiwa_admin_refresh_token";
+const SESSION = "aiwa_admin_session";
 
 function res(status, body) {
   return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(body) };
@@ -20,67 +18,33 @@ const authOf = (call) => new Headers(call[1].headers).get("Authorization");
 const paths = () => globalThis.fetch.mock.calls.map(([u]) => String(u).replace("http://api.test/api", ""));
 
 // What the other tab does and the browser tells this one about.
-function otherTabWrites(key, newValue) {
-  const oldValue = window.localStorage.getItem(key);
-  if (newValue === null) window.localStorage.removeItem(key); else window.localStorage.setItem(key, newValue);
-  window.dispatchEvent(new StorageEvent("storage", { key, oldValue, newValue }));
+function otherTabWrites(newValue) {
+  const oldValue = window.localStorage.getItem(SESSION);
+  if (newValue === null) window.localStorage.removeItem(SESSION); else window.localStorage.setItem(SESSION, newValue);
+  window.dispatchEvent(new StorageEvent("storage", { key: SESSION, oldValue, newValue }));
 }
 
-// A JWT-shaped token for `sub` (the api only reads the subject claim).
-const jwt = (sub) => `h.${btoa(JSON.stringify({ sub })).replace(/=+$/, "")}.s`;
-
-describe("api.js — another tab's token writes (CR-18 follow-up)", () => {
+describe("api.js — another tab's session changes (CR-18 follow-up, F-05)", () => {
   let api;
-  let removeSpy;
+  let mod;
 
   beforeEach(async () => {
     vi.resetModules();
-    ({ api } = await import("../api.js"));
-    window.localStorage.setItem(TOKEN, "expired-access");
-    window.localStorage.setItem(REFRESH, "refresh-1");
-    removeSpy = vi.spyOn(Storage.prototype, "removeItem");
+    window.localStorage.clear();
+    mod = await import("../api.js");
+    ({ api } = mod);
+    mod.setTokens({ accessToken: "expired-access" });
   });
 
-  it("retries with the stored token when another tab refreshed while the request was in flight", async () => {
-    let answer401;
-    vi.spyOn(globalThis, "fetch")
-      .mockImplementationOnce(() => new Promise((resolve) => { answer401 = resolve; }))
-      .mockImplementationOnce(async () => res(200, { data: { totals: { customers: 6 } } }));
-
-    const pending = api.dashboardRaw();
-    await vi.waitFor(() => expect(answer401).toBeTypeOf("function"));
-
-    otherTabWrites(TOKEN, "tab-b-access");
-    otherTabWrites(REFRESH, "refresh-2");
-    answer401(res(401, { message: "expired" }));
-
-    expect(await pending).toEqual({ totals: { customers: 6 } });
-    expect(authOf(globalThis.fetch.mock.calls[1])).toBe("Bearer tab-b-access");
-    expect(paths()).not.toContain("/auth/refresh");
-    expect(removeSpy).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(TOKEN)).toBe("tab-b-access");
-    expect(window.localStorage.getItem(REFRESH)).toBe("refresh-2");
-  });
-
-  it("keeps the other tab's tokens when this tab's own refresh loses to the other tab's rotation", async () => {
-    let finishRefresh;
+  it("does not touch the session when another tab merely refreshed (the hint is unchanged)", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockImplementationOnce(async () => res(401, { message: "expired" }))
-      .mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }))
-      .mockImplementationOnce(async () => res(200, { data: { ok: true } }));
+      .mockImplementationOnce(async () => res(200, { data: { accessToken: "fresh" } }))
+      .mockImplementationOnce(async () => res(200, { data: { totals: { customers: 6 } } }));
 
-    const pending = api.dashboardRaw();
-    await vi.waitFor(() => expect(finishRefresh).toBeTypeOf("function"));
-
-    // The other tab rotated the refresh token first, so ours is rejected.
-    otherTabWrites(TOKEN, "tab-b-access");
-    otherTabWrites(REFRESH, "refresh-2");
-    finishRefresh(res(401, { message: "refresh token reused" }));
-
-    expect(await pending).toEqual({ ok: true });
-    expect(authOf(globalThis.fetch.mock.calls[2])).toBe("Bearer tab-b-access");
-    expect(removeSpy).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(TOKEN)).toBe("tab-b-access");
+    expect(await api.dashboardRaw()).toEqual({ totals: { customers: 6 } });
+    expect(authOf(globalThis.fetch.mock.calls[2])).toBe("Bearer fresh");
+    expect(window.localStorage.getItem(SESSION)).not.toBeNull();
   });
 
   it("does not retry or refresh when another tab signed out while the request was in flight", async () => {
@@ -91,16 +55,15 @@ describe("api.js — another tab's token writes (CR-18 follow-up)", () => {
     const pending = api.dashboardRaw().catch((e) => e);
     await vi.waitFor(() => expect(answer401).toBeTypeOf("function"));
 
-    otherTabWrites(TOKEN, null);
-    otherTabWrites(REFRESH, null);
+    otherTabWrites(null);
     answer401(res(401, { message: "expired" }));
 
     expect((await pending).status).toBe(401);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(mod.getAccessToken()).toBeNull();
   });
 
-  it("drops an in-flight refresh when another tab signs in as a different user", async () => {
-    window.localStorage.setItem(TOKEN, jwt("admin-1"));
+  it("drops an in-flight refresh when another tab signs in again", async () => {
     let finishRefresh;
     vi.spyOn(globalThis, "fetch")
       .mockImplementationOnce(async () => res(401, { message: "expired" }))
@@ -109,12 +72,30 @@ describe("api.js — another tab's token writes (CR-18 follow-up)", () => {
     const pending = api.dashboardRaw().catch((e) => e);
     await vi.waitFor(() => expect(finishRefresh).toBeTypeOf("function"));
 
-    otherTabWrites(TOKEN, jwt("admin-2"));
-    otherTabWrites(REFRESH, "admin-2-refresh");
-    finishRefresh(res(200, { data: { accessToken: jwt("admin-1"), refreshToken: "admin-1-refresh" } }));
+    otherTabWrites("another-session");
+    finishRefresh(res(200, { data: { accessToken: "token-of-the-old-session" } }));
     await pending;
 
-    expect(window.localStorage.getItem(TOKEN)).toBe(jwt("admin-2"));
-    expect(window.localStorage.getItem(REFRESH)).toBe("admin-2-refresh");
+    expect(mod.getAccessToken()).toBeNull();   // not written over the new session
+    expect(paths().filter((p) => p === "/auth/refresh")).toHaveLength(1);
+  });
+
+  it("drops its access token when another tab signs in, then gets one for the new session through the cookie", async () => {
+    otherTabWrites("another-session");
+    expect(mod.getAccessToken()).toBeNull();
+    expect(mod.hasSession()).toBe(true);
+
+    vi.spyOn(globalThis, "fetch")
+      .mockImplementationOnce(async () => res(401, {}))
+      .mockImplementationOnce(async () => res(200, { data: { accessToken: "new-session-access" } }))
+      .mockImplementationOnce(async () => res(200, { data: { id: 2 } }));
+
+    await expect(api.me()).resolves.toMatchObject({ id: 2 });
+    expect(mod.getAccessToken()).toBe("new-session-access");
+  });
+
+  it("ignores storage events for other keys", () => {
+    window.dispatchEvent(new StorageEvent("storage", { key: "something-else", newValue: "x" }));
+    expect(mod.getAccessToken()).toBe("expired-access");
   });
 });

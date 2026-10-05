@@ -24,6 +24,7 @@ describe("<LoginScreen>", () => {
   });
 
   beforeEach(() => {
+    apiModule.clearTokens();
     window.localStorage.clear();
   });
 
@@ -40,9 +41,8 @@ describe("<LoginScreen>", () => {
 
     await waitFor(() => expect(onLogin).toHaveBeenCalledTimes(1));
     expect(onLogin.mock.calls[0][0].user.fullName).toBe("S. Mahmoud");
-    // Tokens should have been persisted so the next reload picks up the session.
-    expect(window.localStorage.getItem("aiwa_admin_access_token")).toBe("acc");
-    expect(window.localStorage.getItem("aiwa_admin_refresh_token")).toBe("ref");
+    // The access token is kept in memory and a session hint is stored; no token reaches localStorage (F-05).
+    expect(apiModule.getAccessToken()).toBe("acc");
   });
 
   it("shows a form error when the login call rejects, without dropping to the 2FA screen", async () => {
@@ -77,7 +77,7 @@ describe("<LoginScreen>", () => {
     // No session yet — onLogin must not be called until the second step succeeds.
     expect(onLogin).not.toHaveBeenCalled();
     // And absolutely no tokens stored — the mfaToken is not a session token.
-    expect(window.localStorage.getItem("aiwa_admin_access_token")).toBeNull();
+    expect(apiModule.getAccessToken()).toBeNull();
   });
 
   it("keeps the Verify button disabled until 6 digits are entered", async () => {
@@ -129,7 +129,7 @@ describe("<LoginScreen>", () => {
 
     await waitFor(() => expect(onLogin).toHaveBeenCalledTimes(1));
     expect(apiModule.api.verifyMfa).toHaveBeenCalledWith("challenge-token", "123456");
-    expect(window.localStorage.getItem("aiwa_admin_access_token")).toBe("final-acc");
+    expect(apiModule.getAccessToken()).toBe("final-acc");
   });
 
   it("Back-to-sign-in from the 2FA step clears the challenge and returns to the password form", async () => {

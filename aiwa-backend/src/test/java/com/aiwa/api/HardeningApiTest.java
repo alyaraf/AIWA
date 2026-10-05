@@ -245,10 +245,13 @@ class HardeningApiTest {
     }
 
     private long refreshLifetimeMillis(User u) throws Exception {
-        String refresh = json.readTree(mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+        var res = mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("identifier", u.getEmail(), "password", PASSWORD))))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
-                .get("data").get("refreshToken").asText();
+                .andExpect(status().isOk()).andReturn().getResponse();
+        var body = json.readTree(res.getContentAsString()).get("data");
+        // F-05: an admin refresh token is in the HttpOnly cookie, not in the body.
+        String refresh = body.hasNonNull("refreshToken") ? body.get("refreshToken").asText()
+                : res.getCookie("aiwa_admin_refresh").getValue();
         String payload = new String(java.util.Base64.getUrlDecoder().decode(refresh.split("\\.")[1]));
         var claims = json.readTree(payload);
         return (claims.get("exp").asLong() - claims.get("iat").asLong()) * 1000L;

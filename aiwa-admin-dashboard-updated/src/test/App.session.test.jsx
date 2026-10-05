@@ -25,6 +25,7 @@ function routeFetch(me) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     const path = String(url).replace("http://api.test/api", "");
     if (path === "/auth/me") return me(init);
+    if (path === "/auth/refresh") return res(401, { message: "no refresh cookie" });
     if (path.startsWith("/admin/settlements/overview")) return res(200, { data: { totalOwed: 0, providerCount: 0 } });
     if (path.startsWith("/admin/settlements/providers")) return res(200, { data: [] });
     if (path.startsWith("/admin/settings/commission")) return res(200, { data: { commissionPercent: 10 } });
@@ -36,8 +37,7 @@ function routeFetch(me) {
 const ME = { id: 7, fullName: "Nour Support", role: "ADMIN", permissions: ["FINANCE"] };
 
 beforeEach(() => {
-  window.localStorage.setItem("aiwa_admin_access_token", "access");
-  window.localStorage.setItem("aiwa_admin_refresh_token", "refresh");
+  apiModule.setTokens({ accessToken: "access" }); // F-05: the access token is in memory, the refresh token a cookie
 });
 
 describe("<App> — CR-22 session start", () => {
@@ -60,8 +60,8 @@ describe("<App> — CR-22 session start", () => {
     const fetchSpy = routeFetch(() => (healthy ? res(200, { data: ME }) : res(500, { message: "boom" })));
     render(<App />);
     const retry = await screen.findByRole("button", { name: "Retry" });
-    expect(window.localStorage.getItem("aiwa_admin_access_token")).toBe("access");
-    expect(window.localStorage.getItem("aiwa_admin_refresh_token")).toBe("refresh");
+    expect(apiModule.getAccessToken()).toBe("access");
+    expect(apiModule.hasSession()).toBe(true);
     expect(screen.queryByText("Sign in to dashboard")).not.toBeInTheDocument();
 
     healthy = true;
@@ -75,16 +75,15 @@ describe("<App> — CR-22 session start", () => {
     routeFetch(() => { throw new TypeError("Failed to fetch"); });
     render(<App />);
     expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
-    expect(window.localStorage.getItem("aiwa_admin_access_token")).toBe("access");
+    expect(apiModule.getAccessToken()).toBe("access");
     expect(screen.queryByText("Sign in to dashboard")).not.toBeInTheDocument();
   });
 
   it("clears the tokens and shows the sign-in screen on a 401", async () => {
-    window.localStorage.removeItem("aiwa_admin_refresh_token"); // nothing to refresh with
     routeFetch(() => res(401, { message: "Unauthorized" }));
     render(<App />);
     expect(await screen.findByText("Sign in to dashboard")).toBeInTheDocument();
-    expect(window.localStorage.getItem("aiwa_admin_access_token")).toBeNull();
+    expect(apiModule.getAccessToken()).toBeNull();
   });
 });
 

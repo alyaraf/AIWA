@@ -48,7 +48,7 @@ import {
   X,
   XCircle
 } from "lucide-react";
-import { api, clearTokens, getAccessToken, mock, setAdminTwoFactorHandler, setTokens, TOKEN_STORAGE_KEYS, USE_MOCKS } from "./api";
+import { api, clearTokens, hasSession, mock, setAdminTwoFactorHandler, setTokens, TOKEN_STORAGE_KEYS, USE_MOCKS } from "./api";
 
 /* String → component map for icons that arrive as strings from the API/mock. */
 const iconMap = {
@@ -367,7 +367,7 @@ export function InlineBanner({ tone = "info", title, body }) {
 const LOADING_SESSION = { user: { permissions: [] }, loading: true };
 
 export default function App() {
-  const [session, setSession] = useState(() => (USE_MOCKS ? { user: mock.user } : getAccessToken() ? LOADING_SESSION : null));
+  const [session, setSession] = useState(() => (USE_MOCKS ? { user: mock.user } : hasSession() ? LOADING_SESSION : null));
   const [profileError, setProfileError] = useState(false);
   const [profileTry, setProfileTry] = useState(0);
   const [route, setRoute] = useState("dashboard");
@@ -406,7 +406,7 @@ export default function App() {
   // is no longer good (drop to login); a 5xx or a network blip keeps the
   // session and shows a retry (CR-22).
   useEffect(() => {
-    if (USE_MOCKS || !getAccessToken()) return;
+    if (USE_MOCKS || !hasSession()) return;
     let alive = true;
     setProfileError(false);
     api.me()
@@ -426,7 +426,7 @@ export default function App() {
   useEffect(() => {
     const onStorage = (event) => {
       if (USE_MOCKS || !(event.key === null || TOKEN_STORAGE_KEYS.includes(event.key))) return;
-      if (!getAccessToken()) { setSession(null); setRoute("dashboard"); } else setProfileTry((n) => n + 1);
+      if (!hasSession()) { setSession(null); setRoute("dashboard"); } else setProfileTry((n) => n + 1);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);

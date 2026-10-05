@@ -1,38 +1,49 @@
-# Admin session hardening (S-04)
+# Admin session hardening (S-04, F-05)
 
-## Current state
+## Current state (implemented 2026-10-05, F-05)
 
-The admin dashboard keeps its access and refresh tokens in `localStorage`
-(`aiwa_admin_access_token`, `aiwa_admin_refresh_token`). The CSP in
-`aiwa-admin-dashboard-updated/deploy/nginx.conf.template` and the absence of HTML-injection sinks
-make theft unlikely, but any future XSS, malicious extension or compromised browser profile can read
-them.
+No admin credential is readable from JavaScript after the page is gone.
 
-## Done in this pass (incremental)
+| What | Where it lives |
+| --- | --- |
+| Access token (15 min) | Memory of the admin page only (`src/api.js`). Gone on reload. |
+| Refresh token (8 h, single use) | `aiwa_admin_refresh` cookie: `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`. Set by the backend, never in a JSON body for admin accounts. |
+| "A session exists" hint | `localStorage` key `aiwa_admin_session`: a random id, no secret. Lets a reload decide whether to try restoring, and lets other tabs notice a sign-in or sign-out. |
+| Idle timestamp | `localStorage` key `aiwa_admin_last_activity` (30 min limit, `VITE_ADMIN_IDLE_MINUTES`). |
 
-- **Idle sign-out.** After 30 minutes without a click or keypress (`VITE_ADMIN_IDLE_MINUTES`, build
-  time; `0` turns it off) the next API call, or the next poll of an open panel, drops both tokens and
-  the admin signs in again (with 2FA). A profile left open or recovered later no longer holds a usable
-  session. Tests: `src/test/api.idle-timeout.test.js`.
-- Admin refresh tokens already live 8 hours (`JWT_ADMIN_REFRESH_EXPIRATION_MS`), access tokens 15
-  minutes, and Super admin / Finance 2FA is enforced server side.
+How it works:
 
-## Remaining migration (not done: needs backend and client changes together)
+- `/auth/login` (no 2FA), `/auth/2fa/verify`, `/auth/2fa/enable`, `/auth/refresh`, `/auth/me/phone` and `/auth/me/email/verify`
+  return the refresh token as the cookie for ADMIN accounts (`AuthController.tokenResponse`). Other users (the mobile
+  apps) still get it in the body.
+- `POST /auth/refresh` with no body token uses the cookie and **requires `X-Requested-With: aiwa-admin`** (403 otherwise):
+  CSRF defence on top of `SameSite=Strict`. A refresh token sent in the body still works for API clients.
+- `POST /auth/logout` revokes the cookie's token and clears the cookie.
+- Reload: no access token in memory and the hint is present, so the first request gets 401, refreshes through the
+  cookie and retries. With no cookie the login screen shows.
+- Tabs share the cookie, so refreshes take turns with the Web Locks API (`navigator.locks`); a refresh token is single
+  use and two tabs refreshing together would otherwise trip reuse detection. A sign-in in another tab changes the
+  hint; this tab drops its access token and gets one for the new session. A sign-out elsewhere signs this tab out.
+- Tokens an older build left in `localStorage` (`aiwa_admin_access_token`, `aiwa_admin_refresh_token`) are removed on load.
+- `JwtAuthFilter` still accepts only the `Authorization` header, so the access token never becomes a cookie.
 
-Goal: no admin credential readable from JavaScript.
+Tests: backend `AdminRefreshCookieApiTest` (cookie flags, no body token, CSRF header, rotation and single use, logout,
+customers unchanged); admin `api.tokens`, `api.refresh-token`, `api.cross-tab-refresh`, `api.idle-timeout`,
+`App.session`, `App.signout`. Checked by hand in a browser against a local backend: after sign-in `localStorage` holds only
+the hint, `document.cookie` is empty, a reload restores the session through the cookie, a refresh without the header
+is 403, and after logout a refresh is 401.
 
-1. **Backend.** For `ADMIN` users, `/auth/login`, `/auth/2fa/verify` and `/auth/refresh` set the refresh
-   token as `HttpOnly; Secure; SameSite=Strict; Path=/api/auth` and omit it from the JSON body;
-   `/auth/refresh` and `/auth/logout` read it from the cookie. Require a custom header
-   (`X-Requested-With`) on those calls as CSRF defence in depth. `JwtAuthFilter` keeps accepting only the
-   `Authorization` header (AU-14 removed cookie auth deliberately), so the access token never becomes a
-   cookie.
-2. **Rotation races.** Refresh tokens are single-use with reuse detection. With a shared cookie jar two
-   tabs refreshing at once would trip it. Serialise refreshes across tabs in the client (Web Locks API,
-   `navigator.locks`) or add a short grace window for the previous token on the server.
-3. **Client.** Keep the access token in memory only; on page load call `/auth/refresh` to obtain it.
-   Replace the `storage` listeners in `api.js` / `App.jsx` with `BroadcastChannel` messages for
-   sign-out and user change. Update the tests in `src/test/api.*.test.js` and `App.*.test.jsx`.
-4. **Deployment.** Admin and API share the registrable domain (`admin.` / `api.`), so `SameSite=Strict`
-   works; CORS needs `allow-credentials` with the exact admin origin (already not `*`).
-5. **Then** remove the `aiwa_admin_*` localStorage keys and the idle-timeout shim.
+## Deployment requirements
+
+- Serve the admin panel and the API from the **same registrable domain** (`admin.example.com` and `api.example.com`),
+  otherwise `SameSite=Strict` stops the browser sending the cookie. The compose file already does this.
+- `CORS_ALLOWED_ORIGINS` must be the exact admin origin (compose sets `https://${ADMIN_DOMAIN}`; credentials are allowed).
+- The cookie is `Secure` when `AUTH_COOKIE_SECURE` is true (always in the prod profile). The cookie path follows
+  `server.servlet.context-path` (`/api`), so it is sent to `/api/auth/*` only.
+- Admins signed in before the upgrade are signed out once (their old token is not a cookie); they sign in again.
+
+## What is still true
+
+An XSS in the admin origin can still call the API with the in-memory access token while the page is open (15 minutes at
+most), but it can no longer steal a token that outlives the page. Keep the CSP, the dependency audit gate, mandatory 2FA
+for every admin and the idle sign-out.

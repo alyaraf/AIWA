@@ -35,7 +35,7 @@ New or still-open items, in fix order:
    chain); SUPPORT 2FA is optional. Require 2FA for every admin and guard the edit-then-reset chain.
 4. F-07 monitoring gaps (no disk/DB-pool/cert alerts, no log rotation), F-04 permissionless admins can read user PII,
    F-06 `/admin/settlements/{id}/settle` has no amount/reference and settled-then-voided refunds are only logged,
-   F-05 admin tokens still in localStorage, F-08 `open-in-view` still on, F-09 launch checklist unsigned.
+   F-08 `open-in-view` still on, F-09 launch checklist unsigned.
 5. Lower items F-10..F-21 (local-profile bypass and unauthenticated `/dev/2fa/reset` if run on a server, dead access-token cookie,
    shadowed `/providers/*/manage/**` rule, JWT secret length, email OTP budget, CI action SHA pinning, iOS privacy manifest, ...).
 
@@ -60,7 +60,7 @@ Deploy notes for the next release:
   `expectedAmount` and `reference` (the panel does not call it).
 - Check on staging: `open-in-view: false` in prod (`application-prod.yml`), then the k6 smoke.
 
-Still open: F-02 operations (bucket, key escrow, restore drill), F-05 admin cookie/BFF migration, F-17 forced password change,
+Still open: F-02 operations (bucket, key escrow, restore drill), F-17 forced password change,
 F-18 SHA pinning and `NVD_API_KEY`, F-09 signed `docs/launch-signoff.md`, and the tests that cannot run here (Flutter, devices, k6,
 compose smoke, provider sandboxes, macOS iOS build).
 
@@ -162,3 +162,11 @@ Partial: S-04 admin tokens still in localStorage, idle sign-out added, migration
 Not done (operational): S-03 off-server backup and restore drill.
 Not run here: Flutter analyze/test (Flutter not installed on this machine), the CVE scan itself (needs the NVD key).
 Deploy note: existing deployments must add TOTP_ENCRYPTION_KEY, DOCUMENT_ENCRYPTION_KEY and BACKUP_KEY_FILE before upgrading.
+
+### F-05 done (admin session cookie)
+
+Admin refresh token is now an HttpOnly, Secure, SameSite=Strict cookie (`aiwa_admin_refresh`, path `/api/auth`); the access
+token is memory-only; `localStorage` keeps only a non-secret session hint. Cookie refresh needs `X-Requested-With: aiwa-admin`.
+Backend: 410 tests pass (incl. `AdminRefreshCookieApiTest`); admin: 120 tests pass; checked in a real browser (sign-in, reload
+restore, CSRF 403, logout then 401). Details: `docs/admin-session-hardening.md`. Deploy note: admins sign in once more after the
+upgrade; admin and API must stay on the same registrable domain.

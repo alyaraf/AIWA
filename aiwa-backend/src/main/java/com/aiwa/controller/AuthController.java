@@ -58,6 +58,47 @@ public class AuthController {
         if (meterRegistry != null) meterRegistry.counter("aiwa.auth.login", "result", result).increment();
     }
 
+    // ── Admin refresh cookie (F-05) ───────────────────────────────────────────
+    // An admin's refresh token is never given to JavaScript: login, 2FA verify and refresh set it as an
+    // HttpOnly, Secure, SameSite=Strict cookie scoped to /auth and leave it out of the JSON body. The
+    // panel keeps only the 15-minute access token, in memory. Everyone else (the mobile apps) still
+    // gets the refresh token in the body. A refresh that arrives by cookie must carry
+    // "X-Requested-With: aiwa-admin" (CSRF defence in depth on top of SameSite=Strict).
+
+    static final String ADMIN_REFRESH_COOKIE = "aiwa_admin_refresh";
+    static final String CSRF_HEADER = "X-Requested-With";
+    static final String CSRF_VALUE = "aiwa-admin";
+
+    @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
+    private String contextPath;
+
+    private ResponseCookie adminRefreshCookie(String refreshToken) {
+        long maxAge = Math.max(1, jwtUtils.getRemainingValidityMillis(refreshToken) / 1000);
+        return ResponseCookie.from(ADMIN_REFRESH_COOKIE, refreshToken)
+                .httpOnly(true).secure(cookieSecure).sameSite("Strict")
+                .path(contextPath + "/auth").maxAge(maxAge).build();
+    }
+
+    private ResponseCookie clearAdminRefreshCookie() {
+        return ResponseCookie.from(ADMIN_REFRESH_COOKIE, "")
+                .httpOnly(true).secure(cookieSecure).sameSite("Strict")
+                .path(contextPath + "/auth").maxAge(0).build();
+    }
+
+    /** The token response: for an admin session the refresh token moves from the body into the cookie. */
+    private ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> tokenResponse(
+            HttpStatus status, String message, ApiResponse.AuthResponse auth, boolean cookieMode) {
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(status);
+        boolean admin = auth.getRefreshToken() != null && auth.getUser() != null
+                && auth.getUser().getRole() == com.aiwa.enums.UserRole.ADMIN;
+        if (admin && cookieMode) {
+            response.header(HttpHeaders.SET_COOKIE, adminRefreshCookie(auth.getRefreshToken()).toString());
+            auth = ApiResponse.AuthResponse.builder()
+                    .accessToken(auth.getAccessToken()).tokenType(auth.getTokenType()).user(auth.getUser()).build();
+        }
+        return response.body(message == null ? ApiResponse.Success.of(auth) : ApiResponse.Success.of(message, auth));
+    }
+
     // ── Register / Login ──────────────────────────────────────────────────────
 
     @PostMapping("/register")
@@ -87,17 +128,27 @@ public class AuthController {
             throw e;
         }
         countLogin(auth.isMfaRequired() ? "mfa_required" : "ok");
-        ResponseEntity.BodyBuilder response = ResponseEntity.ok(); // F-11: no access-token cookie is issued; the apps use the Bearer header
-        return response.body(ApiResponse.Success.of(auth));
+        return tokenResponse(HttpStatus.OK, null, auth, true); // F-11: no access-token cookie; F-05: admin refresh token in a cookie
     }
 
     @PostMapping("/refresh")
     @Operation(summary = "Refresh access token")
     public ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> refresh(
-            @Valid @RequestBody AuthRequest.RefreshToken request) {
-        ApiResponse.AuthResponse auth = authService.refreshToken(request.getRefreshToken());
-        return ResponseEntity.ok()
-                .body(ApiResponse.Success.of(auth));
+            @RequestBody(required = false) AuthRequest.RefreshToken request,
+            @CookieValue(value = ADMIN_REFRESH_COOKIE, required = false) String cookieToken,
+            @RequestHeader(value = CSRF_HEADER, required = false) String requestedWith) {
+        String bodyToken = request != null ? request.getRefreshToken() : null;
+        boolean viaCookie = bodyToken == null || bodyToken.isBlank();
+        String token = viaCookie ? cookieToken : bodyToken;
+        if (token == null || token.isBlank()) {
+            throw new com.aiwa.exception.InvalidTokenException("auth.error.token_invalid");
+        }
+        // F-05: a cookie is sent by the browser on its own, so a cross-site page must not be able to trigger this.
+        if (viaCookie && !CSRF_VALUE.equals(requestedWith)) {
+            throw new com.aiwa.exception.ForbiddenException("error.access_denied");
+        }
+        ApiResponse.AuthResponse auth = authService.refreshToken(token);
+        return tokenResponse(HttpStatus.OK, null, auth, viaCookie);
     }
 
     @PostMapping("/logout")
@@ -105,15 +156,19 @@ public class AuthController {
     public ResponseEntity<ApiResponse.Success<Void>> logout(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @CookieValue(value = ACCESS_TOKEN_COOKIE, required = false) String cookieToken,
+            @CookieValue(value = ADMIN_REFRESH_COOKIE, required = false) String adminRefreshCookie,
             @RequestBody(required = false) AuthRequest.Logout request) {
         // DR-030: revoke the token from wherever JwtAuthFilter would accept it —
         // the Authorization header first, else the accessToken cookie.
         String accessToken = authorization != null && authorization.startsWith("Bearer ")
                 ? authorization.substring(7)
                 : (cookieToken != null && !cookieToken.isBlank() ? cookieToken : null);
-        authService.logout(accessToken, request != null ? request.getRefreshToken() : null);
+        String refreshToken = request != null && request.getRefreshToken() != null && !request.getRefreshToken().isBlank()
+                ? request.getRefreshToken() : adminRefreshCookie;
+        authService.logout(accessToken, refreshToken);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, clearAccessTokenCookie().toString())
+                .header(HttpHeaders.SET_COOKIE, clearAdminRefreshCookie().toString())
                 .body(ApiResponse.Success.of("Logged out successfully", null));
     }
 
@@ -205,8 +260,7 @@ public class AuthController {
             @Valid @RequestBody AuthRequest.VerifyEmail request,
             @AuthenticationPrincipal UserDetails userDetails) {
         ApiResponse.AuthResponse auth = authService.confirmEmail(userDetails.getUsername(), request.getCode());
-        return ResponseEntity.ok()
-                .body(ApiResponse.Success.of("Email confirmed", auth));
+        return tokenResponse(HttpStatus.OK, "Email confirmed", auth, true);
     }
 
     @PatchMapping("/me/phone")
@@ -216,8 +270,7 @@ public class AuthController {
             @Valid @RequestBody AuthRequest.ChangePhone request,
             @AuthenticationPrincipal UserDetails userDetails) {
         ApiResponse.AuthResponse auth = authService.changePhone(userDetails.getUsername(), request);
-        return ResponseEntity.ok()
-                .body(ApiResponse.Success.of("Phone number updated", auth));
+        return tokenResponse(HttpStatus.OK, "Phone number updated", auth, true);
     }
 
     @PatchMapping("/me/language")
@@ -379,8 +432,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> verifyMfa(
             @Valid @RequestBody AuthRequest.VerifyMfa request) {
         ApiResponse.AuthResponse auth = authService.verifyMfa(request.getMfaToken(), request.getCode());
-        return ResponseEntity.ok()
-                .body(ApiResponse.Success.of(auth));
+        return tokenResponse(HttpStatus.OK, null, auth, true);
     }
 
 
@@ -429,8 +481,8 @@ public class AuthController {
             @Valid @RequestBody AuthRequest.EnableTotp request,
             @AuthenticationPrincipal UserDetails userDetails) {
         // Earlier sessions end (SA-02); the response carries the caller's new token pair.
-        return ResponseEntity.ok(ApiResponse.Success.of("Two-factor authentication enabled",
-                authService.enableTotp(userDetails.getUsername(), request.getCode())));
+        return tokenResponse(HttpStatus.OK, "Two-factor authentication enabled",
+                authService.enableTotp(userDetails.getUsername(), request.getCode()), true);
     }
 
     @PostMapping("/2fa/disable")

@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 /**
- * S-04 (incremental): admin tokens still sit in localStorage, so an admin who walks away must be
- * signed out after the idle limit (30 minutes by default) instead of staying signed in for the
- * full refresh-token lifetime.
+ * S-04: an admin who walks away must be signed out after the idle limit (30 minutes by default)
+ * instead of staying signed in for the full refresh-cookie lifetime.
  */
 
-const ACCESS = "aiwa_admin_access_token";
-const REFRESH = "aiwa_admin_refresh_token";
+const SESSION = "aiwa_admin_session";
 const ACTIVITY = "aiwa_admin_last_activity";
 const MINUTE = 60_000;
 
@@ -16,32 +14,32 @@ describe("api.js - idle sign-out", () => {
 
   beforeEach(async () => {
     vi.resetModules();
+    window.localStorage.clear();
     mod = await import("../api.js");
   });
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("starts the idle clock when tokens are stored and clears it with them", () => {
-    mod.setTokens({ accessToken: "a", refreshToken: "r" });
+  it("starts the idle clock when a session starts and clears it with the session", () => {
+    mod.setTokens({ accessToken: "a" });
     expect(Number(window.localStorage.getItem(ACTIVITY))).toBeGreaterThan(0);
     mod.clearTokens();
     expect(window.localStorage.getItem(ACTIVITY)).toBeNull();
   });
 
   it("is not idle just after activity, and is idle after the limit", () => {
-    mod.setTokens({ accessToken: "a", refreshToken: "r" });
+    mod.setTokens({ accessToken: "a" });
     expect(mod.sessionIdleExpired(Date.now() + 29 * MINUTE)).toBe(false);
     expect(mod.sessionIdleExpired(Date.now() + 31 * MINUTE)).toBe(true);
   });
 
   it("treats a session with no activity record as fresh", () => {
-    window.localStorage.setItem(ACCESS, "a");
+    window.localStorage.setItem(SESSION, "hint");
     expect(mod.sessionIdleExpired()).toBe(false);
   });
 
-  it("drops the tokens instead of sending them once the session has been idle too long", async () => {
-    window.localStorage.setItem(ACCESS, "old-access");
-    window.localStorage.setItem(REFRESH, "old-refresh");
+  it("ends the session instead of using it once it has been idle too long", async () => {
+    mod.setTokens({ accessToken: "old-access" });
     window.localStorage.setItem(ACTIVITY, String(Date.now() - 45 * MINUTE));
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => ({
       ok: false, status: 401, text: async () => JSON.stringify({ message: "Unauthorized" })
@@ -49,15 +47,15 @@ describe("api.js - idle sign-out", () => {
 
     await expect(mod.api.me()).rejects.toMatchObject({ status: 401 });
 
-    expect(window.localStorage.getItem(ACCESS)).toBeNull();
-    expect(window.localStorage.getItem(REFRESH)).toBeNull();
-    // No refresh attempt was made with the stale refresh token, and the stale bearer was not sent.
+    expect(mod.getAccessToken()).toBeNull();
+    expect(window.localStorage.getItem(SESSION)).toBeNull();
+    // No refresh attempt (the session was ended first), and the stale bearer was not sent.
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(new Headers(fetchSpy.mock.calls[0][1].headers).get("Authorization")).toBeNull();
   });
 
   it("keeps an active session signed in", async () => {
-    window.localStorage.setItem(ACCESS, "live-access");
+    mod.setTokens({ accessToken: "live-access" });
     window.localStorage.setItem(ACTIVITY, String(Date.now() - 5 * MINUTE));
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => ({
       ok: true, status: 200, text: async () => JSON.stringify({ data: { id: 1 } })
@@ -65,7 +63,7 @@ describe("api.js - idle sign-out", () => {
 
     await mod.api.me();
 
-    expect(window.localStorage.getItem(ACCESS)).toBe("live-access");
+    expect(mod.getAccessToken()).toBe("live-access");
     expect(new Headers(fetchSpy.mock.calls[0][1].headers).get("Authorization")).toBe("Bearer live-access");
   });
 });
