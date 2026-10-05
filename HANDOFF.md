@@ -1,6 +1,6 @@
 # AIWA Handoff
 
-Last updated: 2026-10-05 10:50 Africa/Cairo
+Last updated: 2026-10-05 (audit round 2, after the S-01..S-11 fixes)
 
 Project path: `D:\AIWA PROJECT\AIWA`
 Branch: `main`
@@ -16,6 +16,55 @@ New audit artifact:
 - `docs/audit/production-audit-2026-10-05/audit.md`
 
 No application code was changed during this audit pass. Documentation was updated only.
+
+## Audit round 2 (2026-10-05, HEAD `7f59f37`) - read this first
+
+Report: `docs/audit/production-audit-2026-10-05-r2/audit.md` (audit only, no application code changed).
+
+Verified against current code: S-01, S-02, S-05, S-06, S-07, S-10, S-11 are fixed. Backend `mvn test` (JDK 17): 399 run, 0 failures.
+Admin: 115 tests pass, build OK, `npm audit` 0 vulnerabilities. No critical finding.
+
+New or still-open items, in fix order:
+
+1. **F-01 (High, new): CI is broken for the "Migrations + schema validation" step.** `ProductionGuardConfig` (S-01) now applies to the
+   default profile, and `.github/workflows/ci.yml:58-77` starts the jar with only `JWT_SECRET`. Reproduced locally against PostgreSQL 16:
+   8 guard problems, startup refused. `deploy-staging` needs that job. Fix the CI env; do not weaken the guard. Confirm in the Actions tab.
+2. **F-02 (High, open): no enforced off-server backup.** The documented `rclone sync` mirrors deletions and has no versioning/object lock;
+   key escrow for `DOCUMENT_ENCRYPTION_KEY` and `BACKUP_KEY_FILE` is advice only. Needs a restore drill from the off-server copy.
+3. **F-03 (Medium, new): SUPPORT can edit a user's phone/email and then send a temporary password to that new contact** (account takeover
+   chain); SUPPORT 2FA is optional. Require 2FA for every admin and guard the edit-then-reset chain.
+4. F-07 monitoring gaps (no disk/DB-pool/cert alerts, no log rotation), F-04 permissionless admins can read user PII,
+   F-06 `/admin/settlements/{id}/settle` has no amount/reference and settled-then-voided refunds are only logged,
+   F-05 admin tokens still in localStorage, F-08 `open-in-view` still on, F-09 launch checklist unsigned.
+5. Lower items F-10..F-21 (local-profile bypass and unauthenticated `/dev/2fa/reset` if run on a server, dead access-token cookie,
+   shadowed `/providers/*/manage/**` rule, JWT secret length, email OTP budget, CI action SHA pinning, iOS privacy manifest, ...).
+
+Not run on this machine (see section 6 of the report): Flutter analyze/test (SDK missing; the PATH entry `C:\flutter\src\flutter\bin`
+does not exist), Android/iOS device smoke, OWASP CVE scan (needs `NVD_API_KEY`), k6, compose smoke, restore drill, provider sandbox sends.
+Local tooling note: default `java` is 1.8 and `node` is 12; use JDK 17 and Node 20 (nvm), and do not run Maven and Vitest at the same time
+(the Windows paging file is small and both crash).
+
+### Fix pass (same day, after the report)
+
+Implemented: F-01 (CI env, verified against PostgreSQL 16 + Redis), F-03, F-04, F-06, F-08 (prod/test profiles run with
+`open-in-view: false`), F-10 to F-15, F-19, F-20 (privacy manifest), F-21, and most of F-02/F-07/F-18 on the repo side.
+Backend `mvn test`: 404 run, 0 failures. Admin: 115 pass. `backup_test.sh`: 31 pass. Compose and Caddy configs validate.
+Full status table: top of `docs/audit/production-audit-2026-10-05-r2/audit.md`.
+
+Deploy notes for the next release:
+- New REQUIRED `.env` value `OFFSITE_REMOTE` plus `deploy/secrets/rclone.conf` (compose refuses to start without them); see
+  `docs/runbooks.md` "Backups off the server". Optional: `DEADMAN_WEBHOOK_URL`, `OFFSITE_HEARTBEAT_URL`, `ADMIN_ALLOWED_IPS`.
+- The backend now gets only an explicit list of variables from `.env` (`docker-compose.prod.yml`); a custom variable you added
+  to `.env` must be added to that list.
+- Every admin needs 2FA enrolled; changing a user's email/phone is SUPER_ADMIN only; `/admin/settlements/{id}/settle` needs
+  `expectedAmount` and `reference` (the panel does not call it).
+- Check on staging: `open-in-view: false` in prod (`application-prod.yml`), then the k6 smoke.
+
+Still open: F-02 operations (bucket, key escrow, restore drill), F-05 admin cookie/BFF migration, F-17 forced password change,
+F-18 SHA pinning and `NVD_API_KEY`, F-09 signed `docs/launch-signoff.md`, and the tests that cannot run here (Flutter, devices, k6,
+compose smoke, provider sandboxes, macOS iOS build).
+
+Launch recommendation: staging yes; production not yet (F-02 operations, F-09 sign-off and the unrun tests first).
 
 ## Verification Completed
 

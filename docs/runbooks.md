@@ -99,10 +99,9 @@ fires after 26 hours). Only a throwaway environment should set `BACKUP_ALLOW_UNE
 on the backup service; it then logs `WARNING ... NOT encrypted` and the
 **BackupNotEncrypted** alert fires after an hour.
 
-The postgres alpine image used by the backup container is not known to ship the
-`openssl` command line tool, so `backup.sh` runs `apk add openssl` the first time it
-needs it (network access to the Alpine mirror; the install is lost when the container
-is recreated). If a key is mounted and openssl cannot be installed, the backup does
+The backup container is built from `deploy/backup/Dockerfile` (the postgres alpine image with
+`openssl` baked in), so nothing is installed from the network at run time (F-02). If a key is
+mounted and openssl is missing for any reason, the backup does
 NOT fall back to plain files: it logs `BACKUP FAILED: cannot encrypt ...`, keeps the old
 last-success time, and **BackupStale** fires after 26 hours. A blank key file counts as
 no key (**BackupNotEncrypted**). `./restore.sh` decrypts and checks the dump and the
@@ -115,15 +114,55 @@ before the app is stopped, the database is dropped or `/uploads` is emptied.
 
 ## Backups off the server
 
-A backup on the same disk doesn't survive losing the server. Copy `deploy/backups/`
-somewhere else every night, for example with a cron job and `rclone` to an
-S3-compatible bucket (Backblaze B2, Cloudflare R2, Hetzner Storage Box):
+A backup on the same disk doesn't survive losing the server, so the stack ships the encrypted
+backups off it itself (F-02): the `offsite` service in `docker-compose.prod.yml` runs
+`backup/offsite.sh` every `OFFSITE_INTERVAL_SECONDS` (default 6 h). Compose refuses to start
+without `OFFSITE_REMOTE`.
 
-```cron
-30 3 * * * rclone sync /srv/aiwa/deploy/backups remote:aiwa-backups --max-age 15d
+Set up once:
+
+1. Create a **private** bucket at an S3-compatible provider (Backblaze B2, Cloudflare R2, Hetzner
+   Storage Box) and turn on **versioning or object lock** with a retention of at least the
+   backup retention. This is what makes the remote copy survive a compromised server.
+2. Create a write-only (or write + list) access key for that bucket. Do not give the server a key that can delete.
+3. `deploy/secrets/rclone.conf` (git-ignored) with a remote, then set in `.env`
+   `OFFSITE_REMOTE=<remote>:<bucket>/aiwa`:
+
+   ```ini
+   [aiwa]
+   type = s3
+   provider = Cloudflare
+   access_key_id = ...
+   secret_access_key = ...
+   endpoint = https://<account>.r2.cloudflarestorage.com
+   ```
+4. `dc up -d --build`, then `dc logs offsite` must say `offsite ok`.
+
+How it behaves: `rclone copy --immutable` (never `sync`: a wiped or encrypted local `backups/` is not
+mirrored over the remote, and an existing remote file is never rewritten), only `*.enc` files are sent,
+and `rclone check` proves the copy before `aiwa_offsite_last_success_timestamp_seconds` moves.
+Alerts: **OffsiteBackupStale** (copy older than 26 h) and **OffsiteBackupMetricsMissing**.
+Set `OFFSITE_HEARTBEAT_URL` for an external "no ping" alert too.
+
+### Keys: store them off the server
+
+The encrypted backups are useless without the keys, and ID documents are unreadable without
+`DOCUMENT_ENCRYPTION_KEY`. Keep copies of **`BACKUP_KEY_FILE`, `DOCUMENT_ENCRYPTION_KEY`,
+`TOTP_ENCRYPTION_KEY` and `JWT_SECRET`** in a password manager or secret store that is not on this
+server and that at least two people can open. Losing the first two means the data cannot be recovered.
+
+### Restore drill (a launch gate)
+
+On a clean machine, with only the off-server bucket and the escrowed keys:
+
+```bash
+rclone copy aiwa:aiwa-backups/db ./restore-test/db        # latest .enc dump
+rclone copy aiwa:aiwa-backups/uploads ./restore-test/uploads
+BACKUP_KEY_FILE=./restore.key ./restore.sh restore-test/db/aiwa-<stamp>.dump.enc restore-test/uploads/uploads-<stamp>.tar.gz.enc
 ```
 
-The uploads tarballs contain ID documents: encrypt the backups (above) and use a private bucket.
+Then sign in as an admin and open one ID document. Record the date, the operator and the backup
+used in `docs/launch-signoff.md`. Repeat after any change to the backup scripts and at least quarterly.
 
 ## Backend down / 5xx alerts
 

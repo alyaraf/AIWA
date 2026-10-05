@@ -36,12 +36,12 @@ E-1 closes when every box is ticked.
 
 - TOTP for admins; setup and disable need the password and, when on, a current code.
 - The MFA challenge is single-use, checked against the session cut-off.
-- **Decided 2026-10-04 and enforced:** in prod a SUPER_ADMIN or FINANCE admin without
-  2FA gets 403 `auth.error.admin_2fa_required` on every call except `/auth/**` (SA-01) and the panel
-  shows the setup card (`AdminTwoFactorInterceptor`, `REQUIRE_ADMIN_2FA`, default on in
-  prod). SUPPORT admins are not forced.
+- **Decided 2026-10-04, widened 2026-10-05 (F-03) and enforced:** in prod every admin (SUPER_ADMIN, FINANCE, SUPPORT,
+  or none) without 2FA gets 403 `auth.error.admin_2fa_required` on every call except `/auth/**` (SA-01) and the panel
+  shows the setup card (`AdminTwoFactorInterceptor`, `REQUIRE_ADMIN_2FA`, default on in prod). Changing a user's email or
+  phone is a SUPER_ADMIN action (SUPPORT can still fix a name), so support cannot move a contact and then reset the password.
 - TOTP secrets are encrypted at rest (AU-08); `TOTP_ENCRYPTION_KEY` is required in production: the backend refuses to start without it (S-02).
-- [ ] Confirm SUPPORT stays optional, or require it for every admin too.
+- [x] SUPPORT 2FA: required for every admin (F-03, 2026-10-05).
 - [ ] Set `TOTP_ENCRYPTION_KEY` and `DOCUMENT_ENCRYPTION_KEY` in `deploy/.env` and keep a copy of both with
   the other secrets: without them, admins with 2FA can’t sign in and stored ID photos can’t be opened.
 
