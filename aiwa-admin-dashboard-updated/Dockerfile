@@ -1,7 +1,7 @@
 # Admin panel image (OPS-8): Vite build, then served by nginx with the CSP in
 # deploy/nginx.conf.template. VITE_API_BASE_URL is baked in at build time;
 # API_ORIGIN (runtime) feeds the CSP connect-src/img-src.
-FROM node:20.20.2-alpine AS build
+FROM node:26.10.0-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
