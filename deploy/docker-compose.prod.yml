@@ -90,6 +90,9 @@ services:
       - EMAIL_API_URL
       - EMAIL_API_KEY
       - EMAIL_FROM
+      - AIWA_GATEWAY_ALLOWED_HOSTS
+      - PUBLIC_MAX_IMAGE_DIMENSION
+      - PUBLIC_MAX_DECODE_WORKING_BYTES
       - PUSH_PROVIDER
       - FCM_PROJECT_ID
       - SAFETY_ONCALL_PHONES
@@ -186,6 +189,9 @@ services:
       BACKUP_KEY_FILE: /run/secrets/backup.key
     volumes:
       - ./backup/backup.sh:/backup.sh:ro
+      # I-02 / I-03: used by restore.sh (staged uploads swap, reconciliation report)
+      - ./backup/uploads_swap.sh:/uploads_swap.sh:ro
+      - ./backup/reconcile_uploads.sh:/reconcile_uploads.sh:ro
       - ${BACKUP_KEY_FILE:?Set BACKUP_KEY_FILE (docs/runbooks.md)}:/run/secrets/backup.key:ro
       - ./backups:/backups
       - uploads:/uploads

@@ -92,9 +92,16 @@ run_backup() {
     mv "$dump.partial" "$dump" || { fail "cannot rename the dump"; return 1; }
   fi
 
+  # I-03: the dump above and this tarball are two snapshots of a live system, not one transaction. The ORDER is the
+  # guarantee: the dump is taken first, so every file the dump references that still existed when tar ran is in the
+  # tarball. What can differ: a file deleted between the two (the dump still points at it: "missing") and a file
+  # uploaded between the two (in the tarball, not in the dump: an "orphan", harmless). restore.sh prints that
+  # reconciliation after a restore (backup/reconcile_uploads.sh); docs/runbooks.md "Backup consistency".
+  tar_started=$(date -u +%FT%TZ)
   if ! tar -czf "$tarball.partial" -C "$UPLOADS" .; then
     rm -f "$tarball.partial"; fail "tar of uploads failed"; return 1
   fi
+  tar_finished=$(date -u +%FT%TZ)
   if ! gzip -t "$tarball.partial"; then
     rm -f "$tarball.partial"; fail "uploads tarball is corrupt"; return 1
   fi
@@ -105,6 +112,11 @@ run_backup() {
     mv "$tarball.partial" "$tarball" || { fail "cannot rename the uploads tarball"; return 1; }
   fi
 
+  # I-03: a small record of what the pair is: when each half was taken and how many files the tarball holds.
+  mkdir -p "$OUT/manifest" && printf '{"stamp":"%s","dump":"aiwa-%s.dump%s","uploads":"uploads-%s.tar.gz%s","dump_taken_before":"%s","tar_started":"%s","tar_finished":"%s","consistency":"dump-first: see docs/runbooks.md"}
+'     "$stamp" "$stamp" "$ext" "$stamp" "$ext" "$tar_started" "$tar_started" "$tar_finished" > "$OUT/manifest/snapshot-$stamp.json" ||
+    echo "$(date -u +%FT%TZ) cannot write the backup manifest" >&2
+  find "$OUT/manifest" -type f -mtime +"$KEEP_DAYS" -delete 2> /dev/null
   find "$OUT/db" "$OUT/uploads" -type f -mtime +"$KEEP_DAYS" -delete
   find "$OUT/db" "$OUT/uploads" -type f -name '*.partial' -mmin +120 -delete
   date -u +%FT%TZ > "$OUT/last-success"

@@ -1,0 +1,97 @@
+# promtool unit tests for alerts.yml (I-01). Run from deploy/monitoring:
+#   docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus:<same tag as compose> test rules alerts_test.yml
+# CI runs the same command (.github/workflows/ci.yml, job "monitoring-rules").
+#
+# The series below have the label shape node-exporter v1.8.2 really emits when started with --path.rootfs=/host:
+# the "/host" prefix is stripped, so the host's root filesystem is mountpoint="/".
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # A root filesystem with 10 GB free of 100 GB (10%) fires HostDiskLow after 10 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="host",job="node",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: '10e9x30'
+      - series: 'node_filesystem_size_bytes{instance="host",job="node",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: '100e9x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HostDiskLow
+        exp_alerts: []          # not yet: it has to stay low for 10 minutes
+      - eval_time: 15m
+        alertname: HostDiskLow
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              mountpoint: "/"
+            exp_annotations:
+              summary: "Less than 15% disk space left on /; prune old backups/logs or grow the disk"
+      - eval_time: 15m
+        alertname: HostMetricsMissing
+        exp_alerts: []         # the host metrics are present, so the "missing" alert must stay quiet
+
+  # A healthy disk (60% free) stays quiet.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="host",job="node",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: '60e9x30'
+      - series: 'node_filesystem_size_bytes{instance="host",job="node",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: '100e9x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HostDiskLow
+        exp_alerts: []
+
+  # A separate data disk running low is caught even though the root filesystem is fine.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="host",job="node",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: '60e9x30'
+      - series: 'node_filesystem_size_bytes{instance="host",job="node",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: '100e9x30'
+      - series: 'node_filesystem_avail_bytes{instance="host",job="node",device="/dev/sdb1",fstype="xfs",mountpoint="/var/lib/docker-data"}'
+        values: '20e9x30'
+      - series: 'node_filesystem_size_bytes{instance="host",job="node",device="/dev/sdb1",fstype="xfs",mountpoint="/var/lib/docker-data"}'
+        values: '200e9x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HostDiskLow
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              mountpoint: "/var/lib/docker-data"
+            exp_annotations:
+              summary: "Less than 15% disk space left on /var/lib/docker-data; prune old backups/logs or grow the disk"
+
+  # Tiny EFI/boot partitions and pseudo filesystems never raise the alarm.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="host",job="node",device="/dev/sda15",fstype="vfat",mountpoint="/boot/efi"}'
+        values: '1e6x30'
+      - series: 'node_filesystem_size_bytes{instance="host",job="node",device="/dev/sda15",fstype="vfat",mountpoint="/boot/efi"}'
+        values: '100e6x30'
+      - series: 'node_filesystem_avail_bytes{instance="host",job="node",device="tmpfs",fstype="tmpfs",mountpoint="/run/lock"}'
+        values: '0x30'
+      - series: 'node_filesystem_size_bytes{instance="host",job="node",device="tmpfs",fstype="tmpfs",mountpoint="/run/lock"}'
+        values: '5e6x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HostDiskLow
+        exp_alerts: []
+
+  # No mountpoint="/" series at all (exporter down, or only the old "/host" shape): HostMetricsMissing fires.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="host",job="node",device="/dev/sda1",fstype="ext4",mountpoint="/host"}'
+        values: '60e9x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HostMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "No host metrics: node-exporter is down, so disk and memory alerts cannot fire"

@@ -38,6 +38,8 @@ ts=aiwa_backup_last_success_timestamp_seconds
 # C1: success writes a fresh timestamp
 d="$tmp/ok"; run_backup "$d"; now=$(date -u +%s); t=$(metric "$d" $ts)
 check "success exits 0" '[ $rc -eq 0 ]'
+# I-03: each pair gets a manifest saying when the dump and the tarball were taken (dump first)
+check "success writes a snapshot manifest naming both files" 'grep -q "\"dump\":\"aiwa-" "$d"/out/manifest/snapshot-*.json && grep -q "\"tar_started\"" "$d"/out/manifest/snapshot-*.json'
 check "success writes a fresh timestamp" '[ -n "$t" ] && [ "$t" -le "$now" ] && [ "$t" -ge $((now-30)) ]'
 
 # C1: failure keeps the old timestamp and exits non-zero (pg_dump and tar)
@@ -95,8 +97,21 @@ case " $* " in
   # SA-04: the scratch database the dump is test-restored into first
   *" createdb "*|*" dropdb "*) ;;
   *" pg_restore --no-owner --exit-on-error "*) cat > "$FAKE_LOG.scratch"; [ "${FAKE_SCRATCH_FAIL:-}" != 1 ] ;;
-  *" exec "*) cat > "$FAKE_LOG.restored" ;;
-  *" run "*) snap; script="${!#}"; sh -c "${script//\/uploads/$FAKE_UPLOADS}" ;;
+  # I-02: restore.sh takes a safety copy of the live database before it restores
+  *" pg_dump -Fc "*) echo SAFETY-COPY ;;
+  *" pg_restore --clean "*) cat > "$FAKE_LOG.restored" ;;
+  *" psql "*) cat > /dev/null ;;
+  *" exec "*) cat > /dev/null ;;
+  # I-02: the backup container runs the real swap / reconcile scripts against the fake volume
+  *" run "*)
+    snap
+    args=("$@"); i=0
+    while [ "${args[$i]}" != backup ]; do i=$((i+1)); done
+    script="${args[$((i+1))]}"; rest=("${args[@]:$((i+2))}")
+    case "$script" in
+      /uploads_swap.sh) UPLOADS_DIR="$FAKE_UPLOADS" sh "$SWAP_SCRIPTS/uploads_swap.sh" "${rest[@]}" ;;
+      /reconcile_uploads.sh) UPLOADS_DIR="$FAKE_UPLOADS" sh "$SWAP_SCRIPTS/reconcile_uploads.sh" ;;
+    esac ;;
 esac
 S
 chmod +x "$tmp/dstub/docker"
@@ -111,10 +126,12 @@ echo 'not gzip' > "$r/bad.tgz"; printf 'garbage' > "$r/bad.dump"
 run_restore() {
   n="$1"; k="$2"; dp="$3"; up="$4"; shift 4
   FAKE="$r/$n"; rm -rf "$FAKE"; mkdir -p "$FAKE/uploads"; echo live > "$FAKE/uploads/live.jpg"; : > "$FAKE/log"
-  env PATH="$tmp/dstub:$PATH" ASSUME_YES=1 BACKUP_KEY_FILE="$k" FAKE_LOG="$FAKE/log" FAKE_UPLOADS="$FAKE/uploads" "$@"     bash "$rscript" "$dp" "$up" > "$FAKE/out" 2>&1
+  env PATH="$tmp/dstub:$PATH" ASSUME_YES=1 BACKUP_KEY_FILE="$k" FAKE_LOG="$FAKE/log" FAKE_UPLOADS="$FAKE/uploads" SWAP_SCRIPTS="$here" "$@"     bash "$rscript" "$dp" "$up" > "$FAKE/out" 2>&1
   rc=$?
 }
-untouched() { [ "$(cat "$FAKE/uploads/live.jpg" 2>/dev/null)" = live ] && ! grep -Eq ' (stop|exec .*--clean|run) ' "$FAKE/log"; }
+# I-02: a failed restore may have STAGED the archive (inside the volume, live files untouched) but never stops the
+# backend, restores the database or swaps the uploads.
+untouched() { [ "$(cat "$FAKE/uploads/live.jpg" 2>/dev/null)" = live ] && ! grep -Eq ' (stop|exec .*--clean) |uploads_swap.sh swap' "$FAKE/log"; }
 
 run_restore wrongkey "$r/wrong" "$r/db.dump" "$r/up.tgz.enc"
 check "restore, wrong key: fails and leaves uploads and database alone" '[ $rc -ne 0 ] && untouched'
@@ -133,7 +150,7 @@ check "restore, corrupt dump: fails and leaves uploads alone" '[ $rc -ne 0 ] && 
 run_restore scratchfail "$r/key" "$r/db.dump" "$r/up.tgz" FAKE_SCRATCH_FAIL=1
 check "restore, dump that fails the scratch restore: fails and leaves everything alone" '[ $rc -ne 0 ] && untouched && grep -q "does not restore completely" "$FAKE/out"'
 run_restore good "$r/key" "$r/db.dump.enc" "$r/up.tgz.enc"
-check "restore, right key: replaces database and uploads" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ] && [ ! -e "$FAKE/uploads/live.jpg" ] && cmp -s "$FAKE/log.restored" "$r/db.dump"'
+check "restore, right key: replaces database and uploads" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ] && [ ! -e "$FAKE/uploads/live.jpg" ] && cmp -s "$FAKE/log.restored" "$r/db.dump" && [ "$(cat "$FAKE"/uploads/.restore-previous-*/live.jpg)" = live ]'
 run_restore plain "$r/nokey" "$r/db.dump" "$r/up.tgz"
 check "restore, plain files need no key" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ]'
 

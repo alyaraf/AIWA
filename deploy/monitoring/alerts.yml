@@ -135,14 +135,21 @@ groups:
           summary: "Dead-man's switch: this alert always fires"
 
       # F-07: the host (database, uploads, backups and logs all share one disk) is running out of room.
+      # I-01: node-exporter runs with --path.rootfs=/host and STRIPS that prefix from the mountpoint label, so the
+      # host's root filesystem is mountpoint="/" (the old selector "/host" never matched, and HostDiskLow could not
+      # fire). Every real filesystem is checked, not just one: a separate data/backup disk is covered too. The
+      # size filter skips tiny boot/EFI partitions; pseudo filesystems are excluded.
       - alert: HostDiskLow
         expr: >
-          min(node_filesystem_avail_bytes{mountpoint="/host",fstype!~"tmpfs|overlay"}
-          / node_filesystem_size_bytes{mountpoint="/host",fstype!~"tmpfs|overlay"}) < 0.15
+          min by (mountpoint) (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|vfat|ramfs|devtmpfs|fuse.*"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|vfat|ramfs|devtmpfs|fuse.*"}
+            and on (instance, mountpoint) node_filesystem_size_bytes > 5e9
+          ) < 0.15
         for: 10m
         labels: { severity: critical }
         annotations:
-          summary: "Less than 15% disk space left on the server; prune old backups/logs or grow the disk"
+          summary: "Less than 15% disk space left on {{ $labels.mountpoint }}; prune old backups/logs or grow the disk"
 
       - alert: HostMemoryLow
         expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
@@ -152,7 +159,7 @@ groups:
           summary: "Less than 10% of server memory is available"
 
       - alert: HostMetricsMissing
-        expr: absent(node_filesystem_avail_bytes{mountpoint="/host"})
+        expr: absent(node_filesystem_avail_bytes{mountpoint="/"})
         for: 15m
         labels: { severity: warning }
         annotations:
