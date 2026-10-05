@@ -78,20 +78,22 @@ src/main/java/com/aiwa/
 - Maven 3.9+
 - Docker & Docker Compose
 
-### 1 – Run with Docker Compose (recommended)
+### 1 – Run locally (recommended, no Docker)
 
-The app refuses to start with the checked-in default JWT secret, so create a
-`.env` next to `docker-compose.yml` with your own first:
+The `local` profile uses an in-memory H2 database, seeds a demo admin and only logs SMS/e-mail/push:
 
 ```bash
-echo "JWT_SECRET=$(openssl rand -base64 48)" > .env
-docker-compose up --build
+mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 API available at `http://localhost:8080/api`  
 Swagger UI at `http://localhost:8080/api/swagger-ui.html`
 
-### 2 – Run locally (PostgreSQL must be running)
+`aiwa-backend/docker-compose.yml` only starts PostgreSQL and Redis on 127.0.0.1 for local integration work. It has no
+backend service on purpose: the default profile enforces the production settings and refuses to start without them.
+Servers use `deploy/docker-compose.prod.yml` (see `docs/release.md`).
+
+### 2 – Run against a real PostgreSQL (needs the production settings, or use the `local` profile above)
 
 ```bash
 # 1. Start Postgres

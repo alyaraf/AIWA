@@ -1,3 +1,19 @@
+# LOCAL DEVELOPMENT DEPENDENCIES ONLY (audit I-04). Not a deployment file.
+#
+#   - PostgreSQL and Redis with demo credentials, published on 127.0.0.1 only, so nothing outside this machine can
+#     reach them. Never publish them on a public host.
+#   - There is deliberately NO backend service here. The default profile refuses to start without the production
+#     settings (SMS/e-mail/push providers, encryption keys, validated schema; ProductionGuardConfig), so a container
+#     started from a few variables just crash-looped, and weakening the guard to make it start would be wrong.
+#
+# Run the API on your machine instead (no Docker needed): the `local` profile uses an in-memory H2 database, a seeded
+# demo admin and log-only SMS/e-mail/push:
+#     mvn spring-boot:run -Dspring-boot.run.profiles=local
+# Use this file when you need a real PostgreSQL/Redis next to your IDE, and point the test or run configuration at
+# jdbc:postgresql://localhost:5432/aiwa_db (postgres / postgres) and localhost:6379.
+#
+# The maintained server stack (Caddy, backend, admin panel, PostgreSQL, Redis with a password, backups, monitoring) is
+# deploy/docker-compose.prod.yml; see docs/release.md.
 services:
 
   postgres:
@@ -8,7 +24,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - aiwa_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +37,7 @@ services:
     image: redis:7-alpine
     container_name: aiwa_redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - aiwa_redisdata:/data
     command: ["redis-server", "--appendonly", "yes"]
@@ -30,28 +46,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  app:
-    build: .
-    container_name: aiwa_backend
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/aiwa_db
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      # Required: the checked-in default is refused by JwtSecretGuardConfig on this
-      # (default) profile, which made the container restart-loop (BE-43).
-      # Put a long random value in .env next to this file (see .env.example).
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in aiwa-backend/.env - e.g. openssl rand -base64 48}
-    ports:
-      - "8080:8080"
-    restart: on-failure
 
 volumes:
   aiwa_pgdata:

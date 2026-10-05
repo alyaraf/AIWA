@@ -62,98 +62,10 @@ The public site (`deploy/site/`) serves `/privacy`, `/terms` (live from the back
 `/delete-account`; use those URLs in the Play Console and App Store Connect. The privacy
 policy is a **draft**: fill in the [bracketed] parts and have it reviewed before launch.
 
-`aiwa-backend/docker-compose.prod.yml` is the older backend-only file for hosts that
-already have their own TLS proxy; its guides stay valid.
+There is no other production compose file. `aiwa-backend/docker-compose.prod.yml` was removed (audit L-25) and the
+backend-only guide `aiwa-backend/PRODUCTION_ENVIRONMENT_GUIDE.md` is background only. `aiwa-backend/docker-compose.yml` is
+local-development PostgreSQL/Redis on 127.0.0.1, never a server file. A host with its own TLS proxy still runs this
+stack (`deploy/docker-compose.prod.yml`), with the proxy in front of Caddy or Caddy's ports changed; the production
+guards stay on (`ProductionGuardConfig`).
 
-```bash
-cd deploy
-cp .env.example .env   # fill in every value; never commit .env
-mkdir -p secrets        # put firebase-service-account.json here (git-ignored)
-openssl rand -hex 32 | tee secrets/metrics-token   # and put the same value in .env as METRICS_TOKEN
-export RELEASE_TAG=$(git rev-parse --short HEAD)
-docker compose -f docker-compose.prod.yml up -d --build
-```
 
-Every image is pinned to an exact version and our own images are tagged with
-`RELEASE_TAG`, so the server always knows which build it runs (R2-20).
-
-Backups, restores and alerts: see `docs/runbooks.md`. Copy `deploy/backups/` off the
-server every night; the restore script was tested end to end (database and uploads).
-
-Point the DNS A records for `<domain>`, `api.<domain>` and `admin.<domain>` at the server
-before the first start so Caddy can get certificates.
-
-A managed PostgreSQL with point-in-time recovery is still recommended over the
-bundled container (OPS-2); set `SPRING_DATASOURCE_URL` to it and drop the
-`postgres` service.
-
-## Releasing and rolling back (R2-20)
-
-1. Deploy the commit to staging first (the CI job does this on every green push to
-   `main`) and click through `docs/qa-plan.md`'s smoke list there.
-2. On production, note the running tag: `docker images aiwa-backend` (the newest is live).
-3. Take a backup right before: `dc run --rm backup once`.
-4. `git fetch && git checkout <commit>`, then `RELEASE_TAG=<commit> dc up -d --build`.
-5. Watch `dc logs -f backend` until it is healthy, then check the admin panel and one booking.
-
-**Rollback.** The previous images are still on the server:
-
-```bash
-git checkout <previous commit>
-RELEASE_TAG=<previous commit> docker compose -f docker-compose.prod.yml up -d --no-build
-```
-
-Database migrations only move forward, and every migration is written to be
-additive (new tables and columns, `IF NOT EXISTS`), so the previous backend runs
-on the newer schema. If a release ever has to change or drop existing data, ship it
-in two releases (add and copy first, remove later), never in one. When a rollback
-needs the old data back, restore the backup from step 3 (`docs/runbooks.md`); anything
-written since is lost, so prefer fixing forward when the problem is small.
-
-Remove images older than the last three releases now and then:
-`docker image prune --filter "until=720h"`.
-
-**Databases created by the old `ddl-auto` setting** (local or early test servers)
-now upgrade cleanly: V12 and V15 add their columns only if missing (R2-10). Such a
-database that had already run V12 or V15 before this change needs one
-`flyway repair` (it only updates the stored checksums); fresh databases need nothing.
-
-## Staging (OPS-2, OPS-6)
-
-Run the same stack on a second, smaller server with its own `deploy/.env`
-(`staging.<domain>`, `api.staging.<domain>`, `admin.staging.<domain>`, test SMS
-credentials, its own database). Never point staging at production data.
-
-The CI job `deploy-staging` deploys every green push to `main` there. Turn it on in
-GitHub → Settings → Secrets and variables → Actions:
-
-| Kind | Name | Value |
-|------|------|-------|
-| Variable | `STAGING_HOST` | the server's hostname or IP |
-| Variable | `STAGING_USER` | the SSH user that owns `/srv/aiwa` and can run docker |
-| Variable | `STAGING_API_DOMAIN` | e.g. `api.staging.<domain>` (health check) |
-| Secret | `STAGING_SSH_KEY` | a private key used only for this deploy |
-| Secret | `STAGING_KNOWN_HOSTS` | output of `ssh-keyscan <host>` |
-
-On the server, once: `git clone <repo> /srv/aiwa`, then create `/srv/aiwa/deploy/.env` and
-`deploy/secrets/` as above. Production deploys stay manual until staging has run
-for a while.
-
-## Dependency scanning (S-09)
-
-- **Dependabot** (`.github/dependabot.yml`) opens PRs for advisories in Maven, npm, pub, Docker and Actions.
-- **OWASP Dependency-Check** runs in CI (`dependency-scan` job: pushes to main, weekly, manual) against the
-  backend and fails on CVSS 7 or higher; the HTML/JSON report is the `dependency-check-report` artifact.
-  Add the repository secret `NVD_API_KEY` (free key from https://nvd.nist.gov/developers/request-an-api-key).
-  Without it the job prints a warning annotation and skips, because the NVD download is hours slow keyless.
-- Locally: `mvn -DskipTests org.owasp:dependency-check-maven:12.1.8:check -DnvdApiKey=<key> -DfailBuildOnCVSS=7`.
-
-## Production start-up guard (S-01 / S-02)
-
-The backend refuses to start outside the `local` and `test` profiles unless it is production-safe: profile
-`prod` active (or `AIWA_ALLOW_NON_PROD_SERVER=true`), `ddl-auto=validate`, Swagger off, SMS/email/push not
-`dev-log` with their credentials, `SAFETY_ONCALL_PHONES`, and valid `TOTP_ENCRYPTION_KEY` and
-`DOCUMENT_ENCRYPTION_KEY`. The compose file also requires `BACKUP_KEY_FILE`, and `backup.sh` refuses to write
-an unencrypted backup. **Upgrading an existing deployment:** generate both encryption keys
-(`openssl rand -base64 32`) and the backup key before deploying this version, or the stack will not start.
-Files already stored unencrypted stay readable.
