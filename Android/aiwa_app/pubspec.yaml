@@ -69,7 +69,7 @@ dependencies:
   # Cupertino icons
 
   # Crash reporting + funnel breadcrumbs (off unless SENTRY_DSN is set)
-  sentry_flutter: ^8.14.2
+  sentry_flutter: ^9.10.0 # SA-05: first release without the Kotlin languageVersion 1.6/1.8 pin that Kotlin 2.3 rejects
   share_plus: ^12.0.2
   lucide_icons_flutter: ^3.1.20
   firebase_core: ^4.15.0

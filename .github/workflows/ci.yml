@@ -182,8 +182,9 @@ jobs:
       - run: flutter analyze
       - run: flutter test
 
-  # SA-05: Dart tests never read AndroidManifest.xml or the Gradle build, so an invalid manifest
-  # shipped with every test green. This job builds the debug APK.
+  # SA-05: the Dart tests passed while the app could not be packaged (a "--" inside an
+  # XML comment made AndroidManifest.xml invalid, and sentry_flutter 8 did not compile
+  # with Kotlin 2.3). Build the debug APK on the same pinned Flutter.
   android:
     runs-on: ubuntu-latest
     defaults:
@@ -191,6 +192,8 @@ jobs:
         working-directory: Android/aiwa_app
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: AndroidManifest.xml is well-formed XML
+        run: python3 -c "import xml.dom.minidom; xml.dom.minidom.parse('android/app/src/main/AndroidManifest.xml')"
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
