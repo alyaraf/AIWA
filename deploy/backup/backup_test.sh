@@ -29,7 +29,7 @@ chmod +x "$tmp/stubs/"*
 run_backup() {
   d="$1"; shift
   mkdir -p "$d/uploads-src"
-  env PATH="$tmp/stubs:$PATH" BACKUP_DIR="$d/out" UPLOADS_DIR="$d/uploads-src" "$@" sh "$script" once > "$d/log" 2>&1
+  env PATH="$tmp/stubs:$PATH" BACKUP_DIR="$d/out" UPLOADS_DIR="$d/uploads-src" BACKUP_ALLOW_UNENCRYPTED=1 "$@" sh "$script" once > "$d/log" 2>&1
   rc=$?
 }
 metric() { sed -n "s/^$2 //p" "$1/out/metrics/metrics.txt" 2>/dev/null; }
@@ -60,7 +60,13 @@ dec() { BACKUP_PASS=$(cat "$d/key") openssl enc -d -aes-256-cbc -pbkdf2 -iter 20
 check "dump decrypts to the same bytes" 'dec "${dumps[0]}" | cmp -s - <(yes aiwa | head -c 2000)'
 check "uploads tarball decrypts to the same bytes" 'dec "${ups[0]}" | cmp -s - <(printf uploads | gzip -n)'
 
-# C2: without a key the backup still runs, warns, and the unencrypted metric is 0
+# S-02: without a key and without the explicit opt-out the backup refuses to run
+d="$tmp/refuse"; run_backup "$d" BACKUP_ALLOW_UNENCRYPTED=0
+check "no key, no opt-out: exits non-zero" '[ $rc -ne 0 ]'
+check "no key, no opt-out: writes no backup and no success metric" '[ -z "$(ls "$d"/out/db 2>/dev/null)" ] && [ ! -f "$d/out/last-success" ]'
+check "no key, no opt-out: says BACKUP FAILED" 'grep -q "BACKUP FAILED" "$d/log"'
+
+# C2: with BACKUP_ALLOW_UNENCRYPTED=1 and no key the backup still runs, warns, and the unencrypted metric is 0
 d="$tmp/plain"; run_backup "$d"
 check "no key: exits 0 and stores plain files" '[ $rc -eq 0 ] && [ -f "$d"/out/db/*.dump ] && [ -f "$d"/out/uploads/*.tar.gz ]'
 check "no key: encrypted metric is 0" '[ "$(metric "$d" aiwa_backup_encrypted)" = 0 ]'

@@ -15,10 +15,10 @@
 # CR-20: after each good backup the age of the last success is written to
 # $OUT/metrics/metrics.txt, which this container serves on :9100 for Prometheus
 # (alerts.yml: BackupStale, BackupMetricsMissing, BackupNotEncrypted). A failed run
-# leaves the old timestamp, so the alert needs no optional setting. When a key file
-# is mounted (BACKUP_KEY_FILE, docs/runbooks.md) the dump and the uploads tarball are
-# encrypted with openssl; without one the backup still runs, warns, and
-# aiwa_backup_encrypted is 0.
+# leaves the old timestamp, so the alert needs no optional setting. The key file
+# (BACKUP_KEY_FILE, docs/runbooks.md) is required: the dump and the uploads tarball are
+# encrypted with openssl, and without a key the run fails (BACKUP FAILED) unless
+# BACKUP_ALLOW_UNENCRYPTED=1, which warns and sets aiwa_backup_encrypted to 0.
 # Optional: BACKUP_HEARTBEAT_URL (healthchecks.io, Better Stack, …) is called
 # after each good backup, so a missing ping alerts someone.
 set -u
@@ -66,8 +66,11 @@ run_backup() {
   # -f: Docker makes a directory of a bind-mounted file that does not exist; a blank key would encrypt with an empty password
   if [ -f "$KEY" ] && [ -r "$KEY" ] && [ -n "$(cat "$KEY")" ]; then
     encrypted=1; ext=".enc"
+  elif [ "${BACKUP_ALLOW_UNENCRYPTED:-0}" = 1 ]; then
+    echo "$(date -u +%FT%TZ) WARNING: no backup key at '${KEY:-BACKUP_KEY_FILE unset}' and BACKUP_ALLOW_UNENCRYPTED=1: this backup is NOT encrypted (docs/runbooks.md)" >&2
   else
-    echo "$(date -u +%FT%TZ) WARNING: no backup key at '${KEY:-BACKUP_KEY_FILE unset}': this backup is NOT encrypted (docs/runbooks.md)" >&2
+    # S-02: an unencrypted copy of identity documents and the user table must be a deliberate choice.
+    fail "no backup key at '${KEY:-BACKUP_KEY_FILE unset}': refusing to write an unencrypted backup (set BACKUP_KEY_FILE, or BACKUP_ALLOW_UNENCRYPTED=1 for a throwaway environment)"; return 1
   fi
   mkdir -p "$OUT/db" "$OUT/uploads" "$OUT/metrics" || { fail "cannot create $OUT"; return 1; }
 

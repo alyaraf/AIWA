@@ -99,7 +99,8 @@ public class AdminController {
     }
 
     @GetMapping("/bookings")
-    @Operation(summary = "List all bookings for admin monitoring")
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT_OR_FINANCE)
+    @Operation(summary = "List all bookings for admin monitoring (SUPPORT or FINANCE)")
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.BookingDto>>> bookings(
             @RequestParam(required = false) BookingStatus status,
@@ -115,7 +116,8 @@ public class AdminController {
     }
 
     @GetMapping(value = "/bookings/export", produces = "text/csv")
-    @Operation(summary = "Export the filtered bookings list as CSV (ADMIN)")
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT_OR_FINANCE)
+    @Operation(summary = "Export the filtered bookings list as CSV (SUPPORT or FINANCE)")
     @Transactional(readOnly = true)
     public ResponseEntity<String> exportBookings(
             @RequestParam(required = false) BookingStatus status,

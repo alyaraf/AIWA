@@ -131,6 +131,14 @@ SMS_PROVIDER=external
 SMS_API_URL=https://sms-provider.example/send
 SMS_API_KEY=change-this-sms-api-key
 SMS_SENDER=AIWA
+EMAIL_PROVIDER=http
+EMAIL_API_URL=https://email-gateway.example/send
+EMAIL_API_KEY=change-this-email-api-key
+PUSH_PROVIDER=fcm
+GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-service-account.json
+SAFETY_ONCALL_PHONES=+201000000000
+TOTP_ENCRYPTION_KEY=generate-with-openssl-rand-base64-32
+DOCUMENT_ENCRYPTION_KEY=generate-a-different-one
 ADMIN_EMAIL=admin@yourdomain.com
 ADMIN_PHONE=
 ADMIN_PASSWORD=change-this-admin-password
@@ -145,12 +153,16 @@ Important rules:
 ```text
 JWT_SECRET must be changed.
 DB_PASSWORD must be changed.
-SMS_PROVIDER must not be dev-log in production.
+SMS_PROVIDER, EMAIL_PROVIDER and PUSH_PROVIDER must not be dev-log in production.
 CORS_ALLOWED_ORIGINS must be exact domains, not *.
+TOTP_ENCRYPTION_KEY and DOCUMENT_ENCRYPTION_KEY are required (32 random bytes, base64).
+ADMIN_PASSWORD is for the first start only: remove it after the first login (section 5.1).
 .env must never be committed to Gitblit.
 ```
 
-The application has a production guard. If you run with `SPRING_PROFILES_ACTIVE=prod` and unsafe values, the backend will refuse to start.
+The application has a fail-closed production guard. On every profile except `local` and `test` the backend refuses to start unless it is production-safe: the `prod` profile is active (or `AIWA_ALLOW_NON_PROD_SERVER=true` for a deliberate non-prod server), `JPA_DDL_AUTO=validate`, Swagger/OpenAPI is disabled, SMS/email/push are not `dev-log` and have their credentials, `SAFETY_ONCALL_PHONES` is set, and both encryption keys are valid. All problems are listed in the startup error. A deploy that sets `JWT_SECRET` but forgets `SPRING_PROFILES_ACTIVE=prod` therefore fails to start instead of running with dev defaults.
+
+Backups are encrypted with a key file (`BACKUP_KEY_FILE`, see `docs/runbooks.md`); the backup job refuses to write an unencrypted copy.
 
 ## 5.1 First Admin User
 
@@ -173,7 +185,7 @@ ADMIN_PASSWORD=very-strong-admin-password
 ADMIN_FULL_NAME=AIWA Admin
 ```
 
-Start the backend once. The admin user will be created. After confirming login works, you may remove `ADMIN_PASSWORD` from `.env` and restart. The existing admin will remain in PostgreSQL.
+Start the backend once. The admin user will be created. After confirming login works, you **must** remove `ADMIN_PASSWORD` from `.env` and restart: a bootstrap password left in the environment is a standing credential. The existing admin remains in PostgreSQL.
 
 Login from Swagger or the app:
 
@@ -494,7 +506,10 @@ Before going live:
 ```text
 [ ] JWT_SECRET changed
 [ ] DB password changed
-[ ] SMS provider configured
+[ ] SMS, email and push providers configured (not dev-log)
+[ ] TOTP_ENCRYPTION_KEY and DOCUMENT_ENCRYPTION_KEY set and copied somewhere safe
+[ ] BACKUP_KEY_FILE set and a restore from an encrypted backup tested
+[ ] ADMIN_PASSWORD removed from .env after the first login
 [ ] CORS only allows real frontend domains
 [ ] HTTPS enabled
 [ ] Firewall enabled

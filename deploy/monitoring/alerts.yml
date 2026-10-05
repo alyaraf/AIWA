@@ -62,6 +62,15 @@ groups:
         annotations:
           summary: "OTP texts hit the global budget; check aiwa_otp_sent_total for pumping before raising the limit"
 
+      # S-07: Redis is unreachable for the rate limiters, which then count in-process (per
+      # instance, weaker than Redis). Restore Redis; sign-in throttling is degraded until then.
+      - alert: RateLimitRedisUnavailable
+        expr: sum(increase(aiwa_ratelimit_redis_unavailable_total[5m])) > 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Rate limiting is running on the in-process fallback because Redis is unreachable; check the redis container"
+
       # CR-20: no optional setting needed. The timestamp only moves after a verified
       # backup, so a failed or missed night ages it; 93600 s = 26 h.
       - alert: BackupStale

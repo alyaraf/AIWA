@@ -40,7 +40,7 @@ E-1 closes when every box is ticked.
   2FA gets 403 `auth.error.admin_2fa_required` on every call except `/auth/**` (SA-01) and the panel
   shows the setup card (`AdminTwoFactorInterceptor`, `REQUIRE_ADMIN_2FA`, default on in
   prod). SUPPORT admins are not forced.
-- TOTP secrets are encrypted at rest once `TOTP_ENCRYPTION_KEY` is set (AU-08).
+- TOTP secrets are encrypted at rest (AU-08); `TOTP_ENCRYPTION_KEY` is required in production: the backend refuses to start without it (S-02).
 - [ ] Confirm SUPPORT stays optional, or require it for every admin too.
 - [ ] Set `TOTP_ENCRYPTION_KEY` and `DOCUMENT_ENCRYPTION_KEY` in `deploy/.env` and keep a copy of both with
   the other secrets: without them, admins with 2FA can’t sign in and stored ID photos can’t be opened.
@@ -53,11 +53,11 @@ E-1 closes when every box is ticked.
 - `@Version` on users: a stale save can't undo a suspension.
 - Support’s password reset sends the temporary password to the user by SMS or email; the admin
   never sees it (AU-08). Contact changes by support notify the user and the old phone/email.
-- ID documents and selfies are encrypted at rest once `DOCUMENT_ENCRYPTION_KEY` is set.
+- ID documents and selfies are encrypted at rest; `DOCUMENT_ENCRYPTION_KEY` is required in production: the backend refuses to start without it (S-02).
 - The first super admin comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD` once
   (`AdminBootstrapConfig`); change that password after first sign-in.
 - [ ] Agree who holds SUPER_ADMIN at launch (at least two people).
-- [ ] Remove `ADMIN_PASSWORD` from `.env` after the first start.
+- [ ] **Mandatory:** remove `ADMIN_PASSWORD` from `.env` after the first start and recreate the backend (the admin stays in the database).
 
 ## 5. Abuse limits (BE-8, DR-028)
 

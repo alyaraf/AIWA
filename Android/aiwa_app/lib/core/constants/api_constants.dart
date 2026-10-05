@@ -7,6 +7,14 @@ class ApiConstants {
     defaultValue: 'http://10.0.2.2:8080/api',
   );
 
+  /// S-08: the only base URL a release build may use: https with a host. The emulator default above
+  /// is for debug/dev; release builds are blocked at build time (Gradle checkReleaseConfig,
+  /// tool/build_release.sh) and again at start-up (main.dart) when this is false.
+  static bool isSecureBaseUrl(String url) {
+    final uri = Uri.tryParse(url);
+    return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty;
+  }
+
   /// Backend media paths are relative to the API base ("/files/public/gallery/x.jpg");
   /// image widgets need an absolute URL. Absolute URLs pass through unchanged.
   static String mediaUrl(String path) =>

@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../telemetry.dart';
 
 /// Push notifications (FE-3) over Firebase Cloud Messaging.
 ///
@@ -89,7 +90,7 @@ class PushService {
       _ready = true;
     } catch (e) {
       // Push is a convenience; a bad config must never stop the app starting.
-      debugPrint('Push disabled: $e');
+      logDiagnostic('Push disabled', error: e);
     }
   }
 

@@ -24,5 +24,15 @@ public final class Perms {
     public static final String FINANCE     = "hasAuthority('PERM_FINANCE')";
     public static final String SUPER_ADMIN = "hasAuthority('PERM_SUPER_ADMIN')";
 
+    /**
+     * Sensitive reads and bulk exports. There is no dedicated audit permission, so the audit log
+     * is a Super admin read; settlements and the commission ledger are Finance reads; booking
+     * lists and exports (customer/provider names, amounts) are Support or Finance. SUPER_ADMIN
+     * holds both of those implicitly.
+     */
+    public static final String AUDIT_READ  = SUPER_ADMIN;
+    public static final String FINANCE_READ = FINANCE;
+    public static final String SUPPORT_OR_FINANCE = "hasAuthority('PERM_SUPPORT') or hasAuthority('PERM_FINANCE')";
+
     private Perms() {}
 }

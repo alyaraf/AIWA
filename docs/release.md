@@ -138,3 +138,22 @@ GitHub → Settings → Secrets and variables → Actions:
 On the server, once: `git clone <repo> /srv/aiwa`, then create `/srv/aiwa/deploy/.env` and
 `deploy/secrets/` as above. Production deploys stay manual until staging has run
 for a while.
+
+## Dependency scanning (S-09)
+
+- **Dependabot** (`.github/dependabot.yml`) opens PRs for advisories in Maven, npm, pub, Docker and Actions.
+- **OWASP Dependency-Check** runs in CI (`dependency-scan` job: pushes to main, weekly, manual) against the
+  backend and fails on CVSS 7 or higher; the HTML/JSON report is the `dependency-check-report` artifact.
+  Add the repository secret `NVD_API_KEY` (free key from https://nvd.nist.gov/developers/request-an-api-key).
+  Without it the job prints a warning annotation and skips, because the NVD download is hours slow keyless.
+- Locally: `mvn -DskipTests org.owasp:dependency-check-maven:12.1.8:check -DnvdApiKey=<key> -DfailBuildOnCVSS=7`.
+
+## Production start-up guard (S-01 / S-02)
+
+The backend refuses to start outside the `local` and `test` profiles unless it is production-safe: profile
+`prod` active (or `AIWA_ALLOW_NON_PROD_SERVER=true`), `ddl-auto=validate`, Swagger off, SMS/email/push not
+`dev-log` with their credentials, `SAFETY_ONCALL_PHONES`, and valid `TOTP_ENCRYPTION_KEY` and
+`DOCUMENT_ENCRYPTION_KEY`. The compose file also requires `BACKUP_KEY_FILE`, and `backup.sh` refuses to write
+an unencrypted backup. **Upgrading an existing deployment:** generate both encryption keys
+(`openssl rand -base64 32`) and the backup key before deploying this version, or the stack will not start.
+Files already stored unencrypted stay readable.

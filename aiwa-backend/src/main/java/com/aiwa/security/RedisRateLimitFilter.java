@@ -42,6 +42,13 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
             "/auth/2fa/verify", 10L);
 
     private final RedisRuntimeService redis;
+    private final com.aiwa.util.LocalWindowCounter localFallback = new com.aiwa.util.LocalWindowCounter();
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMeterRegistry(io.micrometer.core.instrument.MeterRegistry registry) {
+        this.meterRegistry = registry;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -54,12 +61,21 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
         if (max != null) {
             String ip = request.getRemoteAddr();
             String key = "rate:" + path + ":" + ip;
-            // Fail OPEN: a Redis hiccup must not turn into every login attempt being
-            // blocked. Rate limiting is a best-effort abuse guard, not the primary
-            // auth boundary — losing it briefly is far cheaper than locking everyone
-            // out because the counter store stuttered.
+            // A Redis hiccup must not turn into every login attempt being blocked, and must not
+            // switch the limits off either (S-07): the same limit is counted in this process
+            // instead (per instance, so weaker than Redis, never absent), and the outage is
+            // counted for the RateLimitRedisUnavailable alert.
             try {
-                long count = redis.increment(key, Duration.ofMinutes(1));
+                long count;
+                try {
+                    count = redis.increment(key, Duration.ofMinutes(1));
+                } catch (RuntimeException e) {
+                    count = localFallback.increment(key, Duration.ofMinutes(1));
+                    if (meterRegistry != null) {
+                        meterRegistry.counter("aiwa.ratelimit.redis.unavailable", "scope", "ip").increment();
+                    }
+                    log.error("RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path={} - enforcing the limit in-process: {}", path, e.getMessage());
+                }
                 if (count > max) {
                     response.setStatus(429);
                     response.setHeader("Retry-After", "60");
@@ -69,7 +85,7 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
                     return;
                 }
             } catch (RuntimeException e) {
-                log.warn("Rate limit check failed (Redis unavailable?) — allowing the request through: {}", e.getMessage());
+                log.warn("Rate limit check failed unexpectedly — allowing the request through: {}", e.getMessage());
             }
         }
         filterChain.doFilter(request, response);

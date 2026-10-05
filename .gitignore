@@ -16,3 +16,9 @@ deploy/secrets/
 
 # Local backups written by the backup service
 deploy/backups/
+
+# JVM crash / replay logs and local log artifacts (can capture environment variables)
+hs_err_pid*.log
+replay_pid*.log
+*.hprof
+*.log

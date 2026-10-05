@@ -47,6 +47,9 @@ services:
       CORS_ALLOWED_ORIGINS: https://${ADMIN_DOMAIN}
       # What FcmPushService reads; the file comes from ./secrets below.
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+      # S-02: the backend refuses to start without these (ProductionGuardConfig); compose fails first, with a clearer message.
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?Set TOTP_ENCRYPTION_KEY (openssl rand -base64 32)}
+      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?Set DOCUMENT_ENCRYPTION_KEY (openssl rand -base64 32)}
     volumes:
       - uploads:/app/uploads
       - ./secrets:/run/secrets:ro   # firebase-service-account.json (git-ignored)
@@ -103,12 +106,13 @@ services:
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       # R2-02: pinged after each verified backup; a missing ping alerts (healthchecks.io etc.).
       BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
-      # CR-20: encrypts the dump and the uploads tarball when the host file below is a real key
-      # (BACKUP_KEY_FILE in .env, docs/runbooks.md); /dev/null means "no key", visible as aiwa_backup_encrypted 0.
+      # CR-20 / S-02: the dump and the uploads tarball are encrypted with the host key file below
+      # (BACKUP_KEY_FILE in .env, docs/runbooks.md). It is required: without it backup.sh refuses to
+      # write an unencrypted backup.
       BACKUP_KEY_FILE: /run/secrets/backup.key
     volumes:
       - ./backup/backup.sh:/backup.sh:ro
-      - ${BACKUP_KEY_FILE:-/dev/null}:/run/secrets/backup.key:ro
+      - ${BACKUP_KEY_FILE:?Set BACKUP_KEY_FILE (docs/runbooks.md)}:/run/secrets/backup.key:ro
       - ./backups:/backups
       - uploads:/uploads
     healthcheck:

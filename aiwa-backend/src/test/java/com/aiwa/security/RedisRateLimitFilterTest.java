@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** A Redis outage must not block logins — the rate limiter fails open. */
+/** A Redis outage must not block logins, nor switch the limits off (in-process fallback, S-07). */
 class RedisRateLimitFilterTest {
 
     private final RedisRuntimeService redis = mock(RedisRuntimeService.class);
@@ -42,5 +42,25 @@ class RedisRateLimitFilterTest {
 
         verify(chain, never()).doFilter(any(), any());
         assertThat(response.getStatus()).isEqualTo(429);
+
+    }
+
+    @Test
+    void stillLimitsLoginsInProcessAndCountsTheOutageWhileRedisIsDown() throws Exception {
+        when(redis.increment(anyString(), any(Duration.class))).thenThrow(new RuntimeException("Connection refused"));
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        filter.setMeterRegistry(meters);
+
+        int blocked = 0;
+        for (int i = 0; i < 12; i++) { // the login limit is 10 a minute per IP
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
+            request.setRemoteAddr("203.0.113.9");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            filter.doFilterInternal(request, response, mock(FilterChain.class));
+            if (response.getStatus() == 429) blocked++;
+        }
+
+        assertThat(blocked).isEqualTo(2); // requests 11 and 12: the limit is not switched off
+        assertThat(meters.counter("aiwa.ratelimit.redis.unavailable", "scope", "ip").count()).isEqualTo(12.0);
     }
 }

@@ -12,7 +12,7 @@
 # Share links (FE-13): APP_LINK_BASE=https://<domain> (the public site domain)
 set -euo pipefail
 : "${API_BASE_URL:?Set API_BASE_URL (https://api.<domain>/api)}"
-case "$API_BASE_URL" in https://*) ;; *) echo "API_BASE_URL must start with https://" >&2; exit 1;; esac
+case "$API_BASE_URL" in https://?*) ;; *) echo "API_BASE_URL must start with https://" >&2; exit 1;; esac
 if [ -z "${SENTRY_DSN:-}" ]; then echo "warning: SENTRY_DSN not set - crash reporting stays off" >&2; fi
 missing_push=""
 for v in FIREBASE_API_KEY FIREBASE_PROJECT_ID FIREBASE_SENDER_ID FIREBASE_ANDROID_APP_ID FIREBASE_IOS_APP_ID; do

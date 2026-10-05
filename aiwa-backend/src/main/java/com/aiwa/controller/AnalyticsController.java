@@ -30,7 +30,8 @@ public class AnalyticsController {
     }
 
     @GetMapping(value = "/export", produces = "text/csv")
-    @Operation(summary = "Export the daily booking series as CSV (ADMIN)")
+    @PreAuthorize(com.aiwa.security.Perms.SUPPORT_OR_FINANCE)
+    @Operation(summary = "Export the daily booking series as CSV (SUPPORT or FINANCE)")
     public ResponseEntity<String> export(@RequestParam(defaultValue = "30") int days) {
         StringBuilder csv = new StringBuilder("date,completed,cancelled,total\n");
         series(Math.max(1, Math.min(days, 365))).forEach(point -> csv

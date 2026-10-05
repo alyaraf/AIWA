@@ -80,9 +80,10 @@ second signal that also works if the whole server is down.
 
 ### Encrypt the backups
 
-Dumps and uploads (ID documents) are encrypted when a key file exists. Create it
-once and keep a copy somewhere safe that is NOT the server: without the key the
-backups cannot be restored.
+Dumps and uploads (ID documents) are encrypted, and the key file is **required**
+(`docker compose` refuses to start without `BACKUP_KEY_FILE`, and `backup.sh` refuses to
+write an unencrypted copy). Create it once and keep a copy somewhere safe that is NOT
+the server: without the key the backups cannot be restored.
 
 ```bash
 cd deploy && (umask 077; openssl rand -base64 48 > secrets/backup.key)
@@ -93,7 +94,9 @@ dc up -d backup
 New files are then `aiwa-*.dump.enc` and `uploads-*.tar.gz.enc` (AES-256, openssl);
 `./restore.sh` handles both forms and reads the key from `BACKUP_KEY_FILE` (default
 `secrets/backup.key`). Older plain files stay until `BACKUP_KEEP_DAYS` removes them.
-Without a key the backup still runs, logs `WARNING ... NOT encrypted`, and the
+Without a key the backup fails with `BACKUP FAILED: no backup key ...` (so **BackupStale**
+fires after 26 hours). Only a throwaway environment should set `BACKUP_ALLOW_UNENCRYPTED=1`
+on the backup service; it then logs `WARNING ... NOT encrypted` and the
 **BackupNotEncrypted** alert fires after an hour.
 
 The postgres alpine image used by the backup container is not known to ship the
@@ -156,3 +159,10 @@ k6 run -e BASE_URL=https://staging.example.com deploy/loadtest/smoke.js
 ```
 
 It ramps to 50 users for two minutes and exits non-zero if more than 1% of requests fail or p95 passes 800 ms. While it runs, watch `hikaricp_connections_active` in Prometheus: if it sits at the pool size (`DB_POOL_SIZE`, default 20), raise the pool before launch (keep it under PostgreSQL `max_connections`).
+
+## First admin: remove the bootstrap password
+
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` in `deploy/.env` create the first super admin on the first start
+only. After you have logged in as that admin (and set up 2FA), delete the `ADMIN_PASSWORD` line from
+`.env` and recreate the backend (`dc up -d backend`). The account stays in the database; a password
+left in the environment is a standing credential.

@@ -24,12 +24,14 @@ function writeTokens(tokens) {
 export function setTokens(tokens) {
   sessionGeneration += 1;
   writeTokens(tokens);
+  markActive();
 }
 
 export function clearTokens() {
   sessionGeneration += 1;
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_KEY);
+  window.localStorage.removeItem(IDLE_KEY);
 }
 
 // CR-18: another tab ended the session this tab holds (signed out, or signed in
@@ -53,6 +55,40 @@ if (typeof window !== "undefined") {
 
 /** localStorage key names, for the App's cross-tab listener. */
 export const TOKEN_STORAGE_KEYS = [TOKEN_KEY, REFRESH_KEY];
+
+// S-04 (incremental step): the tokens still live in localStorage (see docs/admin-session-hardening.md
+// for the HttpOnly-cookie migration), so an unattended browser profile must not stay signed in.
+// After VITE_ADMIN_IDLE_MINUTES (default 30; 0 turns it off) without a click or keypress the next API
+// call, or the next poll of an open panel, drops the tokens and the admin signs in again.
+const IDLE_KEY = "aiwa_admin_last_activity";
+const IDLE_MS = (() => {
+  const minutes = Number(import.meta.env.VITE_ADMIN_IDLE_MINUTES ?? 30);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : 0;
+})();
+
+function markActive() {
+  try { window.localStorage.setItem(IDLE_KEY, String(Date.now())); } catch { /* storage unavailable */ }
+}
+
+/** True when the signed-in admin has been inactive longer than the idle limit. */
+export function sessionIdleExpired(now = Date.now()) {
+  if (!IDLE_MS) return false;
+  const last = Number(window.localStorage.getItem(IDLE_KEY));
+  // No record (a session from before this check) counts as fresh; the next click starts the clock.
+  return Number.isFinite(last) && last > 0 && now - last > IDLE_MS;
+}
+
+if (typeof window !== "undefined" && IDLE_MS) {
+  let lastWrite = 0;
+  const onUserActivity = () => {
+    const now = Date.now();
+    if (now - lastWrite < 10_000 || !getAccessToken() || sessionIdleExpired(now)) return;
+    lastWrite = now;
+    markActive();
+  };
+  window.addEventListener("pointerdown", onUserActivity, { passive: true });
+  window.addEventListener("keydown", onUserActivity, { passive: true });
+}
 
 // CR-18: how long the best-effort server sign-out may take before it is dropped.
 const SIGN_OUT_TIMEOUT_MS = 3000;
@@ -136,6 +172,7 @@ function refreshAccessToken() {
 
 async function request(path, options = {}, isRetryAfterRefresh = false) {
   if (USE_MOCKS) return mockRequest(path, options);
+  if (getAccessToken() && sessionIdleExpired()) clearTokens();
 
   const headers = new Headers(options.headers || {});
   if (!(options.body instanceof FormData)) headers.set("Content-Type", "application/json");

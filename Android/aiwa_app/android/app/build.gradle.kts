@@ -77,7 +77,7 @@ val checkReleaseConfig by tasks.registering {
     doLast {
         val problems = mutableListOf<String>()
         val api = dartDefines["API_BASE_URL"].orEmpty()
-        if (!api.startsWith("https://")) {
+        if (!Regex("^https://[^/\\s]+").containsMatchIn(api)) {
             problems += "API_BASE_URL must be an https:// URL (pass --dart-define=API_BASE_URL=https://api.<domain>/api)."
         }
         if (!keystoreProperties.containsKey("storeFile")) {

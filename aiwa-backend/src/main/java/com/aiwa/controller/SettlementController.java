@@ -98,7 +98,7 @@ public class SettlementController {
     }
 
     @GetMapping("/admin/settlements")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.FINANCE_READ)
     public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.CommissionLedgerDto>>> dueEntries(
             @RequestParam(defaultValue = "DUE") LedgerEntryStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -112,7 +112,7 @@ public class SettlementController {
     // ── Admin Settlements screen: overview cards + per-provider rows ──────────
 
     @GetMapping("/admin/settlements/overview")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.FINANCE_READ)
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<ApiResponse.SettlementOverviewDto>> overview() {
         // DR-028: totals computed in the database, not by loading the whole ledger.
@@ -126,7 +126,7 @@ public class SettlementController {
     }
 
     @GetMapping("/admin/settlements/providers")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.FINANCE_READ)
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.SettlementRowDto>>> providers(
             @RequestParam(defaultValue = "0") int page,
@@ -135,7 +135,7 @@ public class SettlementController {
     }
 
     @GetMapping("/admin/settlements/provider/{providerId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.FINANCE_READ)
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<ApiResponse.SettlementDetailDto>> providerDetail(
             @PathVariable Long providerId) {
@@ -238,7 +238,7 @@ public class SettlementController {
 
     /** DR-028: streamed 500 rows at a time instead of building the whole ledger in memory. */
     @GetMapping(value = "/admin/settlements/export", produces = "text/csv")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(Perms.FINANCE_READ)
     public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> exportLedger() {
         org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody body = out -> {
             var w = new java.io.BufferedWriter(new java.io.OutputStreamWriter(out, java.nio.charset.StandardCharsets.UTF_8));

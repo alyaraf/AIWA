@@ -113,12 +113,20 @@ let onAuthExpired = () => {};
    FINANCE  — settlements, payouts, commission rate, booking disputes.
    SUPER_ADMIN — other admins & permissions, booking rules, policies,
               support settings, permanent deletion. Implies SUPPORT+FINANCE.
-   Every admin can view every screen; these gate the actions. Exceptions
-   (M-3): identity documents need SUPPORT; booking chats SUPPORT or FINANCE. */
+   Every admin can view most screens; these gate the actions. Exceptions
+   (M-3): identity documents need SUPPORT; booking chats SUPPORT or FINANCE.
+   S-05: the audit log needs SUPER_ADMIN, settlements FINANCE, and the booking
+   list and CSV exports SUPPORT or FINANCE (the API answers 403 otherwise). */
 let currentPermissions = [];
 function can(permission) {
   if (USE_MOCKS) return true;
   return currentPermissions.includes("SUPER_ADMIN") || currentPermissions.includes(permission);
+}
+/** S-05: screens the API refuses to an admin without one of these permissions are not offered. */
+const NAV_REQUIRES = { bookings: ["SUPPORT", "FINANCE"], settlements: ["FINANCE"], audit: ["SUPER_ADMIN"] };
+export function navAllowed(id) {
+  const need = NAV_REQUIRES[id];
+  return !need || need.some((permission) => can(permission));
 }
 /** Test-only: seed the module-level permission list without spinning up <App>.
  *  Production code goes through the App's useEffect on line ~333 instead. */
@@ -444,6 +452,7 @@ export default function App() {
       <Sidebar
         route={route}
         user={session.user}
+        loading={!!session.loading}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onProfile={() => { setRoute("me"); setSidebarOpen(false); }}
@@ -643,7 +652,7 @@ export function useNavBadges() {
   return badges;
 }
 
-function Sidebar({ route, user, open, onClose, onRoute, onLogout, onProfile }) {
+function Sidebar({ route, user, loading, open, onClose, onRoute, onLogout, onProfile }) {
   const badges = useNavBadges();
   return (
     <>
@@ -654,7 +663,7 @@ function Sidebar({ route, user, open, onClose, onRoute, onLogout, onProfile }) {
           <span className="role-tag">Admin</span>
         </div>
         <nav className="nav-list">
-          {navItems.map((item) => {
+          {navItems.filter((item) => loading || navAllowed(item.id)).map((item) => {
             const active = item.id === route;
             return (
               <button key={item.id} className={`nav-item ${active ? "active" : ""}`} onClick={() => onRoute(item.id)}>

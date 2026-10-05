@@ -147,7 +147,6 @@ class SignInLimitsApiTest {
             statuses.add(mvc.perform(post(URI.create("/auth/logi%6e")).contentType(MediaType.APPLICATION_JSON)
                     .content(body)).andReturn().getResponse().getStatus());
         }
-        System.out.println("CR-01 encoded path /auth/logi%6e, statuses of 11 POSTs from one IP: " + statuses);
 
         // The handler is reached (wrong credentials), so the limit must apply: 10 a minute, the 11th is refused.
         assertThat(statuses.subList(0, 10)).containsOnly(401);
@@ -234,8 +233,6 @@ class SignInLimitsApiTest {
         String body = mvc.perform(get("/auth/2fa/server-time")).andReturn().getResponse().getContentAsString();
         int stepSeconds = json.readTree(body).get("data").get("totpStepSeconds").asInt();
         int tolerance = json.readTree(body).get("data").get("driftToleranceSeconds").asInt();
-        System.out.println("CR-01 /auth/2fa/server-time: totpStepSeconds=" + stepSeconds
-                + ", driftToleranceSeconds=" + tolerance);
 
         byte[] key = TotpService.base32Decode(SECRET);
         long steps = tolerance / stepSeconds;

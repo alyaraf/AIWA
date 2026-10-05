@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/admin/audit")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize(com.aiwa.security.Perms.AUDIT_READ)
 @RequiredArgsConstructor
 @Tag(name = "Audit log", description = "History of privileged admin actions")
 public class AuditController {
