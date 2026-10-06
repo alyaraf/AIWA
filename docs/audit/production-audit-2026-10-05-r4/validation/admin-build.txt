@@ -1,0 +1,13 @@
+
+> aiwa-admin-dashboard@0.1.0 build
+> vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 1576 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.76 kB │ gzip:   0.43 kB
+dist/assets/index-B6XePvnG.css   49.90 kB │ gzip:  10.02 kB
+dist/assets/index-C3tl7dXP.js   345.82 kB │ gzip: 100.54 kB
+✓ built in 2.98s

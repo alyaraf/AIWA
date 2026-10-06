@@ -1,0 +1,41 @@
+ok   A: a good restore succeeds
+ok   A: the live volume holds the restored files
+ok   A: the previous files are retained until purged
+ok   A: a safety copy of the live database was taken before the restore
+ok   A: staging happened BEFORE the backend was stopped
+ok   A: the backend is started again at the end
+ok   A: the reconciliation report names the missing file
+ok   B: a failed extraction fails the restore
+ok   B: the live files are untouched
+ok   B: the backend was never stopped and the database never restored
+ok   C: a failed database restore fails the run
+ok   C: the live files are untouched and the backend runs again
+ok   C: the staged copy was discarded
+ok   D: a failed swap fails the run
+ok   D: the live files are exactly as before
+ok   D: the database was put back from the safety copy (second restore, fed the safety dump)
+ok   D: the backend is running again
+ok   D: the output says both are back
+ok   E: the run fails
+ok   E: the backend stays stopped, deliberately
+ok   E: the message names the safety dump and says the old uploads are intact
+ok   E: the live files are the old ones
+ok   F: without a safety copy nothing is restored
+23 passed, 0 failed
+ok   G: restore reports failure
+ok   G: despite failed file rollback the outer script restarts the backend
+ok   G: old public uploads are absent from the live path
+ok   G: old public uploads are still stranded in previous
+ok   G: output falsely claims both database and uploads are back
+ok   G: the retained safety dump is readable plaintext without the encryption key
+need 10240 bytes, 3538243584 available
+staged 1 files
+This replaces the live database and uploads with:
+  /c/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r4/tmp.mEYFbblWFi/G/db.dump
+  /c/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r4/tmp.mEYFbblWFi/G/uploads.tgz
+simulated OS rename failure
+could not move public into place; rolling back
+simulated OS rename failure
+the uploads could not be swapped in; putting the database back as it was
+the uploads could not be swapped in; database and uploads are both back as they were and the backend is running again; nothing was changed
+REPRODUCTION CHECKS: 29 passed, 0 failed

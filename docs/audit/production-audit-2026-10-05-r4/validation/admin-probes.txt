@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r4/snapshot/aiwa-admin-dashboard-updated
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  21:42:28
+   Duration  4.24s (transform 510ms, setup 392ms, import 670ms, tests 497ms, environment 2.32s)
+

@@ -1,0 +1,103 @@
+ok   success exits 0
+ok   success writes a snapshot manifest naming both files
+ok   success writes a fresh timestamp
+ok   pg_dump failure exits non-zero
+ok   pg_dump failure keeps the old timestamp
+ok   tar failure exits non-zero
+ok   tar failure keeps the old timestamp
+ok   encrypted run exits 0
+ok   encrypted: one .enc dump and one .enc tarball, no plaintext
+ok   encrypted metric is 1
+ok   dump decrypts to the same bytes
+ok   uploads tarball decrypts to the same bytes
+ok   no key, no opt-out: exits non-zero
+ok   no key, no opt-out: writes no backup and no success metric
+ok   no key, no opt-out: says BACKUP FAILED
+ok   no key: exits 0 and stores plain files
+ok   no key: encrypted metric is 0
+ok   no key: logs a warning
+ok   key path is a directory: runs unencrypted
+ok   blank key: runs unencrypted, metric 0
+ok   restore, wrong key: fails and leaves uploads and database alone
+ok   restore, wrong key on the dump: fails before anything is touched
+ok   restore, no openssl: fails and leaves uploads alone
+ok   restore, key file missing: fails and leaves uploads alone
+ok   restore, corrupt tarball: fails and leaves uploads alone
+ok   restore, corrupt dump: fails and leaves uploads alone
+ok   restore, dump that fails the scratch restore: fails and leaves everything alone
+ok   restore, right key: replaces database and uploads
+ok   restore, plain files need no key
+ok   restore, temp files: still restores with TMPDIR set
+ok   restore, temp files: runs with umask 077 even when the caller's is 022
+ok   restore, temp files: the temp dir is made under TMPDIR
+skip restore, temp files: modes 600/700 (this file system ignores chmod, e.g. NTFS; the umask check above covers it)
+32 passed, 0 failed
+ok   preflight accepts a readable tarball with room to spare
+ok   preflight rejects garbage
+ok   a damaged archive fails to stage
+ok   ...and the live files are exactly as before
+ok   ...and no staging directory is left behind
+ok   a good archive stages
+ok   staging does not change the live files yet
+ok   the swap succeeds
+ok   the live volume now holds the restored files
+ok   the previous files are kept intact
+ok   rollback puts the previous files back
+ok   the restored content stays staged after a rollback, and discard removes it
+ok   failure after 0 renames: the swap reports failure
+ok   failure after 0 renames: the live files are exactly as before
+ok   failure after 0 renames: the staged copy is intact for a retry
+ok   failure after 1 renames: the swap reports failure
+ok   failure after 1 renames: the live files are exactly as before
+ok   failure after 1 renames: the staged copy is intact for a retry
+ok   failure after 2 renames: the swap reports failure
+ok   failure after 2 renames: the live files are exactly as before
+ok   failure after 2 renames: the staged copy is intact for a retry
+ok   failure after 3 renames: the swap reports failure
+ok   failure after 3 renames: the live files are exactly as before
+ok   failure after 3 renames: the staged copy is intact for a retry
+ok   failure after 4 renames: the swap reports failure
+ok   failure after 4 renames: the live files are exactly as before
+ok   failure after 4 renames: the staged copy is intact for a retry
+ok   failure after 5 renames: the swap reports failure
+ok   failure after 5 renames: the live files are exactly as before
+ok   failure after 5 renames: the staged copy is intact for a retry
+ok   a swap that failed can simply be run again
+ok   purge frees the retained previous files
+ok   ...and keeps the restored ones
+33 passed, 0 failed
+ok   A: a good restore succeeds
+ok   A: the live volume holds the restored files
+ok   A: the previous files are retained until purged
+ok   A: a safety copy of the live database was taken before the restore
+ok   A: staging happened BEFORE the backend was stopped
+ok   A: the backend is started again at the end
+ok   A: the reconciliation report names the missing file
+ok   B: a failed extraction fails the restore
+ok   B: the live files are untouched
+ok   B: the backend was never stopped and the database never restored
+ok   C: a failed database restore fails the run
+ok   C: the live files are untouched and the backend runs again
+ok   C: the staged copy was discarded
+ok   D: a failed swap fails the run
+ok   D: the live files are exactly as before
+ok   D: the database was put back from the safety copy (second restore, fed the safety dump)
+ok   D: the backend is running again
+ok   D: the output says both are back
+ok   E: the run fails
+ok   E: the backend stays stopped, deliberately
+ok   E: the message names the safety dump and says the old uploads are intact
+ok   E: the live files are the old ones
+ok   F: without a safety copy nothing is restored
+23 passed, 0 failed
+staged 1 files
+simulated OS rename failure
+could not move public into place; rolling back
+simulated OS rename failure
+simulated OS rename failure
+rolled back to the previous uploads
+swap exit=1; rollback exit=0; live old file=MISSING
+previous old file=present
+journal=DELETED
+fixture=/c/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r4/r4-rollback.KjDZyS
+REPRODUCED: failed rollback reports success with old uploads absent

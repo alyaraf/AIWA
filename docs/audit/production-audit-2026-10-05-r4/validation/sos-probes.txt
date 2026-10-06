@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r4/snapshot/aiwa-admin-dashboard-updated
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  21:45:03
+   Duration  2.80s (transform 451ms, setup 348ms, import 590ms, tests 75ms, environment 1.55s)
+

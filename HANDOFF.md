@@ -1,3 +1,67 @@
+# AIWA Handoff — round 4 remediation (current)
+
+Last updated: 2026-10-06. Project: D:/AIWA PROJECT/AIWA; branch main. Audit baseline 290a05f; the remediation is **uncommitted work in the tree** (review the diff, commit in your own grouping).
+
+**Read first:** [remediation.md](docs/audit/production-audit-2026-10-05-r4/remediation.md) (every finding and follow-up: status, cause, change, files, tests, compatibility, what is still open). The round 4 [audit](docs/audit/production-audit-2026-10-05-r4/audit.md) and [status table](docs/audit/production-audit-2026-10-05-r4/remediation-status.md) are history.
+
+**Production: not ready.** R4-01…R4-08 fixed and tested locally; follow-ups fixed or mitigated (server paging done for 3 of 9 queues). Launch sign-off now has 40 open rows (35–40 are new); nothing that needs a real environment was run.
+
+Verified here: backend, dashboard (193 tests), Flutter (analyze clean, 246 tests), backup/swap/restore-flow shell suites, CI graph check, V34 rehearsal on H2, and a real-browser two-account check of R4-03 against the local backend (numbers in the remediation record).
+Blocked: Docker Desktop's Linux engine will not start here and there is no PostgreSQL/promtool, so real-PostgreSQL migration and concurrency, promtool, container restore, CI, devices, providers, offsite and load are all unverified.
+
+Operational notes for the next deploy: new optional env vars BACKUP_SAFETY_KEEP_DAYS, SMS_RECEIPT_FIELD, EMAIL_RECEIPT_FIELD (the compose pass-through list was extended); the backup container mounts uploads_references.sql; restore safety copies now live encrypted in deploy/backups/safety (old plaintext deploy/backups/pre-restore-*.dump files are not touched, delete them after checking); the admin sidebar shows only unrestricted screens until /auth/me answers; SOS admin DTO has three new fields; set repository variable REQUIRE_CVE_SCAN=true before production promotion.
+Tooling: JDK17 C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot (use the full path to java.exe in background jobs; PATH picks Java 8), Node20 C:/Users/fsherif/AppData/Local/nvm/v20.20.2, Flutter D:/tools/flutter with PUB_CACHE D:/tools/pubcache. Do not run Maven and Vitest together. A local backend: java -jar target/aiwa-backend-1.0.0.jar --spring.profiles.active=local (H2, seeded demo data, admin@aiwa.com); serve the dashboard from localhost (not 127.0.0.1) so the SameSite=Strict refresh cookie is sent.
+
+---
+
+## Previous handoff (round 4 audit; superseded by the above)
+
+# Round 4 re-audit (history)
+
+Last updated: 2026-10-05. Project: D:/AIWA PROJECT/AIWA; branch main.
+Audited application commit: 290a05f0606545c073c22e1753cc9ad5c584fa5a.
+The six remediation commits after ac67446 are committed. The application tree was clean during verification; this audit changes documentation only.
+
+## Read this current status first
+
+- [Round 4 audit](docs/audit/production-audit-2026-10-05-r4/audit.md): eight actionable findings with locations, reproductions and fixes.
+- [Earlier findings rechecked](docs/audit/production-audit-2026-10-05-r4/remediation-status.md): 29 fixed in reviewed paths, 5 partial, 3 mitigated, 1 external.
+- [Current API inventory](docs/audit/production-audit-2026-10-05-r4/api-inventory.md): 183 handlers / 29 controllers.
+- [Coverage](docs/audit/production-audit-2026-10-05-r4/coverage.md), [fresh logs and fixtures](docs/audit/production-audit-2026-10-05-r4/validation/README.md).
+- [Launch sign-off](docs/launch-signoff.md): all 34 evidence rows remain open.
+
+**Production: not ready.** The earlier claim that all repository-actionable defects were fixed is superseded.
+
+## Current priorities
+
+| ID | Severity | Confirmed behavior |
+| --- | --- | --- |
+| R4-01 | High | Restore restarts backend after an OS rename failure also prevents uploads rollback |
+| R4-02 | High | SOS DTO uses edited saved address instead of agreed booking snapshot |
+| R4-03 | High | Cross-tab Finance session retains old restricted SOS data |
+| R4-04 | Medium | Private blob body can finish after account change |
+| R4-05 | Medium | Obsolete mobile auth handlers delete newer tokens or overwrite authenticated state |
+| R4-06 | Medium | Retained pre-restore dump is plaintext and outside scheduled retention |
+| R4-07 | Medium | Old initial/manual SOS response erases a newer poll and claims live |
+| R4-08 | Low | Staging deployment waits only for backend/admin, not new recovery/monitoring checks |
+
+## Fresh validation and remaining work
+
+Backend 483 tests, dashboard 164 tests + build, Flutter analyzer clean / 221 tests; shell checks 32/33/23. Public npm production advisory scan reports zero vulnerabilities. Additional isolated probes reproduce R4-01 through R4-07; their assertions verify defects, not fixes.
+
+Docker Desktop Linux engine is unavailable. Real PostgreSQL/Redis, promtool/container restore, CI, native browser, devices, providers/cloud/offsite and load were not freshly verified. Keep those gates open.
+
+The user requested audit only; no application remediation was performed. Address High findings first, then Medium session/freshness/backup issues. Rehearse V34 on production-copy data and preserve destination_backfilled provenance. Mobile destination amendment UI and durable onboarding inputs remain follow-ups. Offsite lifecycle/IAM/escrow and all launch gates require execution evidence.
+
+JDK17: C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot; Node20: C:/Users/fsherif/AppData/Local/nvm/v20.20.2; Flutter D:/tools/flutter; PUB_CACHE D:/tools/pubcache.
+Avoid concurrent Maven and full Vitest. Audit workspace: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r4.
+
+---
+
+## Historical handoff — remediation / round 3
+
+Preserved history below. Its uncommitted-remediation and complete-fix statements are superseded by round 4 above.
+
 # AIWA Handoff — current status
 
 Last updated: 2026-10-05, after the round 3 remediation.
