@@ -140,8 +140,9 @@ describe("<Flags> and <Reviews> - server paging", () => {
     expect(spy).toHaveBeenLastCalledWith({ query: "unsafe", page: 0, size: 10 });
   });
 
-  it("Reviews: the reported queue is a loaded list; 'All' and 'Low rating' are server pages with a rating filter", async () => {
-    vi.spyOn(mod.api, "reviewReports").mockResolvedValue([]);
+  it("Reviews: the reported queue and 'All' / 'Low rating' are server pages (the latter with a rating filter)", async () => {
+    // R5 follow-up: the reported queue is a server page too (see Queues.paged6.test.jsx)
+    vi.spyOn(mod.api, "reviewReportsPage").mockResolvedValue(pageOf([], 0, 1));
     const page = vi.spyOn(mod.api, "reviewsPage").mockResolvedValue(pageOf([], 57, 6));
     render(<Reviews />);
     await tick(0);

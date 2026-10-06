@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 import { Safety, __setPermissionsForTest } from "../App.jsx";
 import * as apiModule from "../api.js";
+import { pg } from "./safetyPage.js";
 
 /**
  * AD-05: a SOS poll that fails (network, 503, hang) must never leave a reassuring, apparently current list.
@@ -25,7 +26,7 @@ describe("<Safety> - AD-05 stale / offline monitoring", () => {
     vi.useFakeTimers();
     window.localStorage.setItem("aiwa_admin_session", "hint");
     __setPermissionsForTest(["SUPPORT"]);
-    safetyQueue = vi.spyOn(apiModule.api, "safetyQueue").mockResolvedValue([]);
+    safetyQueue = vi.spyOn(apiModule.api, "safetyPage").mockResolvedValue(pg([]));
   });
   afterEach(() => { vi.useRealTimers(); });
 
@@ -57,7 +58,7 @@ describe("<Safety> - AD-05 stale / offline monitoring", () => {
   });
 
   it("keeps showing the last alerts, labelled as of the last update, when polling fails", async () => {
-    safetyQueue.mockResolvedValue([OPEN_ALERT]);
+    safetyQueue.mockResolvedValue(pg([OPEN_ALERT]));
     render(<Safety />);
     await tick(0);
     safetyQueue.mockRejectedValue(new TypeError("Failed to fetch"));
@@ -73,7 +74,7 @@ describe("<Safety> - AD-05 stale / offline monitoring", () => {
     await tick(15_000);
     expect(screen.getByTestId("sos-stale-banner")).toBeInTheDocument();
 
-    safetyQueue.mockResolvedValue([OPEN_ALERT]); // an incident was raised while we were blind
+    safetyQueue.mockResolvedValue(pg([OPEN_ALERT])); // an incident was raised while we were blind
     await tick(15_000);
     expect(screen.queryByTestId("sos-stale-banner")).not.toBeInTheDocument();
     expect(screen.getByText(/Provider is refusing to leave/)).toBeInTheDocument();
@@ -107,7 +108,7 @@ describe("<Safety> - AD-05 stale / offline monitoring", () => {
     await tick(0);
     await act(async () => { window.dispatchEvent(new Event("offline")); });
     expect(screen.getByTestId("sos-stale-banner")).toHaveTextContent(/offline/i);
-    safetyQueue.mockResolvedValue([]);
+    safetyQueue.mockResolvedValue(pg([]));
     await act(async () => { window.dispatchEvent(new Event("online")); await vi.advanceTimersByTimeAsync(0); });
     expect(screen.queryByTestId("sos-stale-banner")).not.toBeInTheDocument();
   });
@@ -117,7 +118,7 @@ describe("<Safety> - AD-05 stale / offline monitoring", () => {
     await tick(0);
     safetyQueue.mockRejectedValue(new Error("boom"));
     await tick(15_000);
-    safetyQueue.mockResolvedValue([OPEN_ALERT]);
+    safetyQueue.mockResolvedValue(pg([OPEN_ALERT]));
     fireEvent.click(screen.getByRole("button", { name: /Retry now/ }));
     await tick(0);
     expect(screen.getByText(/Provider is refusing to leave/)).toBeInTheDocument();

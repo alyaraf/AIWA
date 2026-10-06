@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { Safety, useNavBadges, __setPermissionsForTest } from "../App.jsx";
 import * as apiModule from "../api.js";
+import { pg } from "./safetyPage.js";
 
 /**
  * CR-19: the SOS queue used to load once per filter, so an operator watching
@@ -29,7 +30,7 @@ describe("<Safety> — CR-19 auto-refresh", () => {
     vi.useFakeTimers();
     window.localStorage.setItem("aiwa_admin_access_token", "test-token");
     __setPermissionsForTest(["SUPPORT"]);
-    safetyQueue = vi.spyOn(apiModule.api, "safetyQueue").mockResolvedValue([]);
+    safetyQueue = vi.spyOn(apiModule.api, "safetyPage").mockResolvedValue(pg([]));
     inbox = vi.spyOn(apiModule.api, "inbox").mockResolvedValue([]);
   });
 
@@ -49,10 +50,10 @@ describe("<Safety> — CR-19 auto-refresh", () => {
     render(<Safety />);
     await tick(0);
     expect(screen.queryByText(/Provider is refusing to leave/)).not.toBeInTheDocument();
-    safetyQueue.mockResolvedValue([apiModule.normalizeSafety({
+    safetyQueue.mockResolvedValue(pg([apiModule.normalizeSafety({
       id: 9, bookingId: 5, actorName: "Mariam Adel", notes: "Provider is refusing to leave",
       createdAt: new Date().toISOString()
-    })]);
+    })]));
     await tick(15_000);
     expect(screen.getByText(/Provider is refusing to leave/)).toBeInTheDocument();
   });
@@ -72,7 +73,7 @@ describe("<Safety> — CR-19 auto-refresh", () => {
     await tick(0);
     fireEvent.click(screen.getByRole("button", { name: "Resolved" }));
     await tick(0);
-    expect(safetyQueue).toHaveBeenLastCalledWith("RESOLVED");
+    expect(safetyQueue).toHaveBeenLastCalledWith(expect.objectContaining({ status: "RESOLVED" }));
     const afterSwitch = safetyQueue.mock.calls.length;
     await tick(60_000);
     expect(safetyQueue).toHaveBeenCalledTimes(afterSwitch);

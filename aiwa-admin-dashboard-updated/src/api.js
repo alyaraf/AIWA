@@ -401,9 +401,10 @@ export async function requestAllPages(path, size = 200) {
  * R4 follow-up: ONE server page of an admin queue, filtered and searched by the server, with the server's own total.
  * Unlike {@link requestAllPages} nothing is collected up to a cap and filtered in the browser, so the count, the page
  * numbers and the search always describe the whole queue. Resolves to { rows, total, totalPages }.
- * In mock mode (no server) the mock list is filtered and sliced here so the screens behave the same.
+ * In mock mode (no server) the mock list is filtered and sliced here so the screens behave the same ("mockKeep" is an extra
+ * mock-only row filter for a queue the server narrows by a parameter the mock data does not carry).
  */
-export async function requestPage(path, { page = 0, size = 10, query = "", ...filters } = {}, normalize = (item) => item) {
+export async function requestPage(path, { page = 0, size = 10, query = "", ...filters } = {}, normalize = (item) => item, mockKeep = () => true) {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "") params.set(key, String(value)); });
   const text = String(query || "").trim();
@@ -414,7 +415,8 @@ export async function requestPage(path, { page = 0, size = 10, query = "", ...fi
   if (USE_MOCKS) {
     const needle = text.toLowerCase();
     const all = normalizeList(result)
-      .filter((item) => !filters.status || filters.status === "ALL" || item.status === filters.status)
+      .filter((item) => !filters.status || filters.status === "ALL" || item.status === undefined || item.status === filters.status)
+      .filter(mockKeep)
       .filter((item) => !filters.maxRating || !(Number(item.rating) > Number(filters.maxRating)))
       .filter((item) => !needle || JSON.stringify(Object.values(item)).toLowerCase().includes(needle));
     return { rows: all.slice(page * size, (page + 1) * size).map(normalize), total: all.length, totalPages: Math.max(1, Math.ceil(all.length / size)) };
@@ -491,8 +493,10 @@ export const api = {
   }),
   dashboard: () => request("/admin/dashboard").then(normalizeDashboard),
   dashboardRaw: () => request("/admin/dashboard").then(unwrap),
-  verifications: () => requestAllPages("/admin/verification/pending").then((items) => carryTruncation(items, items.map(normalizeVerification))),
-  verificationByStatus: (status) => requestAllPages(`/admin/verification?status=${encodeURIComponent(status)}`).then((items) => carryTruncation(items, items.map(normalizeVerification))),
+  /** R5 follow-up: a server page of the verification queue ({ status, query, page, size }); no status = the pending queue. */
+  verificationsPage: ({ status, ...options } = {}) => (status && status !== "PENDING_VERIFICATION" && status !== "PENDING")
+    ? requestPage("/admin/verification", { ...options, status }, normalizeVerification)
+    : requestPage("/admin/verification/pending", options, normalizeVerification),
   approveProvider: (providerId) => request(`/admin/verification/${providerId}/approve`, { method: "POST" }),
   rejectProvider: (providerId, reason) => request(`/admin/verification/${providerId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   /** Blob URL for a private verification document (caller must revokeObjectURL). */
@@ -503,9 +507,11 @@ export const api = {
     if (!res.ok) { const e = new Error(`Document load failed (${res.status})`); e.status = res.status; throw e; }
     return URL.createObjectURL(blob);
   },
-  reviewReports: () => requestAllPages("/admin/reviews/moderation").then((items) => carryTruncation(items, items.map(normalizeReviewReport))),
+  /** R5 follow-up: a server page of reported reviews ({ query, page, size }). */
+  reviewReportsPage: (options) => requestPage("/admin/reviews/moderation", options, normalizeReviewReport),
+  /** R5 follow-up: a server page of reported chat messages ({ query, page, size }). */
+  chatReportsPage: (options) => requestPage("/admin/chat/moderation", options, normalizeChatReport),
   resolveReviewReport: (caseId, action) => request(`/admin/reviews/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
-  chatReports: () => requestAllPages("/admin/chat/moderation").then((items) => carryTruncation(items, items.map(normalizeChatReport))),
   resolveChatReport: (caseId, action) => request(`/admin/chat/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
   /** R4 follow-up: a server page of complaints ({ status, query, page, size }). */
   complaintsPage: (options) => requestPage("/admin/complaints", options, normalizeComplaint),
@@ -537,13 +543,16 @@ export const api = {
   userDetail: (id) => request(`/admin/users/${id}`).then(normalizeUser),
   providerDetail: (providerId) => request(`/providers/${providerId}`),
   reactivateProvider: (providerId) => request(`/admin/verification/${providerId}/reactivate`, { method: "POST" }),
-  moderation: () => requestAllPages("/admin/moderation").then((items) => carryTruncation(items, items.map(normalizeModeration))),
+  /** R5 follow-up: a server page of REPORTED PHOTOS ({ query, page, size }); reviews and chat have their own queues. */
+  moderationPage: (options) => requestPage("/admin/moderation", { ...options, type: "GALLERY_IMAGE" }, normalizeModeration,
+    (item) => normalizeModeration(item).type === "IMAGE"),
   moderationAction: (id, payload) => request(`/admin/moderation/${id}/action?status=${encodeURIComponent(payload.status)}`, { method: "PATCH", body: JSON.stringify({ notes: payload.notes || "" }) }),
   // DR-028: these lists are paged on the server; walk every page.
   settlements: () => requestAllPages("/admin/settlements").then((items) => carryTruncation(items, items.map(normalizeSettlement))),
   settle: (id, expectedAmount, reference) => request(`/admin/settlements/${id}/settle?expectedAmount=${encodeURIComponent(expectedAmount)}&reference=${encodeURIComponent(reference)}`, { method: "PATCH" }),
   settlementOverview: () => request("/admin/settlements/overview"),
-  settlementProviders: () => requestAllPages("/admin/settlements/providers"),
+  /** R5 follow-up: a server page of the provider settlement rows ({ status: ALL|OVERDUE|WITHIN_LIMIT|SETTLED, query, page, size }). */
+  settlementProvidersPage: (options) => requestPage("/admin/settlements/providers", options),
   settlementDetail: (providerId) => request(`/admin/settlements/provider/${providerId}`),
   // CR-06: what a confirmation would settle ({ reportedAt, total, entryCount });
   // the confirmation sends that total back and the server refuses any other.
@@ -559,11 +568,30 @@ export const api = {
     if (changeNote && changeNote.trim()) body.changeNote = changeNote.trim();
     return request("/terms", { method: "POST", body: JSON.stringify(body) });
   },
-  /** SOS queue (GET /admin/safety) — status OPEN (default) | RESOLVED | ALL. */
-  // DR-006: walks every page. It asked for one page of 100 (the server's cap),
-  // newest first, so with more open alerts the oldest ones were never shown.
-  safetyQueue: (status = "OPEN") => requestAllPages(`/admin/safety?status=${encodeURIComponent(status)}`, 100)
-    .then((items) => carryTruncation(items, items.map(normalizeSafety))),
+  // DR-006 (the oldest open alerts were never shown) is answered by safetyPage below: the oldest open alert is its own read.
+  /**
+   * R5 follow-up: ONE server page of the SOS queue ({ status, query, page, size }) with the queue's real total. For the OPEN
+   * queue it also resolves the OLDEST open alert (the one most at risk of being missed), because with paging it is not
+   * necessarily on the page shown: it is taken from the page itself when that page is the whole queue, otherwise from a
+   * second request (order=oldest, size 1). Both reads belong to the same call, so the screen's ordered-read rule (one
+   * accepted read, no freshness without a server answer) applies to the pair; if either fails the whole read fails.
+   * Resolves to { rows, total, totalPages, oldest }.
+   */
+  safetyPage: async ({ status = "OPEN", query = "", page = 0, size = 10 } = {}) => {
+    const current = await requestPage("/admin/safety", { status, query, page, size }, normalizeSafety);
+    if (status !== "OPEN") return { ...current, oldest: null };
+    const text = String(query || "").trim();
+    let oldest = null;
+    if (current.total > 0) {
+      if (!text && page === 0 && current.total <= size) {
+        oldest = current.rows[current.rows.length - 1] ?? null; // newest first: the last row of the whole queue is the oldest
+      } else {
+        const first = await requestPage("/admin/safety", { status: "OPEN", order: "oldest", page: 0, size: 1 }, normalizeSafety);
+        oldest = first.rows[0] ?? null;
+      }
+    }
+    return { ...current, oldest };
+  },
   resolveSafety: (eventId, notes) => request(`/admin/safety/${eventId}/resolve`, { method: "POST", body: JSON.stringify({ notes }) })
     .then(normalizeSafety),
   exportAudit: (query = "") => downloadFile(`/admin/audit/export${query ? `?query=${encodeURIComponent(query)}` : ""}`, "aiwa-audit-log.csv", "text/csv"),

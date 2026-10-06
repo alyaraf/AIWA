@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import App from "../App.jsx";
 import * as mod from "../api.js";
+import { pg } from "./safetyPage.js";
 
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -24,7 +25,7 @@ describe("<App> - R4-03 cross-tab account change", () => {
     who = { id: 1, fullName: "Support A", role: "ADMIN", permissions: ["SUPER_ADMIN"] };
     vi.spyOn(mod.api, "me").mockImplementation(async () => who);
     vi.spyOn(mod.api, "dashboard").mockResolvedValue({ stats: [], activity: [] });
-    vi.spyOn(mod.api, "safetyQueue").mockResolvedValue([SOS()]);
+    vi.spyOn(mod.api, "safetyPage").mockResolvedValue(pg([SOS()]));
     vi.spyOn(globalThis, "fetch").mockResolvedValue({ status: 200, ok: true, text: async () => JSON.stringify({ data: { content: [], totalPages: 1 } }) });
   });
 
@@ -56,12 +57,12 @@ describe("<App> - R4-03 cross-tab account change", () => {
 
   it("the restricted screen is not even requested again for the new account", async () => {
     await openSafetyAsA();
-    mod.api.safetyQueue.mockClear();
+    mod.api.safetyPage.mockClear();
     who = { id: 2, fullName: "Finance B", role: "ADMIN", permissions: ["FINANCE"] };
     await act(async () => { other("new-B"); });
     await screen.findByText(/Admin · Finance B/);
     await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
-    expect(mod.api.safetyQueue).not.toHaveBeenCalled();
+    expect(mod.api.safetyPage).not.toHaveBeenCalled();
   });
 
   it("a failed profile hydration leaves the tab unprivileged with a retry, never the old identity or rows", async () => {
@@ -99,7 +100,7 @@ describe("<App> - R4-03 cross-tab account change", () => {
 
   it("the same account signing in elsewhere also reloads the views instead of keeping stale rows", async () => {
     await openSafetyAsA();
-    mod.api.safetyQueue.mockResolvedValue([mod.normalizeSafety({ id: 100, bookingId: 6, actorName: "New actor", notes: "FRESH_SOS", createdAt: new Date().toISOString() })]);
+    mod.api.safetyPage.mockResolvedValue(pg([mod.normalizeSafety({ id: 100, bookingId: 6, actorName: "New actor", notes: "FRESH_SOS", createdAt: new Date().toISOString() })]));
     await act(async () => { other("same-user-again"); });
     await waitFor(() => expect(screen.queryByText(/PRIVATE_A_SOS/)).not.toBeInTheDocument());
   });

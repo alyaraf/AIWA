@@ -40,20 +40,4 @@ describe("paged admin lists", () => {
     expect(await api.reviews()).toHaveLength(3);
     expect(seen).toHaveLength(1);
   });
-
-  it("the SOS queue walks every page instead of stopping at 100 (DR-006)", async () => {
-    const page = (n, total) => ({
-      ok: true, status: 200,
-      text: async () => JSON.stringify({ data: {
-        content: Array.from({ length: n }, (_, i) => ({ id: total + i, bookingId: 1, actorName: "x", createdAt: null })),
-        totalPages: 2, totalElements: 101 } })
-    });
-    const spy = vi.spyOn(globalThis, "fetch")
-      .mockImplementationOnce(async () => page(100, 0))
-      .mockImplementationOnce(async () => page(1, 100));
-    const { api } = await import("../api.js");
-    const rows = await api.safetyQueue("OPEN");
-    expect(rows).toHaveLength(101);
-    expect(spy.mock.calls[1][0]).toContain("page=1");
-  });
 });

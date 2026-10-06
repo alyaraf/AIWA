@@ -1256,52 +1256,27 @@ const VERIFICATION_TABS = [
   { key: "SUSPENDED", label: "Suspended", status: "SUSPENDED", countKey: "suspended" }
 ];
 
-function Verifications() {
+export function Verifications() {
   const [tab, setTab] = useState("PENDING");
-  const [byTab, setByTab] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
   const [counts, setCounts] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [refreshTick, refreshDone] = useRefreshSignal();
-  const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
+  const searched = useDebounced(query);
+  // R5 follow-up: the server filters (tab), searches and pages the queue; the tab counts and page numbers are its real ones.
+  const { rows: data, total, totalPages, page, setPage, error, loading, reload } = usePagedQuery(
+    ({ page: p, size }) => api.verificationsPage({ status: VERIFICATION_TABS.find((t) => t.key === tab).status, query: searched, page: p, size }),
+    { key: `${tab}|${searched}`, fallback: [] }
+  );
 
-  const data = byTab[tab] || [];
-  const filtered = data.filter((p) => matchesQuery(p, query, ["name", "category", "city", "submitted"]));
-  const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
-
-  useEffect(() => { setPage(1); }, [tab, query]);
-
+  // The tab counts follow every finished list read (first load, refresh, an action, a page change).
   useEffect(() => {
+    if (loading) return undefined;
     let alive = true;
     api.verificationCounts().then((result) => { if (alive) setCounts(result); }).catch(() => {});
     return () => { alive = false; };
-  }, [reloadKey, refreshTick]);
+  }, [loading]);
 
-  useEffect(() => {
-    let alive = true;
-    let failed = false;
-    setError("");
-    setLoading(true);
-    const loader = tab === "PENDING"
-      ? api.verifications()
-      : api.verificationByStatus(VERIFICATION_TABS.find((t) => t.key === tab).status);
-    loader
-      .then((rows) => { if (alive) setByTab((current) => ({ ...current, [tab]: rows })); })
-      .catch((err) => { failed = true; if (alive) setError(err.message || "Request failed"); })
-      .finally(() => { if (alive) { setLoading(false); refreshDone(!failed); } });
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, reloadKey, refreshTick]);
-
-  function refreshAll() {
-    setByTab({});
-    setReloadKey((k) => k + 1);
-  }
+  function refreshAll() { reload(); }
 
   async function approve(id) {
     await runAction(() => api.approveProvider(id), { success: "Provider approved" });
@@ -1371,14 +1346,13 @@ function Verifications() {
         }
       />
       <ReadOnlyNote need="SUPPORT" />
-      <TruncatedNotice list={data} />
-      <SearchBar value={query} onChange={setQuery} placeholder="Search provider, category, city, submitted…" />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search provider, owner, category, city…" />
       <article className="table-card">
         <div className="table-scroll">
           <div className="table header verifications">
             <span>Provider</span><span>Category</span><span>City</span><span>Documents</span><span>Submitted</span><span />
           </div>
-          {pageRows.map((provider) => (
+          {data.map((provider) => (
             <div className="table row verifications clickable" key={provider.id} {...rowActivation(() => setSelected(provider.id))}>
               <ProfileCell name={provider.name} palette={provider.palette} flag={provider.flag} />
               <span>{provider.category}</span>
@@ -1394,14 +1368,14 @@ function Verifications() {
           ))}
           {loading && <SkeletonRows cols={6} />}
           {error && !loading && <StateBlock variant="error" body={`Could not load the verification queue: ${error}`} onAction={refreshAll} />}
-          {!loading && !error && filtered.length === 0 && (
+          {!loading && !error && data.length === 0 && (
             <StateBlock variant="empty" icon={BadgeCheck}
               title={query ? "No matches" : (tab === "PENDING" ? "Queue is clear" : "Nothing here")}
               body={query ? `Nothing matches "${query}".` : emptyCopy[tab]} />
           )}
         </div>
       </article>
-      {!loading && !error && <ListFooter page={safePage} pageSize={LIST_PAGE_SIZE} total={filtered.length} totalPages={totalPages} onPage={setPage} />}
+      {!loading && !error && <ListFooter page={page} pageSize={LIST_PAGE_SIZE} total={total ?? data.length} totalPages={totalPages} onPage={setPage} />}
     </section>
   );
 }
@@ -3525,15 +3499,19 @@ function downloadCsv(filename, header, records) {
 const REVIEW_FILTERS = ["Reported", "Low rating", "All"];
 
 export function Reviews() {
-  const reports = useLoad(api.reviewReports, mock.reviewReports);
   const [filter, setFilter] = useState("Reported");
   const [query, setQuery] = useState("");
   const searched = useDebounced(query);
   const [busyId, setBusyId] = useState(null);
 
   const isReported = filter === "Reported";
-  // R4 follow-up: "Low rating" and "All" are SERVER pages (search, rating filter, totals and page count come from the
-  // server). The reported-review queue is a short list of cases that leave it once handled, so it stays a loaded list.
+  // R5 follow-up: BOTH lists are SERVER pages (search, rating filter, totals and page count come from the server).
+  // The reported-review queue is read in every view so the "in queue" tag is the queue's real size; the search text
+  // applies to it only while it is the list on screen.
+  const reports = usePagedQuery(
+    ({ page: p, size }) => api.reviewReportsPage({ query: isReported ? searched : "", page: p, size }),
+    { key: `reported|${isReported ? searched : ""}`, fallback: [] }
+  );
   const all = usePagedQuery(
     ({ page: p, size }) => api.reviewsPage({ query: searched, maxRating: filter === "Low rating" ? 2 : undefined, page: p, size }),
     { key: `${filter}|${searched}`, enabled: !isReported, fallback: mock.reviews }
@@ -3541,22 +3519,12 @@ export function Reviews() {
   const loading = isReported ? reports.loading : all.loading;
   const error = isReported ? reports.error : all.error;
 
-  const [reportPage, setReportPage] = useState(1);
-  useEffect(() => { setReportPage(1); }, [query]);
-  const reportRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const match = (record) => !q || [record.from, record.to, record.text, record.reason].some((value) => String(value || "").toLowerCase().includes(q));
-    return reports.data.filter(match);
-  }, [query, reports.data]);
-  const reportPages = Math.max(1, Math.ceil(reportRows.length / LIST_PAGE_SIZE));
-  const safeReportPage = Math.min(reportPage, reportPages);
-
-  const rows = isReported ? reportRows : all.rows;
-  const totalPages = isReported ? reportPages : all.totalPages;
-  const safePage = isReported ? safeReportPage : all.page;
-  const setPage = isReported ? setReportPage : all.setPage;
-  const rowTotal = isReported ? reportRows.length : (all.total ?? all.rows.length);
-  const pageRows = isReported ? reportRows.slice((safeReportPage - 1) * LIST_PAGE_SIZE, safeReportPage * LIST_PAGE_SIZE) : all.rows;
+  const rows = isReported ? reports.rows : all.rows;
+  const totalPages = isReported ? reports.totalPages : all.totalPages;
+  const safePage = isReported ? reports.page : all.page;
+  const setPage = isReported ? reports.setPage : all.setPage;
+  const rowTotal = isReported ? (reports.total ?? reports.rows.length) : (all.total ?? all.rows.length);
+  const pageRows = rows;
 
   async function resolveReport(report, action) {
     setBusyId(report.id);
@@ -3564,7 +3532,8 @@ export function Reviews() {
       await runAction(() => api.resolveReviewReport(report.id, action), {
         success: action === "KEEP" ? "Report dismissed — review kept" : action === "HIDE" ? "Review hidden" : "Review removed"
       });
-      reports.setData((current) => current.filter((entry) => entry.id !== report.id));
+      reports.setRows((current) => current.filter((entry) => entry.id !== report.id));
+      reports.reload(); // the page refills and the queue's total follows
       if (action !== "KEEP") all.reload();
     } catch { /* toast shown */ } finally { setBusyId(null); }
   }
@@ -3606,6 +3575,7 @@ export function Reviews() {
   }
 
   function exportCsv() {
+    // R5 follow-up: both lists are server pages, so the export is the page shown; narrow the search to export fewer rows.
     if (isReported) {
       downloadCsv("reported-reviews.csv", ["Author", "Provider", "Rating", "Reason", "Hidden", "Comment", "Reported"],
         rows.map((r) => [r.from, r.to, r.rating, r.reason, r.hidden ? "yes" : "no", r.text, r.when]));
@@ -3615,7 +3585,7 @@ export function Reviews() {
     }
   }
 
-  const queueCount = reports.data.length;
+  const queueCount = reports.total ?? reports.rows.length;
 
   return (
     <section className="page-content">
@@ -3626,8 +3596,8 @@ export function Reviews() {
           <>
             <Tag tone={queueCount ? "danger" : "plum"}>{queueCount} in queue</Tag>
             <button className="btn btn-secondary sm" onClick={exportCsv} disabled={rows.length === 0}
-              title={isReported ? undefined : "Exports the page shown; narrow the search to export fewer rows"}>
-              <Download size={14} /> {isReported ? "Export CSV" : "Export page CSV"}
+              title="Exports the page shown; narrow the search to export fewer rows">
+              <Download size={14} /> Export page CSV
             </button>
           </>
         }
@@ -3641,7 +3611,6 @@ export function Reviews() {
         onFilter={setFilter}
       />
       <ReadOnlyNote need="SUPPORT" />
-      {isReported && <TruncatedNotice list={reports.data} />}
 
       {loading && <div className="review-list"><SkeletonRows cols={2} rows={3} /></div>}
       {error && !loading && (
@@ -3730,6 +3699,8 @@ const SAFETY_REFRESH_MS = 15_000;
 // last good answer is older than STALE_AFTER_MS even if no poll reported an error (throttled background tab, hung request).
 const SAFETY_POLL_TIMEOUT_MS = 10_000;
 const SAFETY_STALE_AFTER_MS = SAFETY_REFRESH_MS * 3;
+// R5 follow-up: the SOS queue is a server page (search, real total, oldest open alert); this many alerts per page.
+const SAFETY_PAGE_SIZE = 10;
 
 function clockTime(ms) {
   return ms ? new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
@@ -3741,9 +3712,20 @@ function SafetyQueue({ status, setStatus }) {
   // no newer read was already accepted (so a reversed, older response is dropped), the read was not abandoned by its
   // timeout, and no local change (closing an alert) happened after it started. Freshness ("Live · updated") is recorded
   // only for an accepted server read, never inferred from the data changing locally.
-  const [view, setView] = useState(() => ({ data: USE_MOCKS ? mock.safety : [], error: "", loading: true }));
-  const { data, error, loading } = view;
+  // R5 follow-up: the list is ONE SERVER PAGE (search, page, the queue's real total, and the oldest open alert, which with
+  // paging is not necessarily on the page shown). The ordered-read rule below covers all of it.
+  const [view, setView] = useState(() => ({ data: USE_MOCKS ? mock.safety : [], total: null, totalPages: 1, oldest: null, error: "", loading: true }));
+  const { data, error, loading, total, totalPages, oldest } = view;
   const setData = useCallback((next) => setView((v) => ({ ...v, data: typeof next === "function" ? next(v.data) : next })), []);
+  const [query, setQuery] = useState("");
+  const searched = useDebounced(query);
+  // The page belongs to the search text it was chosen under: typing a new search goes back to page 1.
+  const [pos, setPos] = useState({ key: "", page: 1 });
+  const page = pos.key === searched ? pos.page : 1;
+  const setPage = useCallback((next) => setPos({ key: searched, page: next }), [searched]);
+  // What a read asks for, read when it STARTS (so the poll, the badge trigger and a retry always ask for what is on screen).
+  const params = useRef({ page, query: searched });
+  params.current = { page, query: searched };
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => setReloadKey((key) => key + 1);
   const [refreshTick, refreshDone] = useRefreshSignal();
@@ -3758,7 +3740,9 @@ function SafetyQueue({ status, setStatus }) {
   const load = useCallback((quiet) => {
     const o = order.current;
     const seq = ++o.seq;
-    const ctx = { abandoned: false };
+    const ctx = { abandoned: false, ...params.current };
+    // A read for a page / search that is no longer on screen must not replace what is shown (the user already moved on).
+    const wanted = () => ctx.page === params.current.page && ctx.query === params.current.query;
     // Only the very first read (nothing accepted yet) replaces the list with a skeleton.
     if (!quiet && o.applied === 0) setView((v) => ({ ...v, loading: true, error: "" }));
     let timer;
@@ -3766,11 +3750,19 @@ function SafetyQueue({ status, setStatus }) {
       timer = setTimeout(() => { ctx.abandoned = true; reject(Object.assign(new Error("The server did not answer in time."), { timeout: true })); }, SAFETY_POLL_TIMEOUT_MS);
     });
     const superseded = () => seq <= o.applied || seq < o.minAccept;
-    return Promise.race([api.safetyQueue(status), timeout])
-      .then((rows) => {
-        if (!o.alive || ctx.abandoned || superseded()) return true; // an older or abandoned read: neither shown nor counted as a confirmation
+    return Promise.race([api.safetyPage({ status, query: ctx.query, page: ctx.page - 1, size: SAFETY_PAGE_SIZE }), timeout])
+      .then((result) => {
+        if (!o.alive || ctx.abandoned || superseded() || !wanted()) return true; // an older, abandoned or moved-on read: neither shown nor counted as a confirmation
+        // The queue shrank below the page asked for (the last alert of the last page was closed): go to the last real page.
+        if (result.rows.length === 0 && ctx.page > 1 && ctx.page > result.totalPages) {
+          setPos({ key: ctx.query, page: result.totalPages });
+          return true;
+        }
         o.applied = seq;
-        setView((v) => ({ data: rows || v.data, error: "", loading: false }));
+        setView((v) => ({
+          data: result.rows ?? v.data, total: result.total ?? null, totalPages: result.totalPages ?? 1, oldest: result.oldest ?? null,
+          error: "", loading: false
+        }));
         setSync({ lastOk: Date.now(), failures: 0, lastError: "" });
         return true;
       })
@@ -3782,7 +3774,7 @@ function SafetyQueue({ status, setStatus }) {
           if (!quiet) { setView((v) => ({ ...v, error: "Session expired. Please sign in again.", loading: false })); onAuthExpired(); }
           return false;
         }
-        if (!quiet && o.applied === 0) setView({ data: USE_MOCKS ? mock.safety : [], error: message, loading: false });
+        if (!quiet && o.applied === 0) setView({ data: USE_MOCKS ? mock.safety : [], total: null, totalPages: 1, oldest: null, error: message, loading: false });
         else setView((v) => ({ ...v, loading: false }));
         setSync((current) => ({ ...current, failures: current.failures + 1, lastError: message }));
         return false;
@@ -3790,13 +3782,19 @@ function SafetyQueue({ status, setStatus }) {
       .finally(() => { clearTimeout(timer); });
   }, [status]);
 
-  // The first load, a Retry, and the global refresh button (AD-06: it reports whether the read worked).
+  // The first load, a Retry, a change of page or search, and the global refresh button (AD-06: it reports whether the read worked).
+  const shown = useRef({ page, searched });
   useEffect(() => {
     order.current.alive = true;
+    if (shown.current.page !== page || shown.current.searched !== searched) {
+      // A different page or search: the rows on screen are not the answer to it, so show the skeleton until the read lands.
+      shown.current = { page, searched };
+      setView((v) => ({ ...v, loading: true, error: "" }));
+    }
     setRetrying(true);
     load(false).then((ok) => { setRetrying(false); refreshDone(ok); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadKey, refreshTick]);
+  }, [reloadKey, refreshTick, page, searched]);
   useEffect(() => () => { order.current.alive = false; }, []);
 
   // While the Open filter is shown, read quietly (no skeleton, typed notes stay) every 15 s and whenever the
@@ -3838,7 +3836,9 @@ function SafetyQueue({ status, setStatus }) {
     setBusyId(ev.id);
     try {
       await runAction(() => api.resolveSafety(ev.id, text), { success: "SOS closed" });
-      setData((current) => status === "OPEN" ? current.filter((e) => e.id !== ev.id) : current);
+      setView((v) => status === "OPEN"
+        ? { ...v, data: v.data.filter((e) => e.id !== ev.id), total: v.total != null ? Math.max(0, v.total - 1) : v.total }
+        : v);
       // A local change is not a server confirmation: no freshness is recorded for it. Reads that started before this
       // closing may still show the alert, so they are ignored, and a fresh read is started to confirm the list.
       order.current.minAccept = order.current.seq + 1;
@@ -3860,7 +3860,9 @@ function SafetyQueue({ status, setStatus }) {
             {status === "OPEN" && !loading && !error && (
               <Tag tone={stale ? "danger" : "plum"}>{stale ? "Not live" : "Live"} · updated {clockTime(sync.lastOk)}</Tag>
             )}
-            <Tag tone={status === "OPEN" && data.length ? "danger" : "plum"}>{status === "OPEN" ? `${data.length} open${stale ? " (as of last update)" : ""}` : `${data.length} shown`}</Tag>
+            <Tag tone={status === "OPEN" && (total ?? data.length) ? "danger" : "plum"}>{status === "OPEN"
+              ? `${total ?? data.length} ${searched ? "matching" : "open"}${stale ? " (as of last update)" : ""}`
+              : `${total ?? data.length} ${searched ? "matching" : "in this view"}`}</Tag>
           </>
         )}
       />
@@ -3873,17 +3875,15 @@ function SafetyQueue({ status, setStatus }) {
           </button>
         </div>
       )}
-      {status === "OPEN" && !loading && !error && data.length > 0 && (() => {
-        // DR-006: the oldest open alert is the one most at risk of being missed.
-        const oldest = data.reduce((a, b) => (new Date(a.createdAt) <= new Date(b.createdAt) ? a : b));
-        return (
-          <InlineBanner tone="danger" title={`Oldest open alert: ${formatRelative(oldest.createdAt) || oldest.when}`}
-            body={`Booking #${oldest.bookingId}, raised by ${oldest.actorName}. Alerts are listed newest first.`} />
-        );
-      })()}
+      {status === "OPEN" && !loading && !error && oldest && (
+        // DR-006: the oldest open alert is the one most at risk of being missed. R5: with paging it is read from the
+        // server (it is not necessarily on this page), so it is shown whatever page or search is on screen.
+        <InlineBanner tone="danger" title={`Oldest open alert: ${formatRelative(oldest.createdAt) || oldest.when}`}
+          body={`Booking #${oldest.bookingId}, raised by ${oldest.actorName}. Alerts are listed newest first.`} />
+      )}
       <ReadOnlyNote need="SUPPORT" />
-      <TruncatedNotice list={data} />
       <div className="policy-tabs">{chip("OPEN", "Open")}{chip("RESOLVED", "Resolved")}{chip("ALL", "All")}</div>
+      <SearchBar value={query} onChange={setQuery} placeholder="Search person, provider, booking #, note…" />
 
       {loading && <div className="review-list"><SkeletonRows cols={2} rows={2} /></div>}
       {error && !loading && <StateBlock variant="error" body={`Could not load SOS alerts: ${error}`} onAction={reload} />}
@@ -3893,8 +3893,8 @@ function SafetyQueue({ status, setStatus }) {
       )}
       {!loading && !error && data.length === 0 && !stale && (
         <StateBlock variant="empty" icon={Siren}
-          title={status === "OPEN" ? "No open SOS alerts" : "Nothing here"}
-          body={status === "OPEN" ? "New alerts appear here and in the bell, and on-call staff get an SMS." : "No SOS alerts match this filter."} />
+          title={searched ? "No matches" : status === "OPEN" ? "No open SOS alerts" : "Nothing here"}
+          body={searched ? `Nothing matches "${searched}".` : status === "OPEN" ? "New alerts appear here and in the bell, and on-call staff get an SMS." : "No SOS alerts match this filter."} />
       )}
 
       <div className="review-list">
@@ -3959,23 +3959,21 @@ function SafetyQueue({ status, setStatus }) {
           </article>
         ))}
       </div>
+      {!loading && !error && <ListFooter page={page} pageSize={SAFETY_PAGE_SIZE} total={total ?? data.length} totalPages={totalPages} onPage={setPage} />}
     </section>
   );
 }
 
-function Moderation() {
-  const { data: raw, setData, error, loading, reload } = useLoad(api.moderation, mock.moderation);
+export function Moderation() {
   const [busyId, setBusyId] = useState(null);
-  const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
-  useEffect(() => { setPage(1); }, [query]);
-  // Reported reviews live on the Reviews screen and chat messages on Chat
-  // reports; this queue covers reported images only.
-  const data = useMemo(() => raw.filter((item) => item.type === "IMAGE"), [raw]);
-  const filtered = data.filter((item) => matchesQuery(item, query, ["provider", "reason", "text", "when", "type"]));
-  const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
+  const searched = useDebounced(query);
+  // R5 follow-up: reported PHOTOS are searched and paged by the server. Reported reviews live on the Reviews screen
+  // and chat messages on Chat reports.
+  const { rows: data, setRows: setData, total, totalPages, page, setPage, error, loading, reload } = usePagedQuery(
+    ({ page: p, size }) => api.moderationPage({ query: searched, page: p, size }),
+    { key: searched, fallback: [] }
+  );
 
   function act(item, status) {
     if (status === "ACTIONED") {
@@ -3999,6 +3997,7 @@ function Moderation() {
         success: status === "ACTIONED" ? "Action recorded" : "Report dismissed"
       });
       setData((current) => current.filter((entry) => entry.id !== item.id));
+      reload(); // the page refills and the queue's total follows
     } catch {
       /* toast already shown */
     } finally {
@@ -4010,17 +4009,16 @@ function Moderation() {
     <section className="page-content">
       <PageHeader eyebrow="Content review" title="Photo moderation" />
       <ReadOnlyNote need="SUPPORT" />
-      <TruncatedNotice list={raw} />
-      <SearchBar value={query} onChange={setQuery} placeholder="Search provider, reason, image text…" />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search provider, reason…" />
       <div className="stack-list">
         {loading && <SkeletonRows cols={1} rows={3} />}
         {error && !loading && <StateBlock variant="error" body={`Could not load the moderation queue: ${error}`} onAction={reload} />}
-        {!loading && !error && filtered.length === 0 && (
+        {!loading && !error && data.length === 0 && (
           <StateBlock variant="empty" icon={ImageOff}
             title={query ? "No matches" : "Queue is clear"}
             body={query ? `Nothing matches "${query}".` : "Every reported image has been handled. Reported reviews live on the Reviews screen."} />
         )}
-        {pageRows.map((item) => (
+        {data.map((item) => (
           <article className="moderation-card" key={item.id}>
             <div className={`moderation-thumb ${item.type.toLowerCase()}`}>
               {item.type === "REVIEW"
@@ -4048,23 +4046,21 @@ function Moderation() {
           </article>
         ))}
       </div>
-      {!loading && !error && <ListFooter page={safePage} pageSize={LIST_PAGE_SIZE} total={filtered.length} totalPages={totalPages} onPage={setPage} />}
+      {!loading && !error && <ListFooter page={page} pageSize={LIST_PAGE_SIZE} total={total ?? data.length} totalPages={totalPages} onPage={setPage} />}
     </section>
   );
 }
 
 /* ─────────────────────────── Chat reports ─────────────────────────── */
-function ChatReports() {
-  const { data, setData, error, loading, reload } = useLoad(api.chatReports, mock.chatReports);
+export function ChatReports() {
   const [busyId, setBusyId] = useState(null);
-  const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
-  useEffect(() => { setPage(1); }, [query]);
-
-  const filtered = data.filter((item) => matchesQuery(item, query, ["from", "bookingId", "reason", "text", "when"]));
-  const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
+  const searched = useDebounced(query);
+  // R5 follow-up: searched and paged by the server (real total and page count).
+  const { rows: data, setRows: setData, total, totalPages, page, setPage, error, loading, reload } = usePagedQuery(
+    ({ page: p, size }) => api.chatReportsPage({ query: searched, page: p, size }),
+    { key: searched, fallback: [] }
+  );
 
   async function resolve(report, action) {
     setBusyId(report.id);
@@ -4073,6 +4069,7 @@ function ChatReports() {
         success: action === "KEEP" ? "Report dismissed — message kept" : "Message removed"
       });
       setData((current) => current.filter((entry) => entry.id !== report.id));
+      reload(); // the page refills and the queue's total follows
     } catch { /* toast shown */ } finally { setBusyId(null); }
   }
 
@@ -4092,22 +4089,21 @@ function ChatReports() {
       <PageHeader
         eyebrow="Content review"
         title="Chat reports"
-        right={<Tag tone={data.length ? "danger" : "plum"}>{data.length} in queue</Tag>}
+        right={<Tag tone={(total ?? data.length) ? "danger" : "plum"}>{total ?? data.length} in queue</Tag>}
       />
       <ReadOnlyNote need="SUPPORT" />
-      <TruncatedNotice list={data} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search reporter, booking, reason, message…" />
 
       {loading && <div className="review-list"><SkeletonRows cols={2} rows={3} /></div>}
       {error && !loading && <StateBlock variant="error" body={`Could not load chat reports: ${error}`} onAction={reload} />}
-      {!loading && !error && filtered.length === 0 && (
+      {!loading && !error && data.length === 0 && (
         <StateBlock variant="empty" icon={MessageSquareWarning}
           title={query ? "No matches" : "Nothing reported"}
           body={query ? `Nothing matches "${query}".` : "There are no reported chat messages waiting for a decision."} />
       )}
 
       <div className="review-list">
-        {pageRows.map((report) => (
+        {data.map((report) => (
           <article className="review-card reported" key={report.id}>
             <Avatar name={report.from} size={44} palette="plum" />
             <div className="review-body">
@@ -4134,7 +4130,7 @@ function ChatReports() {
           </article>
         ))}
       </div>
-      {!loading && !error && <ListFooter page={safePage} pageSize={LIST_PAGE_SIZE} total={filtered.length} totalPages={totalPages} onPage={setPage} />}
+      {!loading && !error && <ListFooter page={page} pageSize={LIST_PAGE_SIZE} total={total ?? data.length} totalPages={totalPages} onPage={setPage} />}
     </section>
   );
 }
@@ -4169,38 +4165,30 @@ function confirmSuspendProvider(providerId, name, onDone) {
   });
 }
 
-function Settlements() {
+const SETTLEMENT_FILTERS = [["ALL", "All"], ["OVERDUE", "Overdue"], ["WITHIN_LIMIT", "Within limit"], ["SETTLED", "Settled"]];
+
+export function Settlements() {
   const [overview, setOverview] = useState(null);
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [detailFor, setDetailFor] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [refreshTick, refreshDone] = useRefreshSignal();
   const [query, setQuery] = useState("");
-
+  const searched = useDebounced(query);
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  // R5 follow-up: the provider rows are searched (provider name), filtered (settlement status) and paged by the server,
+  // with the real total. The commission-owed card is its own small read and follows every finished list read.
+  const list = usePagedQuery(
+    ({ page: p, size }) => api.settlementProvidersPage({ status: statusFilter, query: searched, page: p, size }),
+    { key: `${statusFilter}|${searched}`, fallback: [] }
+  );
+  const { rows, total, totalPages, page, setPage, loading, error } = list;
+  const refresh = () => list.reload();
   useEffect(() => {
+    if (loading) return undefined;
     let alive = true;
-    let failed = false;
-    setLoading(true);
-    setError("");
-    Promise.all([api.settlementOverview(), api.settlementProviders()])
-      .then(([ov, list]) => { if (alive) { setOverview(ov); setRows(list); } })
-      .catch((err) => {
-        failed = true;
-        if (!alive) return;
-        // 401 = the session is gone; 403 = signed in but without FINANCE.
-        if (err?.status === 401) { onAuthExpired(); return; }
-        setError(err?.status === 403
-          ? "You don't have permission to view settlements."
-          : err.message || "Could not load settlements.");
-      })
-      .finally(() => { if (alive) { setLoading(false); refreshDone(!failed); } });
+    api.settlementOverview().then((result) => { if (alive) setOverview(result); }).catch(() => {});
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadKey, refreshTick]);
+  }, [loading]);
 
   async function exportLedger() {
     setExporting(true);
@@ -4220,15 +4208,11 @@ function Settlements() {
     return (
       <SettlementDetail
         providerId={detailFor}
-        onBack={() => { setDetailFor(null); setReloadKey((k) => k + 1); }}
-        onChanged={() => setReloadKey((k) => k + 1)}
+        onBack={() => { setDetailFor(null); refresh(); }}
+        onChanged={() => refresh()}
       />
     );
   }
-
-  const filteredSettlements = rows.filter((r) =>
-    matchesQuery(r, query, ["providerName", "status", "commissionPercent"])
-  );
 
   return (
     <section className="page-content">
@@ -4240,10 +4224,9 @@ function Settlements() {
         </button>}
       />
       <ReadOnlyNote need="FINANCE" />
-      <TruncatedNotice list={rows} />
 
       <div className="settle-cards">
-        <CommissionRateCard onSaved={() => setReloadKey((k) => k + 1)} />
+        <CommissionRateCard onSaved={() => refresh()} />
         <article className="panel settle-owed">
           <p className="eyebrow">Commission owed</p>
           <strong>{money(overview?.totalOwed)}</strong>
@@ -4251,20 +4234,25 @@ function Settlements() {
         </article>
       </div>
 
-      <SearchBar value={query} onChange={setQuery} placeholder="Search provider, status, commission…" />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search provider…" />
+      <div className="policy-tabs">
+        {SETTLEMENT_FILTERS.map(([value, label]) => (
+          <button key={value} className={`chip ${statusFilter === value ? "active" : ""}`} onClick={() => setStatusFilter(value)}>{label}</button>
+        ))}
+      </div>
       <article className="table-card">
         <div className="table-scroll">
           <div className="table header settlements-rich">
             <span>Provider</span><span>Commission</span><span>Balance owed</span><span>Status</span><span>Due</span><span />
           </div>
           {loading && <SkeletonRows cols={6} />}
-          {error && !loading && <StateBlock variant="error" body={error} onAction={() => setReloadKey((k) => k + 1)} />}
-          {!loading && !error && filteredSettlements.length === 0 && (
+          {error && !loading && <StateBlock variant="error" body={error} onAction={() => refresh()} />}
+          {!loading && !error && rows.length === 0 && (
             <StateBlock variant="empty" icon={Banknote}
-              title={query ? "No matches" : "Nothing owing"}
-              body={query ? `Nothing matches "${query}".` : "No provider has an outstanding commission balance."} />
+              title={query || statusFilter !== "ALL" ? "No matches" : "Nothing owing"}
+              body={query ? `Nothing matches "${query}".` : statusFilter !== "ALL" ? "No provider is in this state." : "No provider has an outstanding commission balance."} />
           )}
-          {!loading && !error && filteredSettlements.map((row) => {
+          {!loading && !error && rows.map((row) => {
             const info = SETTLEMENT_STATUS[row.status] || SETTLEMENT_STATUS.WITHIN_LIMIT;
             const owed = Number(row.balanceOwed) || 0;
             return (
@@ -4286,7 +4274,7 @@ function Settlements() {
                     ? <Tag tone="danger">Suspended</Tag>
                     : can("SUPPORT") && (
                       <button className="circle-button sm" aria-label={`Suspend ${row.providerName}`} title="Suspend provider"
-                        onClick={() => confirmSuspendProvider(row.providerId, row.providerName, () => setReloadKey((k) => k + 1))}>
+                        onClick={() => confirmSuspendProvider(row.providerId, row.providerName, () => refresh())}>
                         <Ban size={14} />
                       </button>
                     )}
@@ -4301,6 +4289,7 @@ function Settlements() {
           })}
         </div>
       </article>
+      {!loading && !error && <ListFooter page={page} pageSize={LIST_PAGE_SIZE} total={total ?? rows.length} totalPages={totalPages} onPage={setPage} />}
 
       <InlineBanner tone="warn" title="Applies to new bookings only"
         body="Changing the rate doesn't recalculate past ledger entries — each keeps the rate that was live when it was created." />
@@ -5412,6 +5401,9 @@ function usePagedQuery(fetchPage, { key = "", size = LIST_PAGE_SIZE, enabled = t
     fetchPage({ page: page - 1, size })
       .then((result) => {
         if (!alive || mine !== latest.current) return;
+        // R5 follow-up: the last row of the last page was handled (or the queue shrank): the page asked for no longer
+        // exists, so go to the last real one instead of showing "Queue is clear" for a queue that still has rows.
+        if (result.rows.length === 0 && page > 1 && page > result.totalPages) { setPos({ key, page: result.totalPages }); return; }
         setView({ rows: result.rows, total: result.total, totalPages: result.totalPages, loading: false, error: "" });
         refreshDone(true);
       })
