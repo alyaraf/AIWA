@@ -45,13 +45,16 @@ describe("<App> — CR-22 session start", () => {
     let answer;
     routeFetch(() => new Promise((resolve) => { answer = resolve; }));
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /Settlements/ }));
-    await screen.findByText("Commission rate");
+    // R4-03: while the profile is unknown no protected screen is offered or mounted at all
+    expect(screen.queryByRole("button", { name: /Settlements/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Commission rate")).not.toBeInTheDocument();
     expect(screen.queryByText(/S\. Mahmoud/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit commission rate" })).not.toBeInTheDocument();
 
     await act(async () => { answer(res(200, { data: ME })); });
     expect(await screen.findByText(/Nour Support/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /Settlements/ }));
+    await screen.findByText("Commission rate");
     expect(await screen.findByRole("button", { name: "Edit commission rate" })).toBeInTheDocument();
   });
 
@@ -92,7 +95,7 @@ describe("<App> — CR-22 commission change", () => {
     routeFetch(() => res(200, { data: ME }));
     const setCommission = vi.spyOn(apiModule.api, "setCommission").mockResolvedValue({ commissionPercent: 12 });
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /Settlements/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Settlements/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Edit commission rate" }));
     fireEvent.change(screen.getByLabelText("Commission percent"), { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -109,7 +112,7 @@ describe("<App> — CR-22 commission change", () => {
     routeFetch(() => res(200, { data: ME }));
     const setCommission = vi.spyOn(apiModule.api, "setCommission").mockResolvedValue({ commissionPercent: 12 });
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /Settlements/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Settlements/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Edit commission rate" }));
     fireEvent.change(screen.getByLabelText("Commission percent"), { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));

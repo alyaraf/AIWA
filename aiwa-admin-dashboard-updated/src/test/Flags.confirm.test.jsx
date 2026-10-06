@@ -21,7 +21,7 @@ const FLAG = {
 };
 
 function renderFlags() {
-  vi.spyOn(apiModule.api, "flags").mockResolvedValue([FLAG]);
+  vi.spyOn(apiModule.api, "flagsPage").mockResolvedValue({ rows: [FLAG], total: 1, totalPages: 1 });
   return render(
     <>
       <Flags />

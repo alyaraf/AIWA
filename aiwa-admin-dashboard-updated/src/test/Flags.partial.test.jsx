@@ -24,7 +24,7 @@ describe("<Flags> - AD-07 partial operations", () => {
   });
 
   it("a failed closing step keeps the flag, says the warning went out, and retries only the closing step", async () => {
-    const flags = vi.spyOn(apiModule.api, "flags").mockResolvedValue([FLAG]);
+    const flags = vi.spyOn(apiModule.api, "flagsPage").mockResolvedValue({ rows: [FLAG], total: 1, totalPages: 1 });
     const warn = vi.spyOn(apiModule.api, "warnUser").mockResolvedValue({});
     const resolve = vi.spyOn(apiModule.api, "resolveComplaint")
       .mockRejectedValueOnce(new Error("Service Unavailable"))
@@ -38,7 +38,7 @@ describe("<Flags> - AD-07 partial operations", () => {
     expect(screen.queryByRole("button", { name: /Send warning/i })).not.toBeInTheDocument(); // cannot warn twice
     expect(warn).toHaveBeenCalledTimes(1);
 
-    flags.mockResolvedValue([]); // once the complaint is closed the server no longer lists it
+    flags.mockResolvedValue({ rows: [], total: 0, totalPages: 1 }); // once the complaint is closed the server no longer lists it
     fireEvent.click(screen.getByRole("button", { name: /Retry closing/i }));
     await waitFor(() => expect(resolve).toHaveBeenCalledTimes(2));
     expect(warn).toHaveBeenCalledTimes(1); // the warning was NOT sent again
@@ -47,7 +47,7 @@ describe("<Flags> - AD-07 partial operations", () => {
   });
 
   it("no refresh runs between the two writes, so a stale list cannot reinsert the row", async () => {
-    const flags = vi.spyOn(apiModule.api, "flags").mockResolvedValue([FLAG]);
+    const flags = vi.spyOn(apiModule.api, "flagsPage").mockResolvedValue({ rows: [FLAG], total: 1, totalPages: 1 });
     vi.spyOn(apiModule.api, "warnUser").mockResolvedValue({});
     let finishClose;
     vi.spyOn(apiModule.api, "resolveComplaint").mockImplementation(() => new Promise((resolve) => { finishClose = resolve; }));
@@ -63,7 +63,7 @@ describe("<Flags> - AD-07 partial operations", () => {
   });
 
   it("when the first write fails nothing is closed", async () => {
-    vi.spyOn(apiModule.api, "flags").mockResolvedValue([FLAG]);
+    vi.spyOn(apiModule.api, "flagsPage").mockResolvedValue({ rows: [FLAG], total: 1, totalPages: 1 });
     vi.spyOn(apiModule.api, "warnUser").mockRejectedValue(new Error("nope"));
     const resolve = vi.spyOn(apiModule.api, "resolveComplaint").mockResolvedValue({});
     render(<><Flags /><ConfirmHost /></>);

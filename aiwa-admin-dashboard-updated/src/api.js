@@ -42,16 +42,26 @@ export function hasSession() {
 // (DR-003): it used to sign an admin who had just signed out straight back in.
 let sessionGeneration = 0;
 
+// R4-04: private downloads (documents, exports) that are still running when the session changes are cancelled, and
+// whatever still completes is discarded by the generation check after its body has been read.
+const blobControllers = new Set();
+
+function bumpSessionGeneration() {
+  sessionGeneration += 1;
+  blobControllers.forEach((controller) => { try { controller.abort(); } catch { /* already finished */ } });
+  blobControllers.clear();
+}
+
 /** The access token of a new sign-in (the refresh token arrives as a cookie). */
 export function setTokens(tokens) {
-  sessionGeneration += 1;
+  bumpSessionGeneration();
   if (tokens?.accessToken) accessToken = tokens.accessToken;
   try { window.localStorage.setItem(SESSION_KEY, `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`); } catch { /* storage unavailable */ }
   markActive();
 }
 
 export function clearTokens() {
-  sessionGeneration += 1;
+  bumpSessionGeneration();
   accessToken = null;
   try {
     window.localStorage.removeItem(SESSION_KEY);
@@ -66,7 +76,7 @@ export function clearTokens() {
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
     if (event.key !== null && event.key !== SESSION_KEY) return;
-    sessionGeneration += 1;
+    bumpSessionGeneration();
     accessToken = null;
   });
 }
@@ -252,22 +262,48 @@ function refreshAccessToken() {
  * as request(): idle limit, one refresh-and-retry on 401, and a response that arrives after the session changed
  * is discarded (AD-04).
  */
-async function authedBlobFetch(path, isRetryAfterRefresh = false) {
+async function authedBlobFetch(path, isRetryAfterRefresh = false, signal = undefined) {
   if (enforceIdleLimit()) throw sessionEndedError("idle");
   const generation = sessionGeneration;
   const token = getAccessToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, ...(signal ? { signal } : {}) });
   if (generation !== sessionGeneration) throw staleSessionError();
   if (response.status === 401 && !isRetryAfterRefresh) {
     const stored = getAccessToken();
     const refreshed = (stored && stored !== token) || await refreshAccessToken();
-    if (refreshed && generation === sessionGeneration) return authedBlobFetch(path, true);
+    if (refreshed && generation === sessionGeneration) return authedBlobFetch(path, true, signal);
     if (!refreshed && !refreshFailedTransiently && generation === sessionGeneration && hasSession()) {
       endSession("expired");
       throw sessionEndedError("expired");
     }
   }
   return response;
+}
+
+/**
+ * R4-04: the complete private download. The session generation is validated AFTER the whole body was read, so the
+ * caller only ever receives a blob that belongs to the session that asked for it; creating an object URL or starting
+ * a download is a side effect and must happen after this returns. A session change cancels the transfer and rejects
+ * with SESSION_CHANGED. Returns { response, blob } (blob is null for a non-2xx response).
+ */
+async function authedBlob(path) {
+  const generation = sessionGeneration;
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  if (controller) blobControllers.add(controller);
+  try {
+    const response = await authedBlobFetch(path, false, controller?.signal);
+    if (generation !== sessionGeneration) throw staleSessionError();
+    if (!response.ok) return { response, blob: null };
+    const blob = await response.blob();
+    if (generation !== sessionGeneration) throw staleSessionError();
+    return { response, blob };
+  } catch (error) {
+    // An aborted transfer is the session change we caused; report it as that.
+    if (generation !== sessionGeneration && !error?.sessionEnded) throw staleSessionError();
+    throw error;
+  } finally {
+    if (controller) blobControllers.delete(controller);
+  }
 }
 
 async function request(path, options = {}, isRetryAfterRefresh = false) {
@@ -362,6 +398,35 @@ export async function requestAllPages(path, size = 200) {
 }
 
 /**
+ * R4 follow-up: ONE server page of an admin queue, filtered and searched by the server, with the server's own total.
+ * Unlike {@link requestAllPages} nothing is collected up to a cap and filtered in the browser, so the count, the page
+ * numbers and the search always describe the whole queue. Resolves to { rows, total, totalPages }.
+ * In mock mode (no server) the mock list is filtered and sliced here so the screens behave the same.
+ */
+export async function requestPage(path, { page = 0, size = 10, query = "", ...filters } = {}, normalize = (item) => item) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "") params.set(key, String(value)); });
+  const text = String(query || "").trim();
+  if (text) params.set("query", text);
+  params.set("page", String(page));
+  params.set("size", String(size));
+  const result = await request(`${path}?${params.toString()}`);
+  if (USE_MOCKS) {
+    const needle = text.toLowerCase();
+    const all = normalizeList(result)
+      .filter((item) => !filters.status || filters.status === "ALL" || item.status === filters.status)
+      .filter((item) => !filters.maxRating || !(Number(item.rating) > Number(filters.maxRating)))
+      .filter((item) => !needle || JSON.stringify(Object.values(item)).toLowerCase().includes(needle));
+    return { rows: all.slice(page * size, (page + 1) * size).map(normalize), total: all.length, totalPages: Math.max(1, Math.ceil(all.length / size)) };
+  }
+  const body = result?.data ?? result;
+  const items = normalizeList(result);
+  const total = Number.isFinite(Number(body?.totalElements)) ? Number(body.totalElements) : items.length;
+  const totalPages = Math.max(1, Number(body?.totalPages) || Math.ceil(total / size) || 1);
+  return { rows: items.map(normalize), total, totalPages };
+}
+
+/**
  * Carries "this list was cut off" along with the rows. The properties are not enumerable, so existing code that
  * maps, filters or spreads the array keeps working; {@link isTruncated} reads them back, and normalizing a list
  * with {@link carryTruncation} keeps the mark.
@@ -434,14 +499,16 @@ export const api = {
   verificationDocUrl: async (filePath) => {
     if (USE_MOCKS) return null;
     const docPath = `/admin/verification/document?filePath=${encodeURIComponent(filePath)}`;
-    const res = await authedBlobFetch(docPath);
+    const { response: res, blob } = await authedBlob(docPath);
     if (!res.ok) { const e = new Error(`Document load failed (${res.status})`); e.status = res.status; throw e; }
-    return URL.createObjectURL(await res.blob());
+    return URL.createObjectURL(blob);
   },
   reviewReports: () => requestAllPages("/admin/reviews/moderation").then((items) => carryTruncation(items, items.map(normalizeReviewReport))),
   resolveReviewReport: (caseId, action) => request(`/admin/reviews/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
   chatReports: () => requestAllPages("/admin/chat/moderation").then((items) => carryTruncation(items, items.map(normalizeChatReport))),
   resolveChatReport: (caseId, action) => request(`/admin/chat/moderation/${caseId}/resolve?action=${encodeURIComponent(action)}`, { method: "POST" }),
+  /** R4 follow-up: a server page of complaints ({ status, query, page, size }). */
+  complaintsPage: (options) => requestPage("/admin/complaints", options, normalizeComplaint),
   complaints: () => requestAllPages("/admin/complaints").then((items) => carryTruncation(items, items.map(normalizeComplaint))),
   resolveComplaint: (id, notes) => request(`/admin/complaints/${id}/resolve`, { method: "POST", body: JSON.stringify({ notes }) }).then(normalizeComplaint),
   flagComplaint: (id) => request(`/admin/complaints/${id}/flag`, { method: "POST" }),
@@ -582,6 +649,9 @@ export const api = {
   bookingStats: () => request("/admin/bookings/stats"),
   exportBookingList: (query = "", filter = "All") =>
     downloadFile(`/admin/bookings/export?${bookingParams(query, filter)}`, "aiwa-bookings.csv", "text/csv"),
+  /** R4 follow-up: a server page of every review ({ query, maxRating, page, size }). */
+  reviewsPage: (options) => requestPage("/admin/reviews", options, normalizeReview),
+  flagsPage: (options) => requestPage("/admin/flags", options, normalizeFlag),
   reviews: () => requestAllPages("/admin/reviews").then((items) => carryTruncation(items, items.map(normalizeReview))),
   flags: () => requestAllPages("/admin/flags").then((items) => carryTruncation(items, items.map(normalizeFlag)))
 };
@@ -645,13 +715,13 @@ async function downloadFile(path, filename, mime) {
     saveBlob(new Blob([csv], { type: mime }), filename);
     return { ok: true };
   }
-  const response = await authedBlobFetch(path);
+  const { response, blob } = await authedBlob(path);
   if (!response.ok) {
     const error = new Error(`Export failed with status ${response.status}`);
     error.status = response.status;
     throw error;
   }
-  saveBlob(await response.blob(), filename);
+  saveBlob(blob, filename);
   return { ok: true };
 }
 

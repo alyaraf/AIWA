@@ -39,6 +39,7 @@ describe("<App> - every screen renders", () => {
 
   it("opens each sidebar screen without crashing the panel", async () => {
     const { container } = render(<App />);
+    await screen.findByText(/Admin · Super Admin/); // the profile decides which screens are offered (R4-03)
     await screen.findByRole("button", { name: /Dashboard/ });
     const labels = [
       "Safety (SOS)", "Verifications", "Complaints", "Flags", "Users & providers", "Bookings", "Reviews",

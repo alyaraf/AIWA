@@ -424,6 +424,9 @@ export default function App() {
   const [profileError, setProfileError] = useState(false);
   const [profileTry, setProfileTry] = useState(0);
   const [route, setRoute] = useState("dashboard");
+  // R4-03: bumped whenever another tab may have changed who is signed in. It is part of the key of every authenticated
+  // view, so a change drops all mounted screens (and the rows, details and drafts they loaded) at once.
+  const [epoch, setEpoch] = useState(0);
   // E-1: set when the backend answers auth.error.admin_2fa_required.
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
   useEffect(() => {
@@ -496,12 +499,23 @@ export default function App() {
     return () => { alive = false; };
   }, [profileTry]);
 
-  // CR-18: another tab signed out (this tab follows) or signed in / refreshed
-  // (this tab re-reads who is signed in). Storage events only reach other tabs.
+  // CR-18: another tab signed out (this tab follows) or signed in (this tab re-reads who is signed in).
+  // Storage events only reach other tabs.
+  // R4-03: a sign-in elsewhere may be a DIFFERENT account with different permissions, so everything the previous
+  // identity loaded is dropped immediately: the session becomes the unprivileged "loading" one, every mounted screen
+  // is remounted (new key), and the new identity is hydrated before any protected screen is shown again. If the
+  // hydration fails the tab stays unprivileged with a retry; it never falls back to the old identity.
   useEffect(() => {
     const onStorage = (event) => {
       if (USE_MOCKS || !(event.key === null || TOKEN_STORAGE_KEYS.includes(event.key))) return;
-      if (!hasSession()) { setSession(null); setRoute("dashboard"); } else setProfileTry((n) => n + 1);
+      setEpoch((n) => n + 1);
+      setNeedsTwoFactor(false);
+      setSidebarOpen(false);
+      setRoute("dashboard");
+      if (!hasSession()) { setSession(null); return; }
+      setProfileError(false);
+      setSession(LOADING_SESSION);
+      setProfileTry((n) => n + 1);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -522,9 +536,16 @@ export default function App() {
     );
   }
 
+  // R4-03: the whole authenticated tree is keyed by the session epoch (bumped when another tab may have changed the account), and a screen renders only
+  // when this account may use it. While the profile is still loading only the dashboard is offered.
+  const viewKey = `session-${epoch}`;
+  const routeAllowed = session.loading ? route === "dashboard" : (route === "me" || navAllowed(route));
+  const page = (id) => !needsTwoFactor && routeAllowed && route === id;
+
   return (
     <div className="app-shell">
       <Sidebar
+        key={`sidebar-${viewKey}`}
         route={route}
         user={session.user}
         loading={!!session.loading}
@@ -541,7 +562,7 @@ export default function App() {
           setRoute("dashboard"); // next login starts fresh, not on the page you left
         }}
       />
-      <main className="main-panel">
+      <main className="main-panel" key={viewKey}>
         <MobileBar onMenu={() => setSidebarOpen(true)} />
         <TopBar />
         {profileError && session.loading && (
@@ -559,29 +580,35 @@ export default function App() {
             <TotpSetupCard onEnabled={() => { setNeedsTwoFactor(false); refreshApp(); }} />
           </section>
         )}
-        {!needsTwoFactor && route === "dashboard" && <Dashboard onRoute={setRoute} />}
-        {!needsTwoFactor && route === "safety" && <Safety />}
-        {!needsTwoFactor && route === "verifications" && <Verifications />}
-        {!needsTwoFactor && route === "complaints" && <Complaints />}
-        {!needsTwoFactor && route === "flags" && <Flags />}
-        {!needsTwoFactor && route === "users" && <UsersPage currentUser={session.user} />}
-        {!needsTwoFactor && route === "bookings" && <Bookings />}
-        {!needsTwoFactor && route === "reviews" && <Reviews />}
-        {!needsTwoFactor && route === "moderation" && <Moderation />}
-        {!needsTwoFactor && route === "chat-reports" && <ChatReports />}
-        {!needsTwoFactor && route === "settlements" && <Settlements />}
-        {!needsTwoFactor && route === "audit" && <AuditLog />}
-        {!needsTwoFactor && route === "settings" && <Policies />}
-        {!needsTwoFactor && route === "me" && (
+        {page("dashboard") && <Dashboard onRoute={setRoute} />}
+        {page("safety") && <Safety />}
+        {page("verifications") && <Verifications />}
+        {page("complaints") && <Complaints />}
+        {page("flags") && <Flags />}
+        {page("users") && <UsersPage currentUser={session.user} />}
+        {page("bookings") && <Bookings />}
+        {page("reviews") && <Reviews />}
+        {page("moderation") && <Moderation />}
+        {page("chat-reports") && <ChatReports />}
+        {page("settlements") && <Settlements />}
+        {page("audit") && <AuditLog />}
+        {page("settings") && <Policies />}
+        {page("me") && (
           <MyProfile
             currentUser={session.user}
             onBack={() => setRoute("dashboard")}
             onSelfPatch={(patch) => setSession((s) => ({ ...s, user: { ...s.user, ...patch } }))}
           />
         )}
+        {!needsTwoFactor && !routeAllowed && !session.loading && (
+          <section className="page">
+            <InlineBanner tone="warn" title="Not available for this account"
+              body="This screen needs a permission your account does not have. Pick another screen from the menu." />
+          </section>
+        )}
       </main>
       <Toaster />
-      <ConfirmHost />
+      <ConfirmHost key={`confirm-${viewKey}`} />
     </div>
   );
 }
@@ -704,6 +731,8 @@ export function LoginScreen({ onLogin }) {
 // CR-19: screens that must follow a badge (the SOS queue) subscribe here; the
 // badge poll tells them when that screen's count changed.
 const badgeChangeListeners = new Set();
+/** Test-only: what the badge poll does when the SOS count changes. */
+export function __notifyBadgeChange(route) { badgeChangeListeners.forEach((fn) => fn(route)); }
 
 export function useNavBadges() {
   const [badges, setBadges] = useState({});
@@ -738,7 +767,7 @@ function Sidebar({ route, user, loading, open, onClose, onRoute, onLogout, onPro
           <span className="role-tag">Admin</span>
         </div>
         <nav className="nav-list">
-          {navItems.filter((item) => loading || navAllowed(item.id)).map((item) => {
+          {navItems.filter((item) => navAllowed(item.id)).map((item) => {
             const active = item.id === route;
             return (
               <button key={item.id} className={`nav-item ${active ? "active" : ""}`} onClick={() => onRoute(item.id)}>
@@ -1721,14 +1750,16 @@ function ListFooter({ page, pageSize, total, totalPages, onPage }) {
   );
 }
 
-function Complaints() {
-  const { data, setData, error, loading, reload } = useLoad(api.complaints, mock.complaints);
+export function Complaints() {
   const [filter, setFilter] = useState("ALL");
   const [query, setQuery] = useState("");
+  const searched = useDebounced(query);
+  // R4 follow-up: the server filters, searches and pages; the counts and page numbers are the queue's real ones.
+  const { rows: data, setRows: setData, total, totalPages, page, setPage, error, loading, reload } = usePagedQuery(
+    ({ page: p, size }) => api.complaintsPage({ status: filter === "ALL" ? undefined : filter, query: searched, page: p, size }),
+    { key: `${filter}|${searched}`, fallback: mock.complaints }
+  );
   const [busyId, setBusyId] = useState(null);
-  const [page, setPage] = useState(1);
-
-  useEffect(() => { setPage(1); }, [filter, query]);
 
   function resolve(complaint) {
     setConfirm({
@@ -1762,12 +1793,7 @@ function Complaints() {
     });
   }
 
-  const rows = data
-    .filter((item) => filter === "ALL" || item.status === filter)
-    .filter((item) => matchesQuery(item, query, ["customer", "provider", "subject", "priority", "status", "when"]));
-  const totalPages = Math.max(1, Math.ceil(rows.length / LIST_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = rows.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
+  const pageRows = data;
   const chip = (id, label) => (
     <button className={`chip ${filter === id ? "active" : ""}`} onClick={() => setFilter(id)}>{label}</button>
   );
@@ -1777,11 +1803,10 @@ function Complaints() {
       <PageHeader
         eyebrow="Customer reports"
         title="Complaints"
-        right={<>{chip("ALL", `All (${data.length})`)}{chip("OPEN", "Open")}{chip("UNDER_REVIEW", "In review")}{chip("RESOLVED", "Resolved")}</>}
+        right={<>{chip("ALL", filter === "ALL" && total != null ? `All (${total.toLocaleString()})` : "All")}{chip("OPEN", "Open")}{chip("UNDER_REVIEW", "In review")}{chip("RESOLVED", "Resolved")}</>}
       />
       <ReadOnlyNote need="SUPPORT" />
-      <TruncatedNotice list={data} />
-      <SearchBar value={query} onChange={setQuery} placeholder="Search customer, provider, subject, priority, status…" />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search customer, provider, description, category…" />
       <article className="table-card">
         <div className="table-scroll">
           <div className="table header complaints">
@@ -1809,10 +1834,10 @@ function Complaints() {
           ))}
           {loading && <SkeletonRows cols={7} />}
           {error && !loading && <StateBlock variant="error" body={`Could not load complaints: ${error}`} onAction={reload} />}
-          {!loading && !error && rows.length === 0 && <StateBlock variant="empty" icon={Flag} title="No complaints" body="Nothing matches this filter right now." />}
+          {!loading && !error && data.length === 0 && <StateBlock variant="empty" icon={Flag} title="No complaints" body="Nothing matches this filter right now." />}
         </div>
       </article>
-      {!loading && !error && <ListFooter page={safePage} pageSize={LIST_PAGE_SIZE} total={rows.length} totalPages={totalPages} onPage={setPage} />}
+      {!loading && !error && <ListFooter page={page} pageSize={LIST_PAGE_SIZE} total={total ?? data.length} totalPages={totalPages} onPage={setPage} />}
     </section>
   );
 }
@@ -1825,20 +1850,20 @@ const FLAGS = [
 ];
 
 export function Flags() {
-  const { data, setData, error, loading, reload } = useLoad(api.flags, FLAGS);
-  const [openId, setOpenId] = useState(null);
   const [query, setQuery] = useState("");
+  const searched = useDebounced(query);
+  // R4 follow-up: searched and paged by the server (real total and page count).
+  const { rows: data, setRows: setData, total, totalPages, page, setPage, error, loading, reload } = usePagedQuery(
+    ({ page: p, size }) => api.flagsPage({ query: searched, page: p, size }),
+    { key: searched, fallback: FLAGS }
+  );
+  const [openId, setOpenId] = useState(null);
   const [busyId, setBusyId] = useState(null);
   // AD-07: warn / suspend and "close the complaint" are two writes. When the second one fails the first one has
   // already happened, so the row stays, says what was done, and offers a retry of only the closing step.
   const [partial, setPartial] = useState({});
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [query]);
-
-  const filtered = data.filter((f) => matchesQuery(f, query, ["type", "name", "reason", "reporter"]));
-  const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
+  const filtered = data;
+  const pageRows = data;
 
   // Every action here contacts a real person or closes out a complaint — no
   // silent one-tap fires. Even Dismiss goes through a confirm because it's a
@@ -1927,8 +1952,7 @@ export function Flags() {
     <section className="page-content">
       <PageHeader eyebrow="Trust & safety" title="Flags" />
       <ReadOnlyNote need="SUPPORT" />
-      <TruncatedNotice list={data} />
-      <SearchBar value={query} onChange={setQuery} placeholder="Search type, name, reason, reporter…" />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search name, reason, reporter…" />
       <article className="table-card">
         <div className="table-scroll">
           <div className="table header flags">
@@ -1981,7 +2005,7 @@ export function Flags() {
           )}
         </div>
       </article>
-      {!loading && !error && <ListFooter page={safePage} pageSize={LIST_PAGE_SIZE} total={filtered.length} totalPages={totalPages} onPage={setPage} />}
+      {!loading && !error && <ListFooter page={page} pageSize={LIST_PAGE_SIZE} total={total ?? filtered.length} totalPages={totalPages} onPage={setPage} />}
     </section>
   );
 }
@@ -3500,31 +3524,39 @@ function downloadCsv(filename, header, records) {
 
 const REVIEW_FILTERS = ["Reported", "Low rating", "All"];
 
-function Reviews() {
+export function Reviews() {
   const reports = useLoad(api.reviewReports, mock.reviewReports);
-  const all = useLoad(api.reviews, mock.reviews);
   const [filter, setFilter] = useState("Reported");
   const [query, setQuery] = useState("");
+  const searched = useDebounced(query);
   const [busyId, setBusyId] = useState(null);
 
   const isReported = filter === "Reported";
+  // R4 follow-up: "Low rating" and "All" are SERVER pages (search, rating filter, totals and page count come from the
+  // server). The reported-review queue is a short list of cases that leave it once handled, so it stays a loaded list.
+  const all = usePagedQuery(
+    ({ page: p, size }) => api.reviewsPage({ query: searched, maxRating: filter === "Low rating" ? 2 : undefined, page: p, size }),
+    { key: `${filter}|${searched}`, enabled: !isReported, fallback: mock.reviews }
+  );
   const loading = isReported ? reports.loading : all.loading;
   const error = isReported ? reports.error : all.error;
 
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [filter, query]);
-
-  const rows = useMemo(() => {
+  const [reportPage, setReportPage] = useState(1);
+  useEffect(() => { setReportPage(1); }, [query]);
+  const reportRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const match = (record) => !q || [record.from, record.to, record.text, record.reason].some((value) => String(value || "").toLowerCase().includes(q));
-    if (isReported) return reports.data.filter(match);
-    const base = filter === "Low rating" ? all.data.filter((review) => Number(review.rating) > 0 && Number(review.rating) <= 2) : all.data;
-    return base.filter(match);
-  }, [isReported, filter, query, reports.data, all.data]);
+    return reports.data.filter(match);
+  }, [query, reports.data]);
+  const reportPages = Math.max(1, Math.ceil(reportRows.length / LIST_PAGE_SIZE));
+  const safeReportPage = Math.min(reportPage, reportPages);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / LIST_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = rows.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
+  const rows = isReported ? reportRows : all.rows;
+  const totalPages = isReported ? reportPages : all.totalPages;
+  const safePage = isReported ? safeReportPage : all.page;
+  const setPage = isReported ? setReportPage : all.setPage;
+  const rowTotal = isReported ? reportRows.length : (all.total ?? all.rows.length);
+  const pageRows = isReported ? reportRows.slice((safeReportPage - 1) * LIST_PAGE_SIZE, safeReportPage * LIST_PAGE_SIZE) : all.rows;
 
   async function resolveReport(report, action) {
     setBusyId(report.id);
@@ -3559,7 +3591,7 @@ function Reviews() {
         try {
           await runAction(() => api.setReviewVisibility(review.id, true), { success: "Review hidden" });
           // AD-09: it stays in the list, marked hidden, so the next refresh and this view agree.
-          all.setData((current) => current.map((entry) => (entry.id === review.id ? { ...entry, hidden: true, status: "HIDDEN" } : entry)));
+          all.setRows((current) => current.map((entry) => (entry.id === review.id ? { ...entry, hidden: true, status: "HIDDEN" } : entry)));
         } catch { /* toast shown */ } finally { setBusyId(null); }
       }
     });
@@ -3569,7 +3601,7 @@ function Reviews() {
     setBusyId(review.id);
     try {
       await runAction(() => api.setReviewVisibility(review.id, false), { success: "Review restored" });
-      all.setData((current) => current.map((entry) => (entry.id === review.id ? { ...entry, hidden: false, status: "VISIBLE" } : entry)));
+      all.setRows((current) => current.map((entry) => (entry.id === review.id ? { ...entry, hidden: false, status: "VISIBLE" } : entry)));
     } catch { /* toast shown */ } finally { setBusyId(null); }
   }
 
@@ -3593,8 +3625,9 @@ function Reviews() {
         right={
           <>
             <Tag tone={queueCount ? "danger" : "plum"}>{queueCount} in queue</Tag>
-            <button className="btn btn-secondary sm" onClick={exportCsv} disabled={rows.length === 0}>
-              <Download size={14} /> Export CSV
+            <button className="btn btn-secondary sm" onClick={exportCsv} disabled={rows.length === 0}
+              title={isReported ? undefined : "Exports the page shown; narrow the search to export fewer rows"}>
+              <Download size={14} /> {isReported ? "Export CSV" : "Export page CSV"}
             </button>
           </>
         }
@@ -3608,7 +3641,7 @@ function Reviews() {
         onFilter={setFilter}
       />
       <ReadOnlyNote need="SUPPORT" />
-      <TruncatedNotice list={(isReported ? reports.data : all.data)} />
+      {isReported && <TruncatedNotice list={reports.data} />}
 
       {loading && <div className="review-list"><SkeletonRows cols={2} rows={3} /></div>}
       {error && !loading && (
@@ -3676,7 +3709,7 @@ function Reviews() {
           </article>
         ))}
       </div>
-      {!loading && !error && <ListFooter page={safePage} pageSize={LIST_PAGE_SIZE} total={rows.length} totalPages={totalPages} onPage={setPage} />}
+      {!loading && !error && <ListFooter page={safePage} pageSize={LIST_PAGE_SIZE} total={rowTotal} totalPages={totalPages} onPage={setPage} />}
     </section>
   );
 }
@@ -3703,47 +3736,81 @@ function clockTime(ms) {
 }
 
 function SafetyQueue({ status, setStatus }) {
-  const { data, setData, error, loading, reload } = useLoad(() => api.safetyQueue(status), mock.safety);
-  // AD-05: when this list was last confirmed by the server, and whether polling is failing. A silent failure
+  // R4-07: ONE ordered stream of reads. The first load, a manual retry, the global refresh, the badge trigger and the
+  // 15 s poll all go through load(): each read gets a sequence number when it STARTS, and an answer is accepted only if
+  // no newer read was already accepted (so a reversed, older response is dropped), the read was not abandoned by its
+  // timeout, and no local change (closing an alert) happened after it started. Freshness ("Live · updated") is recorded
+  // only for an accepted server read, never inferred from the data changing locally.
+  const [view, setView] = useState(() => ({ data: USE_MOCKS ? mock.safety : [], error: "", loading: true }));
+  const { data, error, loading } = view;
+  const setData = useCallback((next) => setView((v) => ({ ...v, data: typeof next === "function" ? next(v.data) : next })), []);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((key) => key + 1);
+  const [refreshTick, refreshDone] = useRefreshSignal();
+  // AD-05: when this list was last confirmed by the server, and whether reads are failing. A silent failure
   // used to leave the old rows (or "No open SOS alerts") on screen as if they were current.
   const [sync, setSync] = useState({ lastOk: null, failures: 0, lastError: "" });
   const [clock, setClock] = useState(() => Date.now());
-  const pollRef = useRef({ seq: 0, inFlight: false });
+  const [retrying, setRetrying] = useState(false);
+  const order = useRef({ seq: 0, applied: 0, minAccept: 1, pollInFlight: false, alive: true });
 
-  // The first (or a manual) load counts as a confirmation too.
+  /** Starts one read. `quiet` reads never show the skeleton. Resolves true when the read did not fail. */
+  const load = useCallback((quiet) => {
+    const o = order.current;
+    const seq = ++o.seq;
+    const ctx = { abandoned: false };
+    // Only the very first read (nothing accepted yet) replaces the list with a skeleton.
+    if (!quiet && o.applied === 0) setView((v) => ({ ...v, loading: true, error: "" }));
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => { ctx.abandoned = true; reject(Object.assign(new Error("The server did not answer in time."), { timeout: true })); }, SAFETY_POLL_TIMEOUT_MS);
+    });
+    const superseded = () => seq <= o.applied || seq < o.minAccept;
+    return Promise.race([api.safetyQueue(status), timeout])
+      .then((rows) => {
+        if (!o.alive || ctx.abandoned || superseded()) return true; // an older or abandoned read: neither shown nor counted as a confirmation
+        o.applied = seq;
+        setView((v) => ({ data: rows || v.data, error: "", loading: false }));
+        setSync({ lastOk: Date.now(), failures: 0, lastError: "" });
+        return true;
+      })
+      .catch((err) => {
+        if (!o.alive || err?.stale) return true; // an ended or changed session is handled for the whole app
+        if (superseded()) return true; // the failure (or timeout) of a read that a newer answer already replaced
+        const message = err?.status === 403 ? "You don't have permission to view this." : (err?.message || "Network error");
+        if (err?.status === 401) {
+          if (!quiet) { setView((v) => ({ ...v, error: "Session expired. Please sign in again.", loading: false })); onAuthExpired(); }
+          return false;
+        }
+        if (!quiet && o.applied === 0) setView({ data: USE_MOCKS ? mock.safety : [], error: message, loading: false });
+        else setView((v) => ({ ...v, loading: false }));
+        setSync((current) => ({ ...current, failures: current.failures + 1, lastError: message }));
+        return false;
+      })
+      .finally(() => { clearTimeout(timer); });
+  }, [status]);
+
+  // The first load, a Retry, and the global refresh button (AD-06: it reports whether the read worked).
   useEffect(() => {
-    if (!loading && !error) setSync({ lastOk: Date.now(), failures: 0, lastError: "" });
-  }, [loading, error, data]);
+    order.current.alive = true;
+    setRetrying(true);
+    load(false).then((ok) => { setRetrying(false); refreshDone(ok); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey, refreshTick]);
+  useEffect(() => () => { order.current.alive = false; }, []);
 
-  // While the Open filter is shown, reload quietly (no skeleton, typed notes
-  // stay) every 15 s and whenever the sidebar badge count changes. Polls never overlap and a result that
-  // arrives after a newer poll started is ignored, so an old answer cannot overwrite a newer one.
+  // While the Open filter is shown, read quietly (no skeleton, typed notes stay) every 15 s and whenever the
+  // sidebar badge count changes. Periodic reads never overlap each other; ordering against every other read is
+  // load()'s sequence rule.
   useEffect(() => {
     if (status !== "OPEN") return undefined;
-    let alive = true;
-    const poll = pollRef.current;
-    const fail = (message) => setSync((current) => ({ ...current, failures: current.failures + 1, lastError: message }));
+    const o = order.current;
     const refresh = () => {
-      if (poll.inFlight) return Promise.resolve();
-      poll.inFlight = true;
-      const seq = ++poll.seq;
-      let timer;
-      const timeout = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(Object.assign(new Error("The server did not answer in time."), { timeout: true })), SAFETY_POLL_TIMEOUT_MS);
-      });
-      return Promise.race([api.safetyQueue("OPEN"), timeout])
-        .then((rows) => {
-          if (!alive || seq !== poll.seq) return;
-          if (rows) setData(rows);
-          setSync({ lastOk: Date.now(), failures: 0, lastError: "" });
-        })
-        .catch((err) => {
-          if (!alive || err?.status === 401 || err?.stale) return; // an ended session is handled for the whole app
-          if (err?.timeout) poll.seq += 1; // a late answer to this one must not be applied
-          fail(err?.message || "Network error");
-        })
-        .finally(() => { clearTimeout(timer); poll.inFlight = false; });
+      if (o.pollInFlight) return Promise.resolve();
+      o.pollInFlight = true;
+      return load(true).finally(() => { o.pollInFlight = false; });
     };
+    const fail = (message) => setSync((current) => ({ ...current, failures: current.failures + 1, lastError: message }));
     const timer = setInterval(refresh, SAFETY_REFRESH_MS);
     const tick = setInterval(() => setClock(Date.now()), 5_000);
     const onBadge = (route) => { if (route === "safety") refresh(); };
@@ -3753,14 +3820,13 @@ function SafetyQueue({ status, setStatus }) {
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
     return () => {
-      alive = false;
       clearInterval(timer);
       clearInterval(tick);
       badgeChangeListeners.delete(onBadge);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("online", onOnline);
     };
-  }, [status, setData]);
+  }, [status, load]);
   const stale = status === "OPEN" && !loading && !error
     && (sync.failures > 0 || (sync.lastOk != null && clock - sync.lastOk > SAFETY_STALE_AFTER_MS));
   const [notes, setNotes] = useState({});
@@ -3773,6 +3839,10 @@ function SafetyQueue({ status, setStatus }) {
     try {
       await runAction(() => api.resolveSafety(ev.id, text), { success: "SOS closed" });
       setData((current) => status === "OPEN" ? current.filter((e) => e.id !== ev.id) : current);
+      // A local change is not a server confirmation: no freshness is recorded for it. Reads that started before this
+      // closing may still show the alert, so they are ignored, and a fresh read is started to confirm the list.
+      order.current.minAccept = order.current.seq + 1;
+      load(true);
     } catch { /* toast shown */ } finally { setBusyId(null); }
   }
 
@@ -3798,8 +3868,8 @@ function SafetyQueue({ status, setStatus }) {
         <div role="alert" data-testid="sos-stale-banner">
           <InlineBanner tone="danger" title="This list is out of date"
             body={`The server can't be reached${sync.lastError ? ` (${sync.lastError})` : ""}. Last confirmed at ${clockTime(sync.lastOk)}. New SOS alerts may not be shown, so do not rely on an empty list; check the on-call SMS and phone. Retrying every ${SAFETY_REFRESH_MS / 1000} seconds.`} />
-          <button className="btn btn-primary sm" style={{ marginTop: 8 }} onClick={() => { reload(); }}>
-            <RotateCw size={14} /> Retry now
+          <button className="btn btn-primary sm" style={{ marginTop: 8 }} disabled={retrying} onClick={() => { reload(); }}>
+            <RotateCw size={14} /> {retrying ? "Retrying…" : "Retry now"}
           </button>
         </div>
       )}
@@ -5306,6 +5376,59 @@ function useRefreshSignal() {
   }, []);
   const done = useCallback((ok) => { waiters.current.splice(0).forEach((resolve) => resolve(ok)); }, []);
   return [tick, done];
+}
+
+/** The value of [value] once it has stayed the same for [ms] (search boxes: one request per pause, not per keystroke). */
+function useDebounced(value, ms = 300) {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    if (ms <= 0) { setSettled(value); return undefined; }
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}
+
+/**
+ * R4 follow-up: a queue that is paged, filtered and searched by the SERVER. fetchPage({ page, size }) (page is 0-based)
+ * resolves to { rows, total, totalPages } (see requestPage in api.js). "key" names everything the request depends on
+ * besides the page (filter, search text): when it changes the list goes back to page 1. Answers are applied in the order
+ * the requests were made, so a slow older page never replaces a newer one. The global refresh button reloads it and
+ * reports whether the fetch worked.
+ */
+function usePagedQuery(fetchPage, { key = "", size = LIST_PAGE_SIZE, enabled = true, fallback = [] } = {}) {
+  const [pos, setPos] = useState({ key, page: 1 });
+  const page = pos.key === key ? pos.page : 1;
+  const setPage = useCallback((next) => setPos({ key, page: next }), [key]);
+  const [view, setView] = useState(() => ({ rows: USE_MOCKS ? fallback : [], total: null, totalPages: 1, loading: enabled, error: "" }));
+  const [reloadKey, setReloadKey] = useState(0);
+  const [refreshTick, refreshDone] = useRefreshSignal();
+  const latest = useRef(0);
+  useEffect(() => {
+    if (!enabled) { setView((current) => (current.loading ? { ...current, loading: false } : current)); return undefined; }
+    let alive = true;
+    const mine = ++latest.current;
+    setView((current) => ({ ...current, loading: true, error: "" }));
+    fetchPage({ page: page - 1, size })
+      .then((result) => {
+        if (!alive || mine !== latest.current) return;
+        setView({ rows: result.rows, total: result.total, totalPages: result.totalPages, loading: false, error: "" });
+        refreshDone(true);
+      })
+      .catch((err) => {
+        if (!alive || mine !== latest.current || err?.stale) return;
+        if (err?.status === 401) onAuthExpired();
+        setView({
+          rows: USE_MOCKS ? fallback : [], total: null, totalPages: 1, loading: false,
+          error: err?.status === 401 ? "Session expired. Please sign in again." : err?.status === 403 ? "You don't have permission to view this." : (err?.message || "Request failed")
+        });
+        refreshDone(false);
+      });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, page, enabled, reloadKey, refreshTick]);
+  const setRows = useCallback((update) => setView((current) => ({ ...current, rows: typeof update === "function" ? update(current.rows) : update })), []);
+  return { ...view, page, setPage, setRows, reload: () => setReloadKey((n) => n + 1) };
 }
 
 function useLoad(loader, fallback) {
