@@ -12,6 +12,9 @@
 #                                 after a failure and it continues from the journal
 #   discard <id>                  remove the staging directory (after a failed run)
 #   purge <id>                    delete the retained previous content (only after the restore was verified)
+#   status <id>                   exit 0 when a rollback of <id> is possible (the recovery journal or the retained
+#                                 previous content exists), 1 when there is nothing to roll back (R5-03: restore.sh
+#                                 --undo checks this BEFORE it stops the backend or changes the database)
 #
 # Exit codes: 0 done; 1 the command failed and the live files are exactly as before (for swap: the rollback ran
 # and was VERIFIED); 2 usage; 3 RECOVERY FAILED: the live files are in a mixed state, the journal and both
@@ -210,13 +213,18 @@ case "$cmd" in
     rm -rf "$staging"
     ;;
 
+  status)
+    [ -n "$id" ] || { echo "usage: status <id>" >&2; exit 2; }
+    if [ -e "$journal" ] || [ -d "$previous" ]; then echo "rollback possible for $id"; else echo "nothing to roll back for $id (purged, or the restore had no uploads)" >&2; exit 1; fi
+    ;;
+
   purge)
     [ -n "$id" ] || { echo "usage: purge <id>" >&2; exit 2; }
     rm -rf "$previous" "$staging" "$journal"
     ;;
 
   *)
-    echo "usage: uploads_swap.sh preflight|stage|swap|rollback|discard|purge [id]" >&2
+    echo "usage: uploads_swap.sh preflight|stage|swap|rollback|discard|purge|status [id]" >&2
     exit 2
     ;;
 esac

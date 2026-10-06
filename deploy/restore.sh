@@ -19,6 +19,18 @@
 # backups/safety/, covered by the backup container's retention (BACKUP_SAFETY_KEEP_DAYS, kept while the matching
 # .restore-previous-<id> uploads still exist), and the free disk space is checked first.
 #
+# R5-03: ONE supported way to undo a whole restore (database AND uploads together):
+#
+#   ./restore.sh --undo <restore-id>          (the id is in the name backups/safety/pre-restore-<id>.dump[.enc] and in
+#                                              the .restore-previous-<id> directory of the uploads volume)
+#
+# It checks that both halves exist and verifies the saved database BEFORE anything changes, takes a safety copy of the
+# CURRENT database, stops the backend, restores the previous database, rolls the uploads back from the recovery journal
+# (verified) and starts the backend ONLY when both succeeded. If either half fails the backend stays STOPPED, every
+# recovery artifact is kept and the exact commands to continue are printed. Do not undo by hand in two steps: restoring
+# the safety dump alone with this script starts the backend while the uploads are still the restored ones.
+# UNDO_DB_ONLY=1 ./restore.sh --undo <id> restores only the database (for a restore that was made without uploads).
+#
 # R4-01: the backend is started again ONLY when the database and the uploads are known to be consistent: either the
 # restore completed, or both were verifiably rolled back. If the uploads rollback cannot be proven, or the database cannot be
 # put back, the backend stays STOPPED and the message says what is where.
@@ -26,10 +38,21 @@ set -euo pipefail
 umask 077 # everything created below (temp dir, plaintext dump and tarball) is private to this user
 cd "$(dirname "$0")"
 
-dump="${1:?usage: ./restore.sh <db dump> [uploads tarball]}"
-uploads="${2:-}"
-[ -f "$dump" ] || { echo "no such dump: $dump" >&2; exit 1; }
-[ -z "$uploads" ] || [ -f "$uploads" ] || { echo "no such tarball: $uploads" >&2; exit 1; }
+undo_id=""
+if [ "${1:-}" = "--undo" ]; then
+  # R5-03: the previous database is the safety copy this restore saved; the previous uploads are in the volume.
+  undo_id="${2:?usage: ./restore.sh --undo <restore-id>}"
+  case "$undo_id" in *[!A-Za-z0-9-]*) echo "invalid restore id: $undo_id" >&2; exit 1 ;; esac
+  uploads=""
+  if [ -f "backups/safety/pre-restore-$undo_id.dump.enc" ]; then dump="backups/safety/pre-restore-$undo_id.dump.enc"
+  elif [ -f "backups/safety/pre-restore-$undo_id.dump" ]; then dump="backups/safety/pre-restore-$undo_id.dump"
+  else echo "no safety copy backups/safety/pre-restore-$undo_id.dump[.enc]: this restore cannot be undone with --undo (nothing was changed)" >&2; exit 1; fi
+else
+  dump="${1:?usage: ./restore.sh <db dump> [uploads tarball]  |  ./restore.sh --undo <restore-id>}"
+  uploads="${2:-}"
+  [ -f "$dump" ] || { echo "no such dump: $dump" >&2; exit 1; }
+  [ -z "$uploads" ] || [ -f "$uploads" ] || { echo "no such tarball: $uploads" >&2; exit 1; }
+fi
 
 key="${BACKUP_KEY_FILE:-secrets/backup.key}"
 openssl_bin="${OPENSSL_BIN:-openssl}"
@@ -121,16 +144,34 @@ if [ "$(fs_of "$tmp")" = "$(fs_of backups/safety)" ]; then need_each=$((need_kb 
 # failed extraction can no longer leave the database replaced and the files gone.
 restore_id=$(date -u +%Y%m%d-%H%M%S)-$$
 swap() { "${compose[@]}" run --rm -T --entrypoint sh backup /uploads_swap.sh "$@"; }
+# R5-03: runnable recovery commands, printed verbatim in every message that sends the operator to the shell.
+compose_cmd="docker compose -f docker-compose.prod.yml"
+swap_cmd="$compose_cmd run --rm -T --entrypoint sh backup /uploads_swap.sh"
 if [ -n "$uploads" ]; then
   swap preflight < "$tmp/uploads.tgz" || die "the uploads volume cannot hold a staged copy of $uploads"
   swap stage "$restore_id" < "$tmp/uploads.tgz" || { swap discard "$restore_id" < /dev/null > /dev/null 2>&1 || true; die "the uploads could not be extracted (disk full or damaged archive)"; }
 fi
 
-echo "This replaces the live database${uploads:+ and uploads} with:"
-echo "  $dump"; [ -n "$uploads" ] && echo "  $uploads"
-if [ "${ASSUME_YES:-}" != "1" ]; then
-  read -r -p "Type RESTORE to continue: " answer
-  [ "$answer" = "RESTORE" ] || { [ -z "$uploads" ] || swap discard "$restore_id" < /dev/null > /dev/null 2>&1 || true; echo "cancelled"; exit 1; }
+if [ -n "$undo_id" ]; then
+  # R5-03: both halves must be there BEFORE the backend is stopped: the journal / previous uploads of this restore.
+  if [ "${UNDO_DB_ONLY:-0}" != 1 ]; then
+    swap status "$undo_id" < /dev/null || die "the previous uploads of restore $undo_id are not in the volume, so the pair cannot be undone (set UNDO_DB_ONLY=1 only if that restore had no uploads)"
+  fi
+  if [ "${UNDO_DB_ONLY:-0}" = 1 ]; then scope="database (only)"; else scope="database and uploads"; fi
+  echo "This UNDOES restore $undo_id: the live $scope go back to the state saved before it."
+  echo "  previous database: $dump"; [ "${UNDO_DB_ONLY:-0}" = 1 ] || echo "  previous uploads:  .restore-previous-$undo_id in the uploads volume"
+  echo "Everything written since that restore is lost. The current database is saved to a new safety copy first."
+  if [ "${ASSUME_YES:-}" != "1" ]; then
+    read -r -p "Type UNDO to continue: " answer
+    [ "$answer" = "UNDO" ] || { echo "cancelled"; exit 1; }
+  fi
+else
+  echo "This replaces the live database${uploads:+ and uploads} with:"
+  echo "  $dump"; [ -n "$uploads" ] && echo "  $uploads"
+  if [ "${ASSUME_YES:-}" != "1" ]; then
+    read -r -p "Type RESTORE to continue: " answer
+    [ "$answer" = "RESTORE" ] || { [ -z "$uploads" ] || swap discard "$restore_id" < /dev/null > /dev/null 2>&1 || true; echo "cancelled"; exit 1; }
+  fi
 fi
 
 # Keep the app from writing while the data is swapped.
@@ -140,6 +181,9 @@ backend_stopped=1
 # A copy of the live database taken now, so that if the files cannot be swapped after the database was restored
 # the database can be put back too: the pair is rolled back together (R4-06: verified, encrypted, 600, in backups/safety).
 safety_final="backups/safety/pre-restore-$restore_id.dump"
+# R5-03: the copy of the CURRENT database an undo takes is not the safety copy of any restore (no previous uploads belong to
+# it), so the backup retention removes it with the other old safety copies.
+[ -z "$undo_id" ] || safety_final="backups/safety/pre-restore-undo-$restore_id.dump"
 [ "$safety_enc" = 1 ] && safety_final="$safety_final.enc"
 abort_with_backend() { # the safety copy could not be made: nothing was changed, so the backend can run again
   rm -f "$safety_final.partial"
@@ -171,6 +215,15 @@ put_db_back() {
 # One transaction that stops at the first error: if anything still goes wrong, the live database is
 # rolled back to how it was instead of being left half-restored.
 if ! "${compose[@]}" exec -T postgres sh -c 'pg_restore --clean --if-exists --no-owner --single-transaction --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$tmp/db.dump"; then
+  if [ -n "$undo_id" ]; then
+    # R5-03: single transaction, so the database is unchanged and the uploads were not touched yet: the restored pair is
+    # intact. The backend is still left stopped: the operator asked for an undo that did not happen, and decides.
+    echo "the undo failed: the previous database could not be restored (it was rolled back, so database and uploads are both still the restored pair; nothing else was changed)." >&2
+    echo "  The backend stays STOPPED. Fix the cause and repeat:  ./restore.sh --undo $undo_id" >&2
+    echo "  To give up on the undo and run the restored pair as it is:  $compose_cmd start backend" >&2
+    echo "  The current database was saved to $safety." >&2
+    exit 1
+  fi
   [ -z "$uploads" ] || swap discard "$restore_id" < /dev/null > /dev/null 2>&1 || true
   "${compose[@]}" start backend
   backend_stopped=0
@@ -185,9 +238,10 @@ if [ -n "$uploads" ]; then
       # Exit 3 (or anything unexpected): the uploads rollback could NOT be proven. The files are in a mixed state, so no
       # database state is consistent with them. Do not touch the database; do not start the backend.
       echo "the uploads swap failed AND its rollback could not be verified (exit $swap_rc). The backend stays STOPPED." >&2
-      echo "  The database is the RESTORED one; the previous database is in $safety (restore.sh $safety puts it back)." >&2
+      echo "  The database is the RESTORED one; the previous database is in $safety." >&2
       echo "  The uploads recovery journal and the previous files are kept in the volume (.restore-previous-$restore_id, .restore-journal-$restore_id)." >&2
-      echo "  Fix the cause, then: docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh rollback $restore_id  (repeat until it succeeds), then restore.sh $safety" >&2
+      echo "  Fix the cause, then EITHER finish both halves in one step (the backend stays stopped until both are done):  ./restore.sh --undo $restore_id" >&2
+      echo "  OR by hand:  $swap_cmd rollback $restore_id  (repeat until it succeeds), then ./restore.sh $safety  (restores only the database: the uploads are the previous ones again by then)" >&2
       exit 1
     fi
     # Exit 1: the swap put the old files back and verified it. The database is already the restored one, so restore the
@@ -199,7 +253,23 @@ if [ -n "$uploads" ]; then
       die "the uploads could not be swapped in; database and uploads are both back as they were and the backend is running again"
     fi
     # Cannot happen unless the database is unreachable: stay stopped, with everything needed for a manual fix.
-    die "the uploads could not be swapped in AND the database could not be put back. The backend stays STOPPED. Previous database: $safety (restore.sh it); previous uploads are intact in the volume"
+    die "the uploads could not be swapped in AND the database could not be put back. The backend stays STOPPED. Previous database: $safety (./restore.sh $safety puts it back; the uploads are the previous ones again and intact in the volume)"
+  fi
+fi
+
+if [ -n "$undo_id" ] && [ "${UNDO_DB_ONLY:-0}" != 1 ]; then
+  # R5-03: the second half of the undo, with the backend still stopped. The rollback is journal-driven and verified; it
+  # is resumable, so a failure here is repeated, not worked around.
+  undo_rc=0
+  swap rollback "$undo_id" < /dev/null || undo_rc=$?
+  if [ "$undo_rc" -ne 0 ]; then
+    echo "the undo is INCOMPLETE: the previous database is back, but the previous uploads could not be (exit $undo_rc, not verified)." >&2
+    echo "  The backend stays STOPPED: starting it now would run the previous database on files that are not the previous ones." >&2
+    echo "  The recovery journal and the previous files are kept (.restore-journal-$undo_id, .restore-previous-$undo_id in the uploads volume)." >&2
+    echo "  Fix the cause (disk, permissions), then repeat until it succeeds:  $swap_cmd rollback $undo_id" >&2
+    echo "  When it has succeeded, and only then:  $compose_cmd start backend" >&2
+    echo "  The database as it was before this undo: $safety (./restore.sh $safety restores it, with the backend started again)." >&2
+    exit 1
   fi
 fi
 
@@ -209,7 +279,7 @@ backend_stopped=0
 # Missing ones are listed (a dump and an uploads tarball are two snapshots, see docs/runbooks.md), never fatal.
 # R4: a failed reference query or an incomplete list is reported as a FAILED scan, never as "0 missing".
 reconcile="not applicable (no uploads restored)"
-if [ -n "$uploads" ] && [ -f backup/reconcile_uploads.sh ]; then
+if { [ -n "$uploads" ] || { [ -n "$undo_id" ] && [ "${UNDO_DB_ONLY:-0}" != 1 ]; }; } && [ -f backup/reconcile_uploads.sh ]; then
   if "${compose[@]}" exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -F "|" -f -' < backup/uploads_references.sql > "$tmp/refs.txt" 2> "$tmp/refs.err"; then
     if "${compose[@]}" run --rm -T --entrypoint sh backup /reconcile_uploads.sh < "$tmp/refs.txt"; then
       reconcile="completed"
@@ -223,11 +293,17 @@ if [ -n "$uploads" ] && [ -f backup/reconcile_uploads.sh ]; then
     FAILED*) echo "RECONCILIATION NOT PERFORMED: ${reconcile#FAILED }. This is NOT a zero-missing result: check the restored files by hand before relying on them." >&2 ;;
   esac
 fi
-echo "restored; reconciliation: $reconcile; check https://\$API_DOMAIN/api/actuator/health"
-if [ -n "$uploads" ]; then
+echo "$([ -n "$undo_id" ] && echo undone || echo restored); reconciliation: $reconcile; check https://\$API_DOMAIN/api/actuator/health"
+if [ -n "$undo_id" ]; then
+  echo "Restore $undo_id was UNDONE: database and uploads are the ones from before it, and the backend is running again."
+  echo "The database as it was just before this undo is in $safety (encrypted: $([ "$safety_enc" = 1 ] && echo yes || echo NO)); it is removed by the backup retention (BACKUP_SAFETY_KEEP_DAYS) or by hand."
+  [ "${UNDO_DB_ONLY:-0}" = 1 ] || echo "The files of the undone restore are kept in the volume as .restore-staging-$undo_id until you purge them:  $swap_cmd purge $undo_id"
+  echo "The safety copy of restore $undo_id (backups/safety/pre-restore-$undo_id.dump*) is no longer needed: remove it when you are sure."
+elif [ -n "$uploads" ]; then
   echo "Previous uploads kept in the volume as .restore-previous-$restore_id and the previous database in $safety (encrypted: $([ "$safety_enc" = 1 ] && echo yes || echo NO))."
-  echo "After you have checked the app, free the space:  docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh purge $restore_id  &&  rm -f backups/safety/pre-restore-$restore_id.dump*"
-  echo "To undo the whole restore instead:  restore.sh $safety   and   uploads_swap.sh rollback $restore_id"
+  echo "After you have checked the app, free the space:  $swap_cmd purge $restore_id  &&  rm -f backups/safety/pre-restore-$restore_id.dump*"
+  echo "To undo the WHOLE restore (database and uploads together; the backend stays stopped until both are back):  ./restore.sh --undo $restore_id"
+  echo "Do not undo in two separate steps: restoring the safety dump alone starts the backend on the restored uploads."
 else
   echo "The previous database is in $safety (encrypted: $([ "$safety_enc" = 1 ] && echo yes || echo NO)); it is removed by the backup retention (BACKUP_SAFETY_KEEP_DAYS) or by hand."
 fi

@@ -6,7 +6,9 @@
 # Backups take the dump FIRST and the tarball second on purpose: that order can only produce missing files for
 # uploads deleted inside the window, never for ones created inside it, and orphans are harmless.
 #
-# Input (stdin): "kind|value" lines from uploads_references.sql, ending with the terminator line "done|ok".
+# Input (stdin): "kind|value" lines from uploads_references.sql, ending with the terminator line "done|ok". backup.sh
+# feeds it the references read from the scratch restore of the dump being archived (R5-02), restore.sh the restored
+# database's; never the references of a live database that has moved on since the dump.
 # Output: a summary, and every missing file.
 # Exit code: 0 the scan COMPLETED (missing files are reported, not fatal: restore.sh does not fail a restore over
 # them); 2 the scan did NOT complete (the input has no terminator because the reference query failed or was cut off).

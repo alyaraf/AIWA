@@ -134,5 +134,14 @@ reset_live; run stage R1 < "$work/good.tgz" > /dev/null; run swap R1 > /dev/null
 check "purge frees the retained previous files" 'run purge R1 && [ ! -e "$live/.restore-previous-R1" ]'
 check "...and keeps the restored ones" '[ -f "$live/public/avatars/n1.jpg" ]'
 
+# --- status (R5-03): restore.sh --undo asks before it stops anything -------------------------------------------------------
+reset_live
+check "status: nothing swapped yet, nothing to roll back (exit 1)" '! run status S1 > /dev/null 2>&1'
+run stage S1 < "$work/good.tgz" > /dev/null; run swap S1 > /dev/null
+check "status: after a swap a rollback is possible (exit 0)" 'run status S1 > /dev/null 2>&1'
+run rollback S1 > /dev/null 2>&1; run purge S1
+check "status: after purge there is nothing to roll back (exit 1)" '! run status S1 > /dev/null 2>&1'
+check "status: an id is required (exit 2)" 'run status > /dev/null 2>&1; [ $? -eq 2 ]'
+
 echo "$pass passed, $failed failed"
 [ "$failed" -eq 0 ]

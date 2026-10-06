@@ -50,10 +50,16 @@ encrypt() {
 
 # SA-04: pg_restore --list reads only the table of contents, so a dump cut off in its payload passed
 # it. Restoring into a throwaway database proves the whole file reads back.
+# R5-02: while that scratch restore exists it is the only place that holds the DUMP's own state, so the file references
+# are read from it (psql -d <scratch>, never the live database) into $2. A failed or incomplete read leaves no $2 (or
+# one without the terminator); it never fails the verification, but reconcile_pair then reports the scan as failed.
 verify_dump() {
   v="aiwa_verify_$$"
   createdb "$v" || return 1
   if pg_restore --no-owner --exit-on-error -d "$v" "$1" > /dev/null 2>&1; then
+    if [ -n "${2:-}" ] && [ -f "$REFERENCES_SQL" ]; then
+      psql -d "$v" -v ON_ERROR_STOP=1 -tA -F '|' -f "$REFERENCES_SQL" > "$2" 2> /dev/null || rm -f "$2"
+    fi
     dropdb --if-exists "$v" > /dev/null 2>&1 || true
     return 0
   fi
@@ -61,27 +67,32 @@ verify_dump() {
   return 1
 }
 
-# R4/I-03: reconcile the pair WHILE the backup is made. The database references are read right after the dump
-# (psql, the same connection settings as pg_dump) and checked against the file list of the tarball just written. A failed
-# query, a missing script or an incomplete list is recorded as "failed", never as zero missing files. This never fails
-# the backup (a file deleted inside the window is expected); it is visible in the manifest, the log and the metrics
-# (aiwa_backup_reconcile_ok, aiwa_backup_missing_references; alert BackupReconcileFailed).
+# R4/I-03, R5-02: reconcile the pair WHILE the backup is made. The references are the DUMP's: verify_dump reads them from
+# the scratch restore of the very dump that is being archived ($refs_file), and they are checked against the file list
+# of the tarball just written. The live database is never consulted (it moves on after the dump, so a file deleted from
+# the volume together with its row would look clean). A failed scratch query, a missing script or an incomplete list is
+# recorded as "failed", never as zero missing files. This never fails the backup (a file deleted inside the window is
+# expected); it is visible in the manifest, the log and the metrics (aiwa_backup_reconcile_ok,
+# aiwa_backup_missing_references; alert BackupReconcileFailed).
+# Limits: the dump and the tarball are still two snapshots (docs/runbooks.md "Backup consistency"). This finds files the
+# dump references that the tarball lacks; it does not detect a file replaced under the same name, a corrupt image, or a
+# file that was uploaded and referenced only after the dump (an orphan in the tarball, harmless).
 reconcile_status=failed; missing_refs=-1
 reconcile_pair() {
   reconcile_status=failed; missing_refs=-1
   [ -f "$RECONCILE_SCRIPT" ] && [ -f "$REFERENCES_SQL" ] || { echo "$(date -u +%FT%TZ) reconciliation unavailable: scripts not mounted" >&2; return 0; }
-  rl=$(mktemp) || return 0; rr=$(mktemp) || { rm -f "$rl"; return 0; }
+  [ -n "${refs_file:-}" ] && [ -s "$refs_file" ] || { echo "$(date -u +%FT%TZ) RECONCILIATION FAILED: no file references could be read from the dump's scratch restore" >&2; return 0; }
+  rl=$(mktemp) || return 0
   if tar -tzf "$1" > "$rl.raw" 2> /dev/null &&
-     { sed 's|^\./||' "$rl.raw" | grep -v '/$' | grep -v '^$' > "$rl"; true; } &&
-     psql -v ON_ERROR_STOP=1 -tA -F '|' -f "$REFERENCES_SQL" > "$rr" 2> /dev/null; then
-    if out=$(RECONCILE_FILE_LIST="$rl" sh "$RECONCILE_SCRIPT" < "$rr"); then
+     { sed 's|^\./||' "$rl.raw" | grep -v '/$' | grep -v '^$' > "$rl"; true; }; then
+    if out=$(RECONCILE_FILE_LIST="$rl" sh "$RECONCILE_SCRIPT" < "$refs_file"); then
       missing_refs=$(printf '%s\n' "$out" | sed -n 's/^reconcile: [0-9]* database references checked, \([0-9]*\) missing.*/\1/p')
       if [ -n "$missing_refs" ]; then reconcile_status=ok; else missing_refs=-1; fi
       printf '%s\n' "$out" | sed "s|^|$(date -u +%FT%TZ) |"
     fi
   fi
   [ "$reconcile_status" = ok ] || echo "$(date -u +%FT%TZ) RECONCILIATION FAILED: the database references could not be checked against this backup (not a zero-missing result)" >&2
-  rm -f "$rl" "$rl.raw" "$rr"
+  rm -f "$rl" "$rl.raw"
   return 0
 }
 
@@ -102,7 +113,16 @@ prune_safety() {
   done
 }
 
+# The references read from the dump's scratch restore are kept in a temp file for the run and removed on every exit path.
 run_backup() {
+  refs_file=$(mktemp) || refs_file=""
+  do_backup
+  rc=$?
+  [ -z "$refs_file" ] || rm -f "$refs_file"
+  return $rc
+}
+
+do_backup() {
   stamp=$(date -u +%Y%m%d-%H%M%S)
   dump="$OUT/db/aiwa-$stamp.dump"
   tarball="$OUT/uploads/uploads-$stamp.tar.gz"
@@ -126,7 +146,7 @@ run_backup() {
   if [ "$size" -lt "$MIN_DUMP_BYTES" ]; then
     rm -f "$dump.partial"; fail "dump is only $size bytes"; return 1
   fi
-  if ! verify_dump "$dump.partial"; then
+  if ! verify_dump "$dump.partial" "$refs_file"; then
     rm -f "$dump.partial"; fail "the dump does not restore into a scratch database"; return 1
   fi
   if [ "$encrypted" = 1 ]; then
@@ -140,7 +160,8 @@ run_backup() {
   # guarantee: the dump is taken first, so every file the dump references that still existed when tar ran is in the
   # tarball. What can differ: a file deleted between the two (the dump still points at it: "missing") and a file
   # uploaded between the two (in the tarball, not in the dump: an "orphan", harmless). restore.sh prints that
-  # reconciliation after a restore (backup/reconcile_uploads.sh); docs/runbooks.md "Backup consistency".
+  # reconciliation after a restore (backup/reconcile_uploads.sh); docs/runbooks.md "Backup consistency". R5-02: the pair is
+  # also reconciled right here, from the references of the dump's own scratch restore (reconcile_pair).
   tar_started=$(date -u +%FT%TZ)
   if ! tar -czf "$tarball.partial" -C "$UPLOADS" .; then
     rm -f "$tarball.partial"; fail "tar of uploads failed"; return 1

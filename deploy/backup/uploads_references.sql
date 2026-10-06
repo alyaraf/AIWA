@@ -1,4 +1,4 @@
--- Every file the database points at, as "kind|value" lines (psql -tA -F "|"). Read by backup/reconcile_uploads.sh.
+-- Every file the database (or the scratch restore of a dump) points at, as "kind|value" lines (psql -tA -F "|"). Read by backup/reconcile_uploads.sh.
 -- public values are URL paths (/files/public/<folder>/<file>), private values are the stored paths
 -- (uploads/private/<sub>/<file>). Both live under the uploads volume.
 -- The last row, done|ok, is a terminator: a list without it is incomplete (the query failed or was cut off) and

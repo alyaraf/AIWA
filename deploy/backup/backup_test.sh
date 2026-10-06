@@ -21,16 +21,29 @@ printf '#!/bin/sh\nexit 0\n' > "$tmp/stubs/dropdb"
 cat > "$tmp/stubs/tar" <<'S'
 #!/bin/sh
 [ "${STUB_FAIL:-}" = tar ] && exit 1
-if [ "$1" = -tzf ]; then printf './\n./public/\n./public/a.jpg\n'; exit 0; fi   # the listing of the tarball (R4 reconciliation)
+if [ "$1" = -tzf ]; then   # the listing of the tarball (R4 reconciliation); STUB_TAR_NO_A=1: a.jpg was deleted before tar ran (R5-02)
+  printf './\n./public/\n'; [ "${STUB_TAR_NO_A:-}" = 1 ] || printf './public/a.jpg\n'; exit 0
+fi
 printf uploads | gzip -n > "$2"
 S
 cat > "$tmp/stubs/psql" <<'S'
 #!/bin/sh
-# the file-reference query: rows then the done|ok terminator
-[ "${STUB_FAIL:-}" = psql ] && { echo "psql: connection refused" >&2; exit 2; }
-printf 'public|/files/public/a.jpg\n'
-[ -n "${STUB_MISSING_REF:-}" ] && printf 'public|/files/public/deleted.jpg\n'
-[ "${STUB_NO_TERMINATOR:-}" = 1 ] || printf 'done|ok\n'
+# R5-02: the file-reference query is answered per database. The scratch restore of the dump (psql -d aiwa_verify_*)
+# holds the DUMP's references; any other connection is the LIVE database, which has moved on (STUB_LIVE_REFS=none:
+# the file and its row were deleted after the dump). Rows, then the done|ok terminator.
+db=""; while [ $# -gt 0 ]; do [ "$1" = -d ] && db="$2"; shift; done
+case "$db" in
+  aiwa_verify_*)
+    [ "${STUB_FAIL:-}" = psql ] || [ "${STUB_FAIL:-}" = psql_scratch ] && { echo "psql: connection refused" >&2; exit 2; }
+    printf 'public|/files/public/a.jpg\n'
+    [ -n "${STUB_MISSING_REF:-}" ] && printf 'public|/files/public/deleted.jpg\n'
+    [ "${STUB_PARTIAL_THEN_FAIL:-}" = 1 ] && { echo "psql: connection lost" >&2; exit 2; }
+    [ "${STUB_NO_TERMINATOR:-}" = 1 ] || printf 'done|ok\n' ;;
+  *)
+    [ "${STUB_FAIL:-}" = psql ] && { echo "psql: connection refused" >&2; exit 2; }
+    [ "${STUB_LIVE_REFS:-}" = none ] || printf 'public|/files/public/a.jpg\n'
+    printf 'done|ok\n' ;;
+esac
 S
 chmod +x "$tmp/stubs/"*
 
@@ -61,6 +74,19 @@ check "a failed reference query does not fail the backup" '[ $rc -eq 0 ] && [ -f
 check "...but is recorded as failed: manifest, metric and log, never as 0 missing" 'grep -q "\"reconcile\":\"failed\"" "$d"/out/manifest/snapshot-*.json && [ "$(metric "$d" aiwa_backup_reconcile_ok)" = 0 ] && [ "$(metric "$d" aiwa_backup_missing_references)" = -1 ] && grep -q "RECONCILIATION FAILED" "$d/log" && ! grep -q " 0 missing" "$d/log"'
 d="$tmp/recpartial"; run_backup "$d" STUB_NO_TERMINATOR=1
 check "an incomplete reference list (no terminator) is also a failed scan" '[ "$(metric "$d" aiwa_backup_reconcile_ok)" = 0 ] && grep -q "RECONCILIATION FAILED" "$d/log"'
+
+# R5-02: the references come from the dump's scratch restore, never from the live database
+d="$tmp/recdump"; mkdir -p "$d/tmpdir"; run_backup "$d" TMPDIR="$d/tmpdir" STUB_TAR_NO_A=1 STUB_LIVE_REFS=none
+check "R5-02: a file deleted together with its live row before tar is still missing for the dump" '[ $rc -eq 0 ] && [ "$(metric "$d" aiwa_backup_missing_references)" = 1 ] && [ "$(metric "$d" aiwa_backup_reconcile_ok)" = 1 ] && grep -q "\"missing_references\":1" "$d"/out/manifest/snapshot-*.json && grep -q "MISSING public /files/public/a.jpg" "$d/log"'
+check "R5-02: the reference temp file is removed" '[ -z "$(ls -A "$d/tmpdir")" ]'
+d="$tmp/reclive"; run_backup "$d" STUB_LIVE_REFS=none
+check "R5-02: references deleted from the live database after the dump do not hide a file the tarball holds, or invent a miss" '[ "$(metric "$d" aiwa_backup_missing_references)" = 0 ] && [ "$(metric "$d" aiwa_backup_reconcile_ok)" = 1 ]'
+d="$tmp/recscratchfail"; run_backup "$d" STUB_FAIL=psql_scratch STUB_TAR_NO_A=1
+check "R5-02: a failed scratch query is a failed scan even though the live database would answer (no fallback to it)" '[ $rc -eq 0 ] && grep -q "\"reconcile\":\"failed\"" "$d"/out/manifest/snapshot-*.json && [ "$(metric "$d" aiwa_backup_reconcile_ok)" = 0 ] && [ "$(metric "$d" aiwa_backup_missing_references)" = -1 ] && ! grep -q " 0 missing" "$d/log"'
+d="$tmp/recpartialfail"; run_backup "$d" STUB_PARTIAL_THEN_FAIL=1
+check "R5-02: a scratch query that dies after some rows is a failed scan, not a short clean list" '[ $rc -eq 0 ] && [ "$(metric "$d" aiwa_backup_reconcile_ok)" = 0 ] && [ "$(metric "$d" aiwa_backup_missing_references)" = -1 ] && grep -q "RECONCILIATION FAILED" "$d/log"'
+d="$tmp/recnoterm"; run_backup "$d" STUB_NO_TERMINATOR=1 STUB_TAR_NO_A=1
+check "R5-02: an incomplete scratch list never reports zero missing" '[ "$(metric "$d" aiwa_backup_reconcile_ok)" = 0 ] && ! grep -q " 0 missing" "$d/log"'
 
 # R4-06: the pre-restore safety copies are retained by the same job: old ones go, one whose previous uploads were not purged stays
 d="$tmp/safety"; mkdir -p "$d/out/safety" "$d/uploads-src/.restore-previous-20200101-000000-1"

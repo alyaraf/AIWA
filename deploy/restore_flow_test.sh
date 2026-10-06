@@ -187,5 +187,68 @@ check "M: a failed reference query is reported as NOT PERFORMED, never as 0 miss
 new_case N; restore N FAKE_REFS_TRUNCATED=1
 check "N: an incomplete reference list (no terminator) is also a failed scan" 'grep -q "RECONCILIATION NOT PERFORMED" "$work/N/out" && ! grep -q " 0 missing" "$work/N/out"'
 
+# --- U (R5-03): ONE paired undo: backend stopped for both halves, started only when both are back -------------------------
+# undo <case> <id> [VAR=value ...]: restore.sh --undo <id> in that case's deploy dir; the log is reset first
+undo() {
+  c="$work/$1"; id="$2"; shift 2; : > "$c/log"
+  ( cd "$c/deploy" && env PATH="$work/bin:$PATH" FAKE_LOG="$c/log" FAKE_STATE="$c/state" FAKE_VOLUME="$c/volume" \
+      FAKE_DEPLOY="$c/deploy" ASSUME_YES=1 BACKUP_ALLOW_UNENCRYPTED=${BACKUP_ALLOW_UNENCRYPTED:-1} "$@" bash ./restore.sh --undo "$id" ) > "$c/undo-out" 2>&1
+  urc=$?
+}
+rid_of() { ls "$work/$1/deploy/backups/safety" | sed -n 's/^pre-restore-\(.*\)\.dump.*/\1/p' | grep -v '^undo-' | head -1; }
+starts_after() { awk -v n="$2" 'NR>n && /^start backend/ { c++ } END { print c+0 }' "$work/$1/log"; }
+
+new_case U; restore U; uid=$(rid_of U)
+check "U: the restore itself succeeded and printed the single supported undo command" '[ $rc -eq 0 ] && grep -q "./restore.sh --undo $uid" "$work/U/out"'
+undo U "$uid"
+check "U: the undo succeeds" '[ $urc -eq 0 ]'
+check "U: it puts back BOTH the old database (fed the safety dump) and the old uploads" 'called U "db-restore #2 input=SAFETY-DUMP-OF-LIVE" && [ -f "$work/U/volume/public/avatars/a1.jpg" ] && [ ! -e "$work/U/volume/public/avatars/n1.jpg" ]'
+check "U: the backend is stopped BEFORE either half is changed" '[ "$(line_of U "^stop ")" -lt "$(line_of U "db-restore #2")" ] && [ "$(line_of U "^stop ")" -lt "$(line_of U "uploads_swap.sh rollback")" ]'
+check "U: NO backend start between the database restore and the uploads rollback" '[ "$(line_of U "db-restore #2")" -lt "$(line_of U "uploads_swap.sh rollback")" ] && [ "$(grep -c "^start backend" "$work/U/log")" -eq 1 ] && [ "$(line_of U "uploads_swap.sh rollback")" -lt "$(line_of U "^start backend")" ]'
+check "U: the previous uploads and journal are consumed; the undone restore's files are kept as .restore-staging until purged" '! ls "$work/U/volume/".restore-previous-* > /dev/null 2>&1 && ! ls "$work/U/volume/".restore-journal-* > /dev/null 2>&1 && [ -f "$work/U/volume/".restore-staging-"$uid"/public/avatars/n1.jpg ] && grep -q "uploads_swap.sh purge $uid" "$work/U/undo-out"'
+check "U: a safety copy of the current database was taken first, and it is not mistaken for the restore's own" 'ls "$work/U/deploy/backups/safety"/pre-restore-undo-*.dump > /dev/null 2>&1 && [ -e "$work/U/deploy/backups/safety/pre-restore-$uid.dump" ]'
+check "U: the output says the restore was undone and the reconciliation ran" 'grep -q "was UNDONE" "$work/U/undo-out" && grep -q "undone; reconciliation: completed" "$work/U/undo-out"'
+
+# the database half fails: nothing changed, the backend stays stopped, the uploads are not touched
+new_case U2; restore U2; uid=$(rid_of U2); before=$(volume_sum "$work/U2/volume")
+undo U2 "$uid" FAKE_DB_RESTORE_FAILS=2
+check "U2: a failed database half fails the undo and the backend is NOT started" '[ $urc -ne 0 ] && [ "$(grep -c "^start backend" "$work/U2/log")" -eq 0 ] && grep -q "STOPPED" "$work/U2/undo-out"'
+check "U2: the uploads are untouched (still the restored ones) and nothing recovery-related is lost" '[ "$(volume_sum "$work/U2/volume")" = "$before" ] && ! called U2 "uploads_swap.sh rollback" && ls "$work/U2/volume/".restore-previous-* > /dev/null 2>&1 && ls "$work/U2/volume/".restore-journal-* > /dev/null 2>&1 && [ -e "$work/U2/deploy/backups/safety/pre-restore-$uid.dump" ]'
+check "U2: the message prints runnable commands (repeat the undo, or start the restored pair)" 'grep -q "./restore.sh --undo $uid" "$work/U2/undo-out" && grep -q "docker compose -f docker-compose.prod.yml start backend" "$work/U2/undo-out"'
+
+# the uploads half fails after the database was put back: the backend must stay stopped
+new_case U3; restore U3; uid=$(rid_of U3)
+undo U3 "$uid" FAKE_ROLLBACK_FAIL_AFTER=0
+check "U3: a failed uploads half fails the undo and the backend is NOT started with the old database on the new files" '[ $urc -ne 0 ] && [ "$(grep -c "^start backend" "$work/U3/log")" -eq 0 ] && called U3 "db-restore #2 input=SAFETY-DUMP-OF-LIVE" && grep -q "STOPPED" "$work/U3/undo-out" && grep -q "INCOMPLETE" "$work/U3/undo-out"'
+check "U3: the journal, the previous files and both safety copies are retained" 'ls "$work/U3/volume/".restore-journal-* > /dev/null 2>&1 && ls "$work/U3/volume/".restore-previous-* > /dev/null 2>&1 && [ -e "$work/U3/deploy/backups/safety/pre-restore-$uid.dump" ] && ls "$work/U3/deploy/backups/safety"/pre-restore-undo-*.dump > /dev/null 2>&1'
+check "U3: it prints complete, runnable recovery commands" 'grep -q "docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh rollback $uid" "$work/U3/undo-out" && grep -q "docker compose -f docker-compose.prod.yml start backend" "$work/U3/undo-out"'
+# ...and with the cause gone the printed rollback command finishes it (the fake docker runs the same script)
+( cd "$work/U3/deploy" && env PATH="$work/bin:$PATH" FAKE_LOG="$work/U3/log" FAKE_STATE="$work/U3/state" FAKE_VOLUME="$work/U3/volume" FAKE_DEPLOY="$work/U3/deploy" docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh rollback "$uid" > /dev/null 2>&1 ); u3rc=$?
+check "U3: repeating the printed rollback command completes the recovery" '[ $u3rc -eq 0 ] && [ -f "$work/U3/volume/public/avatars/a1.jpg" ] && [ ! -e "$work/U3/volume/public/avatars/n1.jpg" ]'
+
+# a restore whose own rollback could not be verified (R4-01) is finished by ONE undo command, not by a database-first restore
+new_case U4; restore U4 MV_FAIL=1; uid=$(rid_of U4)
+check "U4: the failed-rollback message names the single undo command" 'grep -q "./restore.sh --undo $uid" "$work/U4/out"'
+undo U4 "$uid"
+check "U4: with the cause gone the undo resumes from the journal and finishes both halves, starting the backend once at the end" '[ $urc -eq 0 ] && [ -f "$work/U4/volume/public/avatars/a1.jpg" ] && [ "$(grep -c "^start backend" "$work/U4/log")" -eq 1 ] && [ "$(line_of U4 "uploads_swap.sh rollback")" -lt "$(line_of U4 "^start backend")" ]'
+
+# encrypted safety copies: the undo decrypts and verifies the saved one, and its own safety copy is encrypted too
+new_case U5; printf 'a long test secret\n' > "$work/U5/key"
+restore U5 BACKUP_KEY_FILE="$work/U5/key" BACKUP_ALLOW_UNENCRYPTED=0; uid=$(rid_of U5)
+before=$(volume_sum "$work/U5/volume")
+BACKUP_ALLOW_UNENCRYPTED=0 undo U5 "$uid" BACKUP_KEY_FILE="$work/U5/nokey"
+check "U5: an encrypted safety copy without its key is refused before anything is stopped or changed" '[ $urc -ne 0 ] && ! called U5 "^stop " && ! called U5 "db-restore" && [ "$(volume_sum "$work/U5/volume")" = "$before" ]'
+BACKUP_ALLOW_UNENCRYPTED=0 undo U5 "$uid" BACKUP_KEY_FILE="$work/U5/key"
+check "U5: with the key the undo succeeds from the ENCRYPTED safety copy" '[ $urc -eq 0 ] && called U5 "db-restore #2 input=SAFETY-DUMP-OF-LIVE" && [ -f "$work/U5/volume/public/avatars/a1.jpg" ]'
+check "U5: the safety copy of the undone state is encrypted as well; no plaintext safety dump exists" 'ls "$work/U5/deploy/backups/safety"/pre-restore-undo-*.dump.enc > /dev/null 2>&1 && ! ls "$work/U5/deploy/backups/safety"/*.dump > /dev/null 2>&1'
+
+# nothing to undo: unknown id, or the previous uploads were purged
+new_case U6; restore U6; uid=$(rid_of U6)
+undo U6 "no-such-id"
+check "U6: an unknown restore id is refused with nothing changed" '[ $urc -ne 0 ] && ! called U6 "^stop " && ! called U6 "db-restore"'
+UPLOADS_DIR="$work/U6/volume" sh "$work/U6/deploy/backup/uploads_swap.sh" purge "$uid"; before=$(volume_sum "$work/U6/volume")
+undo U6 "$uid"
+check "U6: previous uploads already purged: the paired undo is refused BEFORE the backend is stopped or the database touched" '[ $urc -ne 0 ] && ! called U6 "^stop " && ! called U6 "db-restore" && grep -q "cannot be undone" "$work/U6/undo-out" && [ "$(volume_sum "$work/U6/volume")" = "$before" ]'
+
 echo "$pass passed, $failed failed"
 [ "$failed" -eq 0 ]
