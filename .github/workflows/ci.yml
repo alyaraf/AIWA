@@ -222,6 +222,10 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # R4-08: "skipped" must not look like "scanned". The job is green either way, but it says which one happened in
+    # this output, in its summary, and release-gate passes it on (and can refuse a skipped scan, see there).
+    outputs:
+      scan: ${{ steps.scan.outputs.status }}
     defaults:
       run:
         working-directory: aiwa-backend
@@ -240,12 +244,20 @@ jobs:
           key: dependency-check-data-${{ github.run_id }}
           restore-keys: dependency-check-data-
       - name: OWASP Dependency-Check
+        id: scan
         run: |
           if [ -z "$NVD_API_KEY" ]; then
-            if [ "$GITHUB_EVENT_NAME" = "push" ]; then echo "::warning::NVD_API_KEY is not set: the backend CVE scan was SKIPPED (see docs/release.md)"; exit 0; fi
+            if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              echo "status=skipped" >> "$GITHUB_OUTPUT"
+              echo "::warning::NVD_API_KEY is not set: the backend CVE scan was SKIPPED, not passed (see docs/release.md)"
+              echo "### Backend CVE scan: SKIPPED (no NVD_API_KEY). This is not a passing scan." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
             echo "::error::NVD_API_KEY is not set: the scheduled/manual CVE scan cannot run (F-18)"; exit 1
           fi
           mvn -B -ntp -DskipTests org.owasp:dependency-check-maven:12.1.8:check             -DnvdApiKey="$NVD_API_KEY" -Dformat=ALL -DfailBuildOnCVSS=7 -DskipTestScope=true
+          echo "status=ran" >> "$GITHUB_OUTPUT"
+          echo "### Backend CVE scan: ran, no CVSS >= 7 finding" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -253,11 +265,54 @@ jobs:
           path: aiwa-backend/target/dependency-check-report.*
           if-no-files-found: ignore
 
-  # OPS-6: deploy main to staging once backend and admin are green. Inactive
+  # R4-08: the one gate every deployment / promotion waits for. It needs EVERY validation job (including the new
+  # recovery, monitoring, mobile and SBOM jobs) and requires each to have really succeeded: a failed, cancelled or
+  # skipped job fails the gate (needs.*.result). Run with always() so it reports instead of being silently skipped.
+  # The CVE scan reports whether it RAN; set the repository variable REQUIRE_CVE_SCAN=true to make a skipped scan
+  # fail the gate (use it for production promotion). Checked by .github/scripts/check-ci-graph.mjs (job "ci-graph").
+  release-gate:
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci-graph, backend, admin, monitoring-rules, backup-restore, sbom, flutter, android, dependency-scan]
+    runs-on: ubuntu-latest
+    outputs:
+      security_scan: ${{ needs.dependency-scan.outputs.scan }}
+    steps:
+      - name: Require every release check
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          REQUIRE_CVE_SCAN: ${{ vars.REQUIRE_CVE_SCAN }}
+        run: |
+          failed=0
+          for job in ci-graph backend admin monitoring-rules backup-restore sbom flutter android dependency-scan; do
+            result=$(echo "$NEEDS" | jq -r --arg j "$job" '.[$j].result')
+            echo "$job: $result"
+            echo "| $job | $result |" >> "$GITHUB_STEP_SUMMARY"
+            [ "$result" = success ] || failed=1
+          done
+          scan=$(echo "$NEEDS" | jq -r '.["dependency-scan"].outputs.scan // "unknown"')
+          echo "backend CVE scan: $scan"
+          echo "| backend CVE scan | $scan |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$scan" != ran ]; then
+            echo "::warning::the backend CVE scan did not run ($scan): this release has no vulnerability scan evidence"
+            if [ "$REQUIRE_CVE_SCAN" = true ]; then echo "::error::REQUIRE_CVE_SCAN=true and the scan did not run"; failed=1; fi
+          fi
+          [ "$failed" -eq 0 ]
+
+  # R4-08: verifies this file's dependency graph (deploy-staging depends, transitively, on every required job).
+  ci-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+      - run: node .github/scripts/check-ci-graph.mjs --self-test
+
+  # OPS-6: deploy main to staging once EVERY validation job is green (release-gate, R4-08). Inactive
   # until the repo has the variables STAGING_HOST, STAGING_USER, STAGING_API_DOMAIN
   # and the secrets STAGING_SSH_KEY, STAGING_KNOWN_HOSTS (docs/release.md).
   deploy-staging:
-    needs: [backend, admin]
+    needs: [release-gate]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_HOST != ''
     runs-on: ubuntu-latest
     environment: staging
