@@ -34,6 +34,14 @@
 # R4-01: the backend is started again ONLY when the database and the uploads are known to be consistent: either the
 # restore completed, or both were verifiably rolled back. If the uploads rollback cannot be proven, or the database cannot be
 # put back, the backend stays STOPPED and the message says what is where.
+#
+# R6-01: a FAILED run restarts the backend only when the pair (database, uploads) is KNOWN to be consistent. Every run that
+# stops the backend first writes the recovery marker backups/safety/.recovery-incomplete and removes it only when it starts
+# the backend on a proven-consistent pair. A run that finds the marker (an earlier recovery was interrupted, failed half way,
+# or was left stopped on purpose) cannot know what it is looking at, so ANY failure of it, including a failed safety copy,
+# keeps the backend STOPPED, and a database-only restore also leaves it stopped. A run that completes BOTH halves (an --undo,
+# or a restore with uploads) starts the backend and removes the marker. Remove the marker by hand only after you have checked
+# that the database and the uploads belong together.
 set -euo pipefail
 umask 077 # everything created below (temp dir, plaintext dump and tarball) is private to this user
 cd "$(dirname "$0")"
@@ -132,6 +140,33 @@ free_kb() { df -Pk "$1" | awk 'NR==2 { print $4 }'; }
 fs_of() { df -Pk "$1" | awk 'NR==2 { print $1 }'; }
 mkdir -p backups/safety
 chmod 700 backups/safety 2> /dev/null || true
+# R6-01: was an earlier recovery left unfinished? Then the pair is unknown, whatever this run does or fails to do.
+recovery_marker=backups/safety/.recovery-incomplete
+pair_known=1
+if [ -e "$recovery_marker" ]; then
+  pair_known=0
+  echo "NOTE: an earlier recovery did not finish (marker $recovery_marker): the database and the uploads may not belong together." >&2
+  echo "  Until a run completes BOTH halves, a failure of this run keeps the backend STOPPED." >&2
+fi
+# pair_op: this run replaces both halves when it succeeds (a restore with uploads, or an undo of both).
+pair_op=0
+if [ -n "$uploads" ] || { [ -n "$undo_id" ] && [ "${UNDO_DB_ONLY:-0}" != 1 ]; }; then pair_op=1; fi
+# stay_stopped <what happened>: a failure after which the pair is not known to be consistent. Nothing starts the backend.
+stay_stopped() {
+  echo "$1" >&2
+  echo "  The backend stays STOPPED: an earlier recovery did not finish, so the database and the uploads are not known to belong together." >&2
+  echo "  Every recovery artifact is kept (backups/safety, .restore-previous-*, .restore-journal-* in the uploads volume)." >&2
+  if [ -n "$undo_id" ]; then echo "  Fix the cause and repeat:  ./restore.sh --undo $undo_id" >&2
+  else echo "  Fix the cause and finish the earlier recovery first (the commands it printed; ./restore.sh --undo <id> finishes both halves in one step)." >&2; fi
+  echo "  Start the backend by hand ONLY after you have checked that database and uploads belong together, then remove $recovery_marker." >&2
+  exit 1
+}
+# start_backend_consistent: the pair is proven consistent: start the backend and clear the recovery marker.
+start_backend_consistent() {
+  "${compose[@]}" start backend
+  backend_stopped=0
+  rm -f "$recovery_marker"
+}
 db_bytes=$("${compose[@]}" exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c "SELECT pg_database_size(current_database())"' < /dev/null | tr -d '[:space:]') || db_bytes=""
 case "$db_bytes" in ''|*[!0-9]*) die "cannot read the size of the live database to budget the safety copy" ;; esac
 need_kb=$(( (db_bytes + db_bytes / 10 + 16777216) / 1024 + 1 ))
@@ -175,7 +210,11 @@ else
 fi
 
 # Keep the app from writing while the data is swapped.
-"${compose[@]}" stop backend
+echo "$(date -u +%FT%TZ) restore.sh pid $$ ${undo_id:+undo $undo_id }id $restore_id: backend stopped, recovery in progress" >> "$recovery_marker"
+if ! "${compose[@]}" stop backend; then
+  [ "$pair_known" = 0 ] || rm -f "$recovery_marker"
+  die "could not stop the backend"
+fi
 backend_stopped=1
 
 # A copy of the live database taken now, so that if the files cannot be swapped after the database was restored
@@ -185,11 +224,12 @@ safety_final="backups/safety/pre-restore-$restore_id.dump"
 # it), so the backup retention removes it with the other old safety copies.
 [ -z "$undo_id" ] || safety_final="backups/safety/pre-restore-undo-$restore_id.dump"
 [ "$safety_enc" = 1 ] && safety_final="$safety_final.enc"
-abort_with_backend() { # the safety copy could not be made: nothing was changed, so the backend can run again
+abort_with_backend() { # the safety copy could not be made: this run changed nothing
   rm -f "$safety_final.partial"
   [ -z "$uploads" ] || swap discard "$restore_id" < /dev/null > /dev/null 2>&1 || true
-  "${compose[@]}" start backend
-  backend_stopped=0
+  # R6-01: "this run changed nothing" does not make the pair consistent when an earlier recovery was incomplete
+  [ "$pair_known" = 1 ] || stay_stopped "$1; this run changed nothing"
+  start_backend_consistent
   die "$1; the backend is running again"
 }
 if ! "${compose[@]}" exec -T postgres sh -c 'pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$tmp/safety.dump" || [ ! -s "$tmp/safety.dump" ]; then
@@ -216,17 +256,23 @@ put_db_back() {
 # rolled back to how it was instead of being left half-restored.
 if ! "${compose[@]}" exec -T postgres sh -c 'pg_restore --clean --if-exists --no-owner --single-transaction --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$tmp/db.dump"; then
   if [ -n "$undo_id" ]; then
-    # R5-03: single transaction, so the database is unchanged and the uploads were not touched yet: the restored pair is
-    # intact. The backend is still left stopped: the operator asked for an undo that did not happen, and decides.
-    echo "the undo failed: the previous database could not be restored (it was rolled back, so database and uploads are both still the restored pair; nothing else was changed)." >&2
-    echo "  The backend stays STOPPED. Fix the cause and repeat:  ./restore.sh --undo $undo_id" >&2
-    echo "  To give up on the undo and run the restored pair as it is:  $compose_cmd start backend" >&2
+    # R5-03: single transaction, so the database is unchanged and the uploads were not touched yet by this run.
+    # R6-01: that is "the restored pair" only when this run began from a consistent state; after an incomplete earlier
+    # recovery it says nothing about the pair, so no start instruction is given.
+    if [ "$pair_known" = 1 ]; then
+      echo "the undo failed: the previous database could not be restored (it was rolled back, so database and uploads are both still the restored pair; nothing else was changed)." >&2
+      echo "  The backend stays STOPPED. Fix the cause and repeat:  ./restore.sh --undo $undo_id" >&2
+      echo "  To give up on the undo and run the restored pair as it is:  $compose_cmd start backend  (then remove $recovery_marker)" >&2
+      echo "  The current database was saved to $safety." >&2
+      exit 1
+    fi
+    echo "the undo failed: the previous database could not be restored (its transaction was rolled back; this run has not touched the uploads)." >&2
     echo "  The current database was saved to $safety." >&2
-    exit 1
+    stay_stopped "an earlier recovery did not finish, so what the database and the uploads are now is NOT known to be a consistent pair."
   fi
   [ -z "$uploads" ] || swap discard "$restore_id" < /dev/null > /dev/null 2>&1 || true
-  "${compose[@]}" start backend
-  backend_stopped=0
+  [ "$pair_known" = 1 ] || stay_stopped "the restore failed and was rolled back; the database is as this run found it (the current database was saved to $safety)."
+  start_backend_consistent
   die "the restore failed and was rolled back; the live database is as it was and the backend is running again"
 fi
 
@@ -240,20 +286,20 @@ if [ -n "$uploads" ]; then
       echo "the uploads swap failed AND its rollback could not be verified (exit $swap_rc). The backend stays STOPPED." >&2
       echo "  The database is the RESTORED one; the previous database is in $safety." >&2
       echo "  The uploads recovery journal and the previous files are kept in the volume (.restore-previous-$restore_id, .restore-journal-$restore_id)." >&2
-      echo "  Fix the cause, then EITHER finish both halves in one step (the backend stays stopped until both are done):  ./restore.sh --undo $restore_id" >&2
-      echo "  OR by hand:  $swap_cmd rollback $restore_id  (repeat until it succeeds), then ./restore.sh $safety  (restores only the database: the uploads are the previous ones again by then)" >&2
+      echo "  Fix the cause, then finish both halves in one step (the backend stays stopped until both are done):  ./restore.sh --undo $restore_id" >&2
+      echo "  By hand (not recommended):  $swap_cmd rollback $restore_id  (repeat until it succeeds), then ./restore.sh $safety (restores only the database and leaves the backend stopped while $recovery_marker exists); start the backend and remove the marker only when both are done." >&2
       exit 1
     fi
     # Exit 1: the swap put the old files back and verified it. The database is already the restored one, so restore the
     # safety copy as well: database and files are then both as they were before this run.
     echo "the uploads could not be swapped in; putting the database back as it was" >&2
     if put_db_back; then
-      "${compose[@]}" start backend
-      backend_stopped=0
+      [ "$pair_known" = 1 ] || stay_stopped "the uploads could not be swapped in; database and uploads are back as this run found them (safety copy: $safety)"
+      start_backend_consistent
       die "the uploads could not be swapped in; database and uploads are both back as they were and the backend is running again"
     fi
     # Cannot happen unless the database is unreachable: stay stopped, with everything needed for a manual fix.
-    die "the uploads could not be swapped in AND the database could not be put back. The backend stays STOPPED. Previous database: $safety (./restore.sh $safety puts it back; the uploads are the previous ones again and intact in the volume)"
+    die "the uploads could not be swapped in AND the database could not be put back. The backend stays STOPPED. Previous database: $safety (./restore.sh $safety puts it back and, while $recovery_marker exists, leaves the backend stopped; the uploads are the previous ones again and intact in the volume)"
   fi
 fi
 
@@ -267,14 +313,20 @@ if [ -n "$undo_id" ] && [ "${UNDO_DB_ONLY:-0}" != 1 ]; then
     echo "  The backend stays STOPPED: starting it now would run the previous database on files that are not the previous ones." >&2
     echo "  The recovery journal and the previous files are kept (.restore-journal-$undo_id, .restore-previous-$undo_id in the uploads volume)." >&2
     echo "  Fix the cause (disk, permissions), then repeat until it succeeds:  $swap_cmd rollback $undo_id" >&2
-    echo "  When it has succeeded, and only then:  $compose_cmd start backend" >&2
-    echo "  The database as it was before this undo: $safety (./restore.sh $safety restores it, with the backend started again)." >&2
+    echo "  Or repeat the whole undo, which finishes both halves and starts the backend only then:  ./restore.sh --undo $undo_id" >&2
+    echo "  By hand, only after the rollback command has succeeded:  $compose_cmd start backend  (then remove $recovery_marker)" >&2
+    echo "  The database as it was before this undo: $safety (./restore.sh $safety restores it and, while $recovery_marker exists, leaves the backend stopped)." >&2
     exit 1
   fi
 fi
 
-"${compose[@]}" start backend
-backend_stopped=0
+if [ "$pair_known" = 0 ] && [ "$pair_op" = 0 ]; then
+  # R6-01: the database is restored, but an earlier recovery left the uploads in an unknown state and this run did not replace them.
+  echo "the database was restored from $dump, but an earlier recovery did not finish and this run did not replace the uploads." >&2
+  echo "  The backend stays STOPPED. Finish that recovery (./restore.sh --undo <id>, or a restore with an uploads tarball), or check the uploads by hand, then start the backend and remove $recovery_marker." >&2
+  exit 1
+fi
+start_backend_consistent
 # The reconciliation report: every file the restored database points at should exist in the restored uploads.
 # Missing ones are listed (a dump and an uploads tarball are two snapshots, see docs/runbooks.md), never fatal.
 # R4: a failed reference query or an incomplete list is reported as a FAILED scan, never as "0 missing".

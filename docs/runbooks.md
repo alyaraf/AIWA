@@ -79,11 +79,21 @@ If a step fails the pair is put back together, never left half-done:
 | extraction / disk space | nothing changed, backend never stopped |
 | database restore | database rolled back (single transaction), staging removed, backend started |
 | uploads swap | the swap undoes its own renames **and proves it** (every original name is back, no staged name is live), the database is restored from the safety copy, backend started |
-| the uploads rollback itself fails (a rename error while undoing; audit R4-01) | exit 3 "RECOVERY FAILED": the backend stays **stopped**, the database is NOT touched again, the recovery journal `.restore-journal-<id>` and the previous and staged files are kept; fix the cause, then finish both halves in one step with `./restore.sh --undo <id>` (it resumes the uploads rollback from the journal and starts the backend only when the database and the uploads are both back); by hand: `uploads_swap.sh rollback <id>` until it succeeds, then `./restore.sh backups/safety/pre-restore-<id>.dump.enc` (database only: the uploads are the previous ones again by then) |
+| the uploads rollback itself fails (a rename error while undoing; audit R4-01) | exit 3 "RECOVERY FAILED": the backend stays **stopped**, the database is NOT touched again, the recovery journal `.restore-journal-<id>` and the previous and staged files are kept; fix the cause, then finish both halves in one step with `./restore.sh --undo <id>` (it resumes the uploads rollback from the journal and starts the backend only when the database and the uploads are both back); by hand (not recommended): `uploads_swap.sh rollback <id>` until it succeeds, then `./restore.sh backups/safety/pre-restore-<id>.dump.enc` (database only: it restores the database and, because the recovery marker exists, leaves the backend stopped; start it and remove the marker yourself once both are done) |
 | the database cannot be put back either | backend stays **stopped** on purpose; the message names the safety dump and says the old uploads are intact |
 
 The backend is started again only when the database and the uploads are known to be consistent. Whatever ends the script
 while the backend is stopped, it says **STOPPED** on the way out.
+
+**The recovery marker (audit R6-01).** Every run that stops the backend first writes `backups/safety/.recovery-incomplete`
+and removes it only when it starts the backend on a pair it has proven consistent. A run that **finds** the marker (an
+earlier recovery was interrupted, failed half way, or was left stopped on purpose, for example after an undo whose uploads
+half failed) cannot know what state the database and uploads are in, so **any** failure of it (the safety dump, its
+verification, its encryption or its storage, a failed database half, a failed swap) keeps the backend **stopped** and keeps
+every artifact, and it never prints "the pair is intact" or a start instruction it cannot back. A database-only run in that
+state restores the database and still leaves the backend stopped. A run that completes both halves (`--undo <id>`, or a
+restore with an uploads tarball) starts the backend and removes the marker. If you finished a recovery by hand and have
+**checked** that the database and the uploads belong together, start the backend and `rm backups/safety/.recovery-incomplete`.
 
 Afterwards check the app, then free the retained copies:
 `docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh purge <id>` and
@@ -112,7 +122,8 @@ prints the reconciliation report.
 | Failure | Result |
 | --- | --- |
 | previous uploads purged, unknown id, wrong or missing key, safety copy unreadable | refused before anything is stopped or changed |
-| the database half | transaction rolled back, uploads untouched; the backend stays **stopped**; the message prints `./restore.sh --undo <id>` (repeat) and `docker compose -f docker-compose.prod.yml start backend` (give up and run the restored pair) |
+| the database half | transaction rolled back, uploads untouched by this run; the backend stays **stopped**; the message prints `./restore.sh --undo <id>` (repeat) and, only when this undo began from a consistent pair, `docker compose -f docker-compose.prod.yml start backend` (give up and run the restored pair). After an earlier incomplete recovery (marker present) it says the pair is **not known to be consistent** and gives no start command |
+| the safety copy of the current database cannot be made, verified, encrypted or stored | nothing is changed. From a consistent start the backend is started again; when the marker shows an earlier incomplete recovery (for example a retry of an undo whose uploads half failed) the backend stays **stopped** and the message says so |
 | the uploads half (after the database was put back) | the backend stays **stopped** (old database on mismatched files must not run); journal, previous and staged files and both safety copies are kept; the message prints `docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh rollback <id>` (repeat until it succeeds) and then `docker compose -f docker-compose.prod.yml start backend` |
 
 After a successful undo the files of the undone restore stay in the volume as `.restore-staging-<id>` (a recovery artifact);

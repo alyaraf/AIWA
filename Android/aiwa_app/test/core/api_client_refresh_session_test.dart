@@ -202,7 +202,7 @@ void main() {
       storage,
       adapter: _Adapter(refreshStatus: 401, refreshGate: gate.future),
     );
-    final events = <int>[];
+    final events = <SessionEvent>[];
     final sub = ApiClient.authEvents.stream.listen(events.add);
 
     final oldRequest = _settled(client.get('/audit/protected'));
@@ -231,7 +231,7 @@ void main() {
 
     await _settled(client.get('/audit/protected'));
 
-    expect(await event.timeout(const Duration(seconds: 3)), 401);
+    expect((await event.timeout(const Duration(seconds: 3))).status, 401);
     expect(await storage.getAccessToken(), isNull);
     expect(await storage.getRefreshToken(), isNull);
   });

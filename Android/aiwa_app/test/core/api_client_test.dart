@@ -56,7 +56,7 @@ void main() {
   test('423 -> ServerException and an auth event', () async {
     final event = ApiClient.authEvents.stream.first;
     await expectLater(client.get('$base/423'), throwsA(isA<ServerException>()));
-    expect(await event, 423);
+    expect((await event).status, 423);
   });
 
   test('a role 403 opens the Forbidden screen (auth event)', () async {
@@ -65,11 +65,11 @@ void main() {
       client.get('$base/403?code=${ApiClient.roleForbiddenCode}'),
       throwsA(isA<ServerException>()),
     );
-    expect(await event, 403);
+    expect((await event).status, 403);
   });
 
   test('a business 403 is only an error for the screen, no auth event', () async {
-    final events = <int>[];
+    final events = <SessionEvent>[];
     final sub = ApiClient.authEvents.stream.listen(events.add);
     await expectLater(
       client.get('$base/403?code=error.access_denied'),

@@ -21,11 +21,18 @@ shift; shift; shift   # compose -f file
 verb="$1"; shift
 echo "$verb $*" >> "$FAKE_LOG"
 case "$verb" in
-  stop|start) exit 0 ;;
+  stop|start) # R6: the fake tracks whether the backend runs, so a test can assert the state a run leaves behind
+    if [ "$verb" = stop ]; then echo stopped > "$FAKE_STATE/backend"; else echo running > "$FAKE_STATE/backend"; fi
+    exit 0 ;;
   exec)
     # exec -T postgres <cmd...>
     shift; shift
-    if [ "$1" = pg_restore ]; then cat > /dev/null; exit 0; fi   # --list
+    if [ "$1" = pg_restore ]; then   # --list
+      cat > /dev/null
+      n=$(($(cat "$FAKE_STATE/list_n" 2> /dev/null || echo 0) + 1)); echo "$n" > "$FAKE_STATE/list_n"
+      [ -n "${FAKE_LIST_FAILS:-}" ] && [ "$n" = "$FAKE_LIST_FAILS" ] && exit 1
+      exit 0
+    fi
     script="$*"
     case "$script" in
       *pg_database_size*) cat > /dev/null; echo "${FAKE_DB_SIZE:-1000}"; exit 0 ;;
@@ -36,8 +43,14 @@ case "$verb" in
         echo "db-restore #$n input=$(head -c 20 "$FAKE_STATE/restore-input" | tr -d '\n')" >> "$FAKE_LOG"
         [ -n "${FAKE_DB_RESTORE_FAILS:-}" ] && [ "$n" = "$FAKE_DB_RESTORE_FAILS" ] && exit 1
         [ -n "${FAKE_DB_RESTORE_FAILS_FROM:-}" ] && [ "$n" -ge "$FAKE_DB_RESTORE_FAILS_FROM" ] && exit 1
+        head -c 20 "$FAKE_STATE/restore-input" | tr -d '
+' > "$FAKE_STATE/db"   # R6: the live database generation
         exit 0 ;;
-      *"pg_restore --no-owner"*) cat > /dev/null; exit 0 ;;   # scratch restore
+      *"pg_restore --no-owner"*)   # scratch restore
+        cat > /dev/null
+        n=$(($(cat "$FAKE_STATE/scratch_n" 2> /dev/null || echo 0) + 1)); echo "$n" > "$FAKE_STATE/scratch_n"
+        [ -n "${FAKE_SCRATCH_FAILS:-}" ] && [ "$n" = "$FAKE_SCRATCH_FAILS" ] && { echo "pg_restore: error: simulated" >&2; exit 1; }
+        exit 0 ;;
       *psql*) cat > /dev/null
               [ -n "${FAKE_REFS_FAIL:-}" ] && { echo "psql: connection refused" >&2; exit 2; }
               [ -n "${FAKE_REFS_TRUNCATED:-}" ] && { printf 'public|/files/public/avatars/n1.jpg\n'; exit 0; }
@@ -70,6 +83,7 @@ new_case() {
   tar -czf "$c/uploads.tgz" -C "$c/src" .
   echo "DUMPDATA" > "$c/db.dump"
   : > "$c/log"
+  echo "SAFETY-DUMP-OF-LIVE" > "$c/state/db"; echo running > "$c/state/backend"   # R6: generation "old" = what the safety dump holds
 }
 volume_sum() { ( cd "$1" && find . -path './.restore-*' -prune -o -type f -print | sort | xargs cksum ); }
 # restore <case> [VAR=value ...]
@@ -133,6 +147,12 @@ if [ -n "${MV_FAIL:-}" ]; then
     */.restore-staging-*/public|*/.restore-previous-*/public) echo 'simulated OS rename failure' >&2; exit 1;;
   esac
 fi
+# R6: the safety copy cannot be stored (the final rename of backups/safety/pre-restore-*.partial fails)
+if [ -n "${MV_FAIL_SAFETY:-}" ]; then
+  case "$2" in
+    *backups/safety/pre-restore-*) echo 'simulated: cannot store the safety copy' >&2; exit 1;;
+  esac
+fi
 exec /usr/bin/mv "$@"
 MV
 chmod +x "$work/bin/mv"
@@ -190,7 +210,7 @@ check "N: an incomplete reference list (no terminator) is also a failed scan" 'g
 # --- U (R5-03): ONE paired undo: backend stopped for both halves, started only when both are back -------------------------
 # undo <case> <id> [VAR=value ...]: restore.sh --undo <id> in that case's deploy dir; the log is reset first
 undo() {
-  c="$work/$1"; id="$2"; shift 2; : > "$c/log"
+  c="$work/$1"; id="$2"; shift 2; : > "$c/log"; rm -f "$c/state/list_n" "$c/state/scratch_n"
   ( cd "$c/deploy" && env PATH="$work/bin:$PATH" FAKE_LOG="$c/log" FAKE_STATE="$c/state" FAKE_VOLUME="$c/volume" \
       FAKE_DEPLOY="$c/deploy" ASSUME_YES=1 BACKUP_ALLOW_UNENCRYPTED=${BACKUP_ALLOW_UNENCRYPTED:-1} "$@" bash ./restore.sh --undo "$id" ) > "$c/undo-out" 2>&1
   urc=$?
@@ -249,6 +269,67 @@ check "U6: an unknown restore id is refused with nothing changed" '[ $urc -ne 0 
 UPLOADS_DIR="$work/U6/volume" sh "$work/U6/deploy/backup/uploads_swap.sh" purge "$uid"; before=$(volume_sum "$work/U6/volume")
 undo U6 "$uid"
 check "U6: previous uploads already purged: the paired undo is refused BEFORE the backend is stopped or the database touched" '[ $urc -ne 0 ] && ! called U6 "^stop " && ! called U6 "db-restore" && grep -q "cannot be undone" "$work/U6/undo-out" && [ "$(volume_sum "$work/U6/volume")" = "$before" ]'
+
+# --- R6-01: recovery retries. An undo that stopped half way (old database back, files still the restored ones) leaves the
+# backend stopped and the recovery marker behind. A RETRY that fails anywhere must keep it stopped: "this run changed nothing"
+# does not make the pair consistent. The fake tracks the backend state and the database generation (old = the safety dump).
+cat > "$work/bin/openssl-fake" <<'OSSL'
+#!/bin/sh
+# encryption (no -d) fails when FAKE_ENC_FAIL is set; everything else is the real openssl
+if [ -n "${FAKE_ENC_FAIL:-}" ]; then case " $* " in *" -d "*) ;; *) echo 'simulated openssl failure' >&2; exit 1 ;; esac; fi
+exec openssl "$@"
+OSSL
+chmod +x "$work/bin/openssl-fake"
+db_gen() { cat "$work/$1/state/db"; }
+backend_state() { cat "$work/$1/state/backend"; }
+marker_of() { echo "$work/$1/deploy/backups/safety/.recovery-incomplete"; }
+# incomplete_undo <case>: a good encrypted restore, then an undo whose FILES half fails: old database, restored files, stopped
+incomplete_undo() {
+  new_case "$1"; printf 'a long test secret\n' > "$work/$1/key"
+  restore "$1" BACKUP_KEY_FILE="$work/$1/key" BACKUP_ALLOW_UNENCRYPTED=0; uid=$(rid_of "$1")
+  BACKUP_ALLOW_UNENCRYPTED=0 undo "$1" "$uid" BACKUP_KEY_FILE="$work/$1/key" FAKE_ROLLBACK_FAIL_AFTER=0
+}
+# retry <case> [VAR=value ...]: the same undo again, with the fault given
+retry() { c1="$1"; shift; BACKUP_ALLOW_UNENCRYPTED=0 undo "$c1" "$uid" BACKUP_KEY_FILE="$work/$c1/key" OPENSSL_BIN="$work/bin/openssl-fake" "$@"; }
+# the state an unsuccessful retry must leave: stopped, never started, old database + restored files, every artifact kept
+stays_stopped() {
+  [ $urc -ne 0 ] && ! called "$1" "^start backend" && [ "$(backend_state "$1")" = stopped ] \
+    && [ "$(db_gen "$1")" = SAFETY-DUMP-OF-LIVE ] && [ -f "$work/$1/volume/public/avatars/n1.jpg" ] && [ ! -e "$work/$1/volume/public/avatars/a1.jpg" ] \
+    && ls "$work/$1/volume/".restore-previous-* > /dev/null 2>&1 && ls "$work/$1/volume/".restore-journal-* > /dev/null 2>&1 \
+    && ls "$work/$1/deploy/backups/safety/pre-restore-$uid.dump.enc" > /dev/null 2>&1 && [ -e "$(marker_of "$1")" ] \
+    && grep -q "STOPPED" "$work/$1/undo-out" && ! grep -q "running again" "$work/$1/undo-out" \
+    && ! grep -q "docker compose -f docker-compose.prod.yml start backend" "$work/$1/undo-out" \
+    && [ -z "$(ls "$work/$1/deploy/backups/safety" | grep partial)" ]
+}
+incomplete_undo R61
+check "R6 setup: the failed first undo left the OLD database, the restored files, a stopped backend and the marker" '[ $urc -ne 0 ] && [ "$(backend_state R61)" = stopped ] && [ "$(db_gen R61)" = SAFETY-DUMP-OF-LIVE ] && [ -f "$work/R61/volume/public/avatars/n1.jpg" ] && [ -e "$(marker_of R61)" ] && ! called R61 "^start backend"'
+for fault in "dump:FAKE_NO_SAFETY=1" "verify-list:FAKE_LIST_FAILS=2" "verify-scratch:FAKE_SCRATCH_FAILS=2" "encrypt:FAKE_ENC_FAIL=1" "save:MV_FAIL_SAFETY=1"; do
+  name="R6${fault%%:*}"; incomplete_undo "$name"; retry "$name" "${fault#*:}"
+  check "$name: a safety-copy failure ($fault) on the retry keeps the backend STOPPED with both generations and every artifact kept" 'stays_stopped "$name"'
+  check "$name: the retry changed neither half (no database restore, no uploads rollback)" '! called "$name" "db-restore" && ! called "$name" "uploads_swap.sh rollback"'
+  check "$name: it says the pair is not known to be consistent and prints the repeat command" 'grep -q "not known to belong together" "$work/$name/undo-out" && grep -q "./restore.sh --undo $uid" "$work/$name/undo-out"'
+done
+# ...and the same retry with the cause gone finishes BOTH halves and only then starts the backend, once
+incomplete_undo R6ok; retry R6ok
+check "R6 retry: with no fault the retry succeeds" '[ $urc -eq 0 ]'
+check "R6 retry: both generations are the old ones (old database, old files)" '[ "$(db_gen R6ok)" = SAFETY-DUMP-OF-LIVE ] && [ -f "$work/R6ok/volume/public/avatars/a1.jpg" ] && [ ! -e "$work/R6ok/volume/public/avatars/n1.jpg" ]'
+check "R6 retry: the backend is started exactly once, after the database restore and the uploads rollback, and runs" '[ "$(grep -c "^start backend" "$work/R6ok/log")" -eq 1 ] && [ "$(line_of R6ok "db-restore")" -lt "$(line_of R6ok "uploads_swap.sh rollback")" ] && [ "$(line_of R6ok "uploads_swap.sh rollback")" -lt "$(line_of R6ok "^start backend")" ] && [ "$(backend_state R6ok)" = running ]'
+check "R6 retry: the recovery marker is gone once the pair is consistent" '[ ! -e "$(marker_of R6ok)" ]'
+# the database half fails on the retry: no "restored pair is intact" claim, no start instruction
+incomplete_undo R6db; retry R6db FAKE_DB_RESTORE_FAILS_FROM=3
+check "R6db: a failed database half on the retry keeps the backend stopped and changes no file" 'stays_stopped R6db && ! called R6db "uploads_swap.sh rollback"'
+check "R6db: it never claims the restored pair is intact and never tells the operator to start the backend" '! grep -qi "still the restored pair" "$work/R6db/undo-out" && ! grep -qi "give up on the undo" "$work/R6db/undo-out" && grep -q "NOT known to be a consistent pair" "$work/R6db/undo-out"'
+# a retry that is a plain restore (not an undo) after the incomplete recovery
+incomplete_undo R6rs; ( cd "$work/R6rs/deploy" && env PATH="$work/bin:$PATH" FAKE_LOG="$work/R6rs/log" FAKE_STATE="$work/R6rs/state" FAKE_VOLUME="$work/R6rs/volume" FAKE_DEPLOY="$work/R6rs/deploy" ASSUME_YES=1 BACKUP_KEY_FILE="$work/R6rs/key" FAKE_NO_SAFETY=1 bash ./restore.sh "$work/R6rs/db.dump" "$work/R6rs/uploads.tgz" ) > "$work/R6rs/undo-out" 2>&1; urc=$?
+check "R6rs: a fresh restore that fails its safety copy after an incomplete undo also keeps the backend stopped" 'stays_stopped R6rs'
+# a database-only run after an incomplete recovery cannot prove the uploads: it restores, then leaves the backend stopped
+incomplete_undo R6do; retry R6do UNDO_DB_ONLY=1
+check "R6do: a database-only undo on an unknown pair leaves the backend stopped and says so" '[ $urc -ne 0 ] && ! called R6do "^start backend" && [ "$(backend_state R6do)" = stopped ] && [ -e "$(marker_of R6do)" ] && grep -q "did not replace the uploads" "$work/R6do/undo-out"'
+# the normal case is unchanged: a failed safety copy of a run that began from a CONSISTENT state restarts the backend and leaves no marker
+new_case R6c; printf 'a long test secret\n' > "$work/R6c/key"; restore R6c BACKUP_KEY_FILE="$work/R6c/key" BACKUP_ALLOW_UNENCRYPTED=0; uid=$(rid_of R6c)
+check "R6c: a successful restore leaves no recovery marker and the backend running" '[ ! -e "$(marker_of R6c)" ] && [ "$(backend_state R6c)" = running ]'
+retry R6c FAKE_NO_SAFETY=1
+check "R6c: an undo whose safety copy fails from a consistent state restarts the backend, changes nothing and leaves no marker" '[ $urc -ne 0 ] && called R6c "^start backend" && [ ! -e "$(marker_of R6c)" ] && [ "$(db_gen R6c)" = DUMPDATA ] && [ -f "$work/R6c/volume/public/avatars/n1.jpg" ] && [ "$(backend_state R6c)" = running ]'
 
 echo "$pass passed, $failed failed"
 [ "$failed" -eq 0 ]

@@ -3836,8 +3836,10 @@ function SafetyQueue({ status, setStatus }) {
     setBusyId(ev.id);
     try {
       await runAction(() => api.resolveSafety(ev.id, text), { success: "SOS closed" });
+      // R6-03: if it was the oldest open alert it is no longer open, so the banner must not keep warning about it; the
+      // confirming read below names the next oldest.
       setView((v) => status === "OPEN"
-        ? { ...v, data: v.data.filter((e) => e.id !== ev.id), total: v.total != null ? Math.max(0, v.total - 1) : v.total }
+        ? { ...v, data: v.data.filter((e) => e.id !== ev.id), total: v.total != null ? Math.max(0, v.total - 1) : v.total, oldest: v.oldest?.id === ev.id ? null : v.oldest }
         : v);
       // A local change is not a server confirmation: no freshness is recorded for it. Reads that started before this
       // closing may still show the alert, so they are ignored, and a fresh read is started to confirm the list.

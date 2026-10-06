@@ -50,7 +50,7 @@ class ReviewControllerModerationTest {
                 .hidden(false).build();
         when(moderationRepo.searchReviews(eq(ModerationStatus.OPEN), eq("%"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(c)));
-        when(reviewRepo.findById(3L)).thenReturn(Optional.of(review));
+        when(reviewRepo.findAllWithPeopleByIdIn(any())).thenReturn(List.of(review));
 
         var body = controller.reportedReviews(null, 0, 200).getBody();
         assertThat(body).isNotNull();
@@ -67,7 +67,7 @@ class ReviewControllerModerationTest {
     void reportedReviewsSkipsMissingReviews() {
         when(moderationRepo.searchReviews(eq(ModerationStatus.OPEN), eq("%"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(openCase(1L, 404L))));
-        when(reviewRepo.findById(404L)).thenReturn(Optional.empty());
+        when(reviewRepo.findAllWithPeopleByIdIn(any())).thenReturn(List.of());
 
         assertThat(controller.reportedReviews(null, 0, 200).getBody().getData().getContent()).isEmpty();
     }

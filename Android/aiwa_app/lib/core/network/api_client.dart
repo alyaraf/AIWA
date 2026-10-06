@@ -5,13 +5,25 @@ import '../errors/exceptions.dart';
 import '../storage/secure_storage.dart';
 import '../theme/theme_controller.dart';
 
+/// R6-02: a status the app routes globally (401 / 403 / 423) together with the session that produced it. The consumer
+/// (app.dart) drops it unless [owner] is still current when it is delivered, so a late answer for account A can never
+/// sign out or redirect account B.
+class SessionEvent {
+  final int status;
+  final SessionOwner owner;
+  const SessionEvent(this.status, this.owner);
+
+  @override
+  String toString() => 'SessionEvent($status, $owner)';
+}
+
 class ApiClient {
   late final Dio _dio;
   final SecureStorage _storage;
 
   /// Status codes the app routes to a system screen: 401 (refresh
-  /// rejected), 403, 423. Listened to in app.dart.
-  static final authEvents = StreamController<int>.broadcast();
+  /// rejected), 403, 423, each tagged with the session that produced it (R6-02). Listened to in app.dart.
+  static final authEvents = StreamController<SessionEvent>.broadcast();
 
   /// The backend's `code` on a 403 caused by the caller's role
   /// (SecurityConfig.ROLE_FORBIDDEN_CODE).
@@ -175,6 +187,9 @@ class _AuthInterceptor extends Interceptor {
         LocaleController.locale.value.languageCode;
     // The session this request belongs to (DR-003).
     options.extra['session'] = SecureStorage.generation;
+    // R6-02: ...and the credential operation (sign-in / registration / sign-out) that was current: a failed answer
+    // may only act globally while both are still current.
+    options.extra['attempt'] = SecureStorage.authAttempt;
     final token = await _storage.getAccessToken();
     // A request that names its own token (clean-up after sign-out, CR-18)
     // keeps it: it must never go out under the next session's token.
@@ -244,7 +259,7 @@ class _AuthInterceptor extends Interceptor {
       try {
         if (_refreshing == null || _refreshingSession != session) {
           late final Future<String?> mine;
-          mine = _refresh(refreshToken, session).whenComplete(() {
+          mine = _refresh(refreshToken, session, opts.extra['attempt'] as int?).whenComplete(() {
             if (identical(_refreshing, mine)) {
               _refreshing = null;
               _refreshingSession = null;
@@ -280,7 +295,7 @@ class _AuthInterceptor extends Interceptor {
   /// /auth/refresh (token rejected) signs the user out; 429 / 5xx / a bad
   /// body keep the tokens so the next request can try again. Throws
   /// [NetworkException] when offline.
-  Future<String?> _refresh(String refreshToken, int session) async {
+  Future<String?> _refresh(String refreshToken, int session, int? attempt) async {
     String? token;
     String? rotated;
     try {
@@ -298,7 +313,10 @@ class _AuthInterceptor extends Interceptor {
       // account switch neither wipes the new account's tokens nor announces a sign-out for it.
       if ((status == 401 || status == 403) &&
           await _storage.clearIfSession(session)) {
-        ApiClient.authEvents.add(401);
+        // The clear ended [session], so the signed-out state is the next generation, under the request's operation.
+        ApiClient.authEvents.add(
+          SessionEvent(401, SessionOwner(session + 1, attempt ?? SecureStorage.authAttempt)),
+        );
       }
       return null;
     } catch (_) {}
@@ -327,6 +345,14 @@ class _ErrorInterceptor extends Interceptor {
     handler.reject(err.copyWith(error: mapError(err)));
   }
 
+  /// The session and credential operation a request was sent under; null for a request that never went through
+  /// [_AuthInterceptor.onRequest] (it is then treated as current).
+  static SessionOwner? _ownerOf(RequestOptions options) {
+    final session = options.extra['session'];
+    final attempt = options.extra['attempt'];
+    return session is int && attempt is int ? SessionOwner(session, attempt) : null;
+  }
+
   static Exception mapError(DioException err) {
     if (err.error is SessionChangedException) {
       return err.error! as SessionChangedException; // not an outage: do not flip the offline banner
@@ -353,7 +379,15 @@ class _ErrorInterceptor extends Interceptor {
         if (statusCode == 423 ||
             (statusCode == 403 &&
                 (code == null || code == ApiClient.roleForbiddenCode))) {
-          ApiClient.authEvents.add(statusCode!);
+          // R6-02: only the session that sent the request may act on its answer. A late 423 / role 403 for account A
+          // (B signed in, or is signing in, meanwhile) is dropped here, and the stale caller is told the session changed.
+          final owner = _ownerOf(err.requestOptions);
+          if (owner != null && !SecureStorage.owns(owner)) {
+            return const SessionChangedException();
+          }
+          ApiClient.authEvents.add(
+            SessionEvent(statusCode!, owner ?? SecureStorage.currentOwner),
+          );
         }
         return ServerException(
           message: message ?? 'Something went wrong',

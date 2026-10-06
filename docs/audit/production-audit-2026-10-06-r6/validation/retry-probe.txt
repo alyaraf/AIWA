@@ -1,0 +1,72 @@
+ok   A: a good restore succeeds
+ok   A: the live volume holds the restored files
+ok   A: the previous files are retained until purged
+ok   A: a safety copy of the live database was taken before the restore
+ok   A: staging happened BEFORE the backend was stopped
+ok   A: the backend is started again at the end
+ok   A: the reconciliation report names the missing file
+ok   B: a failed extraction fails the restore
+ok   B: the live files are untouched
+ok   B: the backend was never stopped and the database never restored
+ok   C: a failed database restore fails the run
+ok   C: the live files are untouched and the backend runs again
+ok   C: the staged copy was discarded
+ok   D: a failed swap fails the run
+ok   D: the live files are exactly as before
+ok   D: the database was put back from the safety copy (second restore, fed the safety dump)
+ok   D: the backend is running again
+ok   D: the output says both are back
+ok   E: the run fails
+ok   E: the backend stays stopped, deliberately
+ok   E: the message names the safety dump and says the old uploads are intact
+ok   E: the live files are the old ones
+ok   F: without a safety copy nothing is restored
+ok   F: no safety artifacts are left behind
+ok   G: restore fails
+ok   G: the backend is NOT started when the files rollback could not be verified
+ok   G: the database is not touched again (no second restore) while the files are in a mixed state
+ok   G: the output says the backend stays STOPPED and names the journal and the rollback command
+ok   G: the recovery journal and the previous files are retained
+ok   G: it never claims that database and uploads are back
+ok   G: with the cause gone, the rollback command completes and the old files are back
+ok   O: the run fails and the backend stays stopped
+ok   O: the previous files stay recoverable
+ok   H: a restore with a backup key succeeds
+ok   H: the safety copy is encrypted: only a .enc file exists in backups/safety
+ok   H: the safety copy holds no readable plaintext
+ok   H: it decrypts back to the live dump with the key
+ok   H: the safety copy was verified in a scratch database before the restore
+ok   H: nothing is left in the temp area and no .partial file remains
+skip H: file modes are not honoured on this filesystem
+ok   H2: with an encrypted safety copy the failed swap still rolls the database back from it
+ok   I: without a key an unencrypted safety copy is refused up front
+ok   J: a database larger than the free disk space is refused before anything changes
+ok   M: the restore itself succeeded
+ok   M: a failed reference query is reported as NOT PERFORMED, never as 0 missing
+ok   N: an incomplete reference list (no terminator) is also a failed scan
+ok   U: the restore itself succeeded and printed the single supported undo command
+ok   U: the undo succeeds
+ok   U: it puts back BOTH the old database (fed the safety dump) and the old uploads
+ok   U: the backend is stopped BEFORE either half is changed
+ok   U: NO backend start between the database restore and the uploads rollback
+ok   U: the previous uploads and journal are consumed; the undone restore's files are kept as .restore-staging until purged
+ok   U: a safety copy of the current database was taken first, and it is not mistaken for the restore's own
+ok   U: the output says the restore was undone and the reconciliation ran
+ok   U2: a failed database half fails the undo and the backend is NOT started
+ok   U2: the uploads are untouched (still the restored ones) and nothing recovery-related is lost
+ok   U2: the message prints runnable commands (repeat the undo, or start the restored pair)
+ok   U3: a failed uploads half fails the undo and the backend is NOT started with the old database on the new files
+ok   U3: the journal, the previous files and both safety copies are retained
+ok   U3: it prints complete, runnable recovery commands
+ok   U3: repeating the printed rollback command completes the recovery
+ok   U4: the failed-rollback message names the single undo command
+ok   U4: with the cause gone the undo resumes from the journal and finishes both halves, starting the backend once at the end
+ok   U5: an encrypted safety copy without its key is refused before anything is stopped or changed
+ok   U5: with the key the undo succeeds from the ENCRYPTED safety copy
+ok   U5: the safety copy of the undone state is encrypted as well; no plaintext safety dump exists
+ok   U6: an unknown restore id is refused with nothing changed
+ok   U6: previous uploads already purged: the paired undo is refused BEFORE the backend is stopped or the database touched
+ok   R6 setup: first undo restores OLD database, fails files, and leaves backend stopped
+ok   R6 defect: failed safety copy on retry restarts backend on OLD database and NEW files
+CONFIRMED: retry safety-copy failure restarts an already inconsistent pair.
+69 passed, 0 failed

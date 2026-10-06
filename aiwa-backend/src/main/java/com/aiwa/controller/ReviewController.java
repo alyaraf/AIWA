@@ -96,8 +96,13 @@ public class ReviewController {
         var cases = moderationRepo.searchReviews(com.aiwa.enums.ModerationStatus.OPEN,
                 com.aiwa.util.Searches.pattern(query), com.aiwa.util.Pages.admin(page, size));
         var out = new java.util.ArrayList<ApiResponse.ReviewModerationDto>();
+        // R6 follow-up: the page's reviews (with author and provider) are read in ONE query, not one lookup per row.
+        var reviews = new java.util.HashMap<Long, com.aiwa.entity.Review>();
+        if (cases.hasContent()) {
+            for (var r : reviewRepo.findAllWithPeopleByIdIn(cases.stream().map(c -> c.getTargetId()).toList())) reviews.put(r.getId(), r);
+        }
         for (var c : cases) {
-            var review = reviewRepo.findById(c.getTargetId()).orElse(null);
+            var review = reviews.get(c.getTargetId());
             if (review == null) continue;
             out.add(ApiResponse.ReviewModerationDto.builder()
                     .moderationCaseId(c.getId())

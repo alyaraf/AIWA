@@ -25,6 +25,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     Page<Review> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    /** R6 follow-up: the reviews of one moderation page, each with its author and provider, in a single query. */
+    @Query("SELECT r FROM Review r LEFT JOIN FETCH r.user u LEFT JOIN FETCH u.providerProfile LEFT JOIN FETCH r.provider WHERE r.id IN :ids")
+    java.util.List<Review> findAllWithPeopleByIdIn(@Param("ids") java.util.Collection<Long> ids);
+
     /**
      * Admin search (R4 follow-up): comment, customer name or provider business name ("%" = no search), optionally only
      * ratings up to {@code maxRating} (5 = every review; 2 = the "Low rating" view).

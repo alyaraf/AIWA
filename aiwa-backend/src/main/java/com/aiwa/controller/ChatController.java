@@ -141,8 +141,13 @@ public class ChatController {
         var cases = moderationRepo.searchChat(ModerationStatus.OPEN, com.aiwa.util.Searches.pattern(query),
                 com.aiwa.util.Pages.admin(page, size));
         var out = new java.util.ArrayList<ApiResponse.ChatModerationDto>();
+        // R6 follow-up: the page's messages (with their senders) are read in ONE query, not one lookup per row.
+        var messages = new java.util.HashMap<Long, ChatMessage>();
+        if (cases.hasContent()) {
+            for (var m : chatRepo.findAllWithSenderByIdIn(cases.stream().map(c -> c.getTargetId()).toList())) messages.put(m.getId(), m);
+        }
         for (var c : cases) {
-            var message = chatRepo.findById(c.getTargetId()).orElse(null);
+            var message = messages.get(c.getTargetId());
             if (message == null) continue;
             out.add(ApiResponse.ChatModerationDto.builder()
                     .moderationCaseId(c.getId())

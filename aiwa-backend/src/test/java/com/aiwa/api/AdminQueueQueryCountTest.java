@@ -1,14 +1,27 @@
 package com.aiwa.api;
 
+import com.aiwa.entity.Booking;
+import com.aiwa.entity.ChatMessage;
 import com.aiwa.entity.Complaint;
+import com.aiwa.entity.ModerationCase;
+import com.aiwa.entity.Review;
 import com.aiwa.entity.ProviderProfile;
 import com.aiwa.entity.User;
 import com.aiwa.enums.AdminPermission;
+import com.aiwa.enums.BookingStatus;
+import com.aiwa.enums.ModerationStatus;
+import com.aiwa.enums.ModerationTargetType;
+import com.aiwa.enums.PaymentStatus;
 import com.aiwa.enums.ComplaintStatus;
 import com.aiwa.enums.ServiceCategory;
 import com.aiwa.enums.UserRole;
 import com.aiwa.enums.VerificationStatus;
+import com.aiwa.repository.BookingRepository;
+import com.aiwa.repository.ChatMessageRepository;
 import com.aiwa.repository.ComplaintRepository;
+import com.aiwa.repository.ModerationCaseRepository;
+import com.aiwa.repository.ReviewRepository;
+import com.aiwa.repository.ServiceRepository;
 import com.aiwa.repository.ProviderProfileRepository;
 import com.aiwa.repository.UserRepository;
 import com.aiwa.service.impl.RedisRuntimeService;
@@ -31,6 +44,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -66,6 +82,11 @@ class AdminQueueQueryCountTest {
     @Autowired UserRepository userRepo;
     @Autowired ProviderProfileRepository providerRepo;
     @Autowired ComplaintRepository complaintRepo;
+    @Autowired ServiceRepository serviceRepo;
+    @Autowired BookingRepository bookingRepo;
+    @Autowired ChatMessageRepository chatRepo;
+    @Autowired ReviewRepository reviewRepo;
+    @Autowired ModerationCaseRepository moderationRepo;
     @Autowired PasswordEncoder encoder;
     @Autowired RedisRuntimeService redis;
     @Autowired EntityManagerFactory emf;
@@ -120,5 +141,61 @@ class AdminQueueQueryCountTest {
         // 60 users instead of 9 may need one more batched IN query for their permissions, but never one query per row
         assertThat(bigComplaints - smallComplaints).as("complaints: 20 rows vs 3 (N+1)").isLessThanOrEqualTo(2);
         assertThat(bigFlags - smallFlags).as("flags: 20 rows vs 3 (N+1)").isLessThanOrEqualTo(2);
+    }
+
+    /** A booking of its own customer and provider (so every row of a queue has its own people). */
+    private Booking bookingOfOwnPeople(User customer, String label) {
+        User owner = user(UserRole.PROVIDER, Set.of());
+        ProviderProfile provider = providerRepo.save(ProviderProfile.builder().user(owner).businessName("P " + tag + " " + label)
+                .address("x").primaryCategory(ServiceCategory.HAIR).verificationStatus(VerificationStatus.APPROVED).build());
+        com.aiwa.entity.Service svc = serviceRepo.save(com.aiwa.entity.Service.builder().provider(provider).name("Cut")
+                .category(ServiceCategory.HAIR).price(new BigDecimal("100")).durationMinutes(30).active(true).build());
+        return bookingRepo.save(Booking.builder().customer(customer).provider(provider).service(svc)
+                .bookingDate(LocalDate.now().minusDays(1)).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(10, 30))
+                .status(BookingStatus.COMPLETED).totalPrice(new BigDecimal("100")).paymentStatus(PaymentStatus.CASH_CONFIRMED).build());
+    }
+
+    private void reportedChats(int count) {
+        for (int i = 0; i < count; i++) {
+            User sender = user(UserRole.CUSTOMER, Set.of());
+            ChatMessage message = chatRepo.save(ChatMessage.builder().booking(bookingOfOwnPeople(sender, "c" + i)).sender(sender)
+                    .message("rude " + tag + " " + i).build());
+            moderationRepo.save(ModerationCase.builder().targetType(ModerationTargetType.CHAT_MESSAGE).targetId(message.getId())
+                    .reason("Abusive " + tag).status(ModerationStatus.OPEN).build());
+        }
+    }
+
+    private void reportedReviews(int count) {
+        for (int i = 0; i < count; i++) {
+            User author = user(UserRole.CUSTOMER, Set.of());
+            Booking booking = bookingOfOwnPeople(author, "r" + i);
+            Review review = reviewRepo.save(Review.builder().user(author).provider(booking.getProvider()).booking(booking)
+                    .rating(1 + i % 5).comment("awful " + tag + " " + i).build());
+            moderationRepo.save(ModerationCase.builder().targetType(ModerationTargetType.REVIEW).targetId(review.getId())
+                    .reason("Spam " + tag).status(ModerationStatus.OPEN).build());
+        }
+    }
+
+    /** R6 follow-up: the chat-report and reported-review queues looked each row's target up one by one. */
+    @Test
+    void chatAndReviewReportPagesCostTheSameWhetherTheyHoldThreeRowsOrTwenty() throws Exception {
+        User admin = user(UserRole.ADMIN, Set.of(AdminPermission.SUPPORT));
+        String token = "Bearer " + json.readTree(mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("identifier", admin.getEmail(), "password", PASSWORD))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("data").get("accessToken").asText();
+
+        reportedChats(3);
+        reportedReviews(3);
+        long smallChats = statementsFor(token, "/admin/chat/moderation?query=" + tag + "&size=20");
+        long smallReviews = statementsFor(token, "/admin/reviews/moderation?query=" + tag + "&size=20");
+        reportedChats(17);
+        reportedReviews(17);
+        long bigChats = statementsFor(token, "/admin/chat/moderation?query=" + tag + "&size=20");
+        long bigReviews = statementsFor(token, "/admin/reviews/moderation?query=" + tag + "&size=20");
+
+        System.out.println("R6-QUERYCOUNT chat 3 rows=" + smallChats + " 20 rows=" + bigChats
+                + "; reviews 3 rows=" + smallReviews + " 20 rows=" + bigReviews);
+        assertThat(bigChats - smallChats).as("chat reports: 20 rows vs 3 (N+1)").isLessThanOrEqualTo(2);
+        assertThat(bigReviews - smallReviews).as("reported reviews: 20 rows vs 3 (N+1)").isLessThanOrEqualTo(2);
     }
 }

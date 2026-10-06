@@ -40,9 +40,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthRegisterEvent>(_safe(_onRegister, beginsAttempt: true));
     on<AuthSendOtpEvent>(_safe(_onSendOtp));
     on<AuthVerifyOtpEvent>(_safe(_onVerifyOtp));
-    on<AuthLogoutEvent>(
-      _safe(_onLogout, fallback: AuthUnauthenticated(), beginsAttempt: true),
+    final logout = _safe<AuthLogoutEvent>(
+      _onLogout,
+      fallback: AuthUnauthenticated(),
+      beginsAttempt: true,
     );
+    on<AuthLogoutEvent>((event, emit) async {
+      // R6-02: a sign-out caused by a global event of ONE session (an account lock, an expired session) is checked
+      // here, before it begins a credential operation of its own: when that session is no longer the current one
+      // (another account signed in, or is signing in) nothing is wiped, nothing is published, and the sender is told.
+      final owner = event.owner;
+      if (owner != null && !SecureStorage.owns(owner)) {
+        event.settle(false);
+        return;
+      }
+      try {
+        await logout(event, emit);
+      } finally {
+        event.settle(false); // a no-op when the handler already reported that it signed out
+      }
+    });
     on<AuthGetCurrentUserEvent>(_safe(_onGetCurrentUser));
     on<AuthUpdateProfileEvent>(_safe(_onUpdateProfile));
   }
@@ -314,6 +331,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final accessToken = await secureStorage.getAccessToken();
     final refreshToken = await secureStorage.getRefreshToken();
     if (!SecureStorage.isCurrentAttempt(attempt)) {
+      event.settle(false);
       // R4-05: a newer sign-in / sign-out started while this was reading. It owns the credentials: do not wipe them
       // or publish a state. The session this sign-out was asked to end is still ended on the server, provided the
       // tokens read are really its own (no sign-in stored its tokens in between).
@@ -324,6 +342,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
     await secureStorage.clearAll();
     emit(AuthUnauthenticated());
+    event.settle(true);
     await _endOnServer(accessToken: accessToken, refreshToken: refreshToken);
   }
 

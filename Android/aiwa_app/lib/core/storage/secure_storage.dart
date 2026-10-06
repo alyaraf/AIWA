@@ -3,6 +3,25 @@ import 'dart:async';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
 
+/// R6-02: the session generation and credential-operation number an asynchronous result was started under.
+class SessionOwner {
+  final int generation;
+  final int attempt;
+  const SessionOwner(this.generation, this.attempt);
+
+  @override
+  bool operator ==(Object other) =>
+      other is SessionOwner &&
+      other.generation == generation &&
+      other.attempt == attempt;
+
+  @override
+  int get hashCode => Object.hash(generation, attempt);
+
+  @override
+  String toString() => 'SessionOwner($generation, $attempt)';
+}
+
 class SecureStorage {
   final FlutterSecureStorage _storage;
 
@@ -27,6 +46,13 @@ class SecureStorage {
   static int get authAttempt => _attempt;
   static int beginAuthAttempt() => ++_attempt;
   static bool isCurrentAttempt(int attempt) => attempt == _attempt;
+
+  /// R6-02: who a request, a failed response or a global auth event belongs to: the stored session AND the credential
+  /// operation that was current when it started. A newer sign-in / registration / sign-out (even one that is still
+  /// waiting for the server and has not stored anything yet) or another account's session makes it obsolete.
+  static SessionOwner get currentOwner => SessionOwner(_generation, _attempt);
+  static bool owns(SessionOwner owner) =>
+      owner.generation == _generation && owner.attempt == _attempt;
 
   static Future<void> _credentialLock = Future<void>.value();
 

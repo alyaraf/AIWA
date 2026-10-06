@@ -1,3 +1,68 @@
+# AIWA Handoff — round 6 remediation (current)
+
+Last updated: 2026-10-06. Project: D:/AIWA PROJECT/AIWA; branch main. Base commit b2d70b9; the remediation below is **uncommitted work in the tree** (review the diff, commit in your own grouping).
+
+**Read first:** [remediation record](docs/audit/production-audit-2026-10-06-r6/remediation.md) (root cause, files, tests, limits per finding), then the round 6 [audit](docs/audit/production-audit-2026-10-06-r6/audit.md) and its [validation fixtures](docs/audit/production-audit-2026-10-06-r6/validation/README.md). The audit folder is historical evidence and was not edited; its fixtures still assert the original defects.
+
+**Production: not established.** All three round 6 findings are fixed and tested on the host, but launch sign-off still has **48 rows with no owner/decision/evidence** (45 earlier + new gates 46-48), and every real-environment check is unavailable here (no Docker engine, psql, promtool, devices, staging or cloud access).
+
+| ID | Status | Fix |
+| --- | --- | --- |
+| R6-01 High | Fixed (host/fake-docker); real-container drill = gate 46 | `deploy/restore.sh`: recovery marker `backups/safety/.recovery-incomplete`, written before any backend stop, removed only when the backend is started on a proven-consistent pair. A run that finds it keeps the backend stopped on every failure (safety dump, verification, encryption, store, database half, swap) and never prints "pair intact"/start guidance; database-only runs leave it stopped; completing both halves starts it once. |
+| R6-02 Medium | Fixed (host); device check = gate 47 | Flutter: `SessionOwner(generation, attempt)` on requests, `SessionEvent` on `ApiClient.authEvents`, stale 423/role-403 dropped at the mapper, owner re-checked at consumption (`routeSessionEvent`) and inside `AuthBloc` (`AuthLogoutEvent(owner:)`, `applied`); redirect only after the logout was applied. |
+| R6-03 Medium | Fixed (host); real-browser check = gate 48 | Dashboard `api.safetyPage`: global oldest-open read no longer depends on the match count (skipped only for an empty unfiltered queue or an unfiltered first page holding the whole queue); closing the bannered alert clears the banner. |
+| Follow-up | Fixed + measured | Chat-report / reported-review queues fetched each row's target one by one: statements for 3 vs 20 rows were 12/64 (chat) and 15/84 (reviews), now 5/6 and 5/6 (one batched query). H2 statement counts only. |
+
+**Final verification (2026-10-06)**
+
+| Check | Result |
+| --- | --- |
+| Backend (JDK 17, offline Maven) | **507 tests**, 0 failures/errors/skips (506 + 1 new query-count test; one existing unit test's stub moved to the batched lookup). Needs `-DargLine="-Xmx640m -XX:MaxMetaspaceSize=320m -Xss512k"` on this machine: two uncapped runs died with native-memory exhaustion (JVM crash, not test failures). |
+| Dashboard | **236 tests / 34 files** (221 + 15 new), production build passes |
+| Flutter | analyzer clean, **265 tests** (253 + 12 new) with `--concurrency=2` (default parallelism stalls this machine; every file passes alone) |
+| `deploy/restore_flow_test.sh` | **93** assertions (67 + 26 new; 15 of them fail against the old script) |
+| `backup_test.sh` / `uploads_swap_test.sh` | 47 / 83 |
+| `restore_test.sh` | **not run** (needs Docker) |
+| CI graph check | OK, 5 mutations rejected (static, not a CI run) |
+| `npm audit --omit=dev --audit-level=high` | 0 vulnerabilities |
+| New dashboard tests on the old source | 6 of 15 fail (red before, green after). Flutter R6-02 tests use the new API and cannot compile against the old code; the audit fixture shows the original defect. |
+
+**Still open (external):** real PostgreSQL/Redis and V34 rehearsal, plans/statement counts on staging-sized data (gates 27, 40, 44), real-container recovery and Linux modes (24, 36, 43, 46), native account switch and device checks (17, 30, 38, 41, 47), real-browser checks (29, 37, 48), actual CI/dependency scan/release artifacts (1, 20, 34, 35, 45), providers, monitoring/alert delivery, offsite/IAM/key escrow (2-5, 15, 21, 26, 28, 39). I-03 stays mitigated, not resolved: dump and uploads are still two snapshots. After an incomplete recovery finished by hand, remove the marker only once the pair is verified. No deployment, live restore, external message or cloud change was made.
+
+Tooling: JDK17 C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot; Node20 C:/Users/fsherif/AppData/Local/nvm/v20.20.2; Flutter D:/tools/flutter, PUB_CACHE D:/tools/pubcache. Do not run full Maven and Vitest together; no python (use Node for patching; Dart/Java/doc files are CRLF). Do not reproduce recovery fixtures against live data.
+
+---
+
+## Previous handoff — round 6 verification (superseded)
+
+### Round 6 verification (as audited)
+
+Last updated: 2026-10-06. Project: D:/AIWA PROJECT/AIWA; branch main. Verified application commit: **b2d70b93399ac318d4aa7ce83533f9d6bf485827**. The six round 5 remediation commits are committed; the application working tree was clean throughout this audit. This delivery adds documentation and this handoff only. The preceding remediation's statement that changes are uncommitted is historical and superseded.
+
+**Read first:** [round 6 audit](docs/audit/production-audit-2026-10-06-r6/audit.md), [closure reconciliation](docs/audit/production-audit-2026-10-06-r6/remediation-status.md), [coverage](docs/audit/production-audit-2026-10-06-r6/coverage.md), [fresh evidence and fixtures](docs/audit/production-audit-2026-10-06-r6/validation/README.md). Prior audit/remediation sections are history.
+
+**Production: not ready.** The four original R5 scenarios are addressed in reviewed local source/tests. Six remaining admin queues now use server paging/search. Three further reproducible cases remain: **1 High, 2 Medium**. Broader M-01 and I-02 closure remains partial, AD-13 has an oldest-SOS search edge case, and I-03/I-05 external consistency/offsite evidence remains open. All **45 launch-signoff evidence rows** remain incomplete.
+
+| ID | Priority | Required work |
+| --- | --- | --- |
+| R6-01 | High | An unsuccessful undo retry starts backend after a failed safety copy even when a previous failed undo left old DB/new uploads. Keep incomplete recovery stopped; qualify safe-start guidance and preserve recovery artifacts. Actual scripts/fake Docker reproduction. |
+| R6-02 | Medium | Delayed account A HTTP 423 reaches the unowned global status stream and logs out current B. Extend session ownership to failed responses and event consumption. Actual client/repository/storage/bloc reproduction; native navigation is source-reviewed. |
+| R6-03 | Medium | Zero-match SOS search suppresses the global oldest-open request/banner despite an unrelated open alert. Read global oldest independently of match count. API helper reproduction and render source. |
+
+Original fixes retained: credential refresh writes/conditional clears share the lock; backup references come from the actual dump's scratch restore; successful paired undo starts only after both halves; clean lock resolution is source-map-js 1.2.2. See the closure table for their platform/staging limits and the new edge cases.
+
+Fresh verification: backend **506 tests** (H2), dashboard **221 tests / 33 files + build**, Flutter **analyzer clean / 253 tests**; backup/swap/restore **47/83/67** assertions; CI static graph passes and **5** bad mutations rejected. Three independent defect probes confirm the new findings (extended retry harness 69 assertions, Flutter 1, dashboard 1). **691 tracked snapshot inputs** match the project. Approved fresh public npm production advisory check: **0 reported vulnerabilities**, exit 0. Passing defect probes assert faulty behavior, not fixes.
+
+Docker Linux engine pipe remains absent; psql/promtool are unavailable. Real PostgreSQL/Redis, production-copy V34 rehearsal, Linux modes/container recovery, actual CI, native browser/device/release archives, provider delivery, cloud/offsite/key escrow and load remain unverified. Gates 41–45 specifically track the recent remediation's external evidence; no row is closed by these local checks.
+
+No application fixes, dependency updates, live restores, deployment, external messages or cloud mutations were performed. The dependency-only public scan used the user's existing authorization; no further approval is needed for that completed check.
+
+Audit workspace: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6. Tooling: JDK17 C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot; Node20 C:/Users/fsherif/AppData/Local/nvm/v20.20.2; Flutter D:/tools/flutter, PUB_CACHE D:/tools/pubcache. Do not run full Maven and Vitest together. Do not reproduce recovery fixtures against live data.
+
+---
+
+## Previous handoff — round 5 remediation (superseded)
+
 # AIWA Handoff — round 5 remediation (current)
 
 Last updated: 2026-10-06. Project: D:/AIWA PROJECT/AIWA; branch main. Audit baseline ddebaf9; the remediation is **uncommitted work in the tree** (review the diff, commit in your own grouping).

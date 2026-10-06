@@ -575,6 +575,10 @@ export const api = {
    * necessarily on the page shown: it is taken from the page itself when that page is the whole queue, otherwise from a
    * second request (order=oldest, size 1). Both reads belong to the same call, so the screen's ordered-read rule (one
    * accepted read, no freshness without a server answer) applies to the pair; if either fails the whole read fails.
+   * R6-03: the oldest open alert is a fact about the WHOLE open queue, so it never depends on how many alerts match the
+   * search: a search with zero matches still reads it (an unrelated alert may be waiting). The only reads that are skipped
+   * are the ones whose answer is already known: an unfiltered queue that is empty (nothing is open) and an unfiltered first
+   * page that holds the whole queue (its last row is the oldest).
    * Resolves to { rows, total, totalPages, oldest }.
    */
   safetyPage: async ({ status = "OPEN", query = "", page = 0, size = 10 } = {}) => {
@@ -582,13 +586,14 @@ export const api = {
     if (status !== "OPEN") return { ...current, oldest: null };
     const text = String(query || "").trim();
     let oldest = null;
-    if (current.total > 0) {
-      if (!text && page === 0 && current.total <= size) {
-        oldest = current.rows[current.rows.length - 1] ?? null; // newest first: the last row of the whole queue is the oldest
-      } else {
-        const first = await requestPage("/admin/safety", { status: "OPEN", order: "oldest", page: 0, size: 1 }, normalizeSafety);
-        oldest = first.rows[0] ?? null;
-      }
+    if (!text && current.total === 0) {
+      oldest = null; // the whole open queue is empty: there is nothing to warn about
+    } else if (!text && page === 0 && current.total <= size) {
+      oldest = current.rows[current.rows.length - 1] ?? null; // newest first: the last row of the whole queue is the oldest
+    } else {
+      // a search (matches or not), a later page, or a queue larger than a page: ask for the global oldest
+      const first = await requestPage("/admin/safety", { status: "OPEN", order: "oldest", page: 0, size: 1 }, normalizeSafety);
+      oldest = first.rows[0] ?? null;
     }
     return { ...current, oldest };
   },

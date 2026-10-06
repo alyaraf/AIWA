@@ -6,6 +6,7 @@ import 'l10n/app_localizations.dart';
 import 'core/network/api_client.dart';
 import 'core/push/push_registrar.dart';
 import 'core/push/push_service.dart';
+import 'core/storage/secure_storage.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
@@ -83,7 +84,7 @@ class _ThemedApp extends StatefulWidget {
 }
 
 class _ThemedAppState extends State<_ThemedApp> {
-  late final StreamSubscription<int> _authEvents;
+  late final StreamSubscription<SessionEvent> _authEvents;
   late final StreamSubscription<Map<String, String>> _pushTaps;
   late final StreamSubscription<String> _tokenRefresh;
 
@@ -121,19 +122,19 @@ class _ThemedAppState extends State<_ThemedApp> {
 
   /// Global HTTP-status routing (ACCT-C07): 401 after a rejected refresh,
   /// 423 locked account, 403 another role's area.
-  void _onAuthEvent(int status) {
-    final path = router.routerDelegate.currentConfiguration.uri.path;
-    switch (status) {
-      case 401 when path != AppRoutes.sessionExpired:
-        context.read<AuthBloc>().add(AuthLogoutEvent());
-        router.go(AppRoutes.sessionExpired);
-      case 423 when path != AppRoutes.accountLocked:
-        context.read<AuthBloc>().add(AuthLogoutEvent());
-        router.go(AppRoutes.accountLocked);
-      case 403 when path != AppRoutes.forbidden:
-        router.push(AppRoutes.forbidden);
-    }
-  }
+  ///
+  /// R6-02: every event names the session that produced it and is acted on only while that session is still the
+  /// current one: a late answer for account A must neither sign out nor redirect account B, and an event that sat in
+  /// the stream while the user switched accounts is dropped here. The sign-out carries the same owner into the bloc
+  /// and the redirect waits for the bloc to confirm that it signed that session out.
+  void _onAuthEvent(SessionEvent event) => routeSessionEvent(
+    event,
+    bloc: context.read<AuthBloc>(),
+    currentPath: () => router.routerDelegate.currentConfiguration.uri.path,
+    go: router.go,
+    push: router.push,
+    alive: () => mounted,
+  );
 
   void _onLocaleChanged() => setState(() {});
 
@@ -160,6 +161,37 @@ class _ThemedAppState extends State<_ThemedApp> {
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (_, child) => Stack(children: [child!, const OfflineBanner()]),
     );
+  }
+}
+
+/// R6-02: the routing of one global auth event (see [_ThemedAppState._onAuthEvent]); a top-level function so the real
+/// handling can be exercised without mounting the whole app. [go] / [push] / [currentPath] are the router.
+Future<void> routeSessionEvent(
+  SessionEvent event, {
+  required AuthBloc bloc,
+  required String Function() currentPath,
+  required void Function(String) go,
+  required void Function(String) push,
+  bool Function()? alive,
+}) async {
+  bool stillMine() => (alive?.call() ?? true) && SecureStorage.owns(event.owner);
+  if (!stillMine()) return;
+  final path = currentPath();
+  Future<void> signOutThen(String route) async {
+    final logout = AuthLogoutEvent(owner: event.owner);
+    bloc.add(logout);
+    // Dropped as obsolete (another account owns the credentials now): no redirect either.
+    if (!await logout.applied || !(alive?.call() ?? true)) return;
+    go(route);
+  }
+
+  switch (event.status) {
+    case 401 when path != AppRoutes.sessionExpired:
+      await signOutThen(AppRoutes.sessionExpired);
+    case 423 when path != AppRoutes.accountLocked:
+      await signOutThen(AppRoutes.accountLocked);
+    case 403 when path != AppRoutes.forbidden:
+      push(AppRoutes.forbidden);
   }
 }
 

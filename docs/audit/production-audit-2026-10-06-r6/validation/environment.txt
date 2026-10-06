@@ -1,0 +1,4 @@
+{"Client":{"Version":"29.6.1","ApiVersion":"1.55","DefaultAPIVersion":"1.55","GitCommit":"8900f1d","GoVersion":"go1.26.4","Os":"windows","Arch":"amd64","BuildTime":"Fri Jun 26 11:43:32 2026","Context":"desktop-linux"},"Server":null}
+failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine; check if the path is correct and if the daemon is running: open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.
+Docker version exit: 1
+No psql or promtool executable found on PATH.
