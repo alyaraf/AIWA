@@ -14,7 +14,9 @@ import '../../../../shared/widgets/aiwa_icon_button.dart';
 import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/screen_chrome.dart';
+import '../../domain/provider_setup.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -94,35 +96,61 @@ class _PreferencesPageState extends State<PreferencesPage> {
     return result;
   }
 
-  /// After register: terms, radius, then the provider profile + documents.
+  /// Writes the setup checkpoint (a provider's only) so a killed app can resume; a storage failure never blocks the
+  /// sign-up itself.
+  Future<void> _saveCheckpoint(ProviderSetupCheckpoint cp) async {
+    if (!_isProvider || cp.userId.isEmpty) return;
+    try {
+      await sl<SecureStorage>().saveSetupCheckpoint(cp.encode());
+    } catch (_) {}
+  }
+
+  Future<void> _clearCheckpoint() async {
+    try {
+      await sl<SecureStorage>().deleteSetupCheckpoint();
+    } catch (_) {}
+  }
+
+  /// After register: terms, radius, then the provider profile + documents (shared with the resume path, which
+  /// runs the same steps from the saved checkpoint).
   Future<void> _finish() async {
     final repo = sl<AuthRepository>();
-    final steps = <Future<Either<Failure, void>> Function()>[
-      () => _acceptTerms(repo),
-      () => repo.updatePreferences(minKm: _min, maxKm: _max),
-      if (_isProvider) ...[
-        () => repo.createProviderProfile({
-          'businessName': _d['businessName'],
-          'bio': _d['bio'],
-          'address': _d['address'],
-          'latitude': _d['latitude'],
-          'longitude': _d['longitude'],
-          'primaryCategory': _d['primaryCategory'],
-          'providerType': _d['businessType'] == 'shop' ? 'SHOP' : 'INDIVIDUAL',
-        }, staff: (_d['staff'] as List?)?.cast<String>() ?? const []),
-        () => repo.uploadVerificationDocuments(
-          idFront: _d['idFront'] as String,
-          idBack: _d['idBack'] as String,
-          selfie: _d['selfie'] as String,
-        ),
-      ],
-    ];
+    final auth = context.read<AuthBloc>().state;
+    final cp = ProviderSetupCheckpoint(
+      userId: auth is AuthAuthenticated ? '${auth.user.id}' : '',
+      done: _done,
+      minKm: _min,
+      maxKm: _max,
+      language: _lang,
+      termsVersion: _d['termsVersion'] as String?, // what the person read and agreed to on the previous step
+      termsType: termsTypeFor(provider: _isProvider),
+      gender: _d['gender'] as String?,
+      profile: {
+        'businessName': _d['businessName'],
+        'bio': _d['bio'],
+        'address': _d['address'],
+        'latitude': _d['latitude'],
+        'longitude': _d['longitude'],
+        'primaryCategory': _d['primaryCategory'],
+        'providerType': _d['businessType'] == 'shop' ? 'SHOP' : 'INDIVIDUAL',
+      },
+      staff: (_d['staff'] as List?)?.cast<String>() ?? const [],
+      idFront: _d['idFront'] as String?,
+      idBack: _d['idBack'] as String?,
+      selfie: _d['selfie'] as String?,
+    );
     setState(() => _busy = true);
-    Failure? error;
-    while (_done < steps.length && error == null) {
-      error = (await steps[_done]()).fold((f) => f, (_) => null);
-      if (error == null) _done++;
-    }
+    await _saveCheckpoint(cp);
+    final error = await runProviderSetup(
+      repo,
+      cp,
+      provider: _isProvider,
+      acceptTerms: () => _acceptTerms(repo),
+      onProgress: (n) async {
+        _done = n;
+        await _saveCheckpoint(cp.withDone(n));
+      },
+    );
     final avatar = _d['avatarPath'] as String?;
     // ponytail: photo is optional; a failed upload can be redone from Profile.
     if (error == null && avatar != null) await repo.uploadAvatar(avatar);
@@ -135,6 +163,8 @@ class _PreferencesPageState extends State<PreferencesPage> {
       _error = message;
     });
     if (message != null) return;
+    await _clearCheckpoint();
+    if (!mounted) return;
     ThemeController.applyGender(_d['gender'] as String?);
     LocaleController.set(_lang);
     // Pick up the saved radius / terms version on the signed-in user.

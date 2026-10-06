@@ -201,4 +201,15 @@ class BookingRepositoryImpl implements BookingRepository {
       newTime: newTime,
     ),
   );
+
+  @override
+  Future<Either<Failure, BookingEntity>> amendDestination({
+    required String bookingId,
+    required String savedAddressId,
+  }) => _guard(
+    () => _remote.amendDestination(
+      bookingId: bookingId,
+      savedAddressId: savedAddressId,
+    ),
+  );
 }

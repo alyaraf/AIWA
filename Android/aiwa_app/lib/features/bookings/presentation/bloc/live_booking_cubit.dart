@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/booking_entity.dart';
+import '../../domain/entities/saved_address_entity.dart';
 import '../../domain/repositories/booking_repository.dart';
 
 /// SOS banner stages on Tracking (flow-screens.jsx:357-376).
@@ -195,6 +196,14 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
     ),
   );
 
+  /// Changes the home visit's address (reconfirmation by the provider is the backend's rule for accepted visits).
+  Future<bool> amendDestination(String savedAddressId) => _act(
+    () => _repo.amendDestination(
+      bookingId: bookingId,
+      savedAddressId: savedAddressId,
+    ),
+  );
+
   Future<bool> checkIn() => _act(() => _repo.checkIn(bookingId));
 
   Future<bool> respondToProposal(bool accept) =>
@@ -288,6 +297,16 @@ class LiveBookingCubit extends Cubit<LiveBookingState> {
           ? state.copyWith(sos: SosStage.logged)
           : state.copyWith(actionError: r.fold((f) => f.message, (_) => null)),
     );
+  }
+
+  /// The customer's saved addresses for the destination amendment, or null when they could not be loaded (the reason
+  /// is shown inline like any other action error).
+  Future<List<SavedAddressEntity>?> savedAddresses() async {
+    final r = await _repo.getSavedAddresses();
+    return r.fold((f) {
+      if (!isClosed) emit(state.copyWith(actionError: f.message));
+      return null;
+    }, (a) => a);
   }
 
   /// tel: number for the call buttons, or null (error shown inline).

@@ -97,6 +97,9 @@ class ApiConstants {
   static String bookingComplete(String id) => '/bookings/$id/complete';
   static String bookingNoShow(String id) => '/bookings/$id/no-show';
   static String bookingReschedule(String id) => '/bookings/$id/reschedule';
+
+  /// PATCH {savedAddressId}: changes the destination of a home visit (B-05); an accepted visit returns to PENDING.
+  static String bookingDestination(String id) => '/bookings/$id/destination';
   static String bookingProposeTime(String id) => '/bookings/$id/propose-time';
   static String bookingProposalResponse(String id) =>
       '/bookings/$id/proposal-response';

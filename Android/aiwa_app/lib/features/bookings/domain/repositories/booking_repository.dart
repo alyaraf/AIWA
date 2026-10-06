@@ -109,6 +109,13 @@ abstract class BookingRepository {
     required String newDate,
     required String newTime,
   });
+
+  /// Moves a home visit to another of the customer's saved addresses. The backend checks ownership, the
+  /// provider's radius and the cutoff, and sends an accepted visit back to PENDING for the provider to confirm again.
+  Future<Either<Failure, BookingEntity>> amendDestination({
+    required String bookingId,
+    required String savedAddressId,
+  });
 }
 
 /// What an SOS reached, from the backend's delivery records (R2-03). The SOS

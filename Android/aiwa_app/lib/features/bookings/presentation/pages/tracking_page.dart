@@ -10,6 +10,7 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/widgets/address_amend_sheet.dart';
 import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/aiwa_icon_button.dart';
@@ -197,6 +198,35 @@ class _TrackingViewState extends State<_TrackingView> {
     }
   }
 
+  /// R4 follow-up (B-05): changes where a home visit takes place. The backend refuses an address outside the provider's
+  /// radius or too close to the visit, and sends an accepted visit back to Pending; the sheet says so first.
+  Future<void> _changeAddress(BookingEntity b) async {
+    final l = AppLocalizations.of(context);
+    final addresses = await _cubit.savedAddresses();
+    if (!mounted) return;
+    if (addresses == null) {
+      showAiwaToast(context, l.addressAmendLoadFailed);
+      return;
+    }
+    final id = await showAddressAmendSheet(
+      context,
+      providerName: b.displayProviderName,
+      addresses: addresses,
+      currentAddress: b.customerAddress,
+      needsReconfirm: b.status == 'ACCEPTED',
+    );
+    if (id == null || !mounted) return;
+    final wasAccepted = b.status == 'ACCEPTED';
+    if (await _cubit.amendDestination(id) && mounted) {
+      showAiwaToast(
+        context,
+        wasAccepted
+            ? l.addressAmendedReconfirmToast(b.displayProviderName)
+            : l.addressAmendedToast,
+      );
+    }
+  }
+
   Future<void> _call() async {
     final n = await _cubit.maskedPhone();
     if (n != null) await launchUrl(Uri(scheme: 'tel', path: n));
@@ -364,6 +394,18 @@ class _TrackingViewState extends State<_TrackingView> {
               onPressed: () => _reschedule(b),
             ),
             const SizedBox(height: 10),
+            if (b.homeService) ...[
+              AiwaButton(
+                key: const Key('change-visit-address'),
+                label: l.trackChangeAddress,
+                icon: LucideIcons.mapPin,
+                variant: AiwaButtonVariant.secondary,
+                fullWidth: true,
+                loading: s.busy,
+                onPressed: () => _changeAddress(b),
+              ),
+              const SizedBox(height: 10),
+            ],
           ],
           if (done && !b.reviewed) ...[
             AiwaButton(

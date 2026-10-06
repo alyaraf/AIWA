@@ -1834,5 +1834,48 @@
   "a11ySaved": "Saved to favourites",
   "bookingsContestNoShow": "This wasn’t a no-show",
   "bookingsNoShowContested": "Sent. AIWA support will review it.",
-  "bookingsNoShowContestOpen": "Contest sent, waiting for AIWA support"
+  "bookingsNoShowContestOpen": "Contest sent, waiting for AIWA support",
+  "trackChangeAddress": "Change visit address",
+  "addressAmendEyebrow": "Home visit",
+  "addressAmendTitle": "Where should they come?",
+  "addressAmendBody": "Pick one of your saved addresses. It has to be inside {name}'s service area.",
+  "@addressAmendBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "addressAmendReconfirm": "{name} already accepted this visit. Changing the address sends it back to Pending until they confirm again.",
+  "@addressAmendReconfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "addressAmendCurrent": "Now: {address}",
+  "@addressAmendCurrent": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "addressAmendNone": "You have no other saved address. Add one under Profile › Addresses, then come back.",
+  "addressAmendConfirm": "Change address",
+  "addressAmendedToast": "Address changed",
+  "addressAmendedReconfirmToast": "Address changed. {name} has to confirm the visit again.",
+  "@addressAmendedReconfirmToast": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "addressAmendLoadFailed": "Couldn't load your addresses. Try again.",
+  "authTermsUpdatedNotice": "The terms were updated while you were signing up. Please read and agree to the new version.",
+  "provResumeSetup": "Finish setup where I left off",
+  "provResumeFilesMissing": "Your ID photos are no longer on this phone. Upload them again to finish.",
+  "provResumeDone": "Setup finished"
 }

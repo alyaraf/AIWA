@@ -3,7 +3,9 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/di/injection_container.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -11,6 +13,8 @@ import '../../../../shared/widgets/aiwa_button.dart';
 import '../../../../shared/widgets/eyebrow_label.dart';
 import '../../../../shared/widgets/screen_chrome.dart' show AiwaGlow;
 import '../../domain/entities/user_entity.dart';
+import '../../domain/provider_setup.dart';
+import '../../domain/repositories/auth_repository.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -29,13 +33,75 @@ class ProviderPendingPage extends StatefulWidget {
 }
 
 class _ProviderPendingPageState extends State<ProviderPendingPage> {
+  /// The saved sign-up (business details, staff, radius, ID photos) of THIS account, if the app was closed before the
+  /// last steps finished (audit follow-up to M-05). Never holds a password or OTP.
+  ProviderSetupCheckpoint? _checkpoint;
+  bool _resuming = false;
+  String? _resumeError;
+
   @override
   void initState() {
     super.initState();
     _refresh();
+    _loadCheckpoint();
   }
 
   void _refresh() => context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
+
+  Future<void> _loadCheckpoint() async {
+    try {
+      final cp = ProviderSetupCheckpoint.decode(await sl<SecureStorage>().getSetupCheckpoint());
+      if (!mounted) return;
+      final auth = context.read<AuthBloc>().state;
+      // Another account's leftovers are never used (and are dropped).
+      if (cp != null && auth is AuthAuthenticated && cp.userId != '${auth.user.id}') {
+        await sl<SecureStorage>().deleteSetupCheckpoint();
+        return;
+      }
+      setState(() => _checkpoint = cp);
+    } catch (_) {}
+  }
+
+  /// Runs the steps that are still missing from the saved checkpoint. Every step is safe to repeat; what the server
+  /// already has is not sent again. Missing ID photos send the provider to pick them again.
+  Future<void> _resume() async {
+    final cp = _checkpoint;
+    if (cp == null || _resuming) return;
+    setState(() {
+      _resuming = true;
+      _resumeError = null;
+    });
+    final failure = await runProviderSetup(
+      sl<AuthRepository>(),
+      cp,
+      onProgress: (n) async {
+        _checkpoint = cp.withDone(n);
+        try {
+          await sl<SecureStorage>().saveSetupCheckpoint(cp.withDone(n).encode());
+        } catch (_) {}
+      },
+    );
+    if (!mounted) return;
+    if (failure == null) {
+      try {
+        await sl<SecureStorage>().deleteSetupCheckpoint();
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _resuming = false;
+        _checkpoint = null;
+      });
+      _refresh();
+      return;
+    }
+    final l = AppLocalizations.of(context);
+    setState(() {
+      _resuming = false;
+      _resumeError = failure is DocumentsMissingFailure
+          ? l.provResumeFilesMissing
+          : l.error(failure.message);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +303,27 @@ class _ProviderPendingPageState extends State<ProviderPendingPage> {
                           ),
                         ],
                         const Spacer(),
+                        if (_checkpoint != null && (noProfile || missingDocs)) ...[
+                          if (_resumeError != null) ...[
+                            _StatusRow(
+                              icon: LucideIcons.triangleAlert,
+                              text: _resumeError!,
+                              color: AppColors.gold300,
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          AiwaButton(
+                            key: const Key('resume-setup'),
+                            label: l.provResumeSetup,
+                            icon: LucideIcons.rotateCw,
+                            variant: AiwaButtonVariant.accent,
+                            fullWidth: true,
+                            size: AiwaButtonSize.lg,
+                            loading: _resuming,
+                            onPressed: _resume,
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         if (noProfile) ...[
                           AiwaButton(
                             label: l.provSetupContinue,

@@ -3559,4 +3559,60 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get bookingsNoShowContestOpen => 'تم إرسال الاعتراض، بانتظار دعم AIWA';
+
+  @override
+  String get trackChangeAddress => 'تغيير عنوان الزيارة';
+
+  @override
+  String get addressAmendEyebrow => 'زيارة منزلية';
+
+  @override
+  String get addressAmendTitle => 'أين تريدهم أن يأتوا؟';
+
+  @override
+  String addressAmendBody(String name) {
+    return 'اختر أحد عناوينك المحفوظة. يجب أن يكون ضمن نطاق خدمة $name.';
+  }
+
+  @override
+  String addressAmendReconfirm(String name) {
+    return 'وافق $name على هذه الزيارة بالفعل. تغيير العنوان يعيد الحجز إلى قيد الانتظار حتى يؤكد من جديد.';
+  }
+
+  @override
+  String addressAmendCurrent(String address) {
+    return 'الحالي: $address';
+  }
+
+  @override
+  String get addressAmendNone =>
+      'لا يوجد لديك عنوان محفوظ آخر. أضف عنوانًا من الملف الشخصي › العناوين ثم عد.';
+
+  @override
+  String get addressAmendConfirm => 'تغيير العنوان';
+
+  @override
+  String get addressAmendedToast => 'تم تغيير العنوان';
+
+  @override
+  String addressAmendedReconfirmToast(String name) {
+    return 'تم تغيير العنوان. على $name تأكيد الزيارة من جديد.';
+  }
+
+  @override
+  String get addressAmendLoadFailed => 'تعذّر تحميل عناويني. حاول مرة أخرى.';
+
+  @override
+  String get authTermsUpdatedNotice =>
+      'تم تحديث الشروط أثناء التسجيل. يرجى قراءة النسخة الجديدة والموافقة عليها.';
+
+  @override
+  String get provResumeSetup => 'إكمال الإعداد من حيث توقفت';
+
+  @override
+  String get provResumeFilesMissing =>
+      'صور هويتك لم تعد موجودة على هذا الهاتف. ارفعها مرة أخرى للإكمال.';
+
+  @override
+  String get provResumeDone => 'اكتمل الإعداد';
 }

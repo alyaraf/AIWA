@@ -84,7 +84,13 @@ Future<void> initDependencies() async {
   );
   // ponytail: every domain repository interface has exactly one *Impl, drop the abstract classes unless a fake/second impl is needed
   sl.registerFactory<AuthRepository>(
-    () => AuthRepositoryImpl(sl<AuthRemoteDataSource>(), sl<SecureStorage>()),
+    () => AuthRepositoryImpl(
+      sl<AuthRemoteDataSource>(),
+      sl<SecureStorage>(),
+      // R4-05: a sign-in that was overtaken must not leave its server session open.
+      revokeTokens: ({accessToken, refreshToken}) =>
+          sl<ApiClient>().logout(accessToken: accessToken, refreshToken: refreshToken),
+    ),
   );
   sl.registerFactory(
     () => AuthBloc(

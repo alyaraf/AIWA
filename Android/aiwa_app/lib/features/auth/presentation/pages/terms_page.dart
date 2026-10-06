@@ -31,6 +31,10 @@ class _TermsPageState extends State<TermsPage> {
   TermsDoc? _doc;
   bool _loadFailed = false;
 
+  /// Set when the version this person had read turned out to be out of date (a reload after "terms changed"): the new
+  /// text is announced as new, and until it has really loaded NOTHING of the old text stays on screen to agree to.
+  bool _updated = false;
+
   bool get _isProvider => widget.registrationData['role'] == 'PROVIDER';
 
   @override
@@ -39,10 +43,14 @@ class _TermsPageState extends State<TermsPage> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool updated = false}) async {
     setState(() {
       _loadFailed = false;
       _agree = false; // a new version has to be agreed to again
+      if (updated) _updated = true;
+      // A reload replaces the policy: the old text is dropped now, so a failed reload shows the error and the
+      // retry (never the outdated policy with a Continue button that cannot succeed).
+      _doc = null;
     });
     final r = await sl<AuthRepository>().latestTerms(
       termsTypeFor(provider: _isProvider),
@@ -67,7 +75,7 @@ class _TermsPageState extends State<TermsPage> {
       },
     );
     // Preferences found a newer version than the one agreed to: show it again.
-    if (result == 'terms-changed' && mounted) await _load();
+    if (result == 'terms-changed' && mounted) await _load(updated: true);
   }
 
   @override
@@ -166,6 +174,21 @@ class _TermsPageState extends State<TermsPage> {
           ),
           const SizedBox(height: 14),
         ],
+        if (_updated) ...[
+          Container(
+            key: const Key('terms-updated-notice'),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.plum100,
+              borderRadius: BorderRadius.circular(AppTheme.radius14),
+            ),
+            child: Text(
+              l.authTermsUpdatedNotice,
+              style: AppTextStyles.bodySm.copyWith(fontSize: 13, color: AppColors.plum700),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         // The actual current policy, in full, before consent.
         Container(
           padding: const EdgeInsets.all(14),
@@ -184,7 +207,7 @@ class _TermsPageState extends State<TermsPage> {
                             label: l.commonRetry,
                             size: AiwaButtonSize.sm,
                             variant: AiwaButtonVariant.ghost,
-                            onPressed: _load,
+                            onPressed: () => _load(),
                           ),
                         ],
                       )
@@ -222,6 +245,7 @@ class _TermsPageState extends State<TermsPage> {
         Semantics(
           checked: _agree,
           child: GestureDetector(
+            key: const Key('terms-consent'),
             behavior: HitTestBehavior.opaque,
             onTap: () {
               if (_doc == null) return; // nothing to agree to until it is shown

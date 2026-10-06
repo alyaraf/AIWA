@@ -3499,4 +3499,61 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get bookingsNoShowContestOpen =>
       'Contest sent, waiting for AIWA support';
+
+  @override
+  String get trackChangeAddress => 'Change visit address';
+
+  @override
+  String get addressAmendEyebrow => 'Home visit';
+
+  @override
+  String get addressAmendTitle => 'Where should they come?';
+
+  @override
+  String addressAmendBody(String name) {
+    return 'Pick one of your saved addresses. It has to be inside $name\'s service area.';
+  }
+
+  @override
+  String addressAmendReconfirm(String name) {
+    return '$name already accepted this visit. Changing the address sends it back to Pending until they confirm again.';
+  }
+
+  @override
+  String addressAmendCurrent(String address) {
+    return 'Now: $address';
+  }
+
+  @override
+  String get addressAmendNone =>
+      'You have no other saved address. Add one under Profile › Addresses, then come back.';
+
+  @override
+  String get addressAmendConfirm => 'Change address';
+
+  @override
+  String get addressAmendedToast => 'Address changed';
+
+  @override
+  String addressAmendedReconfirmToast(String name) {
+    return 'Address changed. $name has to confirm the visit again.';
+  }
+
+  @override
+  String get addressAmendLoadFailed =>
+      'Couldn\'t load your addresses. Try again.';
+
+  @override
+  String get authTermsUpdatedNotice =>
+      'The terms were updated while you were signing up. Please read and agree to the new version.';
+
+  @override
+  String get provResumeSetup => 'Finish setup where I left off';
+
+  @override
+  String get provResumeFilesMissing =>
+      'Your ID photos are no longer on this phone. Upload them again to finish.';
+
+  @override
+  String get provResumeDone => 'Setup finished';
 }

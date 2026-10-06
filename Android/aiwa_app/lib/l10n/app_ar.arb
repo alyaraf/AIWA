@@ -1016,5 +1016,20 @@
   "a11ySaved": "محفوظ في المفضلة",
   "bookingsContestNoShow": "لم يكن ذلك عدم حضور",
   "bookingsNoShowContested": "تم الإرسال. سيراجعه دعم AIWA.",
-  "bookingsNoShowContestOpen": "تم إرسال الاعتراض، بانتظار دعم AIWA"
+  "bookingsNoShowContestOpen": "تم إرسال الاعتراض، بانتظار دعم AIWA",
+  "trackChangeAddress": "تغيير عنوان الزيارة",
+  "addressAmendEyebrow": "زيارة منزلية",
+  "addressAmendTitle": "أين تريدهم أن يأتوا؟",
+  "addressAmendBody": "اختر أحد عناوينك المحفوظة. يجب أن يكون ضمن نطاق خدمة {name}.",
+  "addressAmendReconfirm": "وافق {name} على هذه الزيارة بالفعل. تغيير العنوان يعيد الحجز إلى قيد الانتظار حتى يؤكد من جديد.",
+  "addressAmendCurrent": "الحالي: {address}",
+  "addressAmendNone": "لا يوجد لديك عنوان محفوظ آخر. أضف عنوانًا من الملف الشخصي › العناوين ثم عد.",
+  "addressAmendConfirm": "تغيير العنوان",
+  "addressAmendedToast": "تم تغيير العنوان",
+  "addressAmendedReconfirmToast": "تم تغيير العنوان. على {name} تأكيد الزيارة من جديد.",
+  "addressAmendLoadFailed": "تعذّر تحميل عناويني. حاول مرة أخرى.",
+  "authTermsUpdatedNotice": "تم تحديث الشروط أثناء التسجيل. يرجى قراءة النسخة الجديدة والموافقة عليها.",
+  "provResumeSetup": "إكمال الإعداد من حيث توقفت",
+  "provResumeFilesMissing": "صور هويتك لم تعد موجودة على هذا الهاتف. ارفعها مرة أخرى للإكمال.",
+  "provResumeDone": "اكتمل الإعداد"
 }

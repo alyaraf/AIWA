@@ -6199,6 +6199,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Contest sent, waiting for AIWA support'**
   String get bookingsNoShowContestOpen;
+
+  /// No description provided for @trackChangeAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Change visit address'**
+  String get trackChangeAddress;
+
+  /// No description provided for @addressAmendEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Home visit'**
+  String get addressAmendEyebrow;
+
+  /// No description provided for @addressAmendTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Where should they come?'**
+  String get addressAmendTitle;
+
+  /// No description provided for @addressAmendBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick one of your saved addresses. It has to be inside {name}\'s service area.'**
+  String addressAmendBody(String name);
+
+  /// No description provided for @addressAmendReconfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} already accepted this visit. Changing the address sends it back to Pending until they confirm again.'**
+  String addressAmendReconfirm(String name);
+
+  /// No description provided for @addressAmendCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Now: {address}'**
+  String addressAmendCurrent(String address);
+
+  /// No description provided for @addressAmendNone.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no other saved address. Add one under Profile › Addresses, then come back.'**
+  String get addressAmendNone;
+
+  /// No description provided for @addressAmendConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Change address'**
+  String get addressAmendConfirm;
+
+  /// No description provided for @addressAmendedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Address changed'**
+  String get addressAmendedToast;
+
+  /// No description provided for @addressAmendedReconfirmToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Address changed. {name} has to confirm the visit again.'**
+  String addressAmendedReconfirmToast(String name);
+
+  /// No description provided for @addressAmendLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your addresses. Try again.'**
+  String get addressAmendLoadFailed;
+
+  /// No description provided for @authTermsUpdatedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'The terms were updated while you were signing up. Please read and agree to the new version.'**
+  String get authTermsUpdatedNotice;
+
+  /// No description provided for @provResumeSetup.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish setup where I left off'**
+  String get provResumeSetup;
+
+  /// No description provided for @provResumeFilesMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Your ID photos are no longer on this phone. Upload them again to finish.'**
+  String get provResumeFilesMissing;
+
+  /// No description provided for @provResumeDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup finished'**
+  String get provResumeDone;
 }
 
 class _AppLocalizationsDelegate

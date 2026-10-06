@@ -88,6 +88,11 @@ abstract class BookingRemoteDataSource {
     required String newDate,
     required String newTime,
   });
+
+  Future<BookingModel> amendDestination({
+    required String bookingId,
+    required String savedAddressId,
+  });
 }
 
 class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
@@ -331,6 +336,19 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
     final response = await _api.patch(
       ApiConstants.bookingReschedule(bookingId),
       data: {'bookingDate': newDate, 'startTime': newTime},
+    );
+    final data = response.data['data'] ?? response.data;
+    return BookingModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<BookingModel> amendDestination({
+    required String bookingId,
+    required String savedAddressId,
+  }) async {
+    final response = await _api.patch(
+      ApiConstants.bookingDestination(bookingId),
+      data: {'savedAddressId': int.tryParse(savedAddressId) ?? savedAddressId},
     );
     final data = response.data['data'] ?? response.data;
     return BookingModel.fromJson(data as Map<String, dynamic>);

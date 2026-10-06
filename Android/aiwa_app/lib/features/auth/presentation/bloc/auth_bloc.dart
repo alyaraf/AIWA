@@ -12,6 +12,11 @@ import '../../domain/entities/user_entity.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
+/// Handler signature used by [AuthBloc._safe]: the third argument is the number of the credential attempt the event
+/// runs under (see [SecureStorage.beginAuthAttempt]).
+typedef _AuthHandler<E extends AuthEvent> =
+    Future<void> Function(E event, Emitter<AuthState> emit, int attempt);
+
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository authRepository;
   final SecureStorage secureStorage;
@@ -28,12 +33,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     this.apiClient,
     this.pushRegistrar,
   }) : super(AuthInitial()) {
-    on<AuthCheckSessionEvent>(_safe(_onCheckSession, AuthUnauthenticated()));
-    on<AuthLoginEvent>(_safe(_onLogin));
-    on<AuthRegisterEvent>(_safe(_onRegister));
+    on<AuthCheckSessionEvent>(
+      _safe(_onCheckSession, fallback: AuthUnauthenticated()),
+    );
+    on<AuthLoginEvent>(_safe(_onLogin, beginsAttempt: true));
+    on<AuthRegisterEvent>(_safe(_onRegister, beginsAttempt: true));
     on<AuthSendOtpEvent>(_safe(_onSendOtp));
     on<AuthVerifyOtpEvent>(_safe(_onVerifyOtp));
-    on<AuthLogoutEvent>(_safe(_onLogout, AuthUnauthenticated()));
+    on<AuthLogoutEvent>(
+      _safe(_onLogout, fallback: AuthUnauthenticated(), beginsAttempt: true),
+    );
     on<AuthGetCurrentUserEvent>(_safe(_onGetCurrentUser));
     on<AuthUpdateProfileEvent>(_safe(_onUpdateProfile));
   }
@@ -69,11 +78,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// what gets revoked. [preferStored] (cold start only, storage still holds
   /// the same session) revokes what is stored after unregister instead, as a
   /// 401 there may have rotated them; sign-out must not, as by then storage
-  /// may hold the next user's tokens.
+  /// may hold the next user's tokens. R4-05: even then the stored tokens are
+  /// only used while [storedSessionIsStillTheSame] says so.
   Future<void> _endOnServer({
     String? accessToken,
     String? refreshToken,
     bool preferStored = false,
+    bool Function()? storedSessionIsStillTheSame,
   }) async {
     try {
       await pushRegistrar
@@ -82,8 +93,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } catch (_) {}
     try {
       if (preferStored) {
-        accessToken = await secureStorage.getAccessToken() ?? accessToken;
-        refreshToken = await secureStorage.getRefreshToken() ?? refreshToken;
+        final storedAccess = await secureStorage.getAccessToken();
+        final storedRefresh = await secureStorage.getRefreshToken();
+        if (storedSessionIsStillTheSame?.call() ?? true) {
+          accessToken = storedAccess ?? accessToken;
+          refreshToken = storedRefresh ?? refreshToken;
+        }
       }
       await apiClient
           ?.logout(accessToken: accessToken, refreshToken: refreshToken)
@@ -93,13 +108,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   /// An unexpected throw (bad payload, 2FA response without tokens…) must
   /// not leave the shared bloc stuck in [AuthLoading].
+  ///
+  /// R4-05: [beginsAttempt] marks the credential-changing events (sign-in, registration, sign-out). Each handler
+  /// gets the number of its own attempt (the current one, for the other events). Once a newer attempt has started the
+  /// handler is obsolete, and so is this generic catch: an old operation's failure must not replace the state the
+  /// newer one published.
   EventHandler<E, AuthState> _safe<E extends AuthEvent>(
-    EventHandler<E, AuthState> handler, [
+    _AuthHandler<E> handler, {
     AuthState? fallback,
-  ]) => (event, emit) async {
+    bool beginsAttempt = false,
+  }) => (event, emit) async {
+    final attempt = beginsAttempt
+        ? SecureStorage.beginAuthAttempt()
+        : SecureStorage.authAttempt;
     try {
-      await handler(event, emit);
+      await handler(event, emit, attempt);
     } catch (_) {
+      if (!SecureStorage.isCurrentAttempt(attempt)) return;
       emit(fallback ?? const AuthError('Something went wrong'));
     }
   };
@@ -109,26 +134,44 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// account's identity (or sign the new one out).
   bool _ended(int session) => SecureStorage.generation != session;
 
+  /// R4-05: true when the work must be dropped: its session ended, or a newer sign-in / registration / sign-out
+  /// started after it ([attempt] is no longer the current one). Checked after every await that precedes an emit or a
+  /// storage change.
+  bool _obsolete(int session, int attempt) =>
+      _ended(session) || !SecureStorage.isCurrentAttempt(attempt);
+
   Future<void> _onCheckSession(
     AuthCheckSessionEvent event,
     Emitter<AuthState> emit,
+    int attempt,
   ) async {
     final session = SecureStorage.generation;
-    if (!await secureStorage.getRemember()) {
+    final remember = await secureStorage.getRemember();
+    // R4-05: a sign-in that completed (or began) while storage was being read owns the credentials now.
+    if (_obsolete(session, attempt)) return;
+    if (!remember) {
       // End it on the server too, or a shared phone keeps getting the last
       // user's notifications and their refresh token stays valid (CR-18).
       // The refresh token is read now, before anything can clear it; the
       // access token is left to unregister, which may refresh it on a 401.
       final refreshToken = await secureStorage.getRefreshToken();
-      await _endOnServer(refreshToken: refreshToken, preferStored: true);
+      if (_obsolete(session, attempt)) return; // the token read may already be the next sign-in's
+      await _endOnServer(
+        refreshToken: refreshToken,
+        preferStored: true,
+        storedSessionIsStillTheSame: () => !_obsolete(session, attempt),
+      );
+      // The cold-start session is only wiped while it is still the one in storage: never a newer sign-in's tokens.
+      if (_obsolete(session, attempt)) return;
       await secureStorage.clearAll();
       emit(AuthUnauthenticated());
       return;
     }
     final hasSession = await secureStorage.hasValidSession();
+    if (_obsolete(session, attempt)) return;
     if (hasSession) {
       final result = await authRepository.getCurrentUser();
-      if (_ended(session)) return;
+      if (_obsolete(session, attempt)) return;
       final failure = result.fold((f) => f, (_) => null);
       if (failure == null) {
         result.fold((_) {}, (user) => emit(AuthAuthenticated(user)));
@@ -139,7 +182,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // way; show the last known account until the API answers. Only a rejected session signs out (M-04).
       if (failure is! UnauthorizedFailure) {
         final cached = await _cachedUser();
-        if (_ended(session)) return;
+        if (_obsolete(session, attempt)) return;
         if (cached != null) {
           emit(AuthAuthenticated(cached, refreshError: failure.message));
           return;
@@ -162,31 +205,42 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onLogin(AuthLoginEvent event, Emitter<AuthState> emit) async {
+  Future<void> _onLogin(
+    AuthLoginEvent event,
+    Emitter<AuthState> emit,
+    int attempt,
+  ) async {
     emit(AuthLoading());
     final result = await authRepository.login(
       identifier: event.identifier,
       password: event.password,
     );
-    await result.fold((failure) async => emit(AuthError(failure.message)), (
-      _,
-    ) async {
-      await secureStorage.setRemember(event.remember);
-      final session = SecureStorage.generation; // the session this sign-in just started
-      final userResult = await authRepository.getCurrentUser();
-      if (_ended(session)) return;
-      userResult.fold(
-        (failure) => failure is SessionChangedFailure
-            ? null
-            : emit(AuthError(failure.message)),
-        (user) => emit(AuthAuthenticated(user)),
-      );
-    });
+    // R4-05: an overtaken sign-in publishes nothing and touches no credentials, whatever it ended with. A
+    // SessionChangedFailure keeps its meaning (an answer for a session that is gone), it is not an error to show.
+    if (!SecureStorage.isCurrentAttempt(attempt)) return;
+    final failure = result.fold((f) => f, (_) => null);
+    if (failure != null) {
+      if (failure is! SessionChangedFailure) emit(AuthError(failure.message));
+      return;
+    }
+    // The generation of the session this sign-in just started, taken before anything is awaited.
+    final session = SecureStorage.generation;
+    await secureStorage.setRemember(event.remember);
+    if (_obsolete(session, attempt)) return;
+    final userResult = await authRepository.getCurrentUser();
+    if (_obsolete(session, attempt)) return;
+    userResult.fold(
+      (failure) => failure is SessionChangedFailure
+          ? null
+          : emit(AuthError(failure.message)),
+      (user) => emit(AuthAuthenticated(user)),
+    );
   }
 
   Future<void> _onRegister(
     AuthRegisterEvent event,
     Emitter<AuthState> emit,
+    int attempt,
   ) async {
     emit(AuthLoading());
     final result = await authRepository.register(
@@ -199,29 +253,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       profileImageUrl: event.profileImageUrl,
       preferredLanguage: event.preferredLanguage,
     );
-    await result.fold((failure) async => emit(AuthError(failure.message)), (
-      _,
-    ) async {
-      final session = SecureStorage.generation;
-      final userResult = await authRepository.getCurrentUser();
-      if (_ended(session)) return;
-      userResult.fold(
-        (failure) => failure is SessionChangedFailure
-            ? null
-            : emit(AuthError(failure.message)),
-        (user) => emit(AuthAuthenticated(user)),
-      );
-    });
+    if (!SecureStorage.isCurrentAttempt(attempt)) return;
+    final failure = result.fold((f) => f, (_) => null);
+    if (failure != null) {
+      if (failure is! SessionChangedFailure) emit(AuthError(failure.message));
+      return;
+    }
+    final session = SecureStorage.generation;
+    final userResult = await authRepository.getCurrentUser();
+    if (_obsolete(session, attempt)) return;
+    userResult.fold(
+      (failure) => failure is SessionChangedFailure
+          ? null
+          : emit(AuthError(failure.message)),
+      (user) => emit(AuthAuthenticated(user)),
+    );
   }
 
   Future<void> _onSendOtp(
     AuthSendOtpEvent event,
     Emitter<AuthState> emit,
+    int attempt,
   ) async {
     emit(AuthLoading());
     final result = await authRepository.sendOtp(phone: event.phone);
+    // R4-05: the answer of an OTP request that a sign-in / sign-out overtook must not replace the new state.
+    if (!SecureStorage.isCurrentAttempt(attempt)) return;
     result.fold(
-      (failure) => emit(AuthError(failure.message)),
+      (failure) =>
+          failure is SessionChangedFailure ? null : emit(AuthError(failure.message)),
       (_) => emit(AuthOtpSent(event.phone)),
     );
   }
@@ -229,20 +289,37 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onVerifyOtp(
     AuthVerifyOtpEvent event,
     Emitter<AuthState> emit,
+    int attempt,
   ) async {
     emit(AuthLoading());
     final result = await authRepository.verifyOtp(phone: event.phone, code: event.code);
+    if (!SecureStorage.isCurrentAttempt(attempt)) return;
     result.fold(
-      (failure) => emit(AuthError(failure.message)),
+      (failure) =>
+          failure is SessionChangedFailure ? null : emit(AuthError(failure.message)),
       (_) => emit(AuthOtpVerified(event.phone)),
     );
   }
 
-  Future<void> _onLogout(AuthLogoutEvent event, Emitter<AuthState> emit) async {
+  Future<void> _onLogout(
+    AuthLogoutEvent event,
+    Emitter<AuthState> emit,
+    int attempt,
+  ) async {
     // Signed out on the phone first, even on a stalled connection; the
     // server then gets the tokens read just before (CR-18).
+    final session = SecureStorage.generation;
     final accessToken = await secureStorage.getAccessToken();
     final refreshToken = await secureStorage.getRefreshToken();
+    if (!SecureStorage.isCurrentAttempt(attempt)) {
+      // R4-05: a newer sign-in / sign-out started while this was reading. It owns the credentials: do not wipe them
+      // or publish a state. The session this sign-out was asked to end is still ended on the server, provided the
+      // tokens read are really its own (no sign-in stored its tokens in between).
+      if (!_ended(session)) {
+        await _endOnServer(accessToken: accessToken, refreshToken: refreshToken);
+      }
+      return;
+    }
     await secureStorage.clearAll();
     emit(AuthUnauthenticated());
     await _endOnServer(accessToken: accessToken, refreshToken: refreshToken);
@@ -251,10 +328,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onGetCurrentUser(
     AuthGetCurrentUserEvent event,
     Emitter<AuthState> emit,
+    int attempt,
   ) async {
     final session = SecureStorage.generation;
     final result = await authRepository.getCurrentUser();
-    if (_ended(session)) return;
+    if (_obsolete(session, attempt)) return;
     result.fold(_onProfileFailure(emit), (user) => emit(AuthAuthenticated(user)));
   }
 
@@ -277,6 +355,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onUpdateProfile(
     AuthUpdateProfileEvent event,
     Emitter<AuthState> emit,
+    int attempt,
   ) async {
     // No AuthLoading/AuthProfileUpdated: the Profile tab treats any
     // non-authenticated state as a guest and would flash the lock screen.
@@ -287,7 +366,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       currentPassword: event.currentPassword,
       profileImageUrl: event.profileImageUrl,
     );
-    if (_ended(session)) return;
+    if (_obsolete(session, attempt)) return;
     result.fold(_onProfileFailure(emit), (user) => emit(AuthAuthenticated(user)));
   }
 }
