@@ -34,10 +34,10 @@ class FcmPushServiceTest {
         assertThat(sa.projectId()).isEqualTo("aiwa-test");
 
         String assertion = FcmPushService.buildAssertion(sa, Instant.now());
-        Claims claims = Jwts.parserBuilder().setSigningKey(kp.getPublic()).build()
-                .parseClaimsJws(assertion).getBody();
+        Claims claims = Jwts.parser().verifyWith(kp.getPublic()).build()
+                .parseSignedClaims(assertion).getPayload();
         assertThat(claims.getIssuer()).isEqualTo("push@aiwa-test.iam.gserviceaccount.com");
-        assertThat(claims.getAudience()).isEqualTo("https://oauth2.googleapis.com/token");
+        assertThat(claims.getAudience()).containsExactly("https://oauth2.googleapis.com/token");
         assertThat(claims.get("scope")).isEqualTo(FcmPushService.SCOPE);
     }
 

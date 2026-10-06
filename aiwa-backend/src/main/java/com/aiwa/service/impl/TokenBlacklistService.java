@@ -5,6 +5,7 @@ import com.aiwa.repository.RevokedTokenRepository;
 import com.aiwa.security.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.aiwa.exception.ServiceUnavailableException;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -17,7 +18,8 @@ import java.time.Instant;
  * <p>DR-002: the database is the record; Redis is a fast first check in front
  * of it. Before, everything lived in Redis only, and during a Redis outage a
  * logged-out token kept working and a spent refresh token could be reused.
- * Now a Redis failure falls back to the database instead of failing open.</p>
+ * Now a Redis failure falls back to the database instead of failing open. SEC-01: a Redis
+ * miss is no longer trusted either; the database settles every miss.</p>
  */
 @Slf4j
 @Service
@@ -28,41 +30,49 @@ public class TokenBlacklistService {
     private final JwtUtils jwtUtils;
     private final RevokedTokenRepository revokedRepo;
 
-    /** Until when Redis may be missing a revocation that the database has (L-7). */
-    private volatile Instant checkDatabaseOnMissUntil = Instant.EPOCH;
-
     /**
-     * SA-06: the same deadline, kept in the database so a restarted or second instance knows
-     * it too. It is a row in revoked_tokens under this fixed key, removed when it expires.
+     * Revokes a logged-out token durably. The database row is the revocation (SEC-02): this
+     * returns normally only once that row exists, whether this call wrote it or a parallel
+     * logout already had. When the database cannot confirm it, a ServiceUnavailableException
+     * is thrown so the caller can say so instead of promising a revocation that will not
+     * survive a Redis restart. The Redis copy is a best-effort accelerator.
+     *
+     * <p>A token that is already unusable (malformed, wrongly signed, expired) has nothing
+     * to revoke and is ignored.</p>
      */
-    static final String REDIS_GAP_MARKER = "redis-gap-marker";
-    private static final Duration GAP_REFRESH = Duration.ofSeconds(5);
-    private volatile Instant sharedGapUntil = Instant.EPOCH;
-    private volatile Instant sharedGapReadAt = Instant.EPOCH;
-
-    public void blacklist(String token) {
+    public void revoke(String token) {
         if (token == null || token.isBlank() || !jwtUtils.validateToken(token)) {
             return;
         }
         long ttlMillis = jwtUtils.getRemainingValidityMillis(token);
         if (ttlMillis <= 0) return;
+        String hash = hash(token);
+        boolean durable = true;
+        try {
+            persist(hash, ttlMillis);
+        } catch (RuntimeException e) {
+            durable = false;
+            log.error("TOKEN_REVOCATION_NOT_DURABLE the revoked-token row could not be confirmed: {}", e.toString());
+        }
         try {
             redis.set(key(token), "1", Duration.ofMillis(ttlMillis));
         } catch (RuntimeException e) {
-            log.warn("Could not write the token revocation to Redis (the database copy still holds): {}", e.getMessage());
-            // AU-14 / L-7: until this token would have expired anyway, a Redis miss is
-            // double-checked in the database, or the token works again once Redis is back.
-            Instant until = Instant.now().plusMillis(ttlMillis);
-            if (until.isAfter(checkDatabaseOnMissUntil)) checkDatabaseOnMissUntil = until;
-            recordRedisGap(until);
+            log.warn("Could not write the token revocation to Redis (the database decides on a miss): {}", e.getMessage());
         }
+        if (!durable) {
+            throw new ServiceUnavailableException("auth.error.logout_revocation_failed");
+        }
+    }
+
+    /** Inserts the row; a row that is already there (parallel or repeated logout) counts as revoked. */
+    private void persist(String hash, long ttlMillis) {
+        if (revokedRepo.existsById(hash)) return;
         try {
-            if (!revokedRepo.existsById(hash(token))) {
-                revokedRepo.save(new RevokedToken(hash(token), Instant.now().plusMillis(ttlMillis)));
-            }
-        } catch (RuntimeException e) {
-            // Already revoked by a parallel logout: nothing to do.
-            log.debug("Token already revoked: {}", e.getMessage());
+            revokedRepo.saveAndFlush(new RevokedToken(hash, Instant.now().plusMillis(ttlMillis)));
+        } catch (org.springframework.dao.DataIntegrityViolationException
+                 | jakarta.persistence.EntityExistsException e) {
+            // Only a duplicate key is benign, and only if the row really is there.
+            if (!revokedRepo.existsById(hash)) throw e;
         }
     }
 
@@ -104,47 +114,21 @@ public class TokenBlacklistService {
     }
 
     /**
-     * Access tokens, checked on every request: Redis first (fast), and the
-     * database when Redis can't answer, so an outage neither signs everyone out
-     * nor lets a logged-out token back in.
+     * Access tokens, checked on every request. Redis answers a revoked token quickly, but a
+     * Redis miss proves nothing (SEC-01): a restart, an eviction, a lost AOF second or another
+     * instance's empty cache all look like a miss. So a miss is always settled by the database,
+     * the record of revocation. A database failure propagates and the request stays
+     * unauthenticated, rather than guessing the token is fine.
      */
     public boolean isBlacklisted(String token) {
         if (token == null) return false;
         try {
             // Entries written before the SHA-256 key are still honoured until they expire.
             if (redis.exists(key(token)) || redis.exists(legacyKey(token))) return true;
-            // A revocation written while Redis was down lives only in the database (L-7).
-            return databaseMayHoldMore() && revokedRepo.existsById(hash(token));
         } catch (RuntimeException e) {
             log.warn("Blacklist check: Redis unavailable, using the database: {}", e.getMessage());
-            return revokedRepo.existsById(hash(token));
         }
-    }
-
-    private boolean databaseMayHoldMore() {
-        Instant now = Instant.now();
-        if (now.isBefore(checkDatabaseOnMissUntil)) return true;
-        if (now.isAfter(sharedGapReadAt.plus(GAP_REFRESH))) {
-            try {
-                sharedGapUntil = revokedRepo.findById(REDIS_GAP_MARKER)
-                        .map(RevokedToken::getExpiresAt).orElse(Instant.EPOCH);
-                sharedGapReadAt = now;
-            } catch (RuntimeException e) {
-                log.warn("Could not read the Redis gap marker: {}", e.getMessage());
-            }
-        }
-        return now.isBefore(sharedGapUntil);
-    }
-
-    private void recordRedisGap(Instant until) {
-        try {
-            var existing = revokedRepo.findById(REDIS_GAP_MARKER);
-            if (existing.isPresent() && !existing.get().getExpiresAt().isBefore(until)) return;
-            existing.ifPresent(m -> revokedRepo.deleteById(REDIS_GAP_MARKER));
-            revokedRepo.saveAndFlush(new RevokedToken(REDIS_GAP_MARKER, until));
-        } catch (RuntimeException e) {
-            log.warn("Could not record the Redis gap marker: {}", e.getMessage());
-        }
+        return revokedRepo.existsById(hash(token));
     }
 
     /** Removes records of tokens that have expired anyway. */

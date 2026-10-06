@@ -1,0 +1,28 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----------------------< com.aiwa:aiwa-backend >------------------------
+[INFO] Building AIWA Backend 1.0.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ aiwa-backend ---
+[INFO] Copying 4 resources from src\main\resources to target\classes
+[INFO] Copying 35 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.0:compile (default-compile) @ aiwa-backend ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 209 source files with javac [debug parameters release 17] to target\classes
+#
+# There is insufficient memory for the Java Runtime Environment to continue.
+# Native memory allocation (malloc) failed to allocate 32744 bytes. Error detail: ChunkPool::allocate
+[thread 41528 also had an error]
+[thread 2548 also had an error]
+[thread 11488 also had an error]
+[thread 42444 also had an error]
+# An error report file with more information is saved as:
+# C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend\hs_err_pid46224.log
+[thread 37140 also had an error]
+[thread 27280 also had an error]
+#
+# Compiler replay data is saved as:
+# C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend\replay_pid46224.log

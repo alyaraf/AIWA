@@ -1,3 +1,11 @@
+# AIWA Handoff - security audit 2026-10-06 remediation (newest)
+
+Last updated: 2026-10-06, uncommitted in the tree. **Read first:** [docs/audit/security-audit-2026-10-06/remediation.md](docs/audit/security-audit-2026-10-06/remediation.md).
+SEC-01 (database settles every Redis miss), SEC-02 (logout 503 unless the revocation row is confirmed), SEC-03 (one-time, expiring, attempt-limited 2FA enrollment, migration V35, per-IP limit) and SEC-04 (request ownership checked before dispatch, explicit-credential flag for clean-up requests) are fixed on the host; Tomcat 10.1.60 and JJWT 0.13.0 are in; Spring Security stays 6.5.11 (DPoP advisory not reachable, fix enterprise-only).
+Validation: backend 532 pass, dashboard 237 pass + build, Flutter analyze clean, full Flutter suite 275 pass. Launch sign-off now has gates 49-53 added (53 unsigned in total beyond the earlier ones); no real PostgreSQL/Redis/device/container/CI evidence exists. Not a production-readiness claim.
+
+---
+
 # AIWA Handoff — round 6 remediation (current)
 
 Last updated: 2026-10-06. Project: D:/AIWA PROJECT/AIWA; branch main. Base commit b2d70b9; the remediation below is **uncommitted work in the tree** (review the diff, commit in your own grouping).

@@ -55,6 +55,18 @@ describe("<App> — CR-18 sign-out", () => {
     expect(call[1].body).toBe("{}");
   });
 
+  it("tells the admin when the server could not confirm the revocation (SEC-02), while still signing out locally", async () => {
+    routeFetch(() => Promise.resolve(new Response(JSON.stringify({ success: false, status: 503 }), { status: 503 })));
+    render(<App />);
+    await screen.findByText(/Nour Support/);
+
+    fireEvent.click(screen.getByRole("button", { name: /Logout/ }));
+
+    expect(await screen.findByText("Sign in to dashboard")).toBeInTheDocument();
+    expect(apiModule.getAccessToken()).toBeNull();
+    expect(await screen.findByText(/server could not confirm/i)).toBeInTheDocument();
+  });
+
   it("gives up on the server call after a few seconds", async () => {
     let signal;
     routeFetch((init) => new Promise((_, reject) => {

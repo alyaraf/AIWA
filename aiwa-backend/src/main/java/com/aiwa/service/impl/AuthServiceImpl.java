@@ -44,6 +44,12 @@ public class AuthServiceImpl {
     /** Wrong codes one MFA challenge survives; the next sign-in needs the password again. */
     @org.springframework.beans.factory.annotation.Value("${aiwa.auth.mfa-max-wrong-codes:5}")
     private int mfaMaxWrongCodes = 5;
+    /** SEC-03: confirmation attempts one pending 2FA enrollment gets before setup must be started again. */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.auth.totp-enroll-max-attempts:5}")
+    private int totpEnrollMaxAttempts = 5;
+    /** SEC-03: how long a pending 2FA enrollment can be confirmed. */
+    @org.springframework.beans.factory.annotation.Value("${aiwa.auth.totp-enroll-ttl:10m}")
+    private java.time.Duration totpEnrollTtl = java.time.Duration.ofMinutes(10);
     /** Only counts wrong codes per MFA challenge; the per-account count is in the database. */
     @org.springframework.beans.factory.annotation.Autowired
     private RedisRuntimeService redis;
@@ -186,6 +192,8 @@ public class AuthServiceImpl {
         user.setTotpLastUsedStep(null); // new secret: none of its codes has been used
         user.setTotpEnabled(false);
         userRepository.save(user);
+        // SEC-03: the secret can be confirmed for a limited time and a limited number of tries.
+        userRepository.openTotpEnrollment(user.getId(), Instant.now().plus(totpEnrollTtl));
 
         String label = identifierOf(user);
         return ApiResponse.TwoFactorSetupDto.builder()
@@ -197,20 +205,43 @@ public class AuthServiceImpl {
     /**
      * SA-02: turning two-factor on ends every session issued before it, refresh tokens
      * included, because those were minted without a code. The caller gets a fresh pair.
+     *
+     * <p>SEC-03: only a live pending enrollment (started with the password, unexpired, not
+     * yet confirmed) can be confirmed, and each attempt is taken from that enrollment's
+     * budget before the code is looked at. Deliberately not @Transactional: the attempt is
+     * counted in its own transaction, and the final switch-on is a single guarded UPDATE,
+     * so a refused code can never roll the count back and parallel confirmations cannot
+     * both succeed. An account that already has 2FA on is refused here: re-enabling needs
+     * the setup call, which needs the password and the current code.</p>
      */
-    @Transactional
     public ApiResponse.AuthResponse enableTotp(String identifier, String code) {
         User user = findUser(identifier);
 
+        if (user.isTotpEnabled()) {
+            throw new BusinessException("auth.error.totp_already_enabled");
+        }
         if (user.getTotpSecret() == null) {
             throw new BusinessException("auth.error.totp_setup_not_started");
+        }
+        Instant now = Instant.now();
+        if (user.getTotpEnrollmentExpiresAt() == null || !user.getTotpEnrollmentExpiresAt().isAfter(now)) {
+            throw new BusinessException("auth.error.totp_enrollment_expired");
+        }
+        if (userRepository.claimTotpEnrollmentAttempt(user.getId(), totpEnrollMaxAttempts, now) == 0) {
+            // Budget used up (or the enrollment closed in the meantime): this secret is dead.
+            userRepository.closeTotpEnrollment(user.getId());
+            throw new TooManyRequestsException("auth.error.totp_enrollment_attempts");
         }
         if (!acceptTotp(user, code)) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
+        Instant cutoff = sessionCutoff();
+        if (userRepository.completeTotpEnrollment(user.getId(), cutoff, Instant.now()) == 0) {
+            // A parallel confirmation got there first, or the enrollment just ended.
+            throw new BusinessException("auth.error.totp_enrollment_expired");
+        }
         user.setTotpEnabled(true);
-        user.setTokensValidAfter(sessionCutoff());
-        userRepository.save(user);
+        user.setTokensValidAfter(cutoff);
         return buildAuthResponse(user);
     }
 
@@ -260,9 +291,22 @@ public class AuthServiceImpl {
         return buildAuthResponse(user);
     }
 
+    /**
+     * SEC-02: returns normally only when both tokens' revocation is durable (or the token was
+     * already dead or already revoked). Both are always attempted; if either could not be
+     * persisted the failure is thrown afterwards, so the client learns the server-side
+     * sign-out is not guaranteed.
+     */
     public void logout(String accessToken, String refreshToken) {
-        tokenBlacklistService.blacklist(accessToken);
-        tokenBlacklistService.blacklist(refreshToken);
+        com.aiwa.exception.ServiceUnavailableException failure = null;
+        for (String token : new String[] {accessToken, refreshToken}) {
+            try {
+                tokenBlacklistService.revoke(token);
+            } catch (com.aiwa.exception.ServiceUnavailableException e) {
+                failure = e;
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     public ApiResponse.UserDto getCurrentUser(String identifier) {

@@ -177,18 +177,20 @@ const SIGN_OUT_TIMEOUT_MS = 3000;
 // its cookie would clear the new session's cookie, so a sign-in waits for any sign-out still in flight.
 let signOutInFlight = null;
 
+// SEC-02: resolves true when the server confirmed the revocation (or there was nothing to revoke) and false when it
+// could not (non-2xx such as 503, network error, timeout). The local session is already gone either way.
 function signOut() {
   const token = getAccessToken();
   const hadSession = hasSession();
   clearTokens();
-  if (USE_MOCKS || !hadSession) return Promise.resolve();
+  if (USE_MOCKS || !hadSession) return Promise.resolve(true);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SIGN_OUT_TIMEOUT_MS);
   const headers = { "Content-Type": "application/json", ...CSRF_HEADERS };
   if (token) headers.Authorization = `Bearer ${token}`;
   const call = fetch(`${API_BASE_URL}/auth/logout`, {
     method: "POST", headers, credentials: "include", signal: controller.signal, body: "{}"
-  }).catch(() => {}).finally(() => {
+  }).then((res) => res.ok, () => false).finally(() => {
     clearTimeout(timer);
     if (signOutInFlight === call) signOutInFlight = null;
   });

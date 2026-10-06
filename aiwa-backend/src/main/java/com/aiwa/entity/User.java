@@ -167,6 +167,18 @@ public class User extends BaseEntity {
     /** Time step of the last accepted code: that step and older ones are refused, so a code works once (CR-01). */
     private Long totpLastUsedStep;
 
+    // SEC-03: a pending enrollment expires and has its own guess budget. Written only by the
+    // single-statement updates in UserRepository (updatable = false), like the sign-in count,
+    // so a stale profile save can never rewind the counter.
+    /** When the pending enrollment (secret waiting for its first code) stops being accepted. */
+    @Column(updatable = false)
+    private java.time.Instant totpEnrollmentExpiresAt;
+
+    /** Wrong or attempted codes against the current pending enrollment. */
+    @Column(nullable = false, updatable = false)
+    @Builder.Default
+    private int totpEnrollmentAttempts = 0;
+
     // ── Sign-in attempt limit (CR-01) ───────────────────────────────────────────
     // Written only by the single-statement updates in UserRepository
     // (updatable = false): a profile save that loaded the user earlier can

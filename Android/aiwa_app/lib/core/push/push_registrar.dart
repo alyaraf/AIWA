@@ -62,7 +62,7 @@ class PushRegistrar {
             ? null
             : Options(
                 headers: {'Authorization': 'Bearer $accessToken'},
-                extra: {'retried': true},
+                extra: {'retried': true, ApiClient.ownCredentialsExtra: true},
               ),
       );
     } catch (_) {}

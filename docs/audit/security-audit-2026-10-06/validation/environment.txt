@@ -1,0 +1,10 @@
+Security audit local environment — 2026-10-06; Africa/Cairo
+Windows PowerShell / Git Bash; execution in a disposable snapshot only.
+JDK 17.0.19.10; Maven 3.9.15 (offline cached repository).
+Node 20.20.2; Flutter 3.47.5 / Dart 3.13.4 (existing local SDK and cache).
+Docker executable exists; its server pipe was unavailable in the current read-only check. Docker configuration was sandbox-protected.
+psql and promtool were not found on PATH.
+No real PostgreSQL/Redis fault drill, production container execution, native Android/iOS test or staging-browser run.
+Fresh public npm production-dependency scan completed with prior dependency-only authorization.
+Backend dependency review used resolved classpath versions and official advisory/support pages. No complete NVD/backend, Dart, image or OS scan ran.
+Full Flutter attempt stalled after +230; only this audit process was terminated. Focused 37-test run and analyze passed.

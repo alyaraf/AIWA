@@ -27,10 +27,10 @@ class _Api implements ApiClient {
   String? sentRefreshToken;
 
   @override
-  Future<void> logout({String? accessToken, String? refreshToken}) {
+  Future<bool> logout({String? accessToken, String? refreshToken}) {
     calls.add('logout');
     sentRefreshToken = refreshToken;
-    return hang ? Completer<void>().future : Future.value();
+    return hang ? Completer<bool>().future : Future.value(true);
   }
 
   @override

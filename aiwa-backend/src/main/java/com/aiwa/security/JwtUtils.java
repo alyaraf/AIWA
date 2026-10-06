@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
 import java.util.Date;
 
 @Slf4j
@@ -26,7 +26,7 @@ public class JwtUtils {
     @Value("${jwt.admin-refresh-expiration:28800000}")
     private long adminRefreshExpiration = 28_800_000L;
 
-    private Key getSigningKey() {
+    private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
@@ -52,15 +52,15 @@ public class JwtUtils {
     public String generateAccessToken(String identifier, Long userId, String role) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
-                .setSubject(identifier)
+                .subject(identifier)
                 .claim(TYPE_CLAIM, TYPE_ACCESS)
                 .claim("userId", userId)
                 .claim("role", role)
                 .claim(ISSUED_AT_MILLIS_CLAIM, now)
-                .setId(java.util.UUID.randomUUID().toString())
-                .setIssuedAt(new Date(now))
-                .setExpiration(new Date(now + jwtExpiration))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .id(java.util.UUID.randomUUID().toString())
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + jwtExpiration))
+                .signWith(getSigningKey(), Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -77,16 +77,16 @@ public class JwtUtils {
     public String generateRefreshToken(String identifier, Long userId, boolean admin) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
-                .setSubject(identifier)
+                .subject(identifier)
                 .claim(TYPE_CLAIM, TYPE_REFRESH)
                 .claim("userId", userId)
                 .claim(ISSUED_AT_MILLIS_CLAIM, now)
                 // Unique id so two refreshes in the same second never produce the
                 // same string (rotation blacklists the old one).
-                .setId(java.util.UUID.randomUUID().toString())
-                .setIssuedAt(new Date(now))
-                .setExpiration(new Date(now + (admin ? adminRefreshExpiration : refreshExpiration)))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .id(java.util.UUID.randomUUID().toString())
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + (admin ? adminRefreshExpiration : refreshExpiration)))
+                .signWith(getSigningKey(), Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -149,15 +149,15 @@ public class JwtUtils {
     public String generateMfaChallengeToken(String identifier, Long userId) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
-                .setSubject(identifier)
+                .subject(identifier)
                 .claim(TYPE_CLAIM, TYPE_MFA)
                 .claim(MFA_PURPOSE_CLAIM, MFA_PURPOSE_VALUE)
                 .claim("userId", userId)
                 .claim(ISSUED_AT_MILLIS_CLAIM, now)
-                .setId(java.util.UUID.randomUUID().toString())
-                .setIssuedAt(new Date(now))
-                .setExpiration(new Date(now + MFA_CHALLENGE_TTL_MILLIS))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .id(java.util.UUID.randomUUID().toString())
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + MFA_CHALLENGE_TTL_MILLIS))
+                .signWith(getSigningKey(), Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -195,10 +195,12 @@ public class JwtUtils {
     }
 
     private Claims parseClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
+        // JJWT 0.13: parseSignedClaims accepts only a signed JWS (an unsigned "alg":"none"
+        // token is rejected), verified with this HMAC key.
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }

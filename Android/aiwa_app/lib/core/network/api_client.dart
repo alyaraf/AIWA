@@ -29,6 +29,11 @@ class ApiClient {
   /// (SecurityConfig.ROLE_FORBIDDEN_CODE).
   static const roleForbiddenCode = 'auth.error.forbidden_role';
 
+  /// SEC-04: [RequestOptions.extra] flag of an intentional clean-up request (sign-out revocation, push-token removal)
+  /// that carries the credentials of the session it belongs to, explicitly, after that session was cleared. Such a
+  /// request is exempt from the pre-dispatch ownership check, and never receives the stored token.
+  static const ownCredentialsExtra = 'ownCredentials';
+
   /// Emits `true` on connection errors and `false` on the next response.
   static final offline = StreamController<bool>.broadcast();
 
@@ -128,10 +133,12 @@ class ApiClient {
   /// Best effort: revokes the access and refresh tokens server-side. Never
   /// throws, so sign-out still works offline. Sign-out passes the tokens it
   /// read before clearing them (CR-18); otherwise the stored ones are used.
-  Future<void> logout({String? accessToken, String? refreshToken}) async {
+  /// SEC-02: resolves true only when the server confirmed the revocation (2xx); false when it could not (offline,
+  /// 503 durable-revocation failure, timeout). Local sign-out proceeds either way; callers may surface the false.
+  Future<bool> logout({String? accessToken, String? refreshToken}) async {
     try {
       refreshToken ??= await _storage.getRefreshToken();
-      if (refreshToken == null) return;
+      if (refreshToken == null) return true;
       await _dio
           .post(
             ApiConstants.logout,
@@ -141,11 +148,14 @@ class ApiClient {
               headers: accessToken == null
                   ? null
                   : {'Authorization': 'Bearer $accessToken'},
-              extra: {'retried': true},
+              extra: {'retried': true, ownCredentialsExtra: true},
             ),
           )
           .timeout(const Duration(seconds: 5));
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<Response<T>> postForm<T>(
@@ -185,14 +195,39 @@ class _AuthInterceptor extends Interceptor {
     // Backend picks messages_ar/en.properties from this header.
     options.headers['Accept-Language'] =
         LocaleController.locale.value.languageCode;
-    // The session this request belongs to (DR-003).
-    options.extra['session'] = SecureStorage.generation;
-    // R6-02: ...and the credential operation (sign-in / registration / sign-out) that was current: a failed answer
-    // may only act globally while both are still current.
-    options.extra['attempt'] = SecureStorage.authAttempt;
-    final token = await _storage.getAccessToken();
-    // A request that names its own token (clean-up after sign-out, CR-18)
-    // keeps it: it must never go out under the next session's token.
+    // The session this request belongs to (DR-003), and (R6-02) the credential operation (sign-in / registration /
+    // sign-out) that was current: a failed answer may only act globally while both are still current. A retry keeps
+    // the owner it was first sent under (SEC-04): it must not adopt whoever is current when it is re-dispatched.
+    final session = options.extra['session'];
+    final attempt = options.extra['attempt'];
+    final owner = session is int && attempt is int
+        ? SessionOwner(session, attempt)
+        : SecureStorage.currentOwner;
+    options.extra['session'] = owner.generation;
+    options.extra['attempt'] = owner.attempt;
+    // A clean-up request that names its own token (after sign-out, CR-18) goes out exactly as built: never under
+    // the next session's token, and not dropped because that next session already exists.
+    if (options.extra[ApiClient.ownCredentialsExtra] == true) {
+      return handler.next(options);
+    }
+    String? token;
+    if (options.headers['Authorization'] == null) {
+      token = await _storage.getAccessToken();
+    }
+    // SEC-04: ownership is checked after the asynchronous credential read and immediately before dispatch. If the
+    // session ended or another sign-in / account switch began meanwhile, the credentials just read may belong to
+    // the next account, and a mutation sent with them would be performed as that account (the response check in
+    // onResponse comes too late to undo it). The obsolete request is dropped before the transport.
+    if (!SecureStorage.owns(owner)) {
+      return handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.cancel,
+          error: const SessionChangedException(),
+        ),
+        true,
+      );
+    }
     if (token != null &&
         token.isNotEmpty &&
         options.headers['Authorization'] == null) {
