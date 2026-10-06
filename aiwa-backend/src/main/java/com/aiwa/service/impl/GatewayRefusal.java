@@ -10,6 +10,12 @@ import java.util.Set;
  * Some SMS / e-mail gateways answer HTTP 200 and report the refusal in the JSON body ({@code success:false},
  * {@code status:"failed"}, an {@code error} object). A bare 2xx is therefore not proof of acceptance (P-07);
  * this reads those fields. A body that is empty or not JSON is treated as accepted, as before.
+ *
+ * <p>Integration contract (R4 follow-up): when a gateway is known to return a message receipt (an id), configure its
+ * location ({@code aiwa.sms.receipt-field} / {@code aiwa.email.receipt-field}, a dotted JSON path such as
+ * {@code data.messageId}). With it set, a 2xx is accepted only when the body carries a non-blank value there; an
+ * unreadable body or a missing receipt is reported like a refusal, so "accepted by HTTP" is no longer mistaken for
+ * "accepted by the provider". Unset (the default) keeps the lenient behaviour above.
  */
 final class GatewayRefusal {
 
@@ -18,6 +24,30 @@ final class GatewayRefusal {
             Set.of("error", "failed", "failure", "fail", "rejected", "refused", "undelivered");
 
     private GatewayRefusal() {}
+
+    /**
+     * Like {@link #of(String)}, and with a [receiptField] also demands the provider's receipt in the body.
+     * Returns the reason the message must be treated as NOT accepted, or null when it is accepted.
+     */
+    static String of(String body, String receiptField) {
+        String refusal = of(body);
+        if (refusal != null || receiptField == null || receiptField.isBlank()) return refusal;
+        if (body == null || body.isBlank()) return "no receipt: empty body";
+        JsonNode node;
+        try {
+            node = JSON.readTree(body);
+        } catch (Exception notJson) {
+            return "no receipt: body is not JSON";
+        }
+        for (String part : receiptField.trim().split("\\.")) {
+            node = node == null ? null : node.get(part);
+        }
+        if (node == null || node.isNull() || (node.isTextual() && node.asText().isBlank())
+                || (node.isContainerNode() && node.isEmpty())) {
+            return "no receipt: '" + receiptField.trim() + "' missing";
+        }
+        return null;
+    }
 
     /** The reason a 2xx body reports a refusal, or null when it doesn't (or isn't JSON). */
     static String of(String body) {

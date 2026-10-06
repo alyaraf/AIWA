@@ -35,6 +35,10 @@ public class HttpEmailService implements EmailService {
     @Value("${aiwa.email.api-key:}")
     private String apiKey;
 
+    /** Optional dotted JSON path of the provider's message receipt; when set, a 2xx without it is not "accepted". */
+    @Value("${aiwa.email.receipt-field:}")
+    private String receiptField;
+
     @Value("${aiwa.email.from:no-reply@aiwa.app}")
     private String from;
 
@@ -63,7 +67,7 @@ public class HttpEmailService implements EmailService {
             throw new BusinessException("otp.error.send_failed");
         }
         // P-07: some gateways answer 200 and report the refusal in the body.
-        String refusal = GatewayRefusal.of(response.getBody());
+        String refusal = GatewayRefusal.of(response.getBody(), receiptField);
         if (refusal != null) {
             log.error("Email gateway refused the message: {}", com.aiwa.util.LogSafe.scrub(refusal));
             throw new BusinessException("otp.error.send_failed");

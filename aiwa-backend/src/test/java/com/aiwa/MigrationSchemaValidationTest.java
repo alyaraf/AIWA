@@ -52,27 +52,37 @@ class MigrationSchemaValidationTest {
     }
 
     static void runMigrations() throws Exception {
+        try (Connection c = DriverManager.getConnection(URL, "sa", "")) {
+            for (Resource script : scripts()) applyScript(c, script);
+        }
+    }
+
+    /** Every Flyway script, in version order. */
+    static Resource[] scripts() throws Exception {
         Resource[] scripts = new PathMatchingResourcePatternResolver().getResources("classpath:db/migration/V*__*.sql");
         Arrays.sort(scripts, Comparator.comparingInt(MigrationSchemaValidationTest::version));
-        try (Connection c = DriverManager.getConnection(URL, "sa", ""); Statement st = c.createStatement()) {
-            for (Resource script : scripts) {
-                if (version(script) == 13) dropSingleColumnUniqueOnTermsVersion(c);
-                String sql = DO_BLOCK.matcher(new String(script.getInputStream().readAllBytes(), StandardCharsets.UTF_8))
-                        .replaceAll("");
-                for (String raw : STATEMENT_END.split(sql + "\n")) {
-                    String stmt = h2(stripComments(raw));
-                    if (stmt == null || stmt.isBlank()) continue;
-                    try {
-                        st.execute(stmt);
-                    } catch (Exception e) {
-                        throw new IllegalStateException(script.getFilename() + " failed at: " + stmt, e);
-                    }
+        return scripts;
+    }
+
+    /** One script against {@code c} (shared with the migration rehearsal tests). */
+    static void applyScript(Connection c, Resource script) throws Exception {
+        if (version(script) == 13) dropSingleColumnUniqueOnTermsVersion(c);
+        String sql = DO_BLOCK.matcher(new String(script.getInputStream().readAllBytes(), StandardCharsets.UTF_8))
+                .replaceAll("");
+        try (Statement st = c.createStatement()) {
+            for (String raw : STATEMENT_END.split(sql + "\n")) {
+                String stmt = h2(stripComments(raw));
+                if (stmt == null || stmt.isBlank()) continue;
+                try {
+                    st.execute(stmt);
+                } catch (Exception e) {
+                    throw new IllegalStateException(script.getFilename() + " failed at: " + stmt, e);
                 }
             }
         }
     }
 
-    private static int version(Resource r) {
+    static int version(Resource r) {
         String name = r.getFilename();
         return Integer.parseInt(name.substring(1, name.indexOf("__")));
     }

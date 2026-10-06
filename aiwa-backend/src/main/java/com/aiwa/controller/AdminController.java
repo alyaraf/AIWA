@@ -168,10 +168,13 @@ public class AdminController {
     @Operation(summary = "List all reviews for admin moderation")
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ReviewDto>>> reviews(
+            @RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "5") int maxRating,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = com.aiwa.util.Pages.admin(page, size);
-        Page<Review> reviews = reviewRepo.findAllByOrderByCreatedAtDesc(pageable);
+        Page<Review> reviews = reviewRepo.searchAdmin(com.aiwa.util.Searches.pattern(query),
+                Math.max(1, Math.min(5, maxRating)), pageable);
         List<ApiResponse.ReviewDto> dtos = reviews.getContent().stream().map(this::toReviewDto).toList();
         return ResponseEntity.ok(ApiResponse.Success.of(new PageImpl<>(dtos, pageable, reviews.getTotalElements())));
     }
@@ -181,10 +184,11 @@ public class AdminController {
     @Operation(summary = "List flagged complaints for admin review")
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ComplaintDto>>> flags(
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = com.aiwa.util.Pages.admin(page, size);
-        Page<Complaint> flags = complaintRepo.findByFlaggedTrueOrderByCreatedAtDesc(pageable);
+        Page<Complaint> flags = complaintRepo.searchFlagged(com.aiwa.util.Searches.pattern(query), pageable);
         List<ApiResponse.ComplaintDto> dtos = flags.getContent().stream().map(this::toComplaintDto).toList();
         return ResponseEntity.ok(ApiResponse.Success.of(new PageImpl<>(dtos, pageable, flags.getTotalElements())));
     }

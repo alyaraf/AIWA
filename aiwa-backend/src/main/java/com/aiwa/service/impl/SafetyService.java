@@ -532,13 +532,18 @@ public class SafetyService {
         Booking b = e.getBooking();
         User actor = e.getActor();
         boolean byCustomer = Objects.equals(actor.getId(), b.getCustomer().getId());
+        // R4-02: the destination is the one agreed for this visit (the booking snapshot, B-05), never the live saved address
+        // the customer may have edited since. The reported GPS fix (latitude/longitude below) stays a separate field.
+        ApiResponse.SavedAddressDto destination = b.isHomeService() ? BookingPrivacy.destinationOf(b) : null;
         return ApiResponse.AdminSafetyEventDto.builder()
                 .id(e.getId())
                 .bookingId(b.getId())
                 .bookingStatus(b.getStatus())
                 .homeService(b.isHomeService())
-                .address(b.isHomeService() && b.getSavedAddress() != null
-                        ? b.getSavedAddress().getAddressLine() : b.getProvider().getAddress())
+                .address(destination != null ? destination.getAddressLine() : b.getProvider().getAddress())
+                .destinationLatitude(destination != null ? destination.getLatitude() : null)
+                .destinationLongitude(destination != null ? destination.getLongitude() : null)
+                .destinationBackfilled(destination != null && b.isDestinationBackfilled())
                 .actorId(actor.getId())
                 .actorName(actor.getFullName())
                 .actorPhone(actor.getPhone())

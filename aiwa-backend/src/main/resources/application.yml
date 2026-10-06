@@ -198,6 +198,8 @@ aiwa:
     api-url: ${SMS_API_URL:}
     api-key: ${SMS_API_KEY:}
     sender: ${SMS_SENDER:AIWA}
+    # Optional dotted JSON path of the provider's message receipt (e.g. data.messageId). Set: a 2xx without it is NOT accepted.
+    receipt-field: ${SMS_RECEIPT_FIELD:}
   gateway:
     # P-02: optional allow-list of gateway hosts (comma separated, a leading dot allows subdomains); empty = any https host
     allowed-hosts: ${AIWA_GATEWAY_ALLOWED_HOSTS:}
@@ -207,6 +209,7 @@ aiwa:
     provider: ${EMAIL_PROVIDER:dev-log}
     api-url: ${EMAIL_API_URL:}
     api-key: ${EMAIL_API_KEY:}
+    receipt-field: ${EMAIL_RECEIPT_FIELD:}
     from: ${EMAIL_FROM:no-reply@aiwa.app}
   push:
     # dev-log | fcm (Firebase Cloud Messaging HTTP v1)

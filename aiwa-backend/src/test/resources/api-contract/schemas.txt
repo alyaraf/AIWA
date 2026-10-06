@@ -2,7 +2,7 @@ ActivityBookingDto: amount, counterparty, createdAt, date, id, paymentStatus, re
 ActivityComplaintDto: createdAt, flagged, id, status, subject
 ActivityReviewDto: comment, createdAt, hidden, id, providerName, rating
 AdminDashboardDto: approvedProviders, bookingsLast30Days, bookingsLast7Days, bookingsPrevious30Days, bookingsPrevious7Days, bookingsToday, completedBookings, highPriorityComplaints, newCustomersLast30Days, newCustomersPrevious30Days, openComplaints, openDisputes, openSos, overdueSettlements, pendingVerification, providersVerifiedLast30Days, rejectedProviders, revenueLast30Days, revenuePrevious30Days, suspendedProviders, totalBookings, totalCustomers, totalProviders, totalRevenue
-AdminSafetyEventDto: actorId, actorName, actorPhone, actorRole, address, bookingId, bookingStatus, createdAt, customerName, customerPhone, deliveries, homeService, id, latitude, locationAccuracy, locationTime, longitude, notes, providerName, providerPhone, resolutionNotes, resolved, resolvedAt, resolvedByName
+AdminSafetyEventDto: actorId, actorName, actorPhone, actorRole, address, bookingId, bookingStatus, createdAt, customerName, customerPhone, deliveries, destinationBackfilled, destinationLatitude, destinationLongitude, homeService, id, latitude, locationAccuracy, locationTime, longitude, notes, providerName, providerPhone, resolutionNotes, resolved, resolvedAt, resolvedByName
 AmendDestinationRequest: savedAddressId
 AuditLogDto: action, actor, createdAt, id, ipAddress, target
 AuthResponse: accessToken, mfaRequired, mfaToken, refreshToken, tokenType, user

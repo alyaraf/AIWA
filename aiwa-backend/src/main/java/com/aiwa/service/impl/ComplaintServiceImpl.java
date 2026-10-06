@@ -75,10 +75,15 @@ public class ComplaintServiceImpl {
     /** Admin: view all by status */
     @Transactional(readOnly = true)
     public Page<ApiResponse.ComplaintDto> adminGetAll(ComplaintStatus status, Pageable pageable) {
-        if (status != null) {
-            return complaintRepo.findByStatusOrderByCreatedAtDesc(status, pageable).map(this::toDto);
-        }
-        return complaintRepo.findAll(pageable).map(this::toDto);
+        return adminSearch(status, null, pageable);
+    }
+
+    /** Admin queue, searched and paged on the server (R4 follow-up); {@code query} matches text, category and names. */
+    @Transactional(readOnly = true)
+    public Page<ApiResponse.ComplaintDto> adminSearch(ComplaintStatus status, String query, Pageable pageable) {
+        String q = com.aiwa.util.Searches.pattern(query);
+        return (status != null ? complaintRepo.searchByStatus(status, q, pageable) : complaintRepo.searchAll(q, pageable))
+                .map(this::toDto);
     }
 
     /**

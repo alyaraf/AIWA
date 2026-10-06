@@ -181,6 +181,9 @@ public class User extends BaseEntity {
     private java.time.Instant lastFailedLoginAt;
 
     // ── Admin permissions (only meaningful when role == ADMIN) ────────────────
+    // Batched: a page of admin rows that loads many users (reporter, target, owner) reads their permissions in a few
+    // IN queries instead of one SELECT per user (query-count test AdminQueueQueryCountTest).
+    @org.hibernate.annotations.BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "admin_permissions", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "permission")

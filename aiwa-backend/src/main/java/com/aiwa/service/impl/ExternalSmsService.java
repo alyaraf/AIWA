@@ -54,6 +54,10 @@ public class ExternalSmsService implements SmsService {
     @Value("${aiwa.sms.sender:AIWA}")
     private String sender;
 
+    /** Optional dotted JSON path of the provider's message receipt; when set, a 2xx without it is not "accepted". */
+    @Value("${aiwa.sms.receipt-field:}")
+    private String receiptField;
+
     public ExternalSmsService(RestTemplateBuilder restTemplateBuilder) {
         // Bounded timeouts: a hung gateway must not hold request threads forever.
         this.restTemplate = restTemplateBuilder
@@ -109,7 +113,7 @@ public class ExternalSmsService implements SmsService {
 
     /** The reason a 2xx body reports a refusal, or null when it doesn't (or isn't JSON). */
     String refusal(String body) {
-        return GatewayRefusal.of(body);
+        return GatewayRefusal.of(body, receiptField);
     }
 
     private void count(String kind, String result) {

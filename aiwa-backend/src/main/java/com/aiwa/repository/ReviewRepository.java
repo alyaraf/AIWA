@@ -25,6 +25,18 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     Page<Review> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    /**
+     * Admin search (R4 follow-up): comment, customer name or provider business name ("%" = no search), optionally only
+     * ratings up to {@code maxRating} (5 = every review; 2 = the "Low rating" view).
+     */
+    // The inverse one-to-one User.providerProfile is read with a query per user unless it is part of the graph.
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"user", "user.providerProfile", "provider", "provider.user", "provider.user.providerProfile", "booking"})
+    @Query(value = "SELECT r FROM Review r LEFT JOIN r.user u LEFT JOIN r.provider p WHERE r.rating <= :maxRating AND "
+            + "(COALESCE(LOWER(r.comment), '') LIKE :q OR LOWER(u.fullName) LIKE :q OR LOWER(p.businessName) LIKE :q) ORDER BY r.createdAt DESC",
+            countQuery = "SELECT COUNT(r) FROM Review r LEFT JOIN r.user u LEFT JOIN r.provider p WHERE r.rating <= :maxRating AND "
+                    + "(COALESCE(LOWER(r.comment), '') LIKE :q OR LOWER(u.fullName) LIKE :q OR LOWER(p.businessName) LIKE :q)")
+    Page<Review> searchAdmin(@Param("q") String q, @Param("maxRating") int maxRating, Pageable pageable);
+
     boolean existsByBookingIdAndDirection(Long bookingId, ReviewDirection direction);
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.provider.id = :providerId AND r.direction = com.aiwa.enums.ReviewDirection.CUSTOMER_TO_PROVIDER AND r.hidden = false")

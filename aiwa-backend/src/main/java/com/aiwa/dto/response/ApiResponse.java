@@ -418,7 +418,13 @@ public class ApiResponse {
         private Long bookingId;
         private BookingStatus bookingStatus;
         private boolean homeService;
+        /** The visit destination as agreed on the booking (snapshot), or the provider's address for a non-home visit. */
         private String address;
+        /** Coordinates of the agreed destination (home visits); distinct from the reported SOS fix below. */
+        private Double destinationLatitude;
+        private Double destinationLongitude;
+        /** True when the destination text was copied from the saved address by migration V34, not recorded at booking time. */
+        private boolean destinationBackfilled;
         private Long actorId;
         private String actorName;
         private String actorPhone;

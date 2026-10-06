@@ -64,10 +64,11 @@ public class ComplaintController {
     @Operation(summary = "List all complaints (ADMIN)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ComplaintDto>>> adminList(
             @RequestParam(required = false) ComplaintStatus status,
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                complaintService.adminGetAll(status, com.aiwa.util.Pages.admin(page, size))));
+                complaintService.adminSearch(status, query, com.aiwa.util.Pages.admin(page, size))));
     }
 
     @PostMapping("/admin/complaints/{id}/resolve")
