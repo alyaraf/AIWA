@@ -5,7 +5,6 @@ import com.aiwa.service.PushNotificationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -195,12 +194,12 @@ public class FcmPushService implements PushNotificationService {
     /** Signed JWT-bearer assertion for Google's OAuth2 token endpoint. */
     static String buildAssertion(ServiceAccount sa, Instant now) {
         return Jwts.builder()
-                .setIssuer(sa.clientEmail())
-                .setAudience(sa.tokenUri())
+                .issuer(sa.clientEmail())
+                .audience().add(sa.tokenUri()).and()
                 .claim("scope", SCOPE)
-                .setIssuedAt(Date.from(now))
-                .setExpiration(Date.from(now.plusSeconds(3600)))
-                .signWith(sa.privateKey(), SignatureAlgorithm.RS256)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(3600)))
+                .signWith(sa.privateKey(), Jwts.SIG.RS256)
                 .compact();
     }
 

@@ -557,7 +557,12 @@ export default function App() {
           setSidebarOpen(false);
         }}
         onLogout={() => {
-          api.logout(); // CR-18: clears the tokens first; the server call is best-effort
+          // CR-18: clears the tokens first; the server call is best-effort. SEC-02: but a failed revocation is reported.
+          Promise.resolve(api.logout()).then((revoked) => {
+            if (revoked === false) {
+              toast("Signed out on this device, but the server could not confirm it. Sign in and sign out again to end the session everywhere.", "error");
+            }
+          });
           setSession(null);
           setRoute("dashboard"); // next login starts fresh, not on the page you left
         }}

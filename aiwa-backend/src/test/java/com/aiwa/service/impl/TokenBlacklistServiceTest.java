@@ -51,8 +51,8 @@ class TokenBlacklistServiceTest {
         when(jwtUtils.getRemainingValidityMillis("t")).thenReturn(60000L);
         doThrow(new RuntimeException("down")).when(redis).set(anyString(), anyString(), any());
 
-        assertThatCode(() -> service.blacklist("t")).doesNotThrowAnyException();
-        verify(repo).save(argThat(r -> r.getTokenHash().equals(TokenBlacklistService.hash("t"))));
+        assertThatCode(() -> service.revoke("t")).doesNotThrowAnyException();
+        verify(repo).saveAndFlush(argThat(r -> r.getTokenHash().equals(TokenBlacklistService.hash("t"))));
     }
 
     @Test
@@ -61,7 +61,7 @@ class TokenBlacklistServiceTest {
         when(jwtUtils.validateToken("t")).thenReturn(true);
         when(jwtUtils.getRemainingValidityMillis("t")).thenReturn(60000L);
         doThrow(new RuntimeException("down")).when(redis).set(anyString(), anyString(), any());
-        service.blacklist("t");
+        service.revoke("t");
 
         when(redis.exists(anyString())).thenReturn(false); // Redis is back, entry missing
         when(repo.existsById(TokenBlacklistService.hash("t"))).thenReturn(true);
@@ -69,35 +69,23 @@ class TokenBlacklistServiceTest {
         assertThat(service.isBlacklisted("other")).isFalse();
     }
 
-    // SA-06: the gap is remembered in the database, so a restarted or second instance
-    // still double-checks a Redis miss instead of starting with a clean memory.
+    // SEC-01: a Redis miss proves nothing, so the database settles it on every request.
     @Test
-    void aFreshInstanceDoubleChecksTheDatabaseWhileTheStoredRedisGapIsOpen() {
-        when(repo.findById(TokenBlacklistService.REDIS_GAP_MARKER)).thenReturn(java.util.Optional.of(
-                new RevokedToken(TokenBlacklistService.REDIS_GAP_MARKER, java.time.Instant.now().plusSeconds(600))));
+    void aRedisMissIsAlwaysSettledByTheDatabase() {
         when(redis.exists(anyString())).thenReturn(false);
-        when(repo.existsById(TokenBlacklistService.hash("revoked-in-the-gap"))).thenReturn(true);
+        when(repo.existsById(TokenBlacklistService.hash("revoked-after-cache-loss"))).thenReturn(true);
 
-        assertThat(service.isBlacklisted("revoked-in-the-gap")).isTrue();
+        assertThat(service.isBlacklisted("revoked-after-cache-loss")).isTrue();
         assertThat(service.isBlacklisted("fine")).isFalse();
+        verify(repo, never()).findById(anyString()); // no gap-marker bookkeeping any more
     }
 
     @Test
-    void aRedisWriteFailureStoresTheGapMarkerForOtherInstances() {
-        when(jwtUtils.validateToken("t")).thenReturn(true);
-        when(jwtUtils.getRemainingValidityMillis("t")).thenReturn(60000L);
-        doThrow(new RuntimeException("down")).when(redis).set(anyString(), anyString(), any());
-
-        service.blacklist("t");
-
-        verify(repo).saveAndFlush(argThat(r -> r.getTokenHash().equals(TokenBlacklistService.REDIS_GAP_MARKER)));
-    }
-
-    @Test
-    void withRedisHealthyARedisMissDoesNotHitTheDatabase() {
+    void aDatabaseFailureOnAMissPropagatesInsteadOfGuessingTheTokenIsFine() {
         when(redis.exists(anyString())).thenReturn(false);
-        assertThat(service.isBlacklisted("t")).isFalse();
-        verify(repo, never()).existsById(anyString());
+        when(repo.existsById(anyString())).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db down"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.isBlacklisted("t"))
+                .isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class);
     }
 
     @Test

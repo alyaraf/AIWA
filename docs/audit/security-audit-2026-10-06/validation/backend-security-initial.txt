@@ -1,0 +1,602 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----------------------< com.aiwa:aiwa-backend >------------------------
+[INFO] Building AIWA Backend 1.0.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ aiwa-backend ---
+[INFO] Copying 4 resources from src\main\resources to target\classes
+[INFO] Copying 35 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.0:compile (default-compile) @ aiwa-backend ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ aiwa-backend ---
+[INFO] Copying 2 resources from src\test\resources to target\test-classes
+[INFO] 
+[INFO] --- compiler:3.14.0:testCompile (default-testCompile) @ aiwa-backend ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 95 source files with javac [debug parameters release 17] to target\test-classes
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/ApiFlowIntegrationTest.java:[84,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/ApiFlowIntegrationTest.java:[84,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/ApiFlowIntegrationTest.java:[84,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/ApiFlowIntegrationTest.java:[84,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/ApiFlowIntegrationTest.java:[84,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/BookingRuleGapsApiTest.java:[110,6] org.springframework.boot.test.mock.mockito.SpyBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/BookingRuleGapsApiTest.java:[110,6] org.springframework.boot.test.mock.mockito.SpyBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/BookingRuleGapsApiTest.java:[110,6] org.springframework.boot.test.mock.mockito.SpyBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/BookingRuleGapsApiTest.java:[110,6] org.springframework.boot.test.mock.mockito.SpyBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/BookingRuleGapsApiTest.java:[110,6] org.springframework.boot.test.mock.mockito.SpyBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBodiesApiTest.java:[77,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBodiesApiTest.java:[77,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBodiesApiTest.java:[77,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBodiesApiTest.java:[77,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBodiesApiTest.java:[77,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBoundsApiTest.java:[72,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBoundsApiTest.java:[72,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBoundsApiTest.java:[72,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBoundsApiTest.java:[72,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/FreeTextBoundsApiTest.java:[72,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/PayoutReportFreezeTest.java:[67,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/PayoutReportFreezeTest.java:[67,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/PayoutReportFreezeTest.java:[67,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/PayoutReportFreezeTest.java:[67,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/PayoutReportFreezeTest.java:[67,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/SupportResetLiftsSignInLockApiTest.java:[59,48] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/SupportResetLiftsSignInLockApiTest.java:[59,48] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/SupportResetLiftsSignInLockApiTest.java:[59,48] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/SupportResetLiftsSignInLockApiTest.java:[59,48] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/SupportResetLiftsSignInLockApiTest.java:[59,48] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/service/impl/SosTextRetryTest.java:[69,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/service/impl/SosTextRetryTest.java:[69,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/service/impl/SosTextRetryTest.java:[69,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/service/impl/SosTextRetryTest.java:[69,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[WARNING] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/service/impl/SosTextRetryTest.java:[69,6] org.springframework.boot.test.mock.mockito.MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+[INFO] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/ApiContractSnapshotTest.java: C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend\src\test\java\com\aiwa\api\ApiContractSnapshotTest.java uses or overrides a deprecated API.
+[INFO] /C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r6/snapshot/aiwa-backend/src/test/java/com/aiwa/api/ApiContractSnapshotTest.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ aiwa-backend ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.aiwa.api.AdminReadExportRbacApiTest
+14:48:54.872 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.aiwa.AiwaApplication for test class com.aiwa.api.AdminReadExportRbacApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-06T14:48:55.413+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.api.AdminReadExportRbacApiTest    : Starting AdminReadExportRbacApiTest using Java 17.0.19 with PID 17264 (started by fsherif in C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend)
+2026-10-06T14:48:55.413+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.aiwa.api.AdminReadExportRbacApiTest    : Running with Spring Boot v3.5.16, Spring v6.2.19
+2026-10-06T14:48:55.413+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.api.AdminReadExportRbacApiTest    : The following 1 profile is active: "test"
+2026-10-06T14:48:57.486+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-06T14:48:57.488+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-06T14:48:57.798+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 297 ms. Found 26 JPA repository interfaces.
+2026-10-06T14:48:58.939+03:00  INFO 17264 --- [aiwa-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-06T14:48:59.085+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.53.Final
+2026-10-06T14:48:59.121+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-06T14:48:59.519+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-06T14:48:59.548+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-10-06T14:48:59.696+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-10-06T14:48:59.720+03:00  WARN 17264 --- [aiwa-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-06T14:48:59.745+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-06T14:49:01.586+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-06T14:49:01.702+03:00  INFO 17264 --- [aiwa-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-06T14:49:02.458+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-10-06T14:49:04.849+03:00  INFO 17264 --- [aiwa-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-10-06T14:49:04.849+03:00  WARN 17264 --- [aiwa-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+2026-10-06T14:49:07.446+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-06T14:49:08.207+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Filter 'jwtAuthFilter' configured for use
+2026-10-06T14:49:08.207+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.MetricsTokenFilter     : Filter 'metricsTokenFilter' configured for use
+2026-10-06T14:49:08.207+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : Filter 'redisRateLimitFilter' configured for use
+2026-10-06T14:49:08.207+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-06T14:49:08.207+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-06T14:49:08.207+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
+2026-10-06T14:49:08.280+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.api.AdminReadExportRbacApiTest    : Started AdminReadExportRbacApiTest in 13.24 seconds (process running for 14.621)
+2026-10-06T14:49:08.481+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.config.AdminBootstrapConfig     : No admin user exists. Set ADMIN_EMAIL or ADMIN_PHONE plus ADMIN_PASSWORD to bootstrap the first admin.
+2026-10-06T14:49:08.487+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-10-06T14:49:08.487+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+2026-10-06T14:49:11.718+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.aiwa.exception.GlobalExceptionHandler  : Not found: Ledger entry not found with id: 999999
+2026-10-06T14:49:13.765+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.aiwa.exception.GlobalExceptionHandler  : Not found: Provider not found with id: 999999
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 19.30 s -- in com.aiwa.api.AdminReadExportRbacApiTest
+[INFO] Running com.aiwa.api.AdminRefreshCookieApiTest
+2026-10-06T14:49:13.782+03:00  INFO 17264 --- [aiwa-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aiwa.AiwaApplication for test class com.aiwa.api.AdminRefreshCookieApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-06T14:49:13.847+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.AdminRefreshCookieApiTest   : Starting AdminRefreshCookieApiTest using Java 17.0.19 with PID 17264 (started by fsherif in C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend)
+2026-10-06T14:49:13.851+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.api.AdminRefreshCookieApiTest   : Running with Spring Boot v3.5.16, Spring v6.2.19
+2026-10-06T14:49:13.851+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.AdminRefreshCookieApiTest   : The following 1 profile is active: "test"
+2026-10-06T14:49:14.719+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-06T14:49:14.719+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-06T14:49:14.801+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 84 ms. Found 26 JPA repository interfaces.
+2026-10-06T14:49:14.917+03:00  INFO 17264 --- [aiwa-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-06T14:49:14.932+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-06T14:49:14.945+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-06T14:49:14.949+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Starting...
+2026-10-06T14:49:14.949+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Start completed.
+2026-10-06T14:49:14.949+03:00  WARN 17264 --- [aiwa-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-06T14:49:14.949+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-2)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-06T14:49:15.227+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-06T14:49:15.308+03:00  INFO 17264 --- [aiwa-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-06T14:49:15.624+03:00  INFO 17264 --- [aiwa-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-10-06T14:49:15.624+03:00  WARN 17264 --- [aiwa-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+2026-10-06T14:49:16.162+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-06T14:49:16.365+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Filter 'jwtAuthFilter' configured for use
+2026-10-06T14:49:16.365+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.MetricsTokenFilter     : Filter 'metricsTokenFilter' configured for use
+2026-10-06T14:49:16.365+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : Filter 'redisRateLimitFilter' configured for use
+2026-10-06T14:49:16.365+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-06T14:49:16.365+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-06T14:49:16.367+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 2 ms
+2026-10-06T14:49:16.393+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.AdminRefreshCookieApiTest   : Started AdminRefreshCookieApiTest in 2.602 seconds (process running for 22.729)
+2026-10-06T14:49:16.400+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.config.AdminBootstrapConfig     : No admin user exists. Set ADMIN_EMAIL or ADMIN_PHONE plus ADMIN_PASSWORD to bootstrap the first admin.
+2026-10-06T14:49:16.400+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-10-06T14:49:16.400+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.501 s -- in com.aiwa.api.AdminRefreshCookieApiTest
+[INFO] Running com.aiwa.api.AdminTwoFactorApiTest
+2026-10-06T14:49:17.283+03:00  INFO 17264 --- [aiwa-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aiwa.AiwaApplication for test class com.aiwa.api.AdminTwoFactorApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-06T14:49:17.319+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.AdminTwoFactorApiTest       : Starting AdminTwoFactorApiTest using Java 17.0.19 with PID 17264 (started by fsherif in C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend)
+2026-10-06T14:49:17.319+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.api.AdminTwoFactorApiTest       : Running with Spring Boot v3.5.16, Spring v6.2.19
+2026-10-06T14:49:17.319+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.AdminTwoFactorApiTest       : The following 1 profile is active: "test"
+2026-10-06T14:49:17.989+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-06T14:49:17.989+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-06T14:49:18.063+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 73 ms. Found 26 JPA repository interfaces.
+2026-10-06T14:49:18.144+03:00  INFO 17264 --- [aiwa-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-06T14:49:18.144+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-06T14:49:18.152+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-06T14:49:18.152+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Starting...
+2026-10-06T14:49:18.152+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Start completed.
+2026-10-06T14:49:18.152+03:00  WARN 17264 --- [aiwa-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-06T14:49:18.159+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-3)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-06T14:49:18.344+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-06T14:49:18.372+03:00  INFO 17264 --- [aiwa-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-06T14:49:18.630+03:00  INFO 17264 --- [aiwa-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-10-06T14:49:18.630+03:00  WARN 17264 --- [aiwa-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+2026-10-06T14:49:18.998+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-06T14:49:19.176+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Filter 'jwtAuthFilter' configured for use
+2026-10-06T14:49:19.176+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.MetricsTokenFilter     : Filter 'metricsTokenFilter' configured for use
+2026-10-06T14:49:19.176+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : Filter 'redisRateLimitFilter' configured for use
+2026-10-06T14:49:19.176+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-06T14:49:19.176+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-06T14:49:19.176+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
+2026-10-06T14:49:19.198+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.AdminTwoFactorApiTest       : Started AdminTwoFactorApiTest in 1.913 seconds (process running for 25.534)
+2026-10-06T14:49:19.203+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.config.AdminBootstrapConfig     : No admin user exists. Set ADMIN_EMAIL or ADMIN_PHONE plus ADMIN_PASSWORD to bootstrap the first admin.
+2026-10-06T14:49:19.203+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-10-06T14:49:19.203+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.655 s -- in com.aiwa.api.AdminTwoFactorApiTest
+[INFO] Running com.aiwa.api.HardeningApiTest
+2026-10-06T14:49:19.938+03:00  INFO 17264 --- [aiwa-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aiwa.AiwaApplication for test class com.aiwa.api.HardeningApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-06T14:49:19.966+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.HardeningApiTest            : Starting HardeningApiTest using Java 17.0.19 with PID 17264 (started by fsherif in C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend)
+2026-10-06T14:49:19.966+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.api.HardeningApiTest            : Running with Spring Boot v3.5.16, Spring v6.2.19
+2026-10-06T14:49:19.966+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.HardeningApiTest            : The following 1 profile is active: "test"
+2026-10-06T14:49:20.623+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-06T14:49:20.623+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-06T14:49:20.688+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 65 ms. Found 26 JPA repository interfaces.
+2026-10-06T14:49:20.776+03:00  INFO 17264 --- [aiwa-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-06T14:49:20.776+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-06T14:49:20.785+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-06T14:49:20.785+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-4 - Starting...
+2026-10-06T14:49:20.785+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-4 - Start completed.
+2026-10-06T14:49:20.785+03:00  WARN 17264 --- [aiwa-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-06T14:49:20.785+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-4)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-06T14:49:20.947+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-06T14:49:20.979+03:00  INFO 17264 --- [aiwa-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-06T14:49:21.240+03:00  INFO 17264 --- [aiwa-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-10-06T14:49:21.240+03:00  WARN 17264 --- [aiwa-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+2026-10-06T14:49:21.568+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-06T14:49:21.700+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Filter 'jwtAuthFilter' configured for use
+2026-10-06T14:49:21.705+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.MetricsTokenFilter     : Filter 'metricsTokenFilter' configured for use
+2026-10-06T14:49:21.705+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : Filter 'redisRateLimitFilter' configured for use
+2026-10-06T14:49:21.705+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-06T14:49:21.705+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-06T14:49:21.705+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
+2026-10-06T14:49:21.717+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.HardeningApiTest            : Started HardeningApiTest in 1.767 seconds (process running for 28.056)
+2026-10-06T14:49:21.717+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.config.AdminBootstrapConfig     : No admin user exists. Set ADMIN_EMAIL or ADMIN_PHONE plus ADMIN_PASSWORD to bootstrap the first admin.
+2026-10-06T14:49:21.717+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-10-06T14:49:21.717+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+2026-10-06T14:49:22.294+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.a.s.impl.NotificationServiceImpl       : Push allowed for user 3 but no device token is registered � nowhere to deliver it
+2026-10-06T14:49:22.341+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.a.s.impl.NotificationServiceImpl       : Push allowed for user 3 but no device token is registered � nowhere to deliver it
+2026-10-06T14:49:22.879+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.a.s.impl.NotificationServiceImpl       : Push allowed for user 8 but no device token is registered � nowhere to deliver it
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.417 s -- in com.aiwa.api.HardeningApiTest
+[INFO] Running com.aiwa.api.ModerationPrivacyApiTest
+2026-10-06T14:49:23.361+03:00  INFO 17264 --- [aiwa-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aiwa.AiwaApplication for test class com.aiwa.api.ModerationPrivacyApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-06T14:49:23.380+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.ModerationPrivacyApiTest    : Starting ModerationPrivacyApiTest using Java 17.0.19 with PID 17264 (started by fsherif in C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend)
+2026-10-06T14:49:23.380+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.api.ModerationPrivacyApiTest    : Running with Spring Boot v3.5.16, Spring v6.2.19
+2026-10-06T14:49:23.380+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.ModerationPrivacyApiTest    : The following 1 profile is active: "test"
+2026-10-06T14:49:23.963+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-06T14:49:23.963+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-06T14:49:24.033+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 74 ms. Found 26 JPA repository interfaces.
+2026-10-06T14:49:24.119+03:00  INFO 17264 --- [aiwa-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-06T14:49:24.121+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-06T14:49:24.127+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-06T14:49:24.127+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-5 - Starting...
+2026-10-06T14:49:24.127+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-5 - Start completed.
+2026-10-06T14:49:24.127+03:00  WARN 17264 --- [aiwa-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-06T14:49:24.127+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-5)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-06T14:49:24.290+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-06T14:49:24.327+03:00  INFO 17264 --- [aiwa-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-06T14:49:24.530+03:00  INFO 17264 --- [aiwa-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-10-06T14:49:24.530+03:00  WARN 17264 --- [aiwa-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+2026-10-06T14:49:24.801+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-06T14:49:24.947+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Filter 'jwtAuthFilter' configured for use
+2026-10-06T14:49:24.947+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.MetricsTokenFilter     : Filter 'metricsTokenFilter' configured for use
+2026-10-06T14:49:24.947+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : Filter 'redisRateLimitFilter' configured for use
+2026-10-06T14:49:24.947+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-06T14:49:24.947+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-06T14:49:24.947+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
+2026-10-06T14:49:24.954+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.ModerationPrivacyApiTest    : Started ModerationPrivacyApiTest in 1.591 seconds (process running for 31.298)
+2026-10-06T14:49:24.962+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.config.AdminBootstrapConfig     : No admin user exists. Set ADMIN_EMAIL or ADMIN_PHONE plus ADMIN_PASSWORD to bootstrap the first admin.
+2026-10-06T14:49:24.962+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-10-06T14:49:24.962+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+2026-10-06T14:49:25.515+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.aiwa.exception.GlobalExceptionHandler  : Not found: Provider not found with id: 1
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.808 s -- in com.aiwa.api.ModerationPrivacyApiTest
+[INFO] Running com.aiwa.api.SecurityTotpAuditApiTest
+2026-10-06T14:49:26.166+03:00  INFO 17264 --- [aiwa-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aiwa.AiwaApplication for test class com.aiwa.api.SecurityTotpAuditApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-06T14:49:26.182+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.SecurityTotpAuditApiTest    : Starting SecurityTotpAuditApiTest using Java 17.0.19 with PID 17264 (started by fsherif in C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend)
+2026-10-06T14:49:26.182+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.api.SecurityTotpAuditApiTest    : Running with Spring Boot v3.5.16, Spring v6.2.19
+2026-10-06T14:49:26.182+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.SecurityTotpAuditApiTest    : The following 1 profile is active: "test"
+2026-10-06T14:49:26.796+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-06T14:49:26.796+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-06T14:49:26.870+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 62 ms. Found 26 JPA repository interfaces.
+2026-10-06T14:49:26.932+03:00  INFO 17264 --- [aiwa-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-06T14:49:26.932+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-06T14:49:26.940+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-06T14:49:26.940+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-6 - Starting...
+2026-10-06T14:49:26.940+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-6 - Start completed.
+2026-10-06T14:49:26.940+03:00  WARN 17264 --- [aiwa-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-06T14:49:26.940+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-6)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-06T14:49:27.073+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-06T14:49:27.102+03:00  INFO 17264 --- [aiwa-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-06T14:49:27.299+03:00  INFO 17264 --- [aiwa-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-10-06T14:49:27.299+03:00  WARN 17264 --- [aiwa-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+2026-10-06T14:49:27.613+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-06T14:49:27.754+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Filter 'jwtAuthFilter' configured for use
+2026-10-06T14:49:27.754+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.MetricsTokenFilter     : Filter 'metricsTokenFilter' configured for use
+2026-10-06T14:49:27.754+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : Filter 'redisRateLimitFilter' configured for use
+2026-10-06T14:49:27.754+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-06T14:49:27.754+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-06T14:49:27.766+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 12 ms
+2026-10-06T14:49:27.775+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.SecurityTotpAuditApiTest    : Started SecurityTotpAuditApiTest in 1.607 seconds (process running for 34.114)
+2026-10-06T14:49:27.775+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.config.AdminBootstrapConfig     : No admin user exists. Set ADMIN_EMAIL or ADMIN_PHONE plus ADMIN_PASSWORD to bootstrap the first admin.
+2026-10-06T14:49:27.775+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-10-06T14:49:27.775+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+AUDIT 2fa-enable: 24 wrong guesses do not spend 5-attempt account budget; valid code issues a new session without password
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.905 s -- in com.aiwa.api.SecurityTotpAuditApiTest
+[INFO] Running com.aiwa.api.TempPasswordSessionApiTest
+2026-10-06T14:49:28.074+03:00  INFO 17264 --- [aiwa-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aiwa.AiwaApplication for test class com.aiwa.api.TempPasswordSessionApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-06T14:49:28.096+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.api.TempPasswordSessionApiTest    : Starting TempPasswordSessionApiTest using Java 17.0.19 with PID 17264 (started by fsherif in C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend)
+2026-10-06T14:49:28.096+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.aiwa.api.TempPasswordSessionApiTest    : Running with Spring Boot v3.5.16, Spring v6.2.19
+2026-10-06T14:49:28.096+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.api.TempPasswordSessionApiTest    : The following 1 profile is active: "test"
+2026-10-06T14:49:28.734+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-06T14:49:28.734+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-06T14:49:28.800+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 67 ms. Found 26 JPA repository interfaces.
+2026-10-06T14:49:28.882+03:00  INFO 17264 --- [aiwa-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-06T14:49:28.882+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-06T14:49:28.890+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-06T14:49:28.890+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-7 - Starting...
+2026-10-06T14:49:28.890+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-7 - Start completed.
+2026-10-06T14:49:28.890+03:00  WARN 17264 --- [aiwa-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-06T14:49:28.890+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-7)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-06T14:49:29.051+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-06T14:49:29.098+03:00  INFO 17264 --- [aiwa-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-06T14:49:29.265+03:00  INFO 17264 --- [aiwa-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-10-06T14:49:29.265+03:00  WARN 17264 --- [aiwa-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+2026-10-06T14:49:29.622+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-06T14:49:29.832+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Filter 'jwtAuthFilter' configured for use
+2026-10-06T14:49:29.832+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.MetricsTokenFilter     : Filter 'metricsTokenFilter' configured for use
+2026-10-06T14:49:29.832+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : Filter 'redisRateLimitFilter' configured for use
+2026-10-06T14:49:29.832+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-06T14:49:29.832+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-06T14:49:29.838+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 6 ms
+2026-10-06T14:49:29.856+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.api.TempPasswordSessionApiTest    : Started TempPasswordSessionApiTest in 1.779 seconds (process running for 36.203)
+2026-10-06T14:49:29.871+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.config.AdminBootstrapConfig     : No admin user exists. Set ADMIN_EMAIL or ADMIN_PHONE plus ADMIN_PASSWORD to bootstrap the first admin.
+2026-10-06T14:49:29.871+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-10-06T14:49:29.871+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+2026-10-06T14:49:30.160+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Rejected token issued before the session cut-off for user #1
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.325 s -- in com.aiwa.api.TempPasswordSessionApiTest
+[INFO] Running com.aiwa.api.VerifiedEmailApiTest
+2026-10-06T14:49:30.396+03:00  INFO 17264 --- [aiwa-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aiwa.AiwaApplication for test class com.aiwa.api.VerifiedEmailApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-06T14:49:30.420+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.VerifiedEmailApiTest        : Starting VerifiedEmailApiTest using Java 17.0.19 with PID 17264 (started by fsherif in C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend)
+2026-10-06T14:49:30.420+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.api.VerifiedEmailApiTest        : Running with Spring Boot v3.5.16, Spring v6.2.19
+2026-10-06T14:49:30.420+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.VerifiedEmailApiTest        : The following 1 profile is active: "test"
+2026-10-06T14:49:31.039+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-06T14:49:31.039+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-06T14:49:31.130+03:00  INFO 17264 --- [aiwa-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 90 ms. Found 26 JPA repository interfaces.
+2026-10-06T14:49:31.209+03:00  INFO 17264 --- [aiwa-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-06T14:49:31.209+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-06T14:49:31.220+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-06T14:49:31.220+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-8 - Starting...
+2026-10-06T14:49:31.227+03:00  INFO 17264 --- [aiwa-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-8 - Start completed.
+2026-10-06T14:49:31.227+03:00  WARN 17264 --- [aiwa-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-06T14:49:31.227+03:00  INFO 17264 --- [aiwa-backend] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-8)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-06T14:49:31.348+03:00  INFO 17264 --- [aiwa-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-06T14:49:31.369+03:00  INFO 17264 --- [aiwa-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-06T14:49:31.549+03:00  INFO 17264 --- [aiwa-backend] [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-10-06T14:49:31.549+03:00  WARN 17264 --- [aiwa-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR
+2026-10-06T14:49:31.880+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-06T14:49:32.039+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Filter 'jwtAuthFilter' configured for use
+2026-10-06T14:49:32.039+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.MetricsTokenFilter     : Filter 'metricsTokenFilter' configured for use
+2026-10-06T14:49:32.039+03:00 DEBUG 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : Filter 'redisRateLimitFilter' configured for use
+2026-10-06T14:49:32.039+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-06T14:49:32.039+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-06T14:49:32.045+03:00  INFO 17264 --- [aiwa-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
+2026-10-06T14:49:32.059+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.api.VerifiedEmailApiTest        : Started VerifiedEmailApiTest in 1.663 seconds (process running for 38.396)
+2026-10-06T14:49:32.063+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.config.AdminBootstrapConfig     : No admin user exists. Set ADMIN_EMAIL or ADMIN_PHONE plus ADMIN_PASSWORD to bootstrap the first admin.
+2026-10-06T14:49:32.063+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-10-06T14:49:32.063+03:00  WARN 17264 --- [aiwa-backend] [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+2026-10-06T14:49:32.279+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.service.impl.DevLogSmsService   : [DEV SMS] OTP for +201100000503 is 402482 and expires in 10 minutes
+2026-10-06T14:49:32.450+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Rejected token issued before the session cut-off for user #1
+2026-10-06T14:49:32.890+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.service.impl.DevLogSmsService   : [DEV SMS] OTP for +201100000507 is 354423 and expires in 10 minutes
+2026-10-06T14:49:32.962+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.DevLogEmailService   : [DEV EMAIL] -> cr05-506@test.aiwa : Your AIWA verification code � Your AIWA verification code is 252145. It expires in 10 minutes. If you didn't ask for it, you can ignore this email.
+2026-10-06T14:49:32.978+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.DevLogEmailService   : [DEV EMAIL] -> cr05-506@test.aiwa : Your AIWA verification code � Your AIWA verification code is 524815. It expires in 10 minutes. If you didn't ask for it, you can ignore this email.
+2026-10-06T14:49:33.039+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.DevLogEmailService   : [DEV EMAIL] -> cr05-506@test.aiwa : Your AIWA verification code � Your AIWA verification code is 620700. It expires in 10 minutes. If you didn't ask for it, you can ignore this email.
+2026-10-06T14:49:33.290+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.service.impl.DevLogSmsService   : [DEV SMS] OTP for +201100000508 is 798642 and expires in 10 minutes
+2026-10-06T14:49:33.624+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Cannot set user authentication: User has no identifier: #6
+2026-10-06T14:49:33.949+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.DevLogEmailService   : [DEV EMAIL] -> cr05-513@test.aiwa : Your AIWA verification code � Your AIWA verification code is 067919. It expires in 10 minutes. If you didn't ask for it, you can ignore this email.
+2026-10-06T14:49:34.034+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.DevLogEmailService   : [DEV EMAIL] -> cr05-513@test.aiwa : Your AIWA verification code � Your AIWA verification code is 864454. It expires in 10 minutes. If you didn't ask for it, you can ignore this email.
+2026-10-06T14:49:34.214+03:00  INFO 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.DevLogEmailService   : [DEV EMAIL] -> cr05-513@test.aiwa : Your AIWA verification code � Your AIWA verification code is 646876. It expires in 10 minutes. If you didn't ask for it, you can ignore this email.
+2026-10-06T14:49:34.230+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Rejected token issued before the session cut-off for user #7
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.973 s -- in com.aiwa.api.VerifiedEmailApiTest
+[INFO] Running com.aiwa.config.ProductionGuardConfigTest
+2026-10-06T14:49:34.376+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.config.ProductionGuardConfig    : Production guard passed: profiles=[prod] sms=external email=http push=none
+2026-10-06T14:49:34.376+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.config.ProductionGuardConfig    : Production guard passed: profiles=[staging] sms=external email=http push=none
+2026-10-06T14:49:34.400+03:00  INFO 17264 --- [aiwa-backend] [           main] com.aiwa.config.ProductionGuardConfig    : Production guard passed: profiles=[prod] sms=external email=http push=none
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.033 s -- in com.aiwa.config.ProductionGuardConfigTest
+[INFO] Running com.aiwa.security.JwtAuthFilterTest
+2026-10-06T14:49:35.347+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Rejected request for disabled account user #9
+2026-10-06T14:49:35.352+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.security.JwtAuthFilter          : Rejected request for disabled account user #0
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.955 s -- in com.aiwa.security.JwtAuthFilterTest
+[INFO] Running com.aiwa.security.JwtUtilsTokenTypeTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.064 s -- in com.aiwa.security.JwtUtilsTokenTypeTest
+[INFO] Running com.aiwa.security.RedisRateLimitFilterTest
+2026-10-06T14:49:35.549+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.566+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.566+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.570+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.security.RedisRateLimitFilter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path=/api/auth/login - enforcing the limit in-process: Connection refused
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.180 s -- in com.aiwa.security.RedisRateLimitFilterTest
+[INFO] Running com.aiwa.service.impl.AccountRateLimiterTest
+2026-10-06T14:49:35.602+03:00 ERROR 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.AccountRateLimiter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=account action=chat - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.602+03:00 ERROR 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.AccountRateLimiter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=account action=chat - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.602+03:00 ERROR 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.AccountRateLimiter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=account action=chat - enforcing the limit in-process: Connection refused
+2026-10-06T14:49:35.615+03:00 ERROR 17264 --- [aiwa-backend] [           main] c.aiwa.service.impl.AccountRateLimiter   : RATE_LIMIT_REDIS_UNAVAILABLE scope=account action=chat - enforcing the limit in-process: Connection refused
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.014 s -- in com.aiwa.service.impl.AccountRateLimiterTest
+[INFO] Running com.aiwa.service.impl.FileStorageDecodeLimitsTest
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.270 s -- in com.aiwa.service.impl.FileStorageDecodeLimitsTest
+[INFO] Running com.aiwa.service.impl.FileStorageMetadataTest
+2026-10-06T14:49:36.993+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public WebP stored unchanged: could not strip metadata (java.lang.IllegalArgumentException: chunk overruns the file)
+2026-10-06T14:49:36.993+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public WebP stored unchanged: could not strip metadata (java.lang.IllegalArgumentException: bad RIFF size)
+2026-10-06T14:49:37.006+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public WebP stored unchanged: could not strip metadata (java.lang.IllegalArgumentException: bad RIFF size)
+2026-10-06T14:49:37.009+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public WebP stored unchanged: could not strip metadata (java.lang.IllegalArgumentException: short chunk header)
+2026-10-06T14:49:37.016+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public WebP stored unchanged: could not strip metadata (java.lang.IllegalArgumentException: short VP8X)
+2026-10-06T14:49:37.025+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public WebP stored unchanged: could not strip metadata (java.lang.IllegalArgumentException: chunk overruns the file)
+2026-10-06T14:49:37.159+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public WebP stored unchanged: could not strip metadata (java.lang.IllegalArgumentException: bad RIFF size)
+[INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.682 s -- in com.aiwa.service.impl.FileStorageMetadataTest
+[INFO] Running com.aiwa.service.impl.FileStorageServiceImplTest
+2026-10-06T14:49:37.606+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public image stored unchanged: could not re-encode (javax.imageio.IIOException: I/O error reading PNG header!), metadata not stripped
+2026-10-06T14:49:37.637+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public image stored unchanged: could not re-encode (javax.imageio.IIOException: I/O error reading PNG header!), metadata not stripped
+2026-10-06T14:49:37.653+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.FileStorageServiceImpl  : Public image stored unchanged: could not re-encode (javax.imageio.IIOException: No image data present to read), metadata not stripped
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.101 s -- in com.aiwa.service.impl.FileStorageServiceImplTest
+[INFO] Running com.aiwa.service.impl.OtpPumpingGuardTest
+2026-10-06T14:49:37.762+03:00  WARN 17264 --- [aiwa-backend] [           main] com.aiwa.service.impl.OtpServiceImpl     : OTP global budget exhausted (4 this hour, 4 today)
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.105 s -- in com.aiwa.service.impl.OtpPumpingGuardTest
+[INFO] Running com.aiwa.service.impl.OtpRedisDownTest
+2026-10-06T14:49:37.780+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.service.impl.OtpServiceImpl     : OTP unavailable, Redis is down: down
+2026-10-06T14:49:37.791+03:00 ERROR 17264 --- [aiwa-backend] [           main] com.aiwa.service.impl.OtpServiceImpl     : OTP unavailable, Redis is down: down
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.011 s -- in com.aiwa.service.impl.OtpRedisDownTest
+[INFO] Running com.aiwa.service.impl.SecurityRevocationAuditTest
+2026-10-06T14:49:38.026+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Could not write the token revocation to Redis (the database copy still holds): injected Redis unavailable
+2026-10-06T14:49:38.028+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Could not record the Redis gap marker: injected DB unavailable
+2026-10-06T14:49:38.028+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Token already revoked: injected DB unavailable
+AUDIT double-store-failure: logout returns normally; token is unrevoked after recovery
+[ERROR] Tests run: 2, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.237 s <<< FAILURE! -- in com.aiwa.service.impl.SecurityRevocationAuditTest
+[ERROR] com.aiwa.service.impl.SecurityRevocationAuditTest.healthyRedisMissReauthenticatesAnAccessTokenStillRevokedInDatabase -- Time elapsed: 0.209 s <<< FAILURE!
+Wanted but not invoked:
+revokedTokenRepository.save(
+    <custom argument matcher>
+);
+-> at com.aiwa.service.impl.SecurityRevocationAuditTest.healthyRedisMissReauthenticatesAnAccessTokenStillRevokedInDatabase(SecurityRevocationAuditTest.java:44)
+
+However, there was exactly 1 interaction with this mock:
+revokedTokenRepository.existsById(
+    "b96c9ed32620008c94183f7a5ab97e22dde06e278192ea66533d1aead3a9a49f"
+);
+-> at com.aiwa.service.impl.TokenBlacklistService.blacklist(TokenBlacklistService.java:60)
+
+
+	at com.aiwa.service.impl.SecurityRevocationAuditTest.healthyRedisMissReauthenticatesAnAccessTokenStillRevokedInDatabase(SecurityRevocationAuditTest.java:44)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+[INFO] Running com.aiwa.service.impl.TokenBlacklistServiceTest
+2026-10-06T14:49:38.028+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Could not write the token revocation to Redis (the database copy still holds): down
+2026-10-06T14:49:38.042+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Legacy blacklist check skipped (Redis down): down
+2026-10-06T14:49:38.042+03:00 DEBUG 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Legacy blacklist check skipped (Redis down): down
+2026-10-06T14:49:38.047+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Blacklist check: Redis unavailable, using the database: Connection refused
+2026-10-06T14:49:38.047+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Blacklist check: Redis unavailable, using the database: Connection refused
+2026-10-06T14:49:38.059+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Could not write the token revocation to Redis (the database copy still holds): down
+2026-10-06T14:49:38.059+03:00  WARN 17264 --- [aiwa-backend] [           main] c.a.service.impl.TokenBlacklistService   : Could not write the token revocation to Redis (the database copy still holds): down
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.044 s -- in com.aiwa.service.impl.TokenBlacklistServiceTest
+[INFO] Running com.aiwa.util.PrivateFileCipherTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.010 s -- in com.aiwa.util.PrivateFileCipherTest
+[INFO] Running com.aiwa.util.TotpSecretConverterTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.014 s -- in com.aiwa.util.TotpSecretConverterTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   SecurityRevocationAuditTest.healthyRedisMissReauthenticatesAnAccessTokenStillRevokedInDatabase:44 
+Wanted but not invoked:
+revokedTokenRepository.save(
+    <custom argument matcher>
+);
+-> at com.aiwa.service.impl.SecurityRevocationAuditTest.healthyRedisMissReauthenticatesAnAccessTokenStillRevokedInDatabase(SecurityRevocationAuditTest.java:44)
+
+However, there was exactly 1 interaction with this mock:
+revokedTokenRepository.existsById(
+    "b96c9ed32620008c94183f7a5ab97e22dde06e278192ea66533d1aead3a9a49f"
+);
+-> at com.aiwa.service.impl.TokenBlacklistService.blacklist(TokenBlacklistService.java:60)
+
+
+[INFO] 
+[ERROR] Tests run: 114, Failures: 1, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  59.583 s
+[INFO] Finished at: 2026-10-06T14:49:38+03:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.6:test (default-test) on project aiwa-backend: There are test failures.
+[ERROR] 
+[ERROR] See C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r6\snapshot\aiwa-backend\target\surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

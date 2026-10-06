@@ -157,7 +157,8 @@ public class AuthController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @CookieValue(value = ACCESS_TOKEN_COOKIE, required = false) String cookieToken,
             @CookieValue(value = ADMIN_REFRESH_COOKIE, required = false) String adminRefreshCookie,
-            @RequestBody(required = false) AuthRequest.Logout request) {
+            @RequestBody(required = false) AuthRequest.Logout request,
+            jakarta.servlet.http.HttpServletResponse servletResponse) {
         // DR-030: revoke the token from wherever JwtAuthFilter would accept it —
         // the Authorization header first, else the accessToken cookie.
         String accessToken = authorization != null && authorization.startsWith("Bearer ")
@@ -165,7 +166,16 @@ public class AuthController {
                 : (cookieToken != null && !cookieToken.isBlank() ? cookieToken : null);
         String refreshToken = request != null && request.getRefreshToken() != null && !request.getRefreshToken().isBlank()
                 ? request.getRefreshToken() : adminRefreshCookie;
-        authService.logout(accessToken, refreshToken);
+        try {
+            authService.logout(accessToken, refreshToken);
+        } catch (com.aiwa.exception.ServiceUnavailableException e) {
+            // SEC-02: the server could not confirm the revocation, so no success is reported (503,
+            // code auth.error.logout_revocation_failed). The browser's own cookies are still cleared:
+            // the caller can finish signing out locally, and retry the server-side revocation.
+            servletResponse.addHeader(HttpHeaders.SET_COOKIE, clearAccessTokenCookie().toString());
+            servletResponse.addHeader(HttpHeaders.SET_COOKIE, clearAdminRefreshCookie().toString());
+            throw e;
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, clearAccessTokenCookie().toString())
                 .header(HttpHeaders.SET_COOKIE, clearAdminRefreshCookie().toString())

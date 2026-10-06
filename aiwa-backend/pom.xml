@@ -23,7 +23,10 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.release>17</maven.compiler.release>
-        <jjwt.version>0.11.5</jjwt.version>
+        <jjwt.version>0.13.0</jjwt.version>
+        <!-- 10.1.60 (2026-09-15) fixes the 10.1.55-10.1.59 header mix-up and the WebSocket/HTTP2/AJP advisories;
+             Spring Boot 3.5.16 still manages 10.1.55, so it is pinned here. -->
+        <tomcat.version>10.1.60</tomcat.version>
         <sentry.version>8.59.0</sentry.version>
     </properties>
 

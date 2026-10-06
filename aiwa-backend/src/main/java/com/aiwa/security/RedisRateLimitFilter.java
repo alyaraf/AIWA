@@ -39,7 +39,10 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
             "/auth/refresh", 300L,
             "/auth/register", 5L,
             "/auth/reset-password", 5L,
-            "/auth/2fa/verify", 10L);
+            "/auth/2fa/verify", 10L,
+            // SEC-03: endpoint/IP throttle on top of the per-enrollment attempt budget.
+            "/auth/2fa/enable", 10L,
+            "/auth/2fa/setup", 10L);
 
     private final RedisRuntimeService redis;
     private final com.aiwa.util.LocalWindowCounter localFallback = new com.aiwa.util.LocalWindowCounter();
