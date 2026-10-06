@@ -134,11 +134,12 @@ public class ChatController {
     @Operation(summary = "Reported chat messages awaiting moderation, with the report reason (ADMIN)")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.ChatModerationDto>>> reportedMessages(
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size) {
-        // DR-028: one page at a time (the admin panel walks the pages).
-        var cases = moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(
-                ModerationStatus.OPEN, ModerationTargetType.CHAT_MESSAGE, com.aiwa.util.Pages.admin(page, size));
+        // R5 follow-up: searched and paged on the server; a case whose message is gone is not counted or listed.
+        var cases = moderationRepo.searchChat(ModerationStatus.OPEN, com.aiwa.util.Searches.pattern(query),
+                com.aiwa.util.Pages.admin(page, size));
         var out = new java.util.ArrayList<ApiResponse.ChatModerationDto>();
         for (var c : cases) {
             var message = chatRepo.findById(c.getTargetId()).orElse(null);

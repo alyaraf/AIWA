@@ -89,12 +89,12 @@ public class ReviewController {
     @Operation(summary = "Reported reviews awaiting moderation, with the report reason (ADMIN)")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.ReviewModerationDto>>> reportedReviews(
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size) {
-        // DR-028: one page at a time (the admin panel walks the pages).
-        var cases = moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(
-                com.aiwa.enums.ModerationStatus.OPEN, com.aiwa.enums.ModerationTargetType.REVIEW,
-                com.aiwa.util.Pages.admin(page, size));
+        // R5 follow-up: searched and paged on the server; a case whose review is gone is not counted or listed.
+        var cases = moderationRepo.searchReviews(com.aiwa.enums.ModerationStatus.OPEN,
+                com.aiwa.util.Searches.pattern(query), com.aiwa.util.Pages.admin(page, size));
         var out = new java.util.ArrayList<ApiResponse.ReviewModerationDto>();
         for (var c : cases) {
             var review = reviewRepo.findById(c.getTargetId()).orElse(null);

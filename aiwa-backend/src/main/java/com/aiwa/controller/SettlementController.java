@@ -129,9 +129,17 @@ public class SettlementController {
     @PreAuthorize(Perms.FINANCE_READ)
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.SettlementRowDto>>> providers(
+            @RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "ALL") String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size) {
-        return ResponseEntity.ok(ApiResponse.Success.of(providerRows(com.aiwa.util.Pages.admin(page, size))));
+        // R5 follow-up: searched (provider name) and filtered (settlement status) on the server, with the real total.
+        String wanted = status == null ? "ALL" : status.trim().toUpperCase();
+        if (!java.util.Set.of("ALL", "OVERDUE", "WITHIN_LIMIT", "SETTLED").contains(wanted)) {
+            throw new com.aiwa.exception.BusinessException("Unknown status: " + status);
+        }
+        return ResponseEntity.ok(ApiResponse.Success.of(providerRows(
+                com.aiwa.util.Searches.pattern(query), wanted, com.aiwa.util.Pages.admin(page, size))));
     }
 
     @GetMapping("/admin/settlements/provider/{providerId}")
@@ -382,8 +390,8 @@ public class SettlementController {
      * one page at a time (DR-028: this used to load the whole ledger).
      */
     private org.springframework.data.domain.Page<ApiResponse.SettlementRowDto> providerRows(
-            org.springframework.data.domain.Pageable pageable) {
-        var totals = ledgerRepo.providerTotals(pageable);
+            String q, String status, org.springframework.data.domain.Pageable pageable) {
+        var totals = ledgerRepo.searchProviderTotals(q, status, pageable);
         java.util.Map<Long, ProviderProfile> providers = new java.util.HashMap<>();
         providerRepo.findAllById(totals.map(t -> (Long) t[0]).toList())
                 .forEach(p -> providers.put(p.getId(), p));

@@ -211,13 +211,33 @@ public class SafetyService {
     /** @param status OPEN (default), RESOLVED or ALL */
     @Transactional(readOnly = true)
     public Page<ApiResponse.AdminSafetyEventDto> adminQueue(String status, Pageable pageable) {
+        return adminQueue(status, null, "newest", pageable);
+    }
+
+    /**
+     * The SOS queue searched and paged on the server (R5 follow-up).
+     * @param status OPEN (default), RESOLVED or ALL
+     * @param query  matched against the people, the booking number and the notes ("" or null: no search)
+     * @param order  "newest" (default) or "oldest": the oldest open alert is the one most at risk of being missed, and
+     *               the panel reads it with size 1 instead of scanning every page
+     */
+    @Transactional(readOnly = true)
+    public Page<ApiResponse.AdminSafetyEventDto> adminQueue(String status, String query, String order, Pageable pageable) {
         String s = status == null ? "OPEN" : status.trim().toUpperCase();
-        Page<SafetyEvent> page = switch (s) {
-            case "ALL" -> safetyRepo.findByTypeOrderByCreatedAtDesc(SafetyEventType.SOS, pageable);
-            case "RESOLVED" -> safetyRepo.findByTypeAndResolvedOrderByCreatedAtDesc(SafetyEventType.SOS, true, pageable);
-            case "OPEN" -> safetyRepo.findByTypeAndResolvedOrderByCreatedAtDesc(SafetyEventType.SOS, false, pageable);
+        java.util.List<Boolean> flags = switch (s) {
+            case "ALL" -> java.util.List.of(false, true);
+            case "RESOLVED" -> java.util.List.of(true);
+            case "OPEN" -> java.util.List.of(false);
             default -> throw new BusinessException("Unknown status: " + status);
         };
+        boolean oldest = order != null && order.trim().equalsIgnoreCase("oldest");
+        org.springframework.data.domain.Sort sort = oldest
+                ? org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.asc("createdAt"),
+                        org.springframework.data.domain.Sort.Order.asc("id"))
+                : org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.desc("createdAt"),
+                        org.springframework.data.domain.Sort.Order.desc("id"));
+        Page<SafetyEvent> page = safetyRepo.search(SafetyEventType.SOS, flags, com.aiwa.util.Searches.pattern(query),
+                org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort));
         java.util.Map<Long, List<SosDelivery>> byEvent = page.isEmpty() ? java.util.Map.of()
                 : deliveryRepo.findByEventIdInOrderByIdAsc(page.map(SafetyEvent::getId).toList()).stream()
                         .collect(java.util.stream.Collectors.groupingBy(d -> d.getEvent().getId()));

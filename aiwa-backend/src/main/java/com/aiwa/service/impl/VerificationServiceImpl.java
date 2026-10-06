@@ -78,15 +78,21 @@ public class VerificationServiceImpl {
     /** Admin: list all providers pending verification (req 2) */
     @Transactional(readOnly = true)
     public Page<ApiResponse.ProviderVerificationDto> getPendingVerifications(Pageable pageable) {
-        return providerRepo.findByVerificationStatus(VerificationStatus.PENDING_VERIFICATION, pageable)
-                .map(this::toVerificationDto);
+        return searchByVerificationStatus(VerificationStatus.PENDING_VERIFICATION, null, pageable);
     }
 
     /** Admin: list providers by any verification status */
     @Transactional(readOnly = true)
     public Page<ApiResponse.ProviderVerificationDto> getByVerificationStatus(
             VerificationStatus status, Pageable pageable) {
-        return providerRepo.findByVerificationStatus(status, pageable)
+        return searchByVerificationStatus(status, null, pageable);
+    }
+
+    /** Admin queue searched and paged on the server (R5 follow-up); {@code query} matches names, address and category. */
+    @Transactional(readOnly = true)
+    public Page<ApiResponse.ProviderVerificationDto> searchByVerificationStatus(
+            VerificationStatus status, String query, Pageable pageable) {
+        return providerRepo.searchByVerificationStatus(status, com.aiwa.util.Searches.pattern(query), pageable)
                 .map(this::toVerificationDto);
     }
 

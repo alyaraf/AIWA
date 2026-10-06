@@ -36,12 +36,18 @@ public class ModerationController {
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<org.springframework.data.domain.Page<ApiResponse.ModerationCaseDto>>> list(
             @RequestParam(defaultValue = "OPEN") ModerationStatus status,
+            @RequestParam(required = false) ModerationTargetType type,
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size) {
-        // DR-028: paged; the admin panel walks the pages.
-        return ResponseEntity.ok(ApiResponse.Success.of(moderationRepo
-                .findByStatusOrderByCreatedAtDesc(status, com.aiwa.util.Pages.admin(page, size))
-                .map(this::toDto)));
+        // R5 follow-up: the photo queue asks for type=GALLERY_IMAGE and is searched and paged here, not in the browser.
+        org.springframework.data.domain.Pageable pageable = com.aiwa.util.Pages.admin(page, size);
+        String q = com.aiwa.util.Searches.pattern(query);
+        var cases = type == ModerationTargetType.GALLERY_IMAGE ? moderationRepo.searchImages(status, q, pageable)
+                : type == ModerationTargetType.REVIEW ? moderationRepo.searchReviews(status, q, pageable)
+                : type == ModerationTargetType.CHAT_MESSAGE ? moderationRepo.searchChat(status, q, pageable)
+                : moderationRepo.searchByReason(status, q, pageable);
+        return ResponseEntity.ok(ApiResponse.Success.of(cases.map(this::toDto)));
     }
 
     @PostMapping

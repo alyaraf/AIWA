@@ -98,6 +98,21 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"user"})
     Page<ProviderProfile> findByVerificationStatus(VerificationStatus status, Pageable pageable);
 
+    /**
+     * R5 follow-up: the verification queue, searched and paged on the server. "q" is a lower-case LIKE pattern from
+     * com.aiwa.util.Searches ("%" = no search); it matches the business name, the owner's name, the address (shown as the
+     * city) and the category. Oldest registration first, with the id as a stable tie-break for paging.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"user"})
+    @Query(value = "SELECT p FROM ProviderProfile p JOIN p.user u WHERE p.verificationStatus = :status AND "
+            + "(LOWER(p.businessName) LIKE :q OR LOWER(u.fullName) LIKE :q OR LOWER(COALESCE(p.address, '')) LIKE :q "
+            + "OR LOWER(CAST(p.primaryCategory AS string)) LIKE :q) ORDER BY p.id",
+            countQuery = "SELECT COUNT(p) FROM ProviderProfile p JOIN p.user u WHERE p.verificationStatus = :status AND "
+                    + "(LOWER(p.businessName) LIKE :q OR LOWER(u.fullName) LIKE :q OR LOWER(COALESCE(p.address, '')) LIKE :q "
+                    + "OR LOWER(CAST(p.primaryCategory AS string)) LIKE :q)")
+    Page<ProviderProfile> searchByVerificationStatus(@Param("status") VerificationStatus status, @Param("q") String q,
+                                                     Pageable pageable);
+
     /** Providers who reported paying commission that finance hasn't confirmed yet. */
     List<ProviderProfile> findBySettlementReportedAtIsNotNullOrderBySettlementReportedAtAsc(Pageable pageable);
     long countByVerificationStatus(VerificationStatus status);

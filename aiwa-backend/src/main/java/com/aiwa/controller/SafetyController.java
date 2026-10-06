@@ -69,9 +69,11 @@ public class SafetyController {
     @Operation(summary = "SOS queue — status OPEN (default) | RESOLVED | ALL (ADMIN)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.AdminSafetyEventDto>>> queue(
             @RequestParam(defaultValue = "OPEN") String status,
+            @RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "newest") String order,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(ApiResponse.Success.of(safetyService.adminQueue(status,
+        return ResponseEntity.ok(ApiResponse.Success.of(safetyService.adminQueue(status, query, order,
                 PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 100))))));
     }
 

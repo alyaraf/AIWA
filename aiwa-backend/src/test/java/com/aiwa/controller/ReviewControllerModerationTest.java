@@ -48,11 +48,11 @@ class ReviewControllerModerationTest {
                 .user(User.builder().id(5L).fullName("Karim").build())
                 .provider(ProviderProfile.builder().id(9L).businessName("Omar Barber").build())
                 .hidden(false).build();
-        when(moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(eq(ModerationStatus.OPEN), eq(ModerationTargetType.REVIEW), any(org.springframework.data.domain.Pageable.class)))
+        when(moderationRepo.searchReviews(eq(ModerationStatus.OPEN), eq("%"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(c)));
         when(reviewRepo.findById(3L)).thenReturn(Optional.of(review));
 
-        var body = controller.reportedReviews(0, 200).getBody();
+        var body = controller.reportedReviews(null, 0, 200).getBody();
         assertThat(body).isNotNull();
         List<ApiResponse.ReviewModerationDto> rows = body.getData().getContent();
         assertThat(rows).hasSize(1);
@@ -65,11 +65,11 @@ class ReviewControllerModerationTest {
 
     @Test
     void reportedReviewsSkipsMissingReviews() {
-        when(moderationRepo.findByStatusAndTargetTypeOrderByCreatedAtDesc(eq(ModerationStatus.OPEN), eq(ModerationTargetType.REVIEW), any(org.springframework.data.domain.Pageable.class)))
+        when(moderationRepo.searchReviews(eq(ModerationStatus.OPEN), eq("%"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(openCase(1L, 404L))));
         when(reviewRepo.findById(404L)).thenReturn(Optional.empty());
 
-        assertThat(controller.reportedReviews(0, 200).getBody().getData().getContent()).isEmpty();
+        assertThat(controller.reportedReviews(null, 0, 200).getBody().getData().getContent()).isEmpty();
     }
 
     @Test

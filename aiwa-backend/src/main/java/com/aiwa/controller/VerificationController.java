@@ -94,10 +94,11 @@ public class VerificationController {
     @PreAuthorize(Perms.SUPPORT)
     @Operation(summary = "List providers pending verification (ADMIN)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ProviderVerificationDto>>> pending(
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(ApiResponse.Success.of(
-                verificationService.getPendingVerifications(com.aiwa.util.Pages.admin(page, size))));
+        return ResponseEntity.ok(ApiResponse.Success.of(verificationService.searchByVerificationStatus(
+                VerificationStatus.PENDING_VERIFICATION, query, com.aiwa.util.Pages.admin(page, size))));
     }
 
     @GetMapping("/admin/verification")
@@ -105,10 +106,11 @@ public class VerificationController {
     @Operation(summary = "List providers by verification status (ADMIN)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ProviderVerificationDto>>> byStatus(
             @RequestParam VerificationStatus status,
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.Success.of(
-                verificationService.getByVerificationStatus(status, com.aiwa.util.Pages.admin(page, size))));
+                verificationService.searchByVerificationStatus(status, query, com.aiwa.util.Pages.admin(page, size))));
     }
 
     @PostMapping("/admin/verification/{providerId}/approve")
