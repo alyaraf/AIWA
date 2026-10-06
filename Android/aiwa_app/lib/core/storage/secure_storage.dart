@@ -39,6 +39,34 @@ class SecureStorage {
     return previous.then((_) => body()).whenComplete(done.complete);
   }
 
+  /// R5-01: stores the tokens a refresh produced, but only while [session] is still the stored session. The check
+  /// and both writes run inside the credential lock, so a sign-in / sign-out of another account can neither land
+  /// between them nor be overwritten by them (a plain generation check before an asynchronous write cannot promise
+  /// that: the write may finish after the other account's). Returns false when the session ended and nothing was
+  /// stored. The refresh token goes first: it is single-use, so a failure between the two writes must leave the
+  /// NEW one behind (the old access token just expires and is refreshed again), never the revoked one.
+  Future<bool> storeRefreshedTokens({
+    required int session,
+    required String accessToken,
+    String? refreshToken,
+  }) => withCredentialLock<bool>(() async {
+    if (session != _generation) return false;
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      await saveRefreshToken(refreshToken);
+    }
+    await saveAccessToken(accessToken);
+    return true;
+  });
+
+  /// R5-01: ends [session] (a refresh the server rejected), unless it already ended or another account has signed
+  /// in since. Returns whether this call cleared the credentials; only then may a sign-out be announced.
+  Future<bool> clearIfSession(int session) => withCredentialLock<bool>(() async {
+    if (session != _generation) return false;
+    _generation++;
+    await _storage.deleteAll();
+    return true;
+  });
+
   Future<void> saveAccessToken(String token) =>
       _storage.write(key: AppConstants.accessTokenKey, value: token);
 

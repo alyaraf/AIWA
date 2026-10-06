@@ -163,7 +163,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
       // The cold-start session is only wiped while it is still the one in storage: never a newer sign-in's tokens.
       if (_obsolete(session, attempt)) return;
-      await secureStorage.clearAll();
+      // R5-01: the session is re-checked inside the credential lock, so a sign-in that completes between the check
+      // above and the wipe is never wiped.
+      if (!await secureStorage.clearIfSession(session)) return;
       emit(AuthUnauthenticated());
       return;
     }

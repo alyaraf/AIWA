@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -147,6 +148,7 @@ void main() {
     final storage = _SignOutAfterAccessWrite();
     final c = ApiClient(storage, adapter: _RefreshAdapter());
     await expectLater(c.get('/me'), throwsA(isA<UnauthorizedException>()));
+    await storage.withCredentialLock(() async {}); // the queued sign-out has run
     // 'r2' would keep the signed-out user's session alive on this phone.
     expect(await storage.getRefreshToken(), isNull);
     expect(await storage.getAccessToken(), isNull);
@@ -164,15 +166,15 @@ void main() {
   });
 }
 
-/// The user signs out the moment the refreshed access token is stored, i.e.
-/// between the two token writes of a refresh.
+/// The user signs out the moment the refreshed access token is stored. The sign-out is queued (R5-01: it cannot run
+/// inside the credential operation that is writing, which would wait for itself) and is the last word.
 class _SignOutAfterAccessWrite extends SecureStorage {
   _SignOutAfterAccessWrite() : super(const FlutterSecureStorage());
 
   @override
   Future<void> saveAccessToken(String token) async {
     await super.saveAccessToken(token);
-    await clearAll();
+    unawaited(clearAll());
   }
 }
 

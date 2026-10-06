@@ -158,8 +158,10 @@ class _AuthInterceptor extends Interceptor {
   final SecureStorage _storage;
   final Dio _dio;
 
-  /// The in-flight refresh; concurrent 401s await it instead of failing.
+  /// The in-flight refresh; concurrent 401s await it instead of failing. It belongs to one session: a request of
+  /// another session (the user signed into a different account meanwhile) must never wait for it or take its token.
   Future<String?>? _refreshing;
+  int? _refreshingSession;
 
   _AuthInterceptor(this._storage, this._dio);
 
@@ -222,7 +224,10 @@ class _AuthInterceptor extends Interceptor {
     if (opts.extra['session'] != SecureStorage.generation) {
       return handler.next(err);
     }
+    final session = SecureStorage.generation;
     final refreshToken = await _storage.getRefreshToken();
+    // The read above may already belong to the next account (R5-01).
+    if (session != SecureStorage.generation) return handler.next(err);
     // No refresh token = never signed in (guest / sign-in form): a plain
     // 401, not an expired session.
     if (refreshToken == null) return handler.next(err);
@@ -230,15 +235,25 @@ class _AuthInterceptor extends Interceptor {
     // with the stored token instead of spending the new refresh token.
     final current = await _storage.getAccessToken();
     final String? newToken;
+    if (session != SecureStorage.generation) return handler.next(err);
     if (current != null &&
         _refreshing == null &&
         opts.headers['Authorization'] != 'Bearer $current') {
       newToken = current;
     } else {
       try {
-        newToken = await (_refreshing ??= _refresh(
-          refreshToken,
-        ).whenComplete(() => _refreshing = null));
+        if (_refreshing == null || _refreshingSession != session) {
+          late final Future<String?> mine;
+          mine = _refresh(refreshToken, session).whenComplete(() {
+            if (identical(_refreshing, mine)) {
+              _refreshing = null;
+              _refreshingSession = null;
+            }
+          });
+          _refreshing = mine;
+          _refreshingSession = session;
+        }
+        newToken = await _refreshing;
       } on NetworkException {
         // Offline is not an expired session: keep the tokens.
         return handler.next(err);
@@ -265,8 +280,7 @@ class _AuthInterceptor extends Interceptor {
   /// /auth/refresh (token rejected) signs the user out; 429 / 5xx / a bad
   /// body keep the tokens so the next request can try again. Throws
   /// [NetworkException] when offline.
-  Future<String?> _refresh(String refreshToken) async {
-    final session = SecureStorage.generation;
+  Future<String?> _refresh(String refreshToken, int session) async {
     String? token;
     String? rotated;
     try {
@@ -280,28 +294,24 @@ class _AuthInterceptor extends Interceptor {
     } on DioException catch (e) {
       if (e.error is NetworkException) throw e.error!;
       final status = e.response?.statusCode;
-      // Only if it's still the same session: a stale refresh failing after an
-      // account switch must not wipe the new account's tokens.
-      if ((status == 401 || status == 403) && session == SecureStorage.generation) {
-        await _storage.clearAll();
+      // R5-01: the clear re-checks the session inside the credential lock, so a stale refresh failing after an
+      // account switch neither wipes the new account's tokens nor announces a sign-out for it.
+      if ((status == 401 || status == 403) &&
+          await _storage.clearIfSession(session)) {
         ApiClient.authEvents.add(401);
       }
       return null;
     } catch (_) {}
     if (token == null) return null;
-    // Signed out (or into another account) while this was in flight: drop it.
-    if (session != SecureStorage.generation) return null;
-    await _storage.saveAccessToken(token);
-    // Refresh tokens are single-use: the backend revokes the one just sent,
-    // so the next refresh must use the new one or the user is signed out.
-    // Checked again: a sign-out during the write above must not get this
-    // session's refresh token written back (CR-18).
-    if (rotated != null &&
-        rotated.isNotEmpty &&
-        session == SecureStorage.generation) {
-      await _storage.saveRefreshToken(rotated);
-    }
-    return token;
+    // Refresh tokens are single-use: the backend revokes the one just sent, so the next refresh must use the new
+    // one or the user is signed out. Both tokens are stored in one step that re-checks, under the credential lock,
+    // that this is still the session that asked: a sign-out or another account's sign-in during the write wins.
+    final stored = await _storage.storeRefreshedTokens(
+      session: session,
+      accessToken: token,
+      refreshToken: rotated,
+    );
+    return stored ? token : null;
   }
 }
 
