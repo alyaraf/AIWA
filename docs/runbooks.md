@@ -66,9 +66,11 @@ ls -1t backups/db | head          # newest first
 What it does, in this order (audit I-02): it decrypts and checks every input and test-restores the dump into a
 scratch database; **extracts the uploads tarball into a staging directory inside the uploads volume and verifies
 it, before anything live is touched** (a full disk or a damaged archive stops here: nothing was changed); asks you
-to type RESTORE; stops the backend; takes a **safety copy of the live database**
-(`backups/pre-restore-<id>.dump`); restores the database in one transaction; swaps the uploads with atomic renames
-that keep the previous files in `.restore-previous-<id>`; starts the backend; and prints a reconciliation report.
+to type RESTORE; stops the backend; takes a **safety copy of the live database** (audit R4-06: verified by a scratch
+restore, **encrypted with the backup key**, mode 600, stored in `backups/safety/pre-restore-<id>.dump.enc`; without a key
+the restore refuses unless `BACKUP_ALLOW_UNENCRYPTED=1`, and it checks the free disk space first); restores the database in
+one transaction; swaps the uploads with atomic renames that keep the previous files in `.restore-previous-<id>`; starts the
+backend; and prints a reconciliation report.
 
 If a step fails the pair is put back together, never left half-done:
 
@@ -76,15 +78,26 @@ If a step fails the pair is put back together, never left half-done:
 | --- | --- |
 | extraction / disk space | nothing changed, backend never stopped |
 | database restore | database rolled back (single transaction), staging removed, backend started |
-| uploads swap | the swap undoes its own renames, the database is restored from the safety copy, backend started |
+| uploads swap | the swap undoes its own renames **and proves it** (every original name is back, no staged name is live), the database is restored from the safety copy, backend started |
+| the uploads rollback itself fails (a rename error while undoing; audit R4-01) | exit 3 "RECOVERY FAILED": the backend stays **stopped**, the database is NOT touched again, the recovery journal `.restore-journal-<id>` and the previous and staged files are kept; fix the cause and run `uploads_swap.sh rollback <id>` again (it resumes from the journal) until it succeeds, then `restore.sh backups/safety/pre-restore-<id>.dump.enc` |
 | the database cannot be put back either | backend stays **stopped** on purpose; the message names the safety dump and says the old uploads are intact |
 
-Afterwards check the app, then free the retained copy:
-`docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh purge <id>`.
+The backend is started again only when the database and the uploads are known to be consistent. Whatever ends the script
+while the backend is stopped, it says **STOPPED** on the way out.
+
+Afterwards check the app, then free the retained copies:
+`docker compose -f docker-compose.prod.yml run --rm -T --entrypoint sh backup /uploads_swap.sh purge <id>` and
+`rm -f backups/safety/pre-restore-<id>.dump*`. Safety copies that are forgotten are removed by the backup job after
+`BACKUP_SAFETY_KEEP_DAYS` (default = `BACKUP_KEEP_DAYS`), except while the matching `.restore-previous-<id>` still exists
+(the pair is not purged; the job logs it). They are local only: the off-site job copies `db/` and `uploads/` and never
+`safety/`. Budget the disk for them: one extra compressed database dump per restore, plus the plaintext copy in the
+private temp dir (`TMPDIR`) while the restore runs.
 To undo a whole restore instead, restore the safety dump with `restore.sh` and run
 `uploads_swap.sh rollback <id>`. Anything written after the restored backup is lost: note the time and tell affected
 users. The failure paths are tested without Docker by `deploy/backup/uploads_swap_test.sh` (injects a failure at every
-rename) and `deploy/restore_flow_test.sh` (the order of `restore.sh` with a fake docker); both run in CI.
+rename, and at every rename of the way back; also a real `mv` wrapper that fails both ways) and
+`deploy/restore_flow_test.sh` (the order of `restore.sh` with a fake docker, encrypted safety copy, disk-space refusal,
+failed rollback keeps the backend stopped); both run in CI.
 
 ### Backup consistency (audit I-03)
 
@@ -95,7 +108,11 @@ points at a file that is not there: *missing*) and a file uploaded between them 
 *orphan*, harmless). `backup/manifest/snapshot-<stamp>.json` records when each half was taken, and after every restore
 `restore.sh` prints `reconcile: N database references checked, M missing, K orphan files` and lists each missing path
 (`backup/reconcile_uploads.sh`; the references come from `backup/uploads_references.sql`: avatars, gallery, ID
-documents and selfies). A missing image shows as a broken picture until the owner uploads it again; it is never
+documents and selfies). The list ends with a terminator row; **a failed or cut-off reference query is reported as
+"RECONCILIATION NOT PERFORMED" and never as "0 missing"**. The same check runs when each backup is made: the references are
+read right after the dump and compared with the file list of the tarball just written, recorded in the manifest
+(`reconcile`, `missing_references`) and as the metrics `aiwa_backup_reconcile_ok` / `aiwa_backup_missing_references`
+(alert **BackupReconcileFailed**). A missing image shows as a broken picture until the owner uploads it again; it is never
 fatal. If a stricter guarantee is ever needed: stop the backend for the minutes the backup takes, or snapshot the
 volume at the filesystem level, then take both halves from the snapshot.
 

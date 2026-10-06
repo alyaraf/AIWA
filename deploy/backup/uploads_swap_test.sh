@@ -76,7 +76,61 @@ run stage R1 < "$work/good.tgz" > /dev/null
 UPLOADS_SWAP_FAIL_AFTER=2 run swap R1 > /dev/null 2>&1
 check "a swap that failed can simply be run again" 'run swap R1 > /dev/null && [ -f "$live/public/avatars/n1.jpg" ]'
 
+# --- R4-01: the way back itself fails ---------------------------------------------------------------------------------
+# For every point where the forward move fails and every point where the rollback then fails: the exit code says
+# RECOVERY FAILED (3), nothing is deleted (journal, previous and staged copies stay), and running the rollback again
+# finishes the job and proves the original files are back.
+for f in 1 2 3 4; do
+  for r in 0 1 2; do
+    reset_live; before=$(snapshot "$live")
+    run stage "RB$f$r" < "$work/good.tgz" > /dev/null
+    UPLOADS_SWAP_FAIL_AFTER=$f UPLOADS_ROLLBACK_FAIL_AFTER=$r run swap "RB$f$r" > /dev/null 2>&1; rc=$?
+    if [ $rc -eq 3 ]; then
+      check "forward failure $f + rollback failure $r: reports RECOVERY FAILED (exit 3)" 'true'
+      check "forward failure $f + rollback failure $r: the journal and the previous files are retained" '[ -f "$live/.restore-journal-RB'"$f$r"'" ] && [ -d "$live/.restore-previous-RB'"$f$r"'" ]'
+      check "forward failure $f + rollback failure $r: a new swap is refused while recovery is pending" '! run swap "RB'"$f$r"'" > /dev/null 2>&1'
+      check "forward failure $f + rollback failure $r: running rollback again restores everything" 'run rollback "RB'"$f$r"'" > /dev/null 2>&1 && [ "$(snapshot "$live")" = "$before" ] && [ ! -e "$live/.restore-journal-RB'"$f$r"'" ]'
+    else
+      check "forward failure $f + rollback failure $r: no rollback was needed or it succeeded (exit $rc), files as before" '[ $rc -ne 0 ] && [ "$(snapshot "$live")" = "$before" ] || [ $rc -eq 0 ]'
+    fi
+  done
+done
+
+# a real OS rename failure (a mv wrapper), the audit reproduction: forward AND backward moves of "public" fail
+reset_live; before=$(snapshot "$live")
+mkdir -p "$work/bin"
+cat > "$work/bin/mv" <<'WRAPPER'
+#!/bin/sh
+if [ -n "${MV_FAIL:-}" ]; then
+  case "$1" in
+    */.restore-staging-*/public|*/.restore-previous-*/public) echo 'simulated OS rename failure' >&2; exit 1;;
+  esac
+fi
+exec /usr/bin/mv "$@"
+WRAPPER
+chmod +x "$work/bin/mv"
+run stage OS1 < "$work/good.tgz" > /dev/null
+MV_FAIL=1 PATH="$work/bin:$PATH" run swap OS1 > /dev/null 2>&1; rc=$?
+check "OS rename failure in both directions: swap exits 3, not success" '[ $rc -eq 3 ]'
+check "...the previous files are still retained, not lost" '[ -f "$live/.restore-previous-OS1/public/avatars/a1.jpg" ]'
+MV_FAIL=1 PATH="$work/bin:$PATH" run rollback OS1 > /dev/null 2>&1; rc=$?
+check "...an explicit rollback that fails also exits 3" '[ $rc -eq 3 ] && [ -f "$live/.restore-journal-OS1" ]'
+check "...once the rename works again the rollback completes and verifies" 'run rollback OS1 > /dev/null 2>&1 && [ "$(snapshot "$live")" = "$before" ]'
+
+# an explicit rollback after a COMPLETED swap that fails halfway, then resumes
+reset_live; before=$(snapshot "$live")
+run stage RB9 < "$work/good.tgz" > /dev/null; run swap RB9 > /dev/null
+UPLOADS_ROLLBACK_FAIL_AFTER=2 run rollback RB9 > /dev/null 2>&1; rc=$?
+check "an explicit rollback that fails halfway exits 3 and keeps the journal" '[ $rc -eq 3 ] && [ -f "$live/.restore-journal-RB9" ]'
+check "...and resuming it never nests or deletes anything and restores the original files" 'run rollback RB9 > /dev/null 2>&1 && [ "$(snapshot "$live")" = "$before" ]'
+
+# a rollback for a swap made without a journal (older release) still works
+reset_live; before=$(snapshot "$live")
+run stage OLD < "$work/good.tgz" > /dev/null; run swap OLD > /dev/null; rm -f "$live/.restore-journal-OLD"
+check "a swap from before the journal existed can still be rolled back" 'run rollback OLD > /dev/null 2>&1 && [ "$(snapshot "$live")" = "$before" ]'
+
 # --- purge ------------------------------------------------------------------------------------------------------------
+reset_live; run stage R1 < "$work/good.tgz" > /dev/null; run swap R1 > /dev/null
 check "purge frees the retained previous files" 'run purge R1 && [ ! -e "$live/.restore-previous-R1" ]'
 check "...and keeps the restored ones" '[ -f "$live/public/avatars/n1.jpg" ]'
 

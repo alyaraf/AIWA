@@ -21,7 +21,16 @@ printf '#!/bin/sh\nexit 0\n' > "$tmp/stubs/dropdb"
 cat > "$tmp/stubs/tar" <<'S'
 #!/bin/sh
 [ "${STUB_FAIL:-}" = tar ] && exit 1
+if [ "$1" = -tzf ]; then printf './\n./public/\n./public/a.jpg\n'; exit 0; fi   # the listing of the tarball (R4 reconciliation)
 printf uploads | gzip -n > "$2"
+S
+cat > "$tmp/stubs/psql" <<'S'
+#!/bin/sh
+# the file-reference query: rows then the done|ok terminator
+[ "${STUB_FAIL:-}" = psql ] && { echo "psql: connection refused" >&2; exit 2; }
+printf 'public|/files/public/a.jpg\n'
+[ -n "${STUB_MISSING_REF:-}" ] && printf 'public|/files/public/deleted.jpg\n'
+[ "${STUB_NO_TERMINATOR:-}" = 1 ] || printf 'done|ok\n'
 S
 chmod +x "$tmp/stubs/"*
 
@@ -29,7 +38,7 @@ chmod +x "$tmp/stubs/"*
 run_backup() {
   d="$1"; shift
   mkdir -p "$d/uploads-src"
-  env PATH="$tmp/stubs:$PATH" BACKUP_DIR="$d/out" UPLOADS_DIR="$d/uploads-src" BACKUP_ALLOW_UNENCRYPTED=1 "$@" sh "$script" once > "$d/log" 2>&1
+  env PATH="$tmp/stubs:$PATH" BACKUP_DIR="$d/out" UPLOADS_DIR="$d/uploads-src" BACKUP_ALLOW_UNENCRYPTED=1 RECONCILE_SCRIPT="$here/reconcile_uploads.sh" REFERENCES_SQL="$here/uploads_references.sql" "$@" sh "$script" once > "$d/log" 2>&1
   rc=$?
 }
 metric() { sed -n "s/^$2 //p" "$1/out/metrics/metrics.txt" 2>/dev/null; }
@@ -41,6 +50,26 @@ check "success exits 0" '[ $rc -eq 0 ]'
 # I-03: each pair gets a manifest saying when the dump and the tarball were taken (dump first)
 check "success writes a snapshot manifest naming both files" 'grep -q "\"dump\":\"aiwa-" "$d"/out/manifest/snapshot-*.json && grep -q "\"tar_started\"" "$d"/out/manifest/snapshot-*.json'
 check "success writes a fresh timestamp" '[ -n "$t" ] && [ "$t" -le "$now" ] && [ "$t" -ge $((now-30)) ]'
+
+# R4 / I-03: the pair is reconciled while the backup is made, and a failed scan is never a clean one
+check "success: the manifest records a completed reconciliation with 0 missing" 'grep -q "\"reconcile\":\"ok\"" "$d"/out/manifest/snapshot-*.json && grep -q "\"missing_references\":0" "$d"/out/manifest/snapshot-*.json'
+check "success: reconcile metrics are 1 and 0" '[ "$(metric "$d" aiwa_backup_reconcile_ok)" = 1 ] && [ "$(metric "$d" aiwa_backup_missing_references)" = 0 ]'
+d="$tmp/recmissing"; run_backup "$d" STUB_MISSING_REF=1
+check "a referenced file missing from the tarball is counted, and the backup still succeeds" '[ $rc -eq 0 ] && [ "$(metric "$d" aiwa_backup_missing_references)" = 1 ] && [ "$(metric "$d" aiwa_backup_reconcile_ok)" = 1 ]'
+d="$tmp/recfail"; run_backup "$d" STUB_FAIL=psql
+check "a failed reference query does not fail the backup" '[ $rc -eq 0 ] && [ -f "$d/out/last-success" ]'
+check "...but is recorded as failed: manifest, metric and log, never as 0 missing" 'grep -q "\"reconcile\":\"failed\"" "$d"/out/manifest/snapshot-*.json && [ "$(metric "$d" aiwa_backup_reconcile_ok)" = 0 ] && [ "$(metric "$d" aiwa_backup_missing_references)" = -1 ] && grep -q "RECONCILIATION FAILED" "$d/log" && ! grep -q " 0 missing" "$d/log"'
+d="$tmp/recpartial"; run_backup "$d" STUB_NO_TERMINATOR=1
+check "an incomplete reference list (no terminator) is also a failed scan" '[ "$(metric "$d" aiwa_backup_reconcile_ok)" = 0 ] && grep -q "RECONCILIATION FAILED" "$d/log"'
+
+# R4-06: the pre-restore safety copies are retained by the same job: old ones go, one whose previous uploads were not purged stays
+d="$tmp/safety"; mkdir -p "$d/out/safety" "$d/uploads-src/.restore-previous-20200101-000000-1"
+touch -d '40 days ago' "$d/out/safety/pre-restore-20200101-000000-1.dump.enc" "$d/out/safety/pre-restore-20200102-000000-2.dump.enc" "$d/out/safety/pre-restore-20200103-000000-3.dump.enc.partial"
+touch "$d/out/safety/pre-restore-20991231-000000-4.dump.enc"
+run_backup "$d"
+check "safety copies: an old copy is deleted" '[ ! -e "$d/out/safety/pre-restore-20200102-000000-2.dump.enc" ]'
+check "safety copies: an old copy whose previous uploads still exist is kept, with a warning" '[ -e "$d/out/safety/pre-restore-20200101-000000-1.dump.enc" ] && grep -q "kept: the previous uploads" "$d/log"'
+check "safety copies: a recent copy is kept and an old .partial is removed" '[ -e "$d/out/safety/pre-restore-20991231-000000-4.dump.enc" ] && [ ! -e "$d/out/safety/pre-restore-20200103-000000-3.dump.enc.partial" ]'
 
 # C1: failure keeps the old timestamp and exits non-zero (pg_dump and tar)
 for what in pg_dump tar; do
@@ -98,7 +127,8 @@ case " $* " in
   *" createdb "*|*" dropdb "*) ;;
   *" pg_restore --no-owner --exit-on-error "*) cat > "$FAKE_LOG.scratch"; [ "${FAKE_SCRATCH_FAIL:-}" != 1 ] ;;
   # I-02: restore.sh takes a safety copy of the live database before it restores
-  *" pg_dump -Fc "*) echo SAFETY-COPY ;;
+  *" pg_database_size "*|*pg_database_size*) cat > /dev/null; echo 1000 ;;
+  *" pg_dump -Fc "*) echo PGDMP-SAFETY-COPY ;;
   *" pg_restore --clean "*) cat > "$FAKE_LOG.restored" ;;
   *" psql "*) cat > /dev/null ;;
   *" exec "*) cat > /dev/null ;;
@@ -151,7 +181,7 @@ run_restore scratchfail "$r/key" "$r/db.dump" "$r/up.tgz" FAKE_SCRATCH_FAIL=1
 check "restore, dump that fails the scratch restore: fails and leaves everything alone" '[ $rc -ne 0 ] && untouched && grep -q "does not restore completely" "$FAKE/out"'
 run_restore good "$r/key" "$r/db.dump.enc" "$r/up.tgz.enc"
 check "restore, right key: replaces database and uploads" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ] && [ ! -e "$FAKE/uploads/live.jpg" ] && cmp -s "$FAKE/log.restored" "$r/db.dump" && [ "$(cat "$FAKE"/uploads/.restore-previous-*/live.jpg)" = live ]'
-run_restore plain "$r/nokey" "$r/db.dump" "$r/up.tgz"
+run_restore plain "$r/nokey" "$r/db.dump" "$r/up.tgz" BACKUP_ALLOW_UNENCRYPTED=1
 check "restore, plain files need no key" '[ $rc -eq 0 ] && [ "$(cat "$FAKE/uploads/photo.jpg")" = new ]'
 
 # CR-20: the decrypted dump and tarball are plaintext, so the script runs with umask 077 and puts them under TMPDIR

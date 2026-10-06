@@ -28,6 +28,7 @@ case "$verb" in
     if [ "$1" = pg_restore ]; then cat > /dev/null; exit 0; fi   # --list
     script="$*"
     case "$script" in
+      *pg_database_size*) cat > /dev/null; echo "${FAKE_DB_SIZE:-1000}"; exit 0 ;;
       *"pg_dump -Fc"*) [ -n "${FAKE_NO_SAFETY:-}" ] && exit 1; echo "SAFETY-DUMP-OF-LIVE"; exit 0 ;;
       *"pg_restore --clean"*)
         cat > "$FAKE_STATE/restore-input"
@@ -37,7 +38,10 @@ case "$verb" in
         [ -n "${FAKE_DB_RESTORE_FAILS_FROM:-}" ] && [ "$n" -ge "$FAKE_DB_RESTORE_FAILS_FROM" ] && exit 1
         exit 0 ;;
       *"pg_restore --no-owner"*) cat > /dev/null; exit 0 ;;   # scratch restore
-      *psql*) cat > /dev/null; printf 'public|/files/public/avatars/n1.jpg\npublic|/files/public/avatars/gone.jpg\n'; exit 0 ;;
+      *psql*) cat > /dev/null
+              [ -n "${FAKE_REFS_FAIL:-}" ] && { echo "psql: connection refused" >&2; exit 2; }
+              [ -n "${FAKE_REFS_TRUNCATED:-}" ] && { printf 'public|/files/public/avatars/n1.jpg\n'; exit 0; }
+              printf 'public|/files/public/avatars/n1.jpg\npublic|/files/public/avatars/gone.jpg\ndone|ok\n'; exit 0 ;;
       *) cat > /dev/null; exit 0 ;;                           # createdb / dropdb
     esac ;;
   run)
@@ -46,7 +50,7 @@ case "$verb" in
     script="$1"; shift
     if [ "$1" = stage ] && [ -n "${FAKE_STAGE_FAILS:-}" ]; then cat > /dev/null; exit 1; fi
     case "$script" in
-      /uploads_swap.sh) UPLOADS_DIR="$FAKE_VOLUME" UPLOADS_SWAP_FAIL_AFTER="${FAKE_SWAP_FAIL_AFTER:-}" sh "$FAKE_DEPLOY/backup/uploads_swap.sh" "$@" ;;
+      /uploads_swap.sh) UPLOADS_DIR="$FAKE_VOLUME" UPLOADS_SWAP_FAIL_AFTER="${FAKE_SWAP_FAIL_AFTER:-}" UPLOADS_ROLLBACK_FAIL_AFTER="${FAKE_ROLLBACK_FAIL_AFTER:-}" sh "$FAKE_DEPLOY/backup/uploads_swap.sh" "$@" ;;
       /reconcile_uploads.sh) UPLOADS_DIR="$FAKE_VOLUME" sh "$FAKE_DEPLOY/backup/reconcile_uploads.sh" ;;
     esac ;;
 esac
@@ -72,7 +76,7 @@ volume_sum() { ( cd "$1" && find . -path './.restore-*' -prune -o -type f -print
 restore() {
   c="$work/$1"; shift
   ( cd "$c/deploy" && env PATH="$work/bin:$PATH" FAKE_LOG="$c/log" FAKE_STATE="$c/state" FAKE_VOLUME="$c/volume" \
-      FAKE_DEPLOY="$c/deploy" ASSUME_YES=1 "$@" bash ./restore.sh "$c/db.dump" "$c/uploads.tgz" ) > "$c/out" 2>&1
+      FAKE_DEPLOY="$c/deploy" ASSUME_YES=1 BACKUP_ALLOW_UNENCRYPTED=1 "$@" bash ./restore.sh "$c/db.dump" "$c/uploads.tgz" ) > "$c/out" 2>&1
   rc=$?
 }
 called() { grep -q "$2" "$work/$1/log"; }
@@ -83,7 +87,7 @@ new_case A; restore A
 check "A: a good restore succeeds" '[ $rc -eq 0 ]'
 check "A: the live volume holds the restored files" '[ -f "$work/A/volume/public/avatars/n1.jpg" ] && [ ! -e "$work/A/volume/public/avatars/a1.jpg" ]'
 check "A: the previous files are retained until purged" '[ -f "$work/A/volume/".restore-previous-*/public/avatars/a1.jpg ]'
-check "A: a safety copy of the live database was taken before the restore" 'ls "$work/A/deploy/backups"/pre-restore-*.dump > /dev/null 2>&1'
+check "A: a safety copy of the live database was taken before the restore" 'ls "$work/A/deploy/backups/safety"/pre-restore-*.dump > /dev/null 2>&1'
 check "A: staging happened BEFORE the backend was stopped" '[ "$(line_of A "stage ")" -lt "$(line_of A "^stop ")" ]'
 check "A: the backend is started again at the end" 'called A "^start backend"'
 check "A: the reconciliation report names the missing file" 'grep -q "MISSING public /files/public/avatars/gone.jpg" "$work/A/out" && grep -q "1 missing" "$work/A/out"'
@@ -118,6 +122,70 @@ check "E: the live files are the old ones" '[ -f "$work/E/volume/public/avatars/
 # --- F: no safety copy can be taken ------------------------------------------------------------------------------------------
 new_case F; before=$(volume_sum "$work/F/volume"); restore F FAKE_NO_SAFETY=1
 check "F: without a safety copy nothing is restored" '[ $rc -ne 0 ] && ! called F "db-restore" && [ "$(volume_sum "$work/F/volume")" = "$before" ] && called F "^start backend"'
+
+check "F: no safety artifacts are left behind" '[ -z "$(ls -A "$work/F/deploy/backups/safety" 2> /dev/null)" ]'
+
+# --- G (R4-01): the files rollback ITSELF fails (real rename errors both ways) -----------------------------------------
+cat > "$work/bin/mv" <<'MV'
+#!/bin/sh
+if [ -n "${MV_FAIL:-}" ]; then
+  case "$1" in
+    */.restore-staging-*/public|*/.restore-previous-*/public) echo 'simulated OS rename failure' >&2; exit 1;;
+  esac
+fi
+exec /usr/bin/mv "$@"
+MV
+chmod +x "$work/bin/mv"
+new_case G; restore G MV_FAIL=1
+check "G: restore fails" '[ $rc -ne 0 ]'
+check "G: the backend is NOT started when the files rollback could not be verified" '! called G "^start backend"'
+check "G: the database is not touched again (no second restore) while the files are in a mixed state" '! called G "db-restore #2"'
+check "G: the output says the backend stays STOPPED and names the journal and the rollback command" 'grep -q "STOPPED" "$work/G/out" && grep -q "restore-journal-" "$work/G/out" && grep -q "uploads_swap.sh rollback" "$work/G/out"'
+check "G: the recovery journal and the previous files are retained" 'ls "$work/G/volume/".restore-journal-* > /dev/null 2>&1 && ls "$work/G/volume/".restore-previous-*/public/avatars/a1.jpg > /dev/null 2>&1'
+check "G: it never claims that database and uploads are back" '! grep -q "both back" "$work/G/out"'
+# ...and the operator can finish the recovery once the cause is gone
+gid=$(ls "$work/G/volume" | sed -n 's/^\.restore-journal-//p' | head -1); [ -n "$gid" ] || gid=$(ls -A "$work/G/volume" | sed -n 's/^\.restore-journal-//p' | head -1)
+( cd "$work/G/deploy" && PATH="$work/bin:$PATH" UPLOADS_DIR="$work/G/volume" sh ./backup/uploads_swap.sh rollback "$gid" > /dev/null 2>&1 ); grc=$?
+check "G: with the cause gone, the rollback command completes and the old files are back" '[ $grc -eq 0 ] && [ -f "$work/G/volume/public/avatars/a1.jpg" ]'
+
+# --- O (R4-01): forward move fails, then the rollback hook fails ------------------------------------------------------
+new_case O; restore O FAKE_SWAP_FAIL_AFTER=1 FAKE_ROLLBACK_FAIL_AFTER=0
+check "O: the run fails and the backend stays stopped" '[ $rc -ne 0 ] && ! called O "^start backend" && grep -q "STOPPED" "$work/O/out"'
+check "O: the previous files stay recoverable" 'ls "$work/O/volume/".restore-previous-* > /dev/null 2>&1 && ls "$work/O/volume/".restore-journal-* > /dev/null 2>&1'
+
+# --- H (R4-06): the safety copy is encrypted, verified and kept in backups/safety --------------------------------------
+new_case H; printf 'a long test secret\n' > "$work/H/key"
+restore H BACKUP_KEY_FILE="$work/H/key" BACKUP_ALLOW_UNENCRYPTED=0
+check "H: a restore with a backup key succeeds" '[ $rc -eq 0 ]'
+check "H: the safety copy is encrypted: only a .enc file exists in backups/safety" 'ls "$work/H/deploy/backups/safety"/pre-restore-*.dump.enc > /dev/null 2>&1 && ! ls "$work/H/deploy/backups/safety"/pre-restore-*.dump > /dev/null 2>&1'
+check "H: the safety copy holds no readable plaintext" '! grep -q "SAFETY-DUMP-OF-LIVE" "$work/H/deploy/backups/safety"/pre-restore-*.dump.enc && ! ls "$work/H/deploy/backups"/pre-restore-* > /dev/null 2>&1'
+check "H: it decrypts back to the live dump with the key" '[ "$(BACKUP_PASS=$(cat "$work/H/key") openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_PASS < "$(ls "$work/H/deploy/backups/safety"/pre-restore-*.dump.enc)")" = "SAFETY-DUMP-OF-LIVE" ]'
+check "H: the safety copy was verified in a scratch database before the restore" 'called H "pg_restore --no-owner" || grep -q "createdb\|restore_check" "$work/H/log"'
+check "H: nothing is left in the temp area and no .partial file remains" '[ -z "$(ls "$work/H/deploy/backups/safety" | grep partial)" ]'
+touch "$work/modeprobe"; chmod 600 "$work/modeprobe"
+if [ "$(stat -c %a "$work/modeprobe" 2> /dev/null)" = 600 ]; then
+  check "H: the safety copy is mode 600" '[ "$(stat -c %a "$work"/H/deploy/backups/safety/pre-restore-*.dump.enc)" = 600 ]'
+else echo "skip H: file modes are not honoured on this filesystem"; fi
+new_case H2; printf 'a long test secret\n' > "$work/H2/key"; before=$(volume_sum "$work/H2/volume")
+restore H2 BACKUP_KEY_FILE="$work/H2/key" BACKUP_ALLOW_UNENCRYPTED=0 FAKE_SWAP_FAIL_AFTER=1
+check "H2: with an encrypted safety copy the failed swap still rolls the database back from it" 'called H2 "db-restore #2 input=SAFETY-DUMP-OF-LIVE" && called H2 "^start backend" && [ "$(volume_sum "$work/H2/volume")" = "$before" ]'
+
+# --- I (R4-06): no key and no explicit waiver: refuse before touching anything -------------------------------------------
+new_case I; before=$(volume_sum "$work/I/volume")
+restore I BACKUP_KEY_FILE="$work/I/nokey" BACKUP_ALLOW_UNENCRYPTED=0
+check "I: without a key an unencrypted safety copy is refused up front" '[ $rc -ne 0 ] && grep -q "refusing to keep an unencrypted safety copy" "$work/I/out" && ! called I "^stop " && ! called I "db-restore" && [ "$(volume_sum "$work/I/volume")" = "$before" ]'
+
+# --- J (R4-06): not enough free disk for the safety copy ---------------------------------------------------------------------
+new_case J; before=$(volume_sum "$work/J/volume")
+restore J FAKE_DB_SIZE=900000000000000000
+check "J: a database larger than the free disk space is refused before anything changes" '[ $rc -ne 0 ] && grep -q "not enough free space" "$work/J/out" && ! called J "^stop " && ! called J "db-restore" && [ "$(volume_sum "$work/J/volume")" = "$before" ]'
+
+# --- M/N (R4): a failed or incomplete reference query is never reported as a clean scan ---------------------------------
+new_case M; restore M FAKE_REFS_FAIL=1
+check "M: the restore itself succeeded" '[ $rc -eq 0 ]'
+check "M: a failed reference query is reported as NOT PERFORMED, never as 0 missing" 'grep -q "RECONCILIATION NOT PERFORMED" "$work/M/out" && ! grep -q "0 missing" "$work/M/out" && grep -q "reconciliation: FAILED" "$work/M/out"'
+new_case N; restore N FAKE_REFS_TRUNCATED=1
+check "N: an incomplete reference list (no terminator) is also a failed scan" 'grep -q "RECONCILIATION NOT PERFORMED" "$work/N/out" && ! grep -q " 0 missing" "$work/N/out"'
 
 echo "$pass passed, $failed failed"
 [ "$failed" -eq 0 ]

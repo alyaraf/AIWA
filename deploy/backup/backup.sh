@@ -30,6 +30,9 @@ OUT="${BACKUP_DIR:-/backups}"
 UPLOADS="${UPLOADS_DIR:-/uploads}"
 KEY="${BACKUP_KEY_FILE:-}"
 METRICS_PORT="${BACKUP_METRICS_PORT:-9100}"
+SAFETY_KEEP_DAYS="${BACKUP_SAFETY_KEEP_DAYS:-$KEEP_DAYS}"
+RECONCILE_SCRIPT="${RECONCILE_SCRIPT:-/reconcile_uploads.sh}"
+REFERENCES_SQL="${REFERENCES_SQL:-/uploads_references.sql}"
 
 fail() {
   echo "$(date -u +%FT%TZ) BACKUP FAILED: $*" >&2
@@ -56,6 +59,47 @@ verify_dump() {
   fi
   dropdb --if-exists "$v" > /dev/null 2>&1 || true
   return 1
+}
+
+# R4/I-03: reconcile the pair WHILE the backup is made. The database references are read right after the dump
+# (psql, the same connection settings as pg_dump) and checked against the file list of the tarball just written. A failed
+# query, a missing script or an incomplete list is recorded as "failed", never as zero missing files. This never fails
+# the backup (a file deleted inside the window is expected); it is visible in the manifest, the log and the metrics
+# (aiwa_backup_reconcile_ok, aiwa_backup_missing_references; alert BackupReconcileFailed).
+reconcile_status=failed; missing_refs=-1
+reconcile_pair() {
+  reconcile_status=failed; missing_refs=-1
+  [ -f "$RECONCILE_SCRIPT" ] && [ -f "$REFERENCES_SQL" ] || { echo "$(date -u +%FT%TZ) reconciliation unavailable: scripts not mounted" >&2; return 0; }
+  rl=$(mktemp) || return 0; rr=$(mktemp) || { rm -f "$rl"; return 0; }
+  if tar -tzf "$1" > "$rl.raw" 2> /dev/null &&
+     { sed 's|^\./||' "$rl.raw" | grep -v '/$' | grep -v '^$' > "$rl"; true; } &&
+     psql -v ON_ERROR_STOP=1 -tA -F '|' -f "$REFERENCES_SQL" > "$rr" 2> /dev/null; then
+    if out=$(RECONCILE_FILE_LIST="$rl" sh "$RECONCILE_SCRIPT" < "$rr"); then
+      missing_refs=$(printf '%s\n' "$out" | sed -n 's/^reconcile: [0-9]* database references checked, \([0-9]*\) missing.*/\1/p')
+      if [ -n "$missing_refs" ]; then reconcile_status=ok; else missing_refs=-1; fi
+      printf '%s\n' "$out" | sed "s|^|$(date -u +%FT%TZ) |"
+    fi
+  fi
+  [ "$reconcile_status" = ok ] || echo "$(date -u +%FT%TZ) RECONCILIATION FAILED: the database references could not be checked against this backup (not a zero-missing result)" >&2
+  rm -f "$rl" "$rl.raw" "$rr"
+  return 0
+}
+
+# R4-06: retention for the pre-restore safety copies restore.sh keeps in $OUT/safety (encrypted with the same key).
+# A copy is removed after BACKUP_SAFETY_KEEP_DAYS, EXCEPT while the matching previous uploads (.restore-previous-<id> in the
+# volume) still exist: that pair has not been purged, and the copy is the only way to roll the database back with it.
+# Interrupted runs leave *.partial files; those are removed after two hours.
+prune_safety() {
+  [ -d "$OUT/safety" ] || return 0
+  find "$OUT/safety" -type f -name '*.partial' -mmin +120 -delete 2> /dev/null
+  find "$OUT/safety" -type f -name 'pre-restore-*' ! -name '*.partial' -mtime +"$SAFETY_KEEP_DAYS" 2> /dev/null | while IFS= read -r f; do
+    rid=$(basename "$f"); rid=${rid#pre-restore-}; rid=${rid%.enc}; rid=${rid%.dump}
+    if [ -e "$UPLOADS/.restore-previous-$rid" ]; then
+      echo "$(date -u +%FT%TZ) safety copy $(basename "$f") kept: the previous uploads .restore-previous-$rid were not purged yet" >&2
+    else
+      rm -f "$f"
+    fi
+  done
 }
 
 run_backup() {
@@ -105,6 +149,7 @@ run_backup() {
   if ! gzip -t "$tarball.partial"; then
     rm -f "$tarball.partial"; fail "uploads tarball is corrupt"; return 1
   fi
+  reconcile_pair "$tarball.partial"
   if [ "$encrypted" = 1 ]; then
     encrypt "$tarball.partial" "$tarball$ext.partial" || { rm -f "$tarball.partial" "$tarball$ext.partial"; fail "cannot encrypt the uploads tarball"; return 1; }
     mv "$tarball$ext.partial" "$tarball$ext" || { fail "cannot rename the uploads tarball"; return 1; }
@@ -113,18 +158,23 @@ run_backup() {
   fi
 
   # I-03: a small record of what the pair is: when each half was taken and how many files the tarball holds.
-  mkdir -p "$OUT/manifest" && printf '{"stamp":"%s","dump":"aiwa-%s.dump%s","uploads":"uploads-%s.tar.gz%s","dump_taken_before":"%s","tar_started":"%s","tar_finished":"%s","consistency":"dump-first: see docs/runbooks.md"}
-'     "$stamp" "$stamp" "$ext" "$stamp" "$ext" "$tar_started" "$tar_started" "$tar_finished" > "$OUT/manifest/snapshot-$stamp.json" ||
+  mkdir -p "$OUT/manifest" && printf '{"stamp":"%s","dump":"aiwa-%s.dump%s","uploads":"uploads-%s.tar.gz%s","dump_taken_before":"%s","tar_started":"%s","tar_finished":"%s","reconcile":"%s","missing_references":%s,"consistency":"dump-first: see docs/runbooks.md"}
+'     "$stamp" "$stamp" "$ext" "$stamp" "$ext" "$tar_started" "$tar_started" "$tar_finished" "$reconcile_status" "$missing_refs" > "$OUT/manifest/snapshot-$stamp.json" ||
     echo "$(date -u +%FT%TZ) cannot write the backup manifest" >&2
   find "$OUT/manifest" -type f -mtime +"$KEEP_DAYS" -delete 2> /dev/null
   find "$OUT/db" "$OUT/uploads" -type f -mtime +"$KEEP_DAYS" -delete
   find "$OUT/db" "$OUT/uploads" -type f -name '*.partial' -mmin +120 -delete
+  prune_safety
   date -u +%FT%TZ > "$OUT/last-success"
   printf '# TYPE aiwa_backup_last_success_timestamp_seconds gauge
 aiwa_backup_last_success_timestamp_seconds %s
 # TYPE aiwa_backup_encrypted gauge
 aiwa_backup_encrypted %s
-'     "$(date -u +%s)" "$encrypted" > "$OUT/metrics/metrics.txt.new" && mv "$OUT/metrics/metrics.txt.new" "$OUT/metrics/metrics.txt" ||
+# TYPE aiwa_backup_reconcile_ok gauge
+aiwa_backup_reconcile_ok %s
+# TYPE aiwa_backup_missing_references gauge
+aiwa_backup_missing_references %s
+'     "$(date -u +%s)" "$encrypted" "$([ "$reconcile_status" = ok ] && echo 1 || echo 0)" "$missing_refs" > "$OUT/metrics/metrics.txt.new" && mv "$OUT/metrics/metrics.txt.new" "$OUT/metrics/metrics.txt" ||
     echo "$(date -u +%FT%TZ) cannot write the backup metrics" >&2
   echo "$(date -u +%FT%TZ) backup ok: aiwa-$stamp.dump$ext ($size bytes), uploads-$stamp.tar.gz$ext"
   if [ -n "${BACKUP_HEARTBEAT_URL:-}" ]; then

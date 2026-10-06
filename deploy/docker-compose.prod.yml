@@ -86,10 +86,12 @@ services:
       - SMS_API_URL
       - SMS_API_KEY
       - SMS_SENDER
+      - SMS_RECEIPT_FIELD
       - EMAIL_PROVIDER
       - EMAIL_API_URL
       - EMAIL_API_KEY
       - EMAIL_FROM
+      - EMAIL_RECEIPT_FIELD
       - AIWA_GATEWAY_ALLOWED_HOSTS
       - PUBLIC_MAX_IMAGE_DIMENSION
       - PUBLIC_MAX_DECODE_WORKING_BYTES
@@ -180,6 +182,8 @@ services:
       PGUSER: ${DB_USERNAME}
       PGPASSWORD: ${DB_PASSWORD}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      # R4-06: pre-restore safety copies (backups/safety); kept while the matching previous uploads exist
+      BACKUP_SAFETY_KEEP_DAYS: ${BACKUP_SAFETY_KEEP_DAYS:-14}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       # R2-02: pinged after each verified backup; a missing ping alerts (healthchecks.io etc.).
       BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
@@ -192,6 +196,7 @@ services:
       # I-02 / I-03: used by restore.sh (staged uploads swap, reconciliation report)
       - ./backup/uploads_swap.sh:/uploads_swap.sh:ro
       - ./backup/reconcile_uploads.sh:/reconcile_uploads.sh:ro
+      - ./backup/uploads_references.sql:/uploads_references.sql:ro
       - ${BACKUP_KEY_FILE:?Set BACKUP_KEY_FILE (docs/runbooks.md)}:/run/secrets/backup.key:ro
       - ./backups:/backups
       - uploads:/uploads

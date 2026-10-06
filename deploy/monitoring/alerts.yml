@@ -94,6 +94,15 @@ groups:
         annotations:
           summary: "Backups are stored unencrypted (ID documents included); mount the backup key (docs/runbooks.md)"
 
+      # R4 / I-03: the backup job checks the file references against the tarball it just wrote. 0 means the check could not run
+      # (database query failed, scripts not mounted): a backup without that evidence, never a "0 missing" result.
+      - alert: BackupReconcileFailed
+        expr: aiwa_backup_reconcile_ok == 0
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "The backup could not be reconciled with the database (dc logs backup: RECONCILIATION FAILED); file references are unchecked"
+
       - alert: AlertingPipelineDown
         expr: up{job="alertmanager"} == 0
         for: 5m

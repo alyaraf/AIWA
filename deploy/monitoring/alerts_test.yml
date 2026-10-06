@@ -95,3 +95,30 @@ tests:
               severity: warning
             exp_annotations:
               summary: "No host metrics: node-exporter is down, so disk and memory alerts cannot fire"
+
+  # R4: a backup whose file references could not be checked raises BackupReconcileFailed after an hour; a checked one does not.
+  - interval: 1m
+    input_series:
+      - series: 'aiwa_backup_reconcile_ok{instance="backup",job="backup"}'
+        values: '0x90'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: BackupReconcileFailed
+        exp_alerts: []
+      - eval_time: 80m
+        alertname: BackupReconcileFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: backup
+              job: backup
+            exp_annotations:
+              summary: "The backup could not be reconciled with the database (dc logs backup: RECONCILIATION FAILED); file references are unchecked"
+  - interval: 1m
+    input_series:
+      - series: 'aiwa_backup_reconcile_ok{instance="backup",job="backup"}'
+        values: '1x90'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: BackupReconcileFailed
+        exp_alerts: []
