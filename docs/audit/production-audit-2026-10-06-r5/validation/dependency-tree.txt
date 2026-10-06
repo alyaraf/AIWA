@@ -1,0 +1,5 @@
+aiwa-admin-dashboard@0.1.0 C:\Users\fsherif\.codex\visualizations\2026\10\05\01a10bf7-f91b-7363-9de4-71d88794cf43\audit-work-r5\snapshot\aiwa-admin-dashboard-updated
+└─┬ vite@6.4.3
+  └─┬ postcss@8.5.28
+    └── source-map-js@1.2.1
+

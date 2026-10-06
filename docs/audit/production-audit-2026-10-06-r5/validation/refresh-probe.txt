@@ -1,0 +1,6 @@
+00:00 +0: loading C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r5/snapshot/Android/aiwa_app/test/r5_refresh_audit_test.dart
+Warning: A tag was used that wasn't specified in dart_test.yaml.
+  audit-probe was used in the test "audit reproduction: old refresh write overwrites B access while B refresh/id remain"
+
+00:00 +0: audit reproduction: old refresh write overwrites B access while B refresh/id remain
+00:00 +1: All tests passed!

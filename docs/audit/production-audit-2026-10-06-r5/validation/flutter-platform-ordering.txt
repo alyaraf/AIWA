@@ -1,0 +1,9 @@
+Locked flutter_secure_storage version: 9.2.4
+Local cached implementation inspected; this is not a device reproduction.
+D:\tools\pubcache\hosted\pub.dev\flutter_secure_storage-9.2.4\ios\Classes\SwiftFlutterSecureStoragePlugin.swift
+SHA256: FBF066CB6EF1585B2624D7A661933AD4973929F0799F7CBCAEF690485421EBF7
+line 32: DispatchQueue.global(qos: .userInitiated).async {
+D:\tools\pubcache\hosted\pub.dev\flutter_secure_storage-9.2.4\android\src\main\java\com\it_nomads\fluttersecurestorage\FlutterSecureStoragePlugin.java
+SHA256: 03C1DC99255FFE2E65F3CF53D6D8B866D8756F2730EBCF93185AD1655F23252E
+line 36: workerThread = new HandlerThread("com.it_nomads.fluttersecurestorage.worker");
+line 68: workerThreadHandler.post(new MethodRunner(call, result));

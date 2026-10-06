@@ -1,3 +1,55 @@
+# AIWA Handoff — round 5 remediation (current)
+
+Last updated: 2026-10-06. Project: D:/AIWA PROJECT/AIWA; branch main. Audit baseline ddebaf9; the remediation is **uncommitted work in the tree** (review the diff, commit in your own grouping).
+**Read first:** [round 5 remediation record](docs/audit/production-audit-2026-10-06-r5/remediation.md) (status of every item, design, tests, limits, changed files). The round 5 audit files and the previous sections below are history.
+
+**Production: not ready.** All four R5 findings and the six-queue paging follow-up are implemented and tested locally; every item that needs a real environment is still open (launch sign-off now has **45 open rows**, 41-45 are new).
+
+| ID | Status | What changed (details in the record) |
+| --- | --- | --- |
+| R5-01 refresh corrupts a newer session | fixed (host tests); iOS device evidence open (gate 41) | `SecureStorage.storeRefreshedTokens` / `clearIfSession`: refresh writes and refresh-failure clears run inside the credential lock and re-check the session there; logout/sign-in already used the lock. 7 new regression tests (delayed access/refresh write, logout, rejected refresh, next request is B's). |
+| R5-02 reconciliation reads the live DB | fixed (stub DB); real PostgreSQL rehearsal open (gate 42) | `backup.sh` reads the references from the dump's own scratch restore; failed/incomplete scans stay "failed", never zero missing. Still two snapshots; limits documented in the runbook. |
+| R5-03 undo restarts the backend between halves | fixed (fake Docker); real-container drill open (gate 43) | `./restore.sh --undo <id>`: preflight both halves, stop, previous DB, uploads rollback, start only after both; either failure keeps it stopped with runnable commands. `uploads_swap.sh status` added. |
+| R5-04 source-map-js | fixed locally; CI run open (gate 45) | lockfile only: 1.2.2; `npm audit --omit=dev --audit-level=high` = 0 vulnerabilities; CI gate unchanged. **Please review the registry note in the record** (the lockfile URL of that one package was rewritten from this machine's internal mirror to registry.npmjs.org). |
+| AD-13 six queues | fixed in code/H2/jsdom; PostgreSQL scale evidence open (gate 44) | Verification, Photo moderation, Chat reports, Reported reviews, Settlements, SOS are server-searched/paged with real totals. SOS keeps its ordered-read rule and reads the oldest open alert separately. Deliberate behaviour changes are listed in the record. |
+
+Fresh verification: backend **506 tests** (was 498, H2), dashboard **221 tests / 33 files + build** (was 193 / 32), Flutter **analyzer clean / 253 tests** (was 246), backup/swap/restore-flow **47/83/67** checks (were 41/79/45), CI graph + 5 rejected mutations. No test was weakened; the few adapted tests are listed in the record.
+
+Still unverified (no prerequisites here): PostgreSQL/Redis, V34 on production-sized data, real-container restore/undo, Linux modes, promtool, CI run, native browsers, devices (gate 41), provider sandboxes, cloud/offsite/key escrow, load. Docker's Linux engine is still unavailable and there is no psql. No deployment, live restore, external message or cloud change was made.
+
+Tooling: JDK17 C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot (`mvn -B -o`); Node20 C:/Users/fsherif/AppData/Local/nvm/v20.20.2; Flutter D:/tools/flutter, PUB_CACHE D:/tools/pubcache. Do not run full Maven and Vitest together. Edit CRLF files through a line-ending-preserving patch (the Write tool for scripts: bash heredocs eat backslashes).
+
+---
+
+## Previous handoff — round 5 verification (superseded by the remediation above)
+
+# AIWA Handoff — round 5 verification
+
+Last updated: 2026-10-06. Project: D:/AIWA PROJECT/AIWA; branch main. Verified application commit: **ddebaf9e40d7fd1a071888a490aea23715e6d2bd**. The six round 4 remediation commits are committed; the application working tree was clean throughout verification. This delivery adds audit documentation and this handoff only.
+
+**Read first:** [round 5 audit](docs/audit/production-audit-2026-10-06-r5/audit.md), [closure reconciliation](docs/audit/production-audit-2026-10-06-r5/remediation-status.md), [coverage](docs/audit/production-audit-2026-10-06-r5/coverage.md), [fresh evidence and fixtures](docs/audit/production-audit-2026-10-06-r5/validation/README.md). Earlier audit/remediation records are history.
+
+**Production: not ready.** The original eight R4 scenarios are addressed and their local regression suites pass, but four actionable R5 items remain (1 High, 3 Medium at repository scope). The dependency's upstream advisory is High; production exploitation was not established. M-01 and I-02 remain partial, I-03's new clean-pair diagnostic is incomplete, AD-13 covers only 3 of 9 server-paged queues, and external offsite/cloud evidence is still missing. All 40 launch-signoff evidence rows remain incomplete.
+
+| ID | Priority | Required work |
+| --- | --- | --- |
+| R5-01 | High | Refresh bypasses the credential lock; a delayed A write can corrupt B's stored session. Serialize session-owned writes/clears. Host reproduction models out-of-order storage; locked iOS plugin uses a concurrent queue. Android uses a serialized worker; native iOS proof remains open. |
+| R5-02 | Medium | Backup-time reconciliation queries the later live DB, not the saved dump; a deleted reference/file falsely yields zero missing. Extract references from the actual dump snapshot. |
+| R5-03 | Medium | Printed DB-first whole-restore undo restarts backend before previous uploads are restored. Provide coordinated undo that starts only after both parts succeed. |
+| R5-04 | Medium | source-map-js 1.2.1 via Vite/PostCSS has a High upstream advisory and fails the current mandatory npm audit. Refresh the affected resolution to patched 1.2.2 or compatible later version; rerun audit/tests/build. It is a build-chain finding; no dashboard-user exploit was established. |
+
+Fresh verification: backend **498 tests** (H2), dashboard **193 tests / 32 files + build**, Flutter **analyzer clean / 246 tests**; backup/swap/restore-flow **41/79/45** checks; CI graph **5 rejected mutations**. Three deterministic code probes reproduce R5-01/02/03; their success asserts defects, not fixes. **687 tracked snapshot inputs** match the project. The approved fresh public npm scan found **1 High upstream advisory** (CVE-2026-93749), superseding the prior zero-advisory record.
+
+Docker Linux engine named pipe is still absent; psql/promtool not found. Real PostgreSQL/Redis, production-copy V34 rehearsal, Linux modes/container recovery, CI, native browser/device, provider delivery, cloud/offsite and load remain unverified. The earlier cross-tab browser evidence used a simulated storage event; it does not close genuine two-tab gate 37.
+
+No application fixes, dependency updates, live restores, deployments, external messages or cloud mutations were performed. The npm metadata check was initially blocked by automatic review, then explicitly authorized by the user and completed. No remaining approval is needed for that completed check.
+
+Audit workspace: C:/Users/fsherif/.codex/visualizations/2026/10/05/01a10bf7-f91b-7363-9de4-71d88794cf43/audit-work-r5. Tooling: JDK17 C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot; Node20 C:/Users/fsherif/AppData/Local/nvm/v20.20.2; Flutter D:/tools/flutter, PUB_CACHE D:/tools/pubcache. Do not run full Maven and Vitest together. Local audit builds are not native release evidence.
+
+---
+
+## Previous handoff — round 4 remediation (superseded)
+
 # AIWA Handoff — round 4 remediation (current)
 
 Last updated: 2026-10-06. Project: D:/AIWA PROJECT/AIWA; branch main. Audit baseline 290a05f; the remediation is **uncommitted work in the tree** (review the diff, commit in your own grouping).

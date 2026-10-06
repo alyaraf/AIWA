@@ -1,0 +1,8 @@
+jobs: backend, admin, monitoring-rules, backup-restore, sbom, flutter, android, dependency-scan, release-gate, ci-graph, deploy-staging
+deploy-staging (transitive needs): release-gate, ci-graph, backend, admin, monitoring-rules, backup-restore, sbom, flutter, android, dependency-scan
+ok   self-test rejects: deploy-staging back to backend/admin only
+ok   self-test rejects: gate without backup-restore
+ok   self-test rejects: gate without always()
+ok   self-test rejects: continue-on-error on a required job
+ok   self-test rejects: scan output removed
+CI dependency graph: OK
