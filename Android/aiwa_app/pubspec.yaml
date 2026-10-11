@@ -48,7 +48,7 @@ dependencies:
   shimmer: ^3.0.0
 
   # URL launcher (WhatsApp, phone, maps)
-  url_launcher: ^6.3.0
+  url_launcher: ^6.3.3
 
   # Permissions
   permission_handler: ^11.3.1
