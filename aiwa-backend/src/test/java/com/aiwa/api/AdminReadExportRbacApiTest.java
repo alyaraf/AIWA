@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.User;
 import com.aiwa.enums.AdminPermission;
 import com.aiwa.enums.UserRole;
@@ -66,7 +67,7 @@ class AdminReadExportRbacApiTest {
         int n = SEQ.incrementAndGet();
         User u = userRepo.save(User.builder().fullName("rbac admin " + n)
                 .email("rbac-admin" + n + "@test.aiwa")
-                .phone("+2010885" + String.format("%05d", n))
+                .phone(TestPhones.next())
                 .password(encoder.encode(PASSWORD)).role(UserRole.ADMIN).active(true).termsAccepted(true)
                 .adminPermissions(perms.length == 0 ? new HashSet<>() : new HashSet<>(EnumSet.copyOf(List.of(perms))))
                 .build());

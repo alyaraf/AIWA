@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.*;
 import com.aiwa.enums.*;
 import com.aiwa.repository.*;
@@ -91,7 +92,7 @@ class ApiFlowIntegrationTest {
     // ── fixtures ─────────────────────────────────────────────────────────────
 
     private static String uniquePhone() {
-        return "+2010" + String.format("%08d", SEQ.incrementAndGet());
+        return TestPhones.next();
     }
 
     private User user(UserRole role, AdminPermission... perms) {

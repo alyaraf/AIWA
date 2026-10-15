@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.Complaint;
 import com.aiwa.entity.ProviderProfile;
 import com.aiwa.entity.User;
@@ -78,7 +79,7 @@ class ModerationPrivacyApiTest {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName(role.name().toLowerCase() + " " + n)
                 .email("modpriv-" + role.name().toLowerCase() + n + "@test.aiwa")
-                .phone("+2010773" + String.format("%05d", n))
+                .phone(TestPhones.next())
                 .password(encoder.encode(PASSWORD)).role(role).active(true).termsAccepted(true)
                 .adminPermissions(perms.length == 0 ? new HashSet<>() : new HashSet<>(EnumSet.copyOf(List.of(perms))))
                 .build());

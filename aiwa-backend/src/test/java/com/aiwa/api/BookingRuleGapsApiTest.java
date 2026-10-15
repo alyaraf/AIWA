@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.Availability;
 import com.aiwa.entity.Booking;
 import com.aiwa.entity.ProviderProfile;
@@ -119,7 +120,7 @@ class BookingRuleGapsApiTest {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName(role.name().toLowerCase() + " " + n)
                 .email("gaps-" + role.name().toLowerCase() + n + "@test.aiwa")
-                .phone("+2010772" + String.format("%05d", n))
+                .phone(TestPhones.next())
                 .password(encoder.encode(PASSWORD)).role(role).active(true).termsAccepted(true).build());
     }
 

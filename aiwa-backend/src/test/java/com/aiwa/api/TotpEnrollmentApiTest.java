@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.User;
 import com.aiwa.enums.UserRole;
 import com.aiwa.repository.UserRepository;
@@ -68,7 +69,7 @@ class TotpEnrollmentApiTest {
     private User user(boolean enabled, String secret, Instant enrollmentExpires) {
         int n = SEQ.incrementAndGet();
         return users.save(User.builder().fullName("totp enrol " + n).email("totp-enrol" + n + "@test.aiwa")
-                .phone("+2010793" + String.format("%05d", n)).password(encoder.encode(PASSWORD))
+                .phone(TestPhones.next()).password(encoder.encode(PASSWORD))
                 .role(UserRole.CUSTOMER).active(true).termsAccepted(true).totpEnabled(enabled).totpSecret(enabled ? secret : null).totpPendingSecret(enabled ? null : secret)
                 .totpEnrollmentExpiresAt(enrollmentExpires).build());
     }

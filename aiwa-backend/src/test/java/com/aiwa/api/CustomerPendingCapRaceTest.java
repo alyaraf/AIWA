@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.Availability;
 import com.aiwa.entity.ProviderProfile;
 import com.aiwa.entity.User;
@@ -71,7 +72,7 @@ class CustomerPendingCapRaceTest {
 
     private User user(UserRole role, String tag) {
         return userRepo.save(User.builder().fullName(tag).email(tag + "@test.aiwa")
-                .phone("+2010779" + String.format("%05d", Math.abs(tag.hashCode()) % 100000))
+                .phone(TestPhones.next())
                 .password(encoder.encode(PASSWORD)).role(role).active(true).termsAccepted(true).build());
     }
 
