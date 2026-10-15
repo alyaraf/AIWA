@@ -105,7 +105,8 @@ class AccountDeletionTest {
                 .active(true).profileImageUrl("/files/public/avatars/a.jpg").build();
         when(userRepo.findByLogin("pro@x.com")).thenReturn(Optional.of(u));
         ProviderProfile profile = ProviderProfile.builder().id(7L).user(u)
-                .nationalIdFrontPath("ids/front.jpg").nationalIdBackPath("ids/back.jpg").selfiePath("ids/selfie.jpg").build();
+                .nationalIdFrontPath("ids/front.jpg").nationalIdBackPath("ids/back.jpg").selfiePath("ids/selfie.jpg")
+                .address("5 Home St, Maadi").latitude(29.96).longitude(31.25).bio("I work from home").build();
         when(providerRepo.findByUserId(9L)).thenReturn(Optional.of(profile));
         when(bookingRepo.findByProviderIdAndStatusInOrderByBookingDateAscStartTimeAsc(eq(7L), anyCollection(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
@@ -115,6 +116,9 @@ class AccountDeletionTest {
         com.aiwa.entity.SavedAddress home = com.aiwa.entity.SavedAddress.builder().id(3L).user(u).label("Home")
                 .addressLine("12 Nile St, Zamalek").latitude(30.06).longitude(31.22).defaultAddress(true).build();
         when(addressRepo.findByUserId(9L)).thenReturn(List.of(home));
+        Booking past = booking(6L, BookingStatus.COMPLETED, ProviderProfile.builder().id(8L).build(), u);
+        past.snapshotDestination(home);
+        when(bookingRepo.findByCustomerId(9L)).thenReturn(List.of(past));
 
         controller.delete(u);
 
@@ -125,6 +129,14 @@ class AccountDeletionTest {
         assertThat(home.isArchived()).isTrue();
         assertThat(profile.getNationalIdFrontPath()).isNull();
         assertThat(profile.getSelfiePath()).isNull();
+        // RV-02: the booking keeps no copy of the address, and the listing no home address.
+        assertThat(past.getDestinationAddress()).isNull();
+        assertThat(past.getDestinationLatitude()).isNull();
+        assertThat(past.getDestinationLongitude()).isNull();
+        assertThat(profile.getAddress()).isNull();
+        assertThat(profile.getLatitude()).isNull();
+        assertThat(profile.getLongitude()).isNull();
+        assertThat(profile.getBio()).isNull();
         assertThat(u.getProfileImageUrl()).isNull();
         verify(galleryRepo).deleteAll(List.of(photo));
         // No transaction in a plain unit test, so the files go straight away.

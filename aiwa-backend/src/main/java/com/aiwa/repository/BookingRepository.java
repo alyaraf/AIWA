@@ -107,6 +107,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByCustomerIdAndStatus(Long customerId, BookingStatus status);
 
+    List<Booking> findByCustomerId(Long customerId);
+
     long countByCustomerIdAndStatus(Long customerId, BookingStatus status);
 
     /** AU-07: penalised provider cancellations since a time. */

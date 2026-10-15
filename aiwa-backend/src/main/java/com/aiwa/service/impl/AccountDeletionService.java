@@ -22,7 +22,8 @@ import java.util.List;
  *
  * <p>Anonymises and disables the user; for a provider also takes the listing
  * down and cancels their open bookings. Erases saved addresses and their
- * coordinates, trusted contacts, a provider's ID documents and selfie, gallery
+ * coordinates (and the destination on their bookings), a provider's listing address,
+ * coordinates and bio, trusted contacts, a provider's ID documents and selfie, gallery
  * photos and the avatar. Past bookings, reviews, chats and ledger rows stay
  * (disputes and accounting need them) under "Deleted user".
  */
@@ -108,6 +109,15 @@ public class AccountDeletionService {
             });
         }
 
+        // RV-02: a booking's destination is the customer's address too. The booking stays, the place goes.
+        bookingRepo.findByCustomerId(user.getId()).forEach(b -> {
+            b.setDestinationLabel(null);
+            b.setDestinationAddress(null);
+            b.setDestinationLatitude(null);
+            b.setDestinationLongitude(null);
+            bookingRepo.save(b);
+        });
+
         // Files go only after the commit, so a rollback never leaves rows pointing at deleted files.
         List<String> publicFiles = new java.util.ArrayList<>();
         List<String> privateFiles = new java.util.ArrayList<>();
@@ -115,6 +125,11 @@ public class AccountDeletionService {
         providerRepo.findByUserId(user.getId()).ifPresent(profile -> {
             profile.setVerificationStatus(VerificationStatus.SUSPENDED);
             profile.setOfflineMode(true);
+            // RV-02: for a home-based provider the listing's address is their home.
+            profile.setAddress(null);
+            profile.setLatitude(null);
+            profile.setLongitude(null);
+            profile.setBio(null);
             java.util.stream.Stream.of(profile.getNationalIdFrontPath(), profile.getNationalIdBackPath(), profile.getSelfiePath())
                     .filter(java.util.Objects::nonNull).forEach(privateFiles::add);
             profile.setNationalIdFrontPath(null);
