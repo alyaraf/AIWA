@@ -20,8 +20,9 @@ public interface CommissionLedgerRepository extends JpaRepository<CommissionLedg
     org.springframework.data.domain.Page<CommissionLedgerEntry> findByStatusOrderByCreatedAtAsc(
             LedgerEntryStatus status, org.springframework.data.domain.Pageable pageable);
 
-    org.springframework.data.domain.Slice<CommissionLedgerEntry> findAllByOrderByIdDesc(
-            org.springframework.data.domain.Pageable pageable);
+    /** One export batch: the 500 newest rows below {@code id}. Keyed on the id, so rows added during
+     * an export can't shift the batches and repeat a row (offset paging did). */
+    java.util.List<CommissionLedgerEntry> findTop500ByIdLessThanOrderByIdDesc(Long id);
 
     /**
      * One row per provider with ledger entries:

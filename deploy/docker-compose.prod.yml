@@ -30,8 +30,9 @@ services:
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:?Set ADMIN_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
       SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN}
-      # F-19: networks allowed to reach the admin panel (space-separated CIDRs: office, VPN). Default: everyone.
-      ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:-0.0.0.0/0 ::/0}
+      # F-19: networks allowed to reach the admin panel (space-separated CIDRs: office, VPN). Required: an unset
+      # value used to mean everyone. To really open it to the internet, set it to "0.0.0.0/0 ::/0" on purpose.
+      ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:?Set ADMIN_ALLOWED_IPS (office/VPN CIDRs, or "0.0.0.0/0 ::/0" for everyone)}
       # FE-13 link verification; empty until the stores exist (links then open the web page).
       ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
       APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
