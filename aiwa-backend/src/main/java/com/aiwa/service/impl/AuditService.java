@@ -42,7 +42,8 @@ public class AuditService {
                     .ipAddress(currentIp())
                     .build());
         } catch (Exception ex) {
-            log.warn("Failed to write audit entry {} {}: {}", action, target, ex.getMessage());
+            log.warn("Failed to write audit entry {} {}: {}", com.aiwa.util.LogSafe.oneLine(action),
+                    com.aiwa.util.LogSafe.oneLine(target), ex.getMessage());
         }
     }
 

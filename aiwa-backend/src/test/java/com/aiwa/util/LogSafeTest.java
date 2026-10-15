@@ -21,4 +21,11 @@ class LogSafeTest {
         assertThat(LogSafe.scrub("x".repeat(1000)).length()).isLessThan(310);
         assertThat(LogSafe.scrub(null)).isEmpty();
     }
+
+    @Test
+    void oneLineKeepsTheTextButNotItsLineBreaks() {
+        assertThat(LogSafe.oneLine("/auth/login\r\nFAKE ENTRY")).isEqualTo("/auth/login FAKE ENTRY");
+        assertThat(LogSafe.oneLine("jane@example.com")).isEqualTo("jane@example.com");
+        assertThat(LogSafe.oneLine(null)).isEmpty();
+    }
 }

@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read   # the CodeQL action reads its own workflow run; required in private repos
   security-events: write
 
 jobs:
@@ -32,6 +33,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           queries: security-extended
+          config-file: ./.github/codeql/codeql-config.yml
       - name: Build the backend
         if: matrix.language == 'java-kotlin'
         working-directory: aiwa-backend
@@ -39,3 +41,21 @@ jobs:
       - uses: github/codeql-action/analyze@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3
         with:
           category: "/language:${{ matrix.language }}"
+          # Code scanning (GitHub Code Security) is not enabled on this private repo, so the upload
+          # would fail. Keep the SARIF as an artifact and gate on it here instead.
+          upload: never
+          output: sarif-results
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: codeql-${{ matrix.language }}
+          path: sarif-results
+          if-no-files-found: ignore
+      - name: Fail on any CodeQL result
+        run: |
+          n=$(jq -s '[.[].runs[].results[]] | length' sarif-results/*.sarif)
+          echo "CodeQL results: $n"
+          if [ "$n" -gt 0 ]; then
+            jq -r '.runs[].results[] | "::error file=\(.locations[0].physicalLocation.artifactLocation.uri),line=\(.locations[0].physicalLocation.region.startLine)::\(.ruleId): \(.message.text)"' sarif-results/*.sarif
+            exit 1
+          fi
