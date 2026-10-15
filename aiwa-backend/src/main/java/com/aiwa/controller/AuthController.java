@@ -42,6 +42,9 @@ public class AuthController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.aiwa.service.impl.AccountRateLimiter limiter;
 
+    /** AP-02: confirmation codes one account may have mailed to a new address per hour. */
+    public static final int EMAIL_CHANGE_SENDS_PER_HOUR = 5;
+
     /** Secure flag on the access-token cookie — on in prod (served over HTTPS). */
     @org.springframework.beans.factory.annotation.Value("${aiwa.auth.cookie-secure:false}")
     private boolean cookieSecure;
@@ -219,6 +222,12 @@ public class AuthController {
                 authService.confirmPassword(userDetails.getUsername(), request.getCurrentPassword());
                 if (userRepo.existsByEmailIgnoreCase(email)) {
                     throw new BusinessException("auth.error.email_taken");
+                }
+                // AP-02: the code goes to whatever address was typed, and each send spends the
+                // platform-wide OTP budget that sign-up and password reset depend on. The per-address
+                // limit alone let one account mail any number of strangers and use that budget up.
+                if (limiter != null) {
+                    limiter.check(user.getId(), "email-change", EMAIL_CHANGE_SENDS_PER_HOUR, java.time.Duration.ofHours(1));
                 }
                 user.setPendingEmail(email);
                 otpService.sendEmailOtp(email);

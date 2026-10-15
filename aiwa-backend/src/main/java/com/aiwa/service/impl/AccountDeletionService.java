@@ -50,9 +50,17 @@ public class AccountDeletionService {
      * booking is live (accepted through in progress, as customer or provider) or while
      * commission is still owed. The message says what to finish first. Support's
      * deletion (DELETE /admin/users/{id}) is a deliberate override and doesn't call this.
+     *
+     * <p>AP-01: an admin account is never closed this way. Closed from the app, the last super admin's
+     * deletion left no active super admin, and every admin could then create super admins (the
+     * bootstrap rule in AdminUsersController). A super admin removes admins with DELETE /admin/users/{id},
+     * which keeps at least one active super admin.</p>
      */
     @Transactional(readOnly = true)
     public void requireSelfDeletable(User user) {
+        if (user.getRole() == com.aiwa.enums.UserRole.ADMIN) {
+            throw new com.aiwa.exception.ConflictException("account.error.admin_self_delete");
+        }
         java.util.Set<BookingStatus> live = BookingServiceImpl.CONTACT_VISIBLE;
         boolean liveAsCustomer = live.stream()
                 .anyMatch(st -> !bookingRepo.findByCustomerIdAndStatus(user.getId(), st).isEmpty());

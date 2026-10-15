@@ -172,6 +172,25 @@ class VerifiedEmailApiTest {
         assertThat(loginStatus(oldEmail, PASSWORD)).isEqualTo(401);
     }
 
+    // AP-02: each new address got a code with no per-account limit, and every send spent the shared
+    // OTP budget, so one account could mail strangers until sign-up and reset codes stopped for everyone.
+    @Test
+    void anAccountMailsOnlyAFewEmailChangeCodesPerHourAndARefusedOneSpendsNoBudget() throws Exception {
+        User u = user();
+        String session = login(u.getEmail());
+        int allowed = com.aiwa.controller.AuthController.EMAIL_CHANGE_SENDS_PER_HOUR;
+        for (int i = 0; i < allowed; i++) {
+            send(patch("/auth/me"), session, Map.of("fullName", "N", "email", uniqueEmail(), "currentPassword", PASSWORD))
+                    .andExpect(status().isOk());
+        }
+        String refused = uniqueEmail();
+        send(patch("/auth/me"), session, Map.of("fullName", "N", "email", refused, "currentPassword", PASSWORD))
+                .andExpect(status().isTooManyRequests());
+        assertThat(redis.get("otp:code:" + refused)).isEmpty();
+        assertThat(redis.get("otp:global:hour")).contains(String.valueOf(allowed));
+        assertThat(reload(u).getPendingEmail()).isNotEqualTo(refused);
+    }
+
     // ── sign-up by phone with someone else's email ───────────────────────────
 
     // SA-03: a number someone else proved cannot be registered by a caller who lacks the receipt.
@@ -270,6 +289,25 @@ class VerifiedEmailApiTest {
         assertThat(reload(u).isActive()).isFalse();
         assertThat(reload(u).getEmail()).isNull();
         send(get("/auth/me"), session, null).andExpect(status().isUnauthorized());
+    }
+
+    // AP-01: the last super admin could close their own account here, leaving no active super admin;
+    // the bootstrap rule then let any admin create super admins. Admins are removed from the panel.
+    @Test
+    void anAdminCannotCloseTheirOwnAccountFromTheApp() throws Exception {
+        for (com.aiwa.enums.AdminPermission perm : com.aiwa.enums.AdminPermission.values()) {
+            User admin = userRepo.save(User.builder().fullName("ap01 " + perm).email(uniqueEmail()).phone(uniquePhone())
+                    .password(encoder.encode(PASSWORD)).role(UserRole.ADMIN).active(true).termsAccepted(true)
+                    .adminPermissions(new java.util.HashSet<>(java.util.Set.of(perm))).build());
+            String session = login(admin.getEmail());
+            send(delete("/account"), session, Map.of("currentPassword", PASSWORD))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("account.error.admin_self_delete"));
+            User after = reload(admin);
+            assertThat(after.isActive()).isTrue();
+            assertThat(after.getEmail()).isEqualTo(admin.getEmail());
+            send(get("/auth/me"), session, null).andExpect(status().isOk());
+        }
     }
 
     @Test
