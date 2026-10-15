@@ -11,6 +11,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/aiwa_avatar.dart';
 import '../../../../shared/widgets/aiwa_button.dart';
+import '../../../../shared/widgets/aiwa_toast.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/guest_locked_view.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
@@ -63,6 +64,9 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
   late BookingBloc _bloc;
   String _tab = 'upcoming';
 
+  /// R7-07: a failed contest shows inline on its card; the toast is success-only.
+  (String, String)? _contestError;
+
   static const _pastStatuses = 'COMPLETED,CANCELLED,REJECTED,NO_SHOW,EXPIRED';
   static const _liveStatuses = {
     'PENDING',
@@ -109,10 +113,11 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
     final r = await sl<BookingRepository>().contestNoShow(b.id);
     if (!mounted) return;
     final l = AppLocalizations.of(context);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text(r.fold((f) => AppLocalizations.of(context).error(f.message), (_) => l.bookingsNoShowContested))),
-    );
-    if (r.isRight()) _load();
+    final failure = r.fold((f) => l.error(f.message), (_) => null);
+    setState(() => _contestError = failure == null ? null : (b.id, failure));
+    if (failure != null) return;
+    showAiwaToast(context, l.bookingsNoShowContested);
+    _load();
   }
 
   Future<void> _directions(BookingEntity b) async {
@@ -221,22 +226,35 @@ class _MyBookingsViewState extends State<_MyBookingsView> {
                 : const EndOfList();
           }
           final b = bookings[i];
+          final contestError = _contestError?.$1 == b.id
+              ? _contestError!.$2
+              : null;
+          final card = _BookingCard(
+            booking: b,
+            onTap: _liveStatuses.contains(b.status)
+                ? () => _open(b, 'track')
+                : b.status == 'EXPIRED'
+                ? () => _open(b, 'expired')
+                : null,
+            onTrack: () => _open(b, 'track'),
+            onAlternatives: () => _open(b, 'rejected'),
+            onDirections: () => _directions(b),
+            onReview: () => context.push('/review/${b.id}', extra: b),
+            onRebook: () => context.push('/provider/${b.providerId}'),
+            onContest: () => _contestNoShow(b),
+          );
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _BookingCard(
-              booking: b,
-              onTap: _liveStatuses.contains(b.status)
-                  ? () => _open(b, 'track')
-                  : b.status == 'EXPIRED'
-                  ? () => _open(b, 'expired')
-                  : null,
-              onTrack: () => _open(b, 'track'),
-              onAlternatives: () => _open(b, 'rejected'),
-              onDirections: () => _directions(b),
-              onReview: () => context.push('/review/${b.id}', extra: b),
-              onRebook: () => context.push('/provider/${b.providerId}'),
-              onContest: () => _contestNoShow(b),
-            ),
+            child: contestError == null
+                ? card
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      card,
+                      const SizedBox(height: 8),
+                      InlineBanner(tone: BannerTone.danger, body: contestError),
+                    ],
+                  ),
           );
         }, childCount: bookings.length + 1),
       ),
