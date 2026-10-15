@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.User;
 import com.aiwa.enums.AdminPermission;
 import com.aiwa.enums.UserRole;
@@ -65,7 +66,7 @@ class AdminTwoFactorApiTest {
     private String admin(boolean totp, AdminPermission... perms) throws Exception {
         int n = SEQ.incrementAndGet();
         User u = userRepo.save(User.builder().fullName("admin " + n).email("tfa-admin" + n + "@test.aiwa")
-                .phone("+2010775" + String.format("%05d", n)).password(encoder.encode(PASSWORD))
+                .phone(TestPhones.next()).password(encoder.encode(PASSWORD))
                 .role(UserRole.ADMIN).active(true).termsAccepted(true).totpEnabled(totp)
                 .adminPermissions(perms.length == 0 ? new HashSet<>() : new HashSet<>(EnumSet.copyOf(List.of(perms))))
                 .build());

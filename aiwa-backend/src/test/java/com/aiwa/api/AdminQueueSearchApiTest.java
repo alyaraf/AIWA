@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.Booking;
 import com.aiwa.entity.Complaint;
 import com.aiwa.entity.ProviderProfile;
@@ -86,7 +87,7 @@ class AdminQueueSearchApiTest {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName(name)
                 .email("qs-" + role.name().toLowerCase() + n + "@test.aiwa")
-                .phone("+2010773" + String.format("%05d", n))
+                .phone(TestPhones.next())
                 .password(encoder.encode(PASSWORD)).role(role).active(true).termsAccepted(true)
                 .adminPermissions(new HashSet<>(perms)).build());
     }

@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.Booking;
 import com.aiwa.entity.ProviderProfile;
 import com.aiwa.entity.Review;
@@ -84,7 +85,7 @@ class PersistenceBoundaryApiTest {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName(role.name().toLowerCase() + " " + n)
                 .email("pb-" + role.name().toLowerCase() + n + "@test.aiwa")
-                .phone("+2010551" + String.format("%05d", n))
+                .phone(TestPhones.next())
                 .password(encoder.encode(PASSWORD)).role(role).active(true).termsAccepted(true)
                 .adminPermissions(new HashSet<>(perms)).build());
     }

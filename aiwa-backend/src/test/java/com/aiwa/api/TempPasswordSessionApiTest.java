@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.User;
 import com.aiwa.enums.UserRole;
 import com.aiwa.repository.UserRepository;
@@ -57,7 +58,7 @@ class TempPasswordSessionApiTest {
     private User customer() {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName("temp " + n).email("temp-pw" + n + "@test.aiwa")
-                .phone("+2010441" + String.format("%05d", n)).password(encoder.encode(PASSWORD))
+                .phone(TestPhones.next()).password(encoder.encode(PASSWORD))
                 .role(UserRole.CUSTOMER).active(true).termsAccepted(true)
                 .tempPasswordExpiresAt(Instant.now().plusSeconds(3600)).build());
     }

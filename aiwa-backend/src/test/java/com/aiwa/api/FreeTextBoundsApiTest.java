@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.*;
 import com.aiwa.enums.*;
 import com.aiwa.repository.*;
@@ -79,7 +80,7 @@ class FreeTextBoundsApiTest {
     private User user(UserRole role, AdminPermission... perms) {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName("bounds " + n).email("bounds" + n + "@freetext.aiwa")
-                .phone("+2010777" + String.format("%05d", n)).password(encoder.encode(PASSWORD))
+                .phone(TestPhones.next()).password(encoder.encode(PASSWORD))
                 .role(role).active(true).termsAccepted(true)
                 .adminPermissions(perms.length == 0 ? new HashSet<>()
                         : new HashSet<>(EnumSet.copyOf(java.util.List.of(perms))))

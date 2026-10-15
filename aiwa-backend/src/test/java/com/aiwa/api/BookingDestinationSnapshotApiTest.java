@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.Availability;
 import com.aiwa.entity.ProviderProfile;
 import com.aiwa.entity.User;
@@ -74,7 +75,7 @@ class BookingDestinationSnapshotApiTest {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName(role.name().toLowerCase() + " " + n)
                 .email("dest-" + role.name().toLowerCase() + n + "@test.aiwa")
-                .phone("+2010663" + String.format("%05d", n))
+                .phone(TestPhones.next())
                 .password(encoder.encode(PASSWORD)).role(role).active(true).termsAccepted(true).build());
     }
 
@@ -185,7 +186,7 @@ class BookingDestinationSnapshotApiTest {
     private String support() throws Exception {
         int n = SEQ.incrementAndGet();
         User u = userRepo.save(User.builder().fullName("sos support " + n).email("sos-support" + n + "@test.aiwa")
-                .phone("+2010664" + String.format("%05d", n)).password(encoder.encode(PASSWORD)).role(UserRole.ADMIN)
+                .phone(TestPhones.next()).password(encoder.encode(PASSWORD)).role(UserRole.ADMIN)
                 .active(true).termsAccepted(true)
                 .adminPermissions(new java.util.HashSet<>(java.util.Set.of(com.aiwa.enums.AdminPermission.SUPPORT))).build());
         return login(u);

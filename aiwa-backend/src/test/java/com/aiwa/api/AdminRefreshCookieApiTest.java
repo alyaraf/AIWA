@@ -1,5 +1,6 @@
 package com.aiwa.api;
 
+import com.aiwa.support.TestPhones;
 import com.aiwa.entity.User;
 import com.aiwa.enums.AdminPermission;
 import com.aiwa.enums.UserRole;
@@ -69,7 +70,7 @@ class AdminRefreshCookieApiTest {
     private User user(UserRole role) {
         int n = SEQ.incrementAndGet();
         return userRepo.save(User.builder().fullName("cookie " + n).email("cookie" + n + "@test.aiwa")
-                .phone("+2010991" + String.format("%05d", n)).password(encoder.encode(PASSWORD)).role(role)
+                .phone(TestPhones.next()).password(encoder.encode(PASSWORD)).role(role)
                 .active(true).termsAccepted(true)
                 .adminPermissions(role == UserRole.ADMIN ? new HashSet<>(EnumSet.of(AdminPermission.SUPPORT)) : new HashSet<>())
                 .build());
