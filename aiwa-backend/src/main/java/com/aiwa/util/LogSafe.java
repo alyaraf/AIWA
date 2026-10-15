@@ -25,8 +25,11 @@ public final class LogSafe {
         return s.length() > MAX ? s.substring(0, MAX) + "…" : s;
     }
 
-    /** Request-supplied text on one line, so it cannot forge extra log entries (CodeQL java/log-injection). */
+    /**
+     * Request-supplied text on one line, so it cannot forge extra log entries. CodeQL's java/log-injection only
+     * accepts replaceAll with exactly "\\R", "\\n" or "\\r" as a sanitizer, so keep this pattern literal.
+     */
     public static String oneLine(String s) {
-        return s == null ? "" : s.replaceAll("[\\r\\n]+", " ");
+        return s == null ? "" : s.replaceAll("\\R", " ");
     }
 }
