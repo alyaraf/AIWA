@@ -93,6 +93,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              mountpoint: "/"    # absent() copies the selector's equality matchers onto its result
             exp_annotations:
               summary: "No host metrics: node-exporter is down, so disk and memory alerts cannot fire"
 
