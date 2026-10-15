@@ -130,7 +130,8 @@ public class AdminProviderSettingsController {
             @RequestParam(required = false) Long responseWindowMinutes,
             @RequestParam(required = false, defaultValue = "") String clear) {
         ProviderProfile provider = load(providerId);
-        Set<String> toClear = clear.isBlank() ? Set.of() : Set.of(clear.split("\\s*,\\s*"));
+        Set<String> toClear = clear.isBlank() ? Set.of() : java.util.Arrays.stream(clear.split(","))
+                .map(String::strip).collect(java.util.stream.Collectors.toSet());
 
         platformSettings.validateBookingRules(
                 cancellationCutoffHours, providerCancelPenaltyPercent, responseWindowMinutes);

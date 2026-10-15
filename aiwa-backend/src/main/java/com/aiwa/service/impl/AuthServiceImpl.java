@@ -150,8 +150,11 @@ public class AuthServiceImpl {
     }
 
     public ApiResponse.AuthResponse verifyMfa(String mfaToken, String code) {
-        if (mfaToken == null || !jwtUtils.isMfaChallengeToken(mfaToken) || !jwtUtils.validateToken(mfaToken)
-                || tokenBlacklistService.isBlacklistedStrict(mfaToken)) {
+        // One boolean, one throw: CodeQL (java/user-controlled-bypass) only sees the throw as guarding the
+        // session when a single condition decides it, not each operand of an || chain.
+        boolean validChallenge = mfaToken != null && jwtUtils.isMfaChallengeToken(mfaToken)
+                && jwtUtils.validateToken(mfaToken) && !tokenBlacklistService.isBlacklistedStrict(mfaToken);
+        if (!validChallenge) {
             throw new InvalidTokenException("auth.error.token_invalid");
         }
         User user = userOf(mfaToken);

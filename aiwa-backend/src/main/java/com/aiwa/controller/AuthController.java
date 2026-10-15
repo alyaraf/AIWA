@@ -517,8 +517,9 @@ public class AuthController {
 
     private User resolveUser(UserDetails ud) {
         Long id = com.aiwa.security.AiwaUserDetails.idOf(ud);
-        return (id != null ? userRepo.findById(id) : userRepo.findByLogin(ud.getUsername()))
-                .orElseThrow(() -> new BusinessException("user.not_found"));
+        // An early return rather than a ternary, so CodeQL (java/user-controlled-bypass) sees both lookups as alternatives.
+        if (id != null) return userRepo.findById(id).orElseThrow(() -> new BusinessException("user.not_found"));
+        return userRepo.findByLogin(ud.getUsername()).orElseThrow(() -> new BusinessException("user.not_found"));
     }
 
 

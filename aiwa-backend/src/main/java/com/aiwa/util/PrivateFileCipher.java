@@ -51,7 +51,7 @@ public class PrivateFileCipher {
             Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
             c.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
             byte[] ct = c.doFinal(plain);
-            return ByteBuffer.allocate(MAGIC_BYTES.length + iv.length + ct.length)
+            return ByteBuffer.allocate(MAGIC_BYTES.length + IV_BYTES + ct.length)
                     .put(MAGIC_BYTES).put(iv).put(ct).array();
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Could not encrypt a private file", e);

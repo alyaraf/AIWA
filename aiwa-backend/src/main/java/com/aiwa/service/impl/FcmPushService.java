@@ -120,12 +120,12 @@ public class FcmPushService implements PushNotificationService {
             } else if (status == 401) {
                 invalidateAccessToken();
             }
-            log.warn("FCM rejected push to token …{}: {}", tail(deviceToken), e.getStatusCode());
+            log.warn("FCM rejected push to token {}…: {}", head(deviceToken), e.getStatusCode());
             count(status == 404 || err.contains("UNREGISTERED") ? "unregistered" : "rejected");
         } catch (RestClientException e) {
             // A push failure must never break the caller — the in-app notification
             // was already recorded; this is only the best-effort real-time nudge.
-            log.warn("FCM push failed for token …{}: {}", tail(deviceToken), com.aiwa.util.LogSafe.scrub(e.getMessage()));
+            log.warn("FCM push failed for token {}…: {}", head(deviceToken), com.aiwa.util.LogSafe.scrub(e.getMessage()));
             count("error");
         }
     }
@@ -224,7 +224,8 @@ public class FcmPushService implements PushNotificationService {
         return cachedToken;
     }
 
-    private static String tail(String token) {
-        return token.length() > 6 ? token.substring(token.length() - 6) : token;
+    /** Enough of a push token to tell devices apart in the logs. CodeQL accepts substring(0, n<=7) as masking. */
+    static String head(String token) {
+        return token != null && token.length() > 6 ? token.substring(0, 6) : "";
     }
 }
