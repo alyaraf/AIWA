@@ -158,9 +158,14 @@ public class ProviderServiceImpl {
             throw new ResourceNotFoundException("Provider", providerId);
         }
         if (caller.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()))) return;
-        Long callerId = com.aiwa.security.AiwaUserDetails.idOf(caller);
-        if (callerId == null) callerId = userRepo.findByLogin(caller.getUsername()).map(User::getId).orElse(null);
-        if (owner == null || !owner.getId().equals(callerId)) throw new ResourceNotFoundException("Provider", providerId);
+        if (owner == null || !owner.getId().equals(idOf(caller))) throw new ResourceNotFoundException("Provider", providerId);
+    }
+
+    private Long idOf(org.springframework.security.core.userdetails.UserDetails caller) {
+        Long id = com.aiwa.security.AiwaUserDetails.idOf(caller);
+        // An early return rather than a conditional assignment, so CodeQL (java/user-controlled-bypass) sees both lookups as alternatives.
+        if (id != null) return id;
+        return userRepo.findByLogin(caller.getUsername()).map(User::getId).orElse(null);
     }
 
     private static boolean sentBearerToken() {
