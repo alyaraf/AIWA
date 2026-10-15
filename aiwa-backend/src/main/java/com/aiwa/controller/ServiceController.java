@@ -23,11 +23,14 @@ public class ServiceController {
 
     private final ServiceManagementServiceImpl serviceManagementService;
     private final UserRepository userRepo;
+    private final com.aiwa.service.impl.ProviderServiceImpl providerService;
 
     @GetMapping("/providers/{providerId}/services")
-    @Operation(summary = "List active services for a provider (public)")
+    @Operation(summary = "List active services for a provider (public; an unlisted provider's only to its owner and admins)")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.ServiceDto>>> list(
-            @PathVariable Long providerId) {
+            @PathVariable Long providerId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        providerService.requireVisibleListing(providerId, userDetails); // AP-05
         return ResponseEntity.ok(ApiResponse.Success.of(
                 serviceManagementService.getByProvider(providerId)));
     }

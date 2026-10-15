@@ -139,6 +139,36 @@ public class ProviderServiceImpl {
         return dto;
     }
 
+    /**
+     * AP-05: the rule of {@link #getById} and the gallery (R2-11 / L-26) for the rest of a listing. A provider that
+     * isn't approved, or whose owner account is suspended or deleted, keeps its staff, services, hours, reviews and
+     * free slots to its owner and admins; everyone else gets 404, as for the profile. A request whose token no
+     * longer authenticates (expired) gets 401 instead, so the app refreshes and asks again as the owner.
+     *
+     * @param caller the signed-in user, or null for guests
+     */
+    @Transactional(readOnly = true)
+    public void requireVisibleListing(Long providerId, org.springframework.security.core.userdetails.UserDetails caller) {
+        ProviderProfile profile = providerRepo.findById(providerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
+        User owner = profile.getUser();
+        if (profile.getVerificationStatus() == VerificationStatus.APPROVED && owner != null && owner.isActive()) return;
+        if (caller == null) {
+            if (sentBearerToken()) throw new com.aiwa.exception.InvalidTokenException("auth.error.token_invalid");
+            throw new ResourceNotFoundException("Provider", providerId);
+        }
+        if (caller.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()))) return;
+        Long callerId = com.aiwa.security.AiwaUserDetails.idOf(caller);
+        if (callerId == null) callerId = userRepo.findByLogin(caller.getUsername()).map(User::getId).orElse(null);
+        if (owner == null || !owner.getId().equals(callerId)) throw new ResourceNotFoundException("Provider", providerId);
+    }
+
+    private static boolean sentBearerToken() {
+        return org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()
+                instanceof org.springframework.web.context.request.ServletRequestAttributes attrs
+                && String.valueOf(attrs.getRequest().getHeader("Authorization")).startsWith("Bearer ");
+    }
+
     @Transactional(readOnly = true)
     public Page<ApiResponse.ProviderSummaryDto> getNearby(double lat, double lng, double radiusKm,
                                                            ServiceCategory category, String sort, Pageable pageable) {

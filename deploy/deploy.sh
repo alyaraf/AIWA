@@ -23,6 +23,12 @@ main() {
     if [ -z "$target" ]; then
       [ -f "$log" ] && [ "$(wc -l < "$log")" -ge 2 ] \
         || { echo "ROLLBACK REFUSED: $log has no earlier release; pass the sha: bash deploy/deploy.sh --rollback <sha>" >&2; return 1; }
+      # AP-04: right after a rollback the line before the last is the release just rolled back from, so a second
+      # "--rollback" would start the bad release again. Going further back needs the sha.
+      if tail -n 1 "$log" | grep -q ' rollback$'; then
+        echo "ROLLBACK REFUSED: the last action was already a rollback (to $(tail -n 1 "$log" | awk '{print $2}')); to go further back pass the sha: bash deploy/deploy.sh --rollback <sha>" >&2
+        return 1
+      fi
       target=$(tail -n 2 "$log" | head -n 1 | awk '{print $2}')
     fi
     echo "Rolling back to $target (code only, the database is not touched)"

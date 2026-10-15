@@ -25,6 +25,7 @@ public class ReviewController {
     private final com.aiwa.service.impl.AuditService auditService;
     private final com.aiwa.repository.ModerationCaseRepository moderationRepo;
     private final com.aiwa.repository.ReviewRepository reviewRepo;
+    private final com.aiwa.service.impl.ProviderServiceImpl providerService;
 
     @PostMapping("/reviews")
     @Operation(summary = "Submit a review for a completed booking")
@@ -38,12 +39,14 @@ public class ReviewController {
     }
 
     @GetMapping("/providers/{providerId}/reviews")
-    @Operation(summary = "Customer reviews of a provider (public, paginated, with the provider's replies)")
+    @Operation(summary = "Customer reviews of a provider (public, paginated, with the provider's replies; "
+            + "an unlisted provider's only to its owner and admins)")
     public ResponseEntity<ApiResponse.Success<Page<ApiResponse.ReviewDto>>> getByProvider(
             @PathVariable Long providerId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        providerService.requireVisibleListing(providerId, userDetails); // AP-05
         return ResponseEntity.ok(ApiResponse.Success.of(
                 reviewService.getByProvider(providerId, pageOf(page, size))));
     }

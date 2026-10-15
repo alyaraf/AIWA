@@ -23,11 +23,14 @@ public class AvailabilityController {
 
     private final AvailabilityServiceImpl availabilityService;
     private final UserRepository userRepo;
+    private final com.aiwa.service.impl.ProviderServiceImpl providerService;
 
     @GetMapping("/providers/{providerId}/availability")
-    @Operation(summary = "Get a provider's working hours (public)")
+    @Operation(summary = "Get a provider's working hours (public; an unlisted provider's only to its owner and admins)")
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.AvailabilityDto>>> get(
-            @PathVariable Long providerId) {
+            @PathVariable Long providerId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        providerService.requireVisibleListing(providerId, userDetails); // AP-05
         return ResponseEntity.ok(ApiResponse.Success.of(
                 availabilityService.getByProvider(providerId)));
     }

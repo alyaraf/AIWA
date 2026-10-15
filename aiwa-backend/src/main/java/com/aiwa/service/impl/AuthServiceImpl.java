@@ -232,7 +232,7 @@ public class AuthServiceImpl {
             userRepository.closeTotpEnrollment(user.getId());
             throw new TooManyRequestsException("auth.error.totp_enrollment_attempts");
         }
-        if (!acceptTotp(user, pending, code)) {
+        if (!acceptEnrollmentCode(user, pending, code)) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
         Instant cutoff = sessionCutoff();
@@ -496,6 +496,19 @@ public class AuthServiceImpl {
         Long step = totpService.matchingStep(secret, code);
         if (step == null || userRepository.claimTotpStep(user.getId(), step) == 0) return false;
         user.setTotpLastUsedStep(step); // keep the loaded entity in step: a later save(user) writes this column
+        return true;
+    }
+
+    /**
+     * AP-03: the code that confirms a new secret. A re-setup starts with a code of the current secret, which spent
+     * this time step, so the new secret's code in the same 30 s was refused as a replay and cost an enrollment
+     * attempt. It is a different secret's code, and completeTotpEnrollment lets only one confirmation through. The
+     * step is still recorded (never lowered), so this code cannot also complete a sign-in.
+     */
+    private boolean acceptEnrollmentCode(User user, String pendingSecret, String code) {
+        Long step = totpService.matchingStep(pendingSecret, code);
+        if (step == null) return false;
+        userRepository.recordTotpStep(user.getId(), step);
         return true;
     }
 

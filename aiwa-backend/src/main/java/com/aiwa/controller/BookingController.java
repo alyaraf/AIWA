@@ -31,6 +31,7 @@ public class BookingController {
 
     private final BookingServiceImpl bookingService;
     private final UserRepository userRepo;
+    private final com.aiwa.service.impl.ProviderServiceImpl providerService;
 
     @PostMapping
     @Operation(summary = "Create a booking — SCHEDULED or BOOK_NOW (CUSTOMER). "
@@ -288,7 +289,9 @@ public class BookingController {
             @RequestParam Long providerId,
             @RequestParam Long serviceId,
             @RequestParam(required = false) Long staffMemberId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        providerService.requireVisibleListing(providerId, userDetails); // AP-05: an unlisted calendar is not public
         return ResponseEntity.ok(ApiResponse.Success.of(
                 bookingService.getAvailableSlots(providerId, serviceId, staffMemberId, date)));
     }
