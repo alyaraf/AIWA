@@ -1,0 +1,18 @@
+# Code scanning is not enabled on this private repo, so results cannot be dismissed on GitHub;
+# reviewed false positives are excluded here instead, each with its reason.
+name: AIWA CodeQL config
+
+paths-ignore:
+  # js/empty-password-in-configuration-file: in-memory H2 for the `local` run profile and the tests
+  # (user sa, no password). Production config is still scanned.
+  - aiwa-backend/src/main/resources/application-local.yml
+  - aiwa-backend/src/main/resources/application-test.yml
+  # Admin panel tests (js/incomplete-sanitization on a regex built from constant sidebar labels).
+  - aiwa-admin-dashboard-updated/src/test
+
+query-filters:
+  # java/spring-disabled-csrf-protection: the API authenticates only with the Bearer header
+  # (JwtAuthFilter, AU-14); the one cookie, aiwa_admin_refresh, is SameSite=Strict and /auth/refresh
+  # also requires the X-Requested-With header. Browsers cannot attach either cross-site.
+  - exclude:
+      id: java/spring-disabled-csrf-protection

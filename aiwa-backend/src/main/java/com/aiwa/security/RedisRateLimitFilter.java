@@ -77,7 +77,7 @@ public class RedisRateLimitFilter extends OncePerRequestFilter {
                     if (meterRegistry != null) {
                         meterRegistry.counter("aiwa.ratelimit.redis.unavailable", "scope", "ip").increment();
                     }
-                    log.error("RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path={} - enforcing the limit in-process: {}", path, e.getMessage());
+                    log.error("RATE_LIMIT_REDIS_UNAVAILABLE scope=ip path={} - enforcing the limit in-process: {}", com.aiwa.util.LogSafe.oneLine(path), e.getMessage());
                 }
                 if (count > max) {
                     response.setStatus(429);

@@ -33,6 +33,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           queries: security-extended
+          config-file: ./.github/codeql/codeql-config.yml
       - name: Build the backend
         if: matrix.language == 'java-kotlin'
         working-directory: aiwa-backend

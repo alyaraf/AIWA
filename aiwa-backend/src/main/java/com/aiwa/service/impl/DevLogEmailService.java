@@ -1,6 +1,7 @@
 package com.aiwa.service.impl;
 
 import com.aiwa.service.EmailService;
+import com.aiwa.util.LogSafe;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,6 @@ public class DevLogEmailService implements EmailService {
 
     @Override
     public void send(String to, String subject, String text) {
-        log.info("[DEV EMAIL] -> {} : {} — {}", to, subject, text);
+        log.info("[DEV EMAIL] -> {} : {} — {}", LogSafe.oneLine(to), LogSafe.oneLine(subject), LogSafe.oneLine(text));
     }
 }

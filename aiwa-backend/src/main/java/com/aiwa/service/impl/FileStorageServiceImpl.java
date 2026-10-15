@@ -417,7 +417,8 @@ public class FileStorageServiceImpl {
             ByteArrayOutputStream out = new ByteArrayOutputStream(webp.length);
             out.write(webp, 0, 12); // "RIFF" + size (fixed below) + "WEBP"
             int pos = 12;
-            while (pos < riffEnd) {
+            int end = (int) riffEnd; // checked above: riffEnd <= webp.length
+            while (pos < end) {
                 if (pos + 8 > riffEnd) throw new IllegalArgumentException("short chunk header");
                 long size = in.getInt(pos + 4) & 0xFFFFFFFFL;
                 if (size > riffEnd - pos - 8) throw new IllegalArgumentException("chunk overruns the file");
