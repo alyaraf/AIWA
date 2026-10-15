@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -51,9 +52,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mockStatic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -317,29 +318,35 @@ class BookingRuleGapsApiTest {
 
     @Test
     void aRetriedBookNowThatHitsTheUniqueIndexReturnsTheOriginalBooking() throws Exception {
-        assumeTrue(AiwaTime.timeNow().isBefore(LocalTime.of(22, 45)), "needs two free Book Now slots today");
-        com.aiwa.entity.Service quick = serviceRepo.save(com.aiwa.entity.Service.builder()
-                .provider(profile).name("Fringe trim").category(ServiceCategory.HAIR)
-                .price(new BigDecimal("50")).durationMinutes(5).active(true).build());
-        // The index production has (V17); the test schema is generated from the entities.
-        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_customer_idem ON bookings (customer_id, idempotency_key)");
-        ((TestRedis) redis).down.set(true);
-        Map<String, Object> bookNow = Map.of("providerId", profile.getId(), "serviceId", quick.getId(),
-                "bookingType", "BOOK_NOW", "homeService", false);
-        long original = data(book(bookNow, "tap-1").andExpect(status().isCreated())).get("id").asLong();
+        // R7-09: Cairo time is pinned to 10:00 today, so the test runs at any hour (it used to skip after 22:45).
+        LocalDate today = AiwaTime.today();
+        try (MockedStatic<AiwaTime> clock = mockStatic(AiwaTime.class)) {
+            clock.when(AiwaTime::today).thenReturn(today);
+            clock.when(AiwaTime::timeNow).thenReturn(LocalTime.of(10, 0));
+            clock.when(AiwaTime::now).thenReturn(LocalDateTime.of(today, LocalTime.of(10, 0)));
+            com.aiwa.entity.Service quick = serviceRepo.save(com.aiwa.entity.Service.builder()
+                    .provider(profile).name("Fringe trim").category(ServiceCategory.HAIR)
+                    .price(new BigDecimal("50")).durationMinutes(5).active(true).build());
+            // The index production has (V17); the test schema is generated from the entities.
+            jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_customer_idem ON bookings (customer_id, idempotency_key)");
+            ((TestRedis) redis).down.set(true);
+            Map<String, Object> bookNow = Map.of("providerId", profile.getId(), "serviceId", quick.getId(),
+                    "bookingType", "BOOK_NOW", "homeService", false);
+            long original = data(book(bookNow, "tap-1").andExpect(status().isCreated())).get("id").asLong();
 
-        // The retry arrives while the first request is still in flight: its look-up
-        // by key finds nothing yet, so it goes on to insert a second row.
-        AtomicBoolean inFlight = new AtomicBoolean(true);
-        doAnswer(inv -> inFlight.getAndSet(false)
-                ? Optional.empty()
-                : bookingRepo.findAll().stream()
-                        .filter(b -> "tap-1".equals(b.getIdempotencyKey())).findFirst())
-                .when(bookingRepo).findByCustomerIdAndIdempotencyKey(any(), any());
+            // The retry arrives while the first request is still in flight: its look-up
+            // by key finds nothing yet, so it goes on to insert a second row.
+            AtomicBoolean inFlight = new AtomicBoolean(true);
+            doAnswer(inv -> inFlight.getAndSet(false)
+                    ? Optional.empty()
+                    : bookingRepo.findAll().stream()
+                            .filter(b -> "tap-1".equals(b.getIdempotencyKey())).findFirst())
+                    .when(bookingRepo).findByCustomerIdAndIdempotencyKey(any(), any());
 
-        book(bookNow, "tap-1").andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.id").value(original));
-        assertThat(inFlight).isFalse();
-        assertThat(bookingRepo.findAll().stream().filter(b -> "tap-1".equals(b.getIdempotencyKey()))).hasSize(1);
+            book(bookNow, "tap-1").andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.id").value(original));
+            assertThat(inFlight).isFalse();
+            assertThat(bookingRepo.findAll().stream().filter(b -> "tap-1".equals(b.getIdempotencyKey()))).hasSize(1);
+        }
     }
 }
