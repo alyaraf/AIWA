@@ -493,6 +493,8 @@ public class ProviderServiceImpl {
                 .map(byId::get)
                 .filter(Objects::nonNull)
                 .filter(p -> p.getVerificationStatus() == com.aiwa.enums.VerificationStatus.APPROVED)
+                // Same rule as the uncached query: an owner account suspended since then is not listed.
+                .filter(p -> p.getUser() != null && p.getUser().isActive())
                 .toList();
     }
 

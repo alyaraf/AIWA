@@ -756,8 +756,12 @@ async function downloadFile(path, filename, mime) {
   }
   const { response, blob } = await authedBlob(path);
   if (!response.ok) {
-    const error = new Error(`Export failed with status ${response.status}`);
+    // A refused export (e.g. more rows than the cap) says why in the JSON body; show that, not only the status.
+    let reason = null;
+    try { reason = (await response.json())?.message || null; } catch { /* not JSON */ }
+    const error = new Error(reason || `Export failed with status ${response.status}`);
     error.status = response.status;
+    error.serverMessage = reason;
     throw error;
   }
   saveBlob(blob, filename);

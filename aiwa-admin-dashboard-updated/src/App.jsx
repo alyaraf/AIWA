@@ -3200,7 +3200,10 @@ function Bookings() {
   async function exportCsv() {
     setExporting(true);
     try {
-      await runAction(() => api.exportBookingList(query, filter), { success: "Bookings exported", failure: "Could not export bookings" });
+      await runAction(() => api.exportBookingList(query, filter).catch((err) => {
+        if (!err?.serverMessage) err.message = "Could not export bookings";
+        throw err;
+      }), { success: "Bookings exported" });
     } catch { /* toast shown */ } finally { setExporting(false); }
   }
   const [openId, setOpenId] = useState(null);

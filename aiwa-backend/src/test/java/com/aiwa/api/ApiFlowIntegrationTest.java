@@ -557,13 +557,64 @@ class ApiFlowIntegrationTest {
                 throw new IllegalStateException(e);
             }
         };
-        assertThat(search.get()).contains(near.profile().getId()).doesNotContain(far.profile().getId());
+        Provider neighbour = approvedProvider();                // same place, listed until its owner is suspended
+        assertThat(search.get()).contains(near.profile().getId(), neighbour.profile().getId())
+                .doesNotContain(far.profile().getId());
 
         // Suspended after the ids were cached: must not keep showing.
         ProviderProfile p = providerRepo.findById(near.profile().getId()).orElseThrow();
         p.setVerificationStatus(VerificationStatus.SUSPENDED);
         providerRepo.save(p);
         assertThat(search.get()).doesNotContain(near.profile().getId());
+
+        // The owner ACCOUNT deactivated (the listing itself still APPROVED) after caching: gone too.
+        User owner = userRepo.findById(neighbour.user().getId()).orElseThrow();
+        owner.setActive(false);
+        userRepo.save(owner);
+        assertThat(search.get()).doesNotContain(neighbour.profile().getId());
+    }
+
+    @Test
+    void theLedgerExportListsEveryRowOnceAcrossBatches() throws Exception {
+        Provider p = approvedProvider();
+        var rows = new java.util.ArrayList<CommissionLedgerEntry>();
+        for (int i = 0; i < 1203; i++) {                        // three 500-row batches, the last one partial
+            rows.add(CommissionLedgerEntry.builder().provider(p.profile())
+                    .bookingAmount(java.math.BigDecimal.TEN).commissionPercent(java.math.BigDecimal.TEN)
+                    .commissionAmount(java.math.BigDecimal.ONE).build());
+        }
+        ledgerRepo.saveAll(rows);
+
+        String finance = login(user(UserRole.ADMIN, AdminPermission.FINANCE));
+        MvcResult export = mvc.perform(get("/admin/settlements/export").header("Authorization", bearer(finance)))
+                .andExpect(request().asyncStarted()).andReturn();
+        String csv = mvc.perform(asyncDispatch(export)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<String> ids = csv.lines().skip(1).map(l -> l.substring(0, l.indexOf(','))).toList();
+        assertThat(ids).doesNotHaveDuplicates().hasSize((int) ledgerRepo.count());
+    }
+
+    @Test
+    void aGalleryPhotoHiddenByModerationIsNoLongerServed() throws Exception {
+        Path file = Path.of("uploads/public/gallery/it-hidden.png");
+        Files.createDirectories(file.getParent());
+        Files.write(file, new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
+        try {
+            Provider p = approvedProvider();
+            GalleryImage img = galleryRepo.save(GalleryImage.builder().provider(p.profile())
+                    .url("/files/public/gallery/it-hidden.png").build());
+            mvc.perform(get("/files/public/gallery/it-hidden.png")).andExpect(status().isOk());
+
+            img.setHidden(true);
+            galleryRepo.save(img);
+            mvc.perform(get("/files/public/gallery/it-hidden.png")).andExpect(status().isNotFound());
+
+            img.setHidden(false);                               // unhidden: served again
+            galleryRepo.save(img);
+            mvc.perform(get("/files/public/gallery/it-hidden.png")).andExpect(status().isOk());
+        } finally {
+            Files.deleteIfExists(file);
+        }
     }
 
     @Test

@@ -251,9 +251,10 @@ public class SettlementController {
         org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody body = out -> {
             var w = new java.io.BufferedWriter(new java.io.OutputStreamWriter(out, java.nio.charset.StandardCharsets.UTF_8));
             w.write("id,providerId,bookingId,bookingAmount,commissionPercent,commissionAmount,status,createdAt,settledAt\n");
-            org.springframework.data.domain.Pageable p = org.springframework.data.domain.PageRequest.of(0, 500);
+            long below = Long.MAX_VALUE;
             while (true) {
-                var slice = ledgerRepo.findAllByOrderByIdDesc(p);
+                var slice = ledgerRepo.findTop500ByIdLessThanOrderByIdDesc(below);
+                if (slice.isEmpty()) break;
                 for (CommissionLedgerEntry e : slice) {
                     w.write(e.getId() + "," + e.getProvider().getId() + ","
                             + (e.getBooking() != null ? e.getBooking().getId() : "") + ","
@@ -262,8 +263,7 @@ public class SettlementController {
                             + (e.getCreatedAt() != null ? e.getCreatedAt() : "") + ","
                             + (e.getSettledAt() != null ? e.getSettledAt() : "") + "\n");
                 }
-                if (!slice.hasNext()) break;
-                p = slice.nextPageable();
+                below = slice.get(slice.size() - 1).getId();
             }
             w.flush();
         };

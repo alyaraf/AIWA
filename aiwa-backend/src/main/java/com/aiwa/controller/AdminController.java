@@ -114,7 +114,10 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.Success.of(new PageImpl<>(dtos, pageable, bookings.getTotalElements())));
     }
 
-    @GetMapping(value = "/bookings/export", produces = "text/csv")
+    static final int EXPORT_MAX_ROWS = 10_000;
+
+    // No "produces": it would also bind the error answer of a refused export to text/csv; the JSON message must get through.
+    @GetMapping("/bookings/export")
     @PreAuthorize(com.aiwa.security.Perms.SUPPORT_OR_FINANCE)
     @Operation(summary = "Export the filtered bookings list as CSV (SUPPORT or FINANCE)")
     @Transactional(readOnly = true)
@@ -124,8 +127,10 @@ public class AdminController {
             @RequestParam(required = false) String query) {
         StringBuilder csv = new StringBuilder("ref,customer,provider,service,date,start,amount,status,payment\n");
         // ponytail: capped at 10k rows; stream with a cursor if exports ever outgrow that.
-        bookingRepo.adminSearch(status, disputed, searchPattern(query), PageRequest.of(0, 10_000))
-                .forEach(b -> csv.append("BK-").append(b.getId()).append(',')
+        // Past the cap the export is refused, not cut short: a file that silently stops at row 10 000 reads as complete.
+        var rows = bookingRepo.adminSearch(status, disputed, searchPattern(query), PageRequest.of(0, EXPORT_MAX_ROWS));
+        if (rows.getTotalElements() > EXPORT_MAX_ROWS) throw new com.aiwa.exception.BusinessException("admin.error.export_too_large");
+        rows.forEach(b -> csv.append("BK-").append(b.getId()).append(',')
                         .append(AuditController.cell(b.getCustomer() != null ? b.getCustomer().getFullName() : "")).append(',')
                         .append(AuditController.cell(b.getProvider() != null ? b.getProvider().getBusinessName() : "")).append(',')
                         .append(AuditController.cell(b.getService() != null ? b.getService().getName() : "")).append(',')
@@ -136,6 +141,7 @@ public class AdminController {
                         .append(b.getPaymentStatus()).append('\n'));
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename=aiwa-bookings.csv")
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv;charset=UTF-8"))
                 .body(csv.toString());
     }
 
