@@ -285,4 +285,29 @@ class ProviderSuspensionApiTest {
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.code").value("auth.error.authentication_required"));
     }
+
+    // AP-05: the profile and gallery of an unlisted provider answered 404, but its staff, services, hours, reviews
+    // and free slots stayed public by id, also after the owner closed the account (deletion suspends the listing).
+    @Test
+    void aSuspendedListingIsHiddenFromEveryPublicReadButNotFromItsOwnerOrAdmins() throws Exception {
+        long id = profile.getId();
+        List<String> reads = List.of("/providers/" + id + "/staff", "/providers/" + id + "/services",
+                "/providers/" + id + "/availability", "/providers/" + id + "/reviews", "/provider/gallery/" + id,
+                "/bookings/slots?providerId=" + id + "&serviceId=" + service.getId()
+                        + "&date=" + AiwaTime.today().plusDays(1));
+        for (String path : reads) mvc.perform(get(path)).andExpect(status().isOk()); // listed: public
+
+        ProviderProfile p = providerRepo.findById(id).orElseThrow();
+        p.setVerificationStatus(VerificationStatus.SUSPENDED);
+        providerRepo.save(p);
+        String admin = login(user(UserRole.ADMIN));
+        for (String path : reads) {
+            mvc.perform(get(path)).andExpect(status().isNotFound());
+            mvc.perform(get(path).header("Authorization", customerToken)).andExpect(status().isNotFound());
+            mvc.perform(get(path).header("Authorization", providerToken)).andExpect(status().isOk());
+            mvc.perform(get(path).header("Authorization", admin)).andExpect(status().isOk());
+            // A token that no longer authenticates: 401, so the app refreshes and asks again as the owner.
+            mvc.perform(get(path).header("Authorization", "Bearer stale.token.value")).andExpect(status().isUnauthorized());
+        }
+    }
 }

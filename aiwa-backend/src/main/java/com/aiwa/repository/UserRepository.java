@@ -73,6 +73,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
            "AND (u.totpLastUsedStep IS NULL OR u.totpLastUsedStep < :step)")
     int claimTotpStep(@Param("id") Long id, @Param("step") long step);
 
+    /** AP-03: records a used step without refusing an equal or older one (confirming a new secret); never lowers it. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE User u SET u.totpLastUsedStep = :step WHERE u.id = :id " +
+           "AND (u.totpLastUsedStep IS NULL OR u.totpLastUsedStep < :step)")
+    int recordTotpStep(@Param("id") Long id, @Param("step") long step);
+
     // ── 2FA enrollment (SEC-03) ──────────────────────────────────────────────
 
     /** Opens a pending enrollment: a fresh guess budget and an expiry. Call after the new secret is saved. */

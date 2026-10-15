@@ -79,7 +79,10 @@ class TotpEnrollmentApiTest {
     }
 
     private String validCode(String secret) {
-        long step = System.currentTimeMillis() / 1000 / TotpService.stepSeconds();
+        return codeAt(secret, System.currentTimeMillis() / 1000 / TotpService.stepSeconds());
+    }
+
+    private String codeAt(String secret, long step) {
         byte[] key = org.springframework.test.util.ReflectionTestUtils.invokeMethod(TotpService.class, "base32Decode", secret);
         return org.springframework.test.util.ReflectionTestUtils.invokeMethod(totp, "generateCode", key, step);
     }
@@ -247,6 +250,30 @@ class TotpEnrollmentApiTest {
         assertThat(after.getTotpPendingSecret()).isNull();
         assertThat(verify(u, validCode(secret))).isEqualTo(400);
         assertThat(verify(u, validCode(pending))).isEqualTo(200);
+    }
+
+    // AP-03: a re-setup starts with a code of the current secret, which spends that time step; the new secret's
+    // code in the same 30 s used to be refused as a replay (costing an enrollment attempt) until the next step.
+    @Test
+    void aReSetupConfirmsInTheSameTimeStepItStartedInAndThatCodeCannotThenSignIn() throws Exception {
+        String secret = totp.generateSecret();
+        User u = user(true, secret, null);
+        String bearer = access(u);
+        long step = System.currentTimeMillis() / 1000 / TotpService.stepSeconds();
+        String pending = json.readTree(mvc.perform(post("/auth/2fa/setup").with(fromIp("10.14.0.1")).header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("password", PASSWORD, "code", codeAt(secret, step)))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("data").path("secret").asText();
+        String confirming = codeAt(pending, step);
+
+        assertThat(enable(bearer, confirming, "10.14.0.2").getResponse().getStatus()).isEqualTo(200);
+        assertThat(users.findById(u.getId()).orElseThrow().getTotpPendingSecret()).isNull();
+
+        // The confirming code is spent: it cannot also complete a sign-in in its step.
+        String mfaToken = signIn(u).path("mfaToken").asText();
+        assertThat(mvc.perform(post("/auth/2fa/verify").with(fromIp("10.14.0.3")).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("mfaToken", mfaToken, "code", confirming))))
+                .andReturn().getResponse().getStatus()).isEqualTo(400);
     }
 
     @Test

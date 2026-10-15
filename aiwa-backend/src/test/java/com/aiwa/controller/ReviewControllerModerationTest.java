@@ -30,7 +30,8 @@ class ReviewControllerModerationTest {
     private final ReviewRepository reviewRepo = mock(ReviewRepository.class);
 
     private final ReviewController controller =
-            new ReviewController(reviewService, userRepo, auditService, moderationRepo, reviewRepo);
+            new ReviewController(reviewService, userRepo, auditService, moderationRepo, reviewRepo,
+                    mock(com.aiwa.service.impl.ProviderServiceImpl.class));
 
     private ModerationCase openCase(long id, long reviewId) {
         return ModerationCase.builder()

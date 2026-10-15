@@ -79,6 +79,18 @@ check "rollback: starts it without building" 'grep -q "^up -d --no-build --remov
 check "rollback: no backup, no database work" '! grep -q "^run" "$work/log"'
 check "rollback: recorded" 'tail -n 1 "$rel" | grep -q " aaa rollback$"'
 
+setup aaa; printf '2026-10-01T00:00:00Z aaa a.dump\n2026-10-02T00:00:00Z bbb b.dump\n2026-10-03T00:00:00Z aaa rollback\n' > "$rel"
+run --rollback; rc=$?
+check "AP-04: a second rollback in a row is refused, not a return to the bad release" '[ $rc != 0 ] && grep -q "already a rollback" "$work/out" && ! grep -q "^up" "$work/log" && [ "$(wc -l < "$rel")" = 3 ]'
+
+setup aaa; printf 'x aaa a\nx bbb b\nx aaa rollback\nx ccc c\n' > "$rel"
+run --rollback; rc=$?
+check "AP-04: a deploy after a rollback rolls back to the rolled-back-to release" '[ $rc = 0 ] && grep -q "^up -d --no-build --remove-orphans tag=aaa" "$work/log"'
+
+setup aaa; printf 'x aaa a\nx bbb b\nx aaa rollback\n' > "$rel"
+run --rollback 9999fff; rc=$?
+check "AP-04: after a rollback an explicit sha still works" '[ $rc = 0 ] && grep -q "^up -d --no-build --remove-orphans tag=9999fff" "$work/log"'
+
 setup bbb; echo "2026-10-02T00:00:00Z bbb b.dump" > "$rel"
 run --rollback; rc=$?
 check "rollback with one release: refused" '[ $rc != 0 ] && ! grep -q "^up" "$work/log"'

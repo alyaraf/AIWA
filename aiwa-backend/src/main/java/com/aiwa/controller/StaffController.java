@@ -26,17 +26,20 @@ public class StaffController {
     private final StaffMemberRepository staffRepo;
     private final ServiceRepository serviceRepo;
     private final UserRepository userRepo;
+    private final com.aiwa.service.impl.ProviderServiceImpl providerService;
 
     /**
      * Public staff picker. Staff phone numbers are NOT included — this endpoint
      * needs no authentication, and it used to publish every staff member's
-     * personal number.
+     * personal number. AP-05: an unlisted provider's staff only to its owner and admins.
      */
     @GetMapping("/providers/{providerId}/staff")
     @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse.Success<List<ApiResponse.StaffMemberDto>>> publicStaff(
             @PathVariable Long providerId,
-            @RequestParam(required = false) Long serviceId) {
+            @RequestParam(required = false) Long serviceId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        providerService.requireVisibleListing(providerId, userDetails);
         return ResponseEntity.ok(ApiResponse.Success.of(staffRepo
                 .findByProviderIdAndActiveTrueOrderByFullNameAsc(providerId)
                 .stream()
