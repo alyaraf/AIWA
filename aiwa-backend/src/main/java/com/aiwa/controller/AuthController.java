@@ -497,11 +497,12 @@ public class AuthController {
 
     @PostMapping("/2fa/disable")
     @Operation(summary = "Turn off 2FA for this account (current password + current code)")
-    public ResponseEntity<ApiResponse.Success<Void>> disableTotp(
+    public ResponseEntity<ApiResponse.Success<ApiResponse.AuthResponse>> disableTotp(
             @Valid @RequestBody AuthRequest.ConfirmIdentity request,
             @AuthenticationPrincipal UserDetails userDetails) {
-        authService.disableTotp(userDetails.getUsername(), request.getPassword(), request.getCode());
-        return ResponseEntity.ok(ApiResponse.Success.of("Two-factor authentication disabled", null));
+        // Earlier sessions end; the response carries the caller's new token pair, as for enable.
+        return tokenResponse(HttpStatus.OK, "Two-factor authentication disabled",
+                authService.disableTotp(userDetails.getUsername(), request.getPassword(), request.getCode()), true);
     }
 
     @GetMapping("/2fa/status")

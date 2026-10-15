@@ -69,7 +69,7 @@ class TotpEnrollmentApiTest {
         int n = SEQ.incrementAndGet();
         return users.save(User.builder().fullName("totp enrol " + n).email("totp-enrol" + n + "@test.aiwa")
                 .phone("+2010793" + String.format("%05d", n)).password(encoder.encode(PASSWORD))
-                .role(UserRole.CUSTOMER).active(true).termsAccepted(true).totpEnabled(enabled).totpSecret(secret)
+                .role(UserRole.CUSTOMER).active(true).termsAccepted(true).totpEnabled(enabled).totpSecret(enabled ? secret : null).totpPendingSecret(enabled ? null : secret)
                 .totpEnrollmentExpiresAt(enrollmentExpires).build());
     }
 
@@ -195,6 +195,91 @@ class TotpEnrollmentApiTest {
                         .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("password", PASSWORD))))
                 .andExpect(status().isBadRequest());
         assertThat(users.findById(u.getId()).orElseThrow().isTotpEnabled()).isTrue();
+    }
+
+    /** A code works once per 30 s step (CR-01); this stands in for waiting for the next step. */
+    private void forgetUsedCode(User u) {
+        users.findById(u.getId()).ifPresent(x -> { x.setTotpLastUsedStep(null); users.saveAndFlush(x); });
+    }
+
+    private JsonNode signIn(User u) throws Exception {
+        return json.readTree(mvc.perform(post("/auth/login").with(fromIp("10.10.0.1")).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("identifier", u.getEmail(), "password", PASSWORD))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("data");
+    }
+
+    private int verify(User u, String code) throws Exception {
+        forgetUsedCode(u);
+        return mvc.perform(post("/auth/2fa/verify").with(fromIp("10.10.0.2")).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("mfaToken", signIn(u).path("mfaToken").asText(), "code", code))))
+                .andReturn().getResponse().getStatus();
+    }
+
+    // Archived SA-02 follow-up: a re-setup used to switch 2FA off until the new secret was confirmed,
+    // so the password alone could sign in (and enrol its own authenticator) in that window, or forever
+    // after an abandoned setup.
+    @Test
+    void reSetupKeepsTwoFactorOnWithTheOldSecretUntilTheNewOneIsConfirmed() throws Exception {
+        String secret = totp.generateSecret();
+        User u = user(true, secret, null);
+        String bearer = access(u);
+        String pending = mvc.perform(post("/auth/2fa/setup").with(fromIp("10.11.0.1")).header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("password", PASSWORD, "code", validCode(secret)))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        pending = json.readTree(pending).path("data").path("secret").asText();
+        assertThat(users.findById(u.getId()).orElseThrow().isTotpEnabled()).isTrue();
+
+        // The window: the password alone gets a challenge, not a session.
+        JsonNode passwordOnly = signIn(u);
+        assertThat(passwordOnly.path("mfaRequired").asBoolean()).isTrue();
+        assertThat(passwordOnly.path("accessToken").isMissingNode() || passwordOnly.path("accessToken").isNull()).isTrue();
+        // Until confirmed, the pending secret does not sign in and the old one does.
+        assertThat(verify(u, validCode(pending))).isEqualTo(400);
+        assertThat(verify(u, validCode(secret))).isEqualTo(200);
+
+        // Confirming switches over: the new secret signs in, the old one no longer does.
+        forgetUsedCode(u);
+        assertThat(enable(bearer, validCode(pending), "10.11.0.2").getResponse().getStatus()).isEqualTo(200);
+        User after = users.findById(u.getId()).orElseThrow();
+        assertThat(after.isTotpEnabled()).isTrue();
+        assertThat(after.getTotpPendingSecret()).isNull();
+        assertThat(verify(u, validCode(secret))).isEqualTo(400);
+        assertThat(verify(u, validCode(pending))).isEqualTo(200);
+    }
+
+    @Test
+    void usingUpTheReSetupBudgetLeavesTheOldSecretOn() throws Exception {
+        String secret = totp.generateSecret();
+        User u = user(true, secret, null);
+        String bearer = access(u);
+        String pending = json.readTree(mvc.perform(post("/auth/2fa/setup").with(fromIp("10.12.0.1")).header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("password", PASSWORD, "code", validCode(secret)))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("data").path("secret").asText();
+        for (int i = 0; i < 5; i++) enable(bearer, wrongCode(pending), "10.12.1." + i);
+        assertThat(enable(bearer, wrongCode(pending), "10.12.2.1").getResponse().getStatus()).isEqualTo(429);
+        User after = users.findById(u.getId()).orElseThrow();
+        assertThat(after.isTotpEnabled()).isTrue();
+        assertThat(after.getTotpPendingSecret()).isNull();
+        assertThat(verify(u, validCode(secret))).isEqualTo(200);
+    }
+
+    @Test
+    void turningTwoFactorOffEndsEarlierSessionsAndHandsOverANewOne() throws Exception {
+        String secret = totp.generateSecret();
+        User u = user(true, secret, null);
+        String other = access(u), caller = access(u);
+        MvcResult off = mvc.perform(post("/auth/2fa/disable").with(fromIp("10.13.0.1")).header("Authorization", caller)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("password", PASSWORD, "code", validCode(secret)))))
+                .andExpect(status().isOk()).andReturn();
+        String fresh = json.readTree(off.getResponse().getContentAsString()).path("data").path("accessToken").asText();
+        assertThat(fresh).isNotBlank();
+        assertThat(users.findById(u.getId()).orElseThrow().isTotpEnabled()).isFalse();
+        mvc.perform(get("/auth/me").header("Authorization", other)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/auth/me").header("Authorization", caller)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/auth/me").header("Authorization", "Bearer " + fresh)).andExpect(status().isOk());
     }
 
     @Test

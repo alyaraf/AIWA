@@ -489,9 +489,13 @@ export const api = {
     if (result?.accessToken) setTokens(result);
     return result;
   }),
+  /** Turning 2FA off also ends the earlier sessions; the response carries the new pair. */
   totpDisable: (password, code) => request("/auth/2fa/disable", {
     method: "POST",
     body: JSON.stringify({ password, code: code || undefined })
+  }).then((result) => {
+    if (result?.accessToken) setTokens(result);
+    return result;
   }),
   dashboard: () => request("/admin/dashboard").then(normalizeDashboard),
   dashboardRaw: () => request("/admin/dashboard").then(unwrap),
