@@ -3,6 +3,9 @@
 `AccountDeletionService` erases the account itself: name, email, phone, photo,
 password, 2FA secret, push devices, saved addresses (scrubbed), trusted contacts,
 ID documents, selfie and gallery images, and upcoming bookings are cancelled.
+The visit address and coordinates on the customer's bookings, and a provider
+listing's address, coordinates and bio, are erased too (RV-02); the booking rows
+and the business name stay.
 The items below are **not** erased today. Each needs an owner decision, recorded in
 the privacy policy (`deploy/site/privacy.html`) once legal has reviewed it
 (Law 151/2020: keep personal data only as long as the purpose needs it).
