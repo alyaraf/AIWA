@@ -69,3 +69,38 @@ stack (`deploy/docker-compose.prod.yml`), with the proxy in front of Caddy or Ca
 guards stay on (`ProductionGuardConfig`).
 
 
+
+## Releasing and rolling back (RV-03)
+
+**Release.** On the server checkout (`/srv/aiwa`); the `deploy-staging` CI job runs the same thing:
+
+```bash
+git fetch origin && git checkout --detach <sha> && bash deploy/deploy.sh
+```
+
+`deploy/deploy.sh` first takes a **pre-deploy backup** (`backup.sh once`: the same verified, encrypted dump and
+uploads tarball as the nightly one, in `deploy/backups/`). If the backup fails, the deploy is refused and nothing
+changes. It then appends `<utc time> <sha> <pre-deploy dump>` to `deploy/backups/releases.log`, and builds and
+starts images tagged with the sha (`aiwa-backend:<sha>`, …). Earlier releases' images stay on the host; that is
+what makes a rollback quick, so don't `docker image prune -a` while you may still need to go back. Afterwards check
+`https://api.<domain>/api/actuator/health`.
+
+**Rolling back.** First list the migrations the bad release brought in:
+
+```bash
+git diff --name-only <previous-sha> <bad-sha> -- aiwa-backend/src/main/resources/db/migration
+```
+
+| Its migrations | Roll back |
+|---|---|
+| none, or only additive: new tables, nullable columns or columns with a default, indexes | **Code only:** `bash deploy/deploy.sh --rollback`. The older image starts on the newer schema: Flyway skips migrations it doesn't know (`ignore-migration-patterns: "*:future"` in `application-prod.yml`) and Hibernate `validate` only checks the columns the old code maps. No data is lost. |
+| drops or renames a column or table, changes a type, adds `NOT NULL` without a default, or rewrites data | **Code and database:** `bash deploy/deploy.sh --rollback`, then from `deploy/` restore the database only, using the dump on the bad release's line in `backups/releases.log`: `./restore.sh backups/db/aiwa-<stamp>.dump.enc`. Everything written since the deploy is lost. `restore.sh` takes its own safety copy first and stops/starts the backend ([runbooks](runbooks.md), "Restore the database from a backup"). Leave out the uploads tarball: a deploy doesn't change the uploads. |
+
+`--rollback` goes to the release on the line before the last one, from the images on the host. It doesn't build,
+doesn't back up and doesn't touch the database. A second `--rollback` in a row would step back to the bad release,
+so give the target instead: `bash deploy/deploy.sh --rollback <sha>`. `ROLLBACK FAILED` means that release's images
+are gone (pruned, or a new host). In that case rebuild it with `git checkout --detach <sha> && bash deploy/deploy.sh`,
+which backs up first.
+
+Write migrations so that the release before them can still run (add, backfill, and drop only in a later
+release). Then a rollback is always the code-only kind. Not yet rehearsed on a real host: launch gate 54.

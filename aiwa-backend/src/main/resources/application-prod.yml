@@ -13,6 +13,9 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+    # RV-03: a rolled-back (older) image starts on a database a newer release already migrated: migrations it
+    # doesn't know are skipped, not an error. Flyway's default, stated so a rollback never depends on it.
+    ignore-migration-patterns: "*:future"
 
 # API docs are a map of every endpoint — not public in production.
 springdoc:
