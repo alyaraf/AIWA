@@ -159,26 +159,33 @@ public class ProviderServiceImpl {
         if (!(Math.abs(lat) <= 90) || !(Math.abs(lng) <= 180)) {
             throw new BusinessException("provider.nearby.location_invalid");
         }
-        double radius = Math.max(0.1, Math.min(radiusKm, 100));
+        // RV-01: at least 1 km, and an individual is matched on the ~500 m grid point
+        // (AU-18), not the home pin, so small-radius probes can't narrow the home down.
+        // The database is asked for a little more and the grid-point filter runs below.
+        double radius = Math.max(1, Math.min(radiusKm, 100));
+        double dbRadius = radius + GRID_SLACK_KM;
         String cacheKey = nearbyCacheKey(lat, lng, radius, category);
         List<ProviderProfile> all = redis.getLongList(cacheKey)
                 .map(this::findProvidersInOrder)
                 .orElseGet(() -> {
                     List<ProviderProfile> fresh = (category != null)
-                            ? providerRepo.findNearbyByCategory(lat, lng, radius, category)
-                            : providerRepo.findNearby(lat, lng, radius);
+                            ? providerRepo.findNearbyByCategory(lat, lng, dbRadius, category)
+                            : providerRepo.findNearby(lat, lng, dbRadius);
                     redis.setLongList(cacheKey, fresh.stream().map(ProviderProfile::getId).toList(), PROVIDER_CACHE_TTL);
                     return fresh;
                 });
 
         List<ApiResponse.ProviderSummaryDto> dtos = new ArrayList<>(toSummaryDtos(all, lat, lng));
+        dtos.removeIf(d -> d.getDistanceKm() == null || d.getDistanceKm() > radius); // grid-point distance for individuals
         dtos.forEach(ProviderServiceImpl::hideHomeLocation); // AU-18
         if (maxPrice != null) {
             dtos.removeIf(d -> d.getStartingPrice() == null || d.getStartingPrice().compareTo(maxPrice) > 0);
         }
 
-        Comparator<ApiResponse.ProviderSummaryDto> byDistance = Comparator.comparingDouble(
-                d -> d.getDistanceKm() != null && d.getDistanceKm() >= 0 ? d.getDistanceKm() : Double.MAX_VALUE);
+        Comparator<ApiResponse.ProviderSummaryDto> byDistance = Comparator.<ApiResponse.ProviderSummaryDto>comparingDouble(
+                        d -> d.getDistanceKm() != null && d.getDistanceKm() >= 0 ? d.getDistanceKm() : Double.MAX_VALUE)
+                // RV-01: ties go by id, not the database's exact-distance order.
+                .thenComparing(ApiResponse.ProviderSummaryDto::getId);
         Comparator<ApiResponse.ProviderSummaryDto> comparator = switch (sort != null ? sort : "distance") {
             case "rating" -> Comparator.<ApiResponse.ProviderSummaryDto>comparingDouble(
                     d -> -(d.getAverageRating() != null ? d.getAverageRating() : 0.0)).thenComparing(byDistance);
@@ -243,6 +250,9 @@ public class ProviderServiceImpl {
     /** About 550 m of latitude; longitude steps are a little shorter in Egypt. */
     static final double LOCATION_GRID_DEG = 0.005;
 
+    /** More than the farthest a pin can be from its grid point (half a cell's diagonal, about 0.4 km). */
+    static final double GRID_SLACK_KM = 0.5;
+
     static Double coarse(Double v) {
         return v == null ? null : Math.round(Math.round(v / LOCATION_GRID_DEG) * LOCATION_GRID_DEG * 1000.0) / 1000.0;
     }
@@ -282,6 +292,8 @@ public class ProviderServiceImpl {
         Set<Long> busy = new HashSet<>(bookingRepo.findBusyProviderIds(ids));
 
         return providers.stream().map(p -> {
+            // RV-01: an individual's distance is to the grid point, never the home itself.
+            boolean home = p.getProviderType() == ProviderType.INDIVIDUAL;
             boolean accepting = p.getVerificationStatus() == VerificationStatus.APPROVED
                     && !p.isVacationMode() && !p.isOfflineMode() && !p.isBookingPaused();
             boolean withinHours = today.getOrDefault(p.getId(), List.of()).stream()
@@ -307,7 +319,9 @@ public class ProviderServiceImpl {
                     .openNow(accepting && withinHours)
                     // A shop has several people; only an individual is "busy" as a whole.
                     .busyNow(p.getProviderType() == ProviderType.INDIVIDUAL && busy.contains(p.getId()))
-                    .distanceKm(lat != null && lng != null ? haversine(lat, lng, p.getLatitude(), p.getLongitude()) : null)
+                    .distanceKm(lat != null && lng != null ? haversine(lat, lng,
+                            home ? coarse(p.getLatitude()) : p.getLatitude(),
+                            home ? coarse(p.getLongitude()) : p.getLongitude()) : null)
                     .build();
         }).toList();
     }
@@ -483,7 +497,7 @@ public class ProviderServiceImpl {
     }
 
     private String nearbyCacheKey(double lat, double lng, double radiusKm, ServiceCategory category) {
-        return "cache:providers:nearby:v2:"
+        return "cache:providers:nearby:v3:"
                 + Math.round(lat * 1000) + ":"
                 + Math.round(lng * 1000) + ":"
                 + Math.round(radiusKm * 10) + ":"

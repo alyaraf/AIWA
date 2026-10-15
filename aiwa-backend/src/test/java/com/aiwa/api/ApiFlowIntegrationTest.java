@@ -567,6 +567,33 @@ class ApiFlowIntegrationTest {
     }
 
     @Test
+    void nearbySearchCannotPinAHomeBasedProviderTo100m() throws Exception {
+        // RV-01: the home is 60 m from its grid point (30.000, 31.200). Two 0.1 km probes
+        // 110 m apart, one on the home: before, only that one found the provider, at 0 km.
+        Provider home = approvedProvider();
+        home.profile().setProviderType(ProviderType.INDIVIDUAL);
+        home.profile().setLatitude(30.0004);
+        home.profile().setLongitude(31.2004);
+        providerRepo.save(home.profile());
+
+        java.util.function.Function<String, JsonNode> probe = lat -> {
+            try {
+                JsonNode page = data(mvc.perform(get("/providers/nearby")
+                        .param("lat", lat).param("lng", "31.2004").param("radiusKm", "0.1").param("size", "100")));
+                return java.util.stream.StreamSupport.stream(page.get("content").spliterator(), false)
+                        .filter(n -> n.get("id").asLong() == home.profile().getId()).findFirst().orElse(null);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        JsonNode onHome = probe.apply("30.0004");
+        JsonNode north = probe.apply("30.0014");
+        assertThat(onHome).isNotNull();
+        assertThat(north).isNotNull();
+        assertThat(north.get("distanceKm").asDouble()).isEqualTo(onHome.get("distanceKm").asDouble());
+    }
+
+    @Test
     void aStaleBookingWriteIsRejectedNotSilentlyApplied() throws Exception {
         Provider p = approvedProvider();
         User c = user(UserRole.CUSTOMER);
