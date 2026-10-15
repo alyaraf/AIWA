@@ -57,6 +57,7 @@ public class DevTotpResetController {
         boolean was = user.isTotpEnabled();
         user.setTotpEnabled(false);
         user.setTotpSecret(null);
+        user.setTotpPendingSecret(null);
         userRepo.save(user);
         return ResponseEntity.ok(ApiResponse.Success.of(
                 "2FA reset for " + identifier + (was ? " (was enabled)" : " (was already off)"),

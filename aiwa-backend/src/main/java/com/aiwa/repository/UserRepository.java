@@ -83,33 +83,34 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /**
      * Takes one confirmation attempt from the pending enrollment, before the code is looked at.
-     * Returns 0 when there is no live enrollment, the account already has 2FA on, or the budget
-     * is used up. Its own transaction: the attempt stays counted when the caller's rolls back.
+     * Returns 0 when there is no live enrollment or the budget is used up. Its own transaction: the attempt stays counted when the caller's rolls back.
      */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional(
             propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     @Query("UPDATE User u SET u.totpEnrollmentAttempts = u.totpEnrollmentAttempts + 1 WHERE u.id = :id " +
-           "AND u.totpEnabled = false AND u.totpEnrollmentExpiresAt > :now AND u.totpEnrollmentAttempts < :max")
+           "AND u.totpPendingSecret IS NOT NULL AND u.totpEnrollmentExpiresAt > :now AND u.totpEnrollmentAttempts < :max")
     int claimTotpEnrollmentAttempt(@Param("id") Long id, @Param("max") int max, @Param("now") java.time.Instant now);
 
     /**
-     * Completes the enrollment exactly once: turns 2FA on, ends earlier sessions and closes the
-     * enrollment. Returns 0 if it was already completed, expired or cancelled in the meantime.
+     * Completes the enrollment exactly once: the confirmed secret replaces the old one, 2FA is
+     * on, earlier sessions end and the enrollment closes. Returns 0 if it was already
+     * completed, expired or cancelled in the meantime.
      */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional
-    @Query("UPDATE User u SET u.totpEnabled = true, u.tokensValidAfter = :cutoff, " +
-           "u.totpEnrollmentExpiresAt = NULL, u.totpEnrollmentAttempts = 0 WHERE u.id = :id " +
-           "AND u.totpEnabled = false AND u.totpSecret IS NOT NULL AND u.totpEnrollmentExpiresAt > :now")
-    int completeTotpEnrollment(@Param("id") Long id, @Param("cutoff") java.time.Instant cutoff,
-                               @Param("now") java.time.Instant now);
+    @Query("UPDATE User u SET u.totpSecret = :secret, u.totpPendingSecret = NULL, u.totpEnabled = true, " +
+           "u.tokensValidAfter = :cutoff, u.totpEnrollmentExpiresAt = NULL, u.totpEnrollmentAttempts = 0 " +
+           "WHERE u.id = :id AND u.totpPendingSecret IS NOT NULL AND u.totpEnrollmentExpiresAt > :now")
+    int completeTotpEnrollment(@Param("id") Long id, @Param("secret") String secret,
+                               @Param("cutoff") java.time.Instant cutoff, @Param("now") java.time.Instant now);
 
-    /** Ends a pending enrollment whose budget is used up: the secret is discarded, so setup must start again. */
+    /** Ends a pending enrollment: the pending secret is discarded, so setup must start again.
+     *  A confirmed secret, and 2FA, are untouched. */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional(
             propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    @Query("UPDATE User u SET u.totpEnrollmentExpiresAt = NULL WHERE u.id = :id AND u.totpEnabled = false")
+    @Query("UPDATE User u SET u.totpEnrollmentExpiresAt = NULL, u.totpPendingSecret = NULL WHERE u.id = :id")
     int closeTotpEnrollment(@Param("id") Long id);
 
     long countByRoleAndCreatedAtBetween(UserRole role, java.time.LocalDateTime from, java.time.LocalDateTime to);

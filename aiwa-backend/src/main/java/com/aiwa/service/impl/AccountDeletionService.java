@@ -166,6 +166,7 @@ public class AccountDeletionService {
         user.setPushPlatform(null);
         pushDeviceRepo.deleteByUserId(user.getId());
         user.setTotpSecret(null);
+        user.setTotpPendingSecret(null);
         user.setTotpEnabled(false);
         user.setSearchAreaLabel(null);
         user.setSearchAreaLatitude(null);

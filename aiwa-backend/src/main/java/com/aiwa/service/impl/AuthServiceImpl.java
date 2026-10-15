@@ -180,17 +180,15 @@ public class AuthServiceImpl {
 
     public ApiResponse.TwoFactorSetupDto beginTotpSetup(String identifier, String password, String code) {
         User user = findUser(identifier);
-        // DR-017: restarting setup replaces the secret and turns 2FA off until the
-        // new one is confirmed, so a signed-in session alone is not enough.
+        // DR-017: setup starts replacing the secret, so a signed-in session alone is not enough.
         requireReauthentication(user, password, code);
 
-        // A fresh secret every time setup is (re)started — it only becomes
-        // trusted for login once enableTotp() confirms the user can actually
-        // produce a matching code with it.
+        // A fresh secret every time setup is (re)started. It waits beside the confirmed one and
+        // only replaces it once enableTotp() gets a matching code: until then 2FA stays on with the
+        // old secret, so the password alone can't sign in during a re-setup or after an abandoned one.
         String secret = totpService.generateSecret();
-        user.setTotpSecret(secret);
-        user.setTotpLastUsedStep(null); // new secret: none of its codes has been used
-        user.setTotpEnabled(false);
+        user.setTotpPendingSecret(secret);
+        if (!user.isTotpEnabled()) user.setTotpLastUsedStep(null); // no confirmed secret whose codes need guarding
         userRepository.save(user);
         // SEC-03: the secret can be confirmed for a limited time and a limited number of tries.
         userRepository.openTotpEnrollment(user.getId(), Instant.now().plus(totpEnrollTtl));
@@ -211,17 +209,16 @@ public class AuthServiceImpl {
      * budget before the code is looked at. Deliberately not @Transactional: the attempt is
      * counted in its own transaction, and the final switch-on is a single guarded UPDATE,
      * so a refused code can never roll the count back and parallel confirmations cannot
-     * both succeed. An account that already has 2FA on is refused here: re-enabling needs
-     * the setup call, which needs the password and the current code.</p>
+     * both succeed. On an account with 2FA on, this confirms a re-setup (started with the
+     * password and the current code) and switches to the new secret.</p>
      */
     public ApiResponse.AuthResponse enableTotp(String identifier, String code) {
         User user = findUser(identifier);
+        String pending = user.getTotpPendingSecret();
 
-        if (user.isTotpEnabled()) {
-            throw new BusinessException("auth.error.totp_already_enabled");
-        }
-        if (user.getTotpSecret() == null) {
-            throw new BusinessException("auth.error.totp_setup_not_started");
+        if (pending == null) {
+            throw new BusinessException(user.isTotpEnabled()
+                    ? "auth.error.totp_already_enabled" : "auth.error.totp_setup_not_started");
         }
         Instant now = Instant.now();
         if (user.getTotpEnrollmentExpiresAt() == null || !user.getTotpEnrollmentExpiresAt().isAfter(now)) {
@@ -232,26 +229,32 @@ public class AuthServiceImpl {
             userRepository.closeTotpEnrollment(user.getId());
             throw new TooManyRequestsException("auth.error.totp_enrollment_attempts");
         }
-        if (!acceptTotp(user, code)) {
+        if (!acceptTotp(user, pending, code)) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
         Instant cutoff = sessionCutoff();
-        if (userRepository.completeTotpEnrollment(user.getId(), cutoff, Instant.now()) == 0) {
+        if (userRepository.completeTotpEnrollment(user.getId(), pending, cutoff, Instant.now()) == 0) {
             // A parallel confirmation got there first, or the enrollment just ended.
             throw new BusinessException("auth.error.totp_enrollment_expired");
         }
+        user.setTotpSecret(pending);
+        user.setTotpPendingSecret(null);
         user.setTotpEnabled(true);
         user.setTokensValidAfter(cutoff);
         return buildAuthResponse(user);
     }
 
+    /** Turning 2FA off also ends every earlier session, as turning it on does; the caller gets a fresh pair. */
     @Transactional
-    public void disableTotp(String identifier, String password, String code) {
+    public ApiResponse.AuthResponse disableTotp(String identifier, String password, String code) {
         User user = findUser(identifier);
         requireReauthentication(user, password, code);
         user.setTotpEnabled(false);
         user.setTotpSecret(null);
+        user.setTotpPendingSecret(null);
+        user.setTokensValidAfter(sessionCutoff());
         userRepository.save(user);
+        return buildAuthResponse(user);
     }
 
     public boolean isTotpEnabled(String identifier) {
@@ -483,7 +486,11 @@ public class AuthServiceImpl {
      * (seen over a shoulder, replayed from a proxy) is refused inside its window.
      */
     private boolean acceptTotp(User user, String code) {
-        Long step = totpService.matchingStep(user.getTotpSecret(), code);
+        return acceptTotp(user, user.getTotpSecret(), code);
+    }
+
+    private boolean acceptTotp(User user, String secret, String code) {
+        Long step = totpService.matchingStep(secret, code);
         if (step == null || userRepository.claimTotpStep(user.getId(), step) == 0) return false;
         user.setTotpLastUsedStep(step); // keep the loaded entity in step: a later save(user) writes this column
         return true;

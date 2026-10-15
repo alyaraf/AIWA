@@ -156,10 +156,14 @@ public class User extends BaseEntity {
     private com.aiwa.enums.DevicePlatform pushPlatform;
 
     // ── Two-factor authentication (TOTP) ────────────────────────────────────────
-    /** Base32 secret. Set as soon as setup starts; only trusted for login once
-     *  totpEnabled is true (setup isn't "on" until the first code is confirmed). */
+    /** Base32 secret confirmed with a code; the one sign-in checks while totpEnabled is true. */
     @jakarta.persistence.Convert(converter = com.aiwa.util.TotpSecretConverter.class) // AU-08: encrypted at rest
     private String totpSecret;
+
+    /** Secret of a started setup, waiting for its first code. It never signs in; confirming it
+     *  replaces totpSecret, so 2FA stays on with the old secret until then (V36). */
+    @jakarta.persistence.Convert(converter = com.aiwa.util.TotpSecretConverter.class)
+    private String totpPendingSecret;
 
     @Builder.Default
     private boolean totpEnabled = false;
