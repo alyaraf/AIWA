@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  */
 public final class Identifiers {
 
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$");
 
     private Identifiers() {
     }

@@ -192,7 +192,7 @@ public class VerificationController {
         if (!providerRepo.existsByNationalIdFrontPathOrNationalIdBackPathOrSelfiePath(filePath, filePath, filePath)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        auditService.record("VERIFICATION_DOCUMENT_VIEWED", filePath.replaceAll(".*/", ""));
+        auditService.record("VERIFICATION_DOCUMENT_VIEWED", filePath.substring(filePath.lastIndexOf('/') + 1));
         return serveDocument(filePath);
     }
 

@@ -155,6 +155,10 @@ public class ProviderServiceImpl {
     public Page<ApiResponse.ProviderSummaryDto> getNearby(double lat, double lng, double radiusKm,
                                                            ServiceCategory category, String sort,
                                                            BigDecimal maxPrice, Pageable pageable) {
+        // NaN, infinite or out-of-range coordinates would only poison the cache key and the distance sort.
+        if (!(Math.abs(lat) <= 90) || !(Math.abs(lng) <= 180)) {
+            throw new BusinessException("provider.nearby.location_invalid");
+        }
         double radius = Math.max(0.1, Math.min(radiusKm, 100));
         String cacheKey = nearbyCacheKey(lat, lng, radius, category);
         List<ProviderProfile> all = redis.getLongList(cacheKey)
@@ -449,7 +453,8 @@ public class ProviderServiceImpl {
     }
 
     private static Double haversine(double lat1, double lon1, Double lat2, Double lon2) {
-        if (lat2 == null || lon2 == null) return null;
+        // lat1/lon1 come from the request: no distance for NaN, infinite or out-of-range coordinates.
+        if (lat2 == null || lon2 == null || !(Math.abs(lat1) <= 90) || !(Math.abs(lon1) <= 180)) return null;
         return GeoUtils.distanceKm(lat1, lon1, lat2, lon2);
     }
 

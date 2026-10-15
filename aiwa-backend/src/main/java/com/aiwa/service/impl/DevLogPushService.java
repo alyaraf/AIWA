@@ -15,6 +15,6 @@ public class DevLogPushService implements PushNotificationService {
 
     @Override
     public void send(String deviceToken, DevicePlatform platform, String title, String body, Map<String, String> data) {
-        log.info("[DEV PUSH] -> {} ({}) : {} - {} {}", deviceToken, platform, title, body, data);
+        log.info("[DEV PUSH] -> {}… ({}) : {} - {} {}", FcmPushService.head(deviceToken), platform, title, body, data);
     }
 }
