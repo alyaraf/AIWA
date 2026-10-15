@@ -56,7 +56,7 @@ public class TotpSecretConverter implements AttributeConverter<String, String> {
             Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
             c.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
             byte[] ct = c.doFinal(secret.getBytes(StandardCharsets.UTF_8));
-            return PREFIX + Base64.getEncoder().encodeToString(ByteBuffer.allocate(iv.length + ct.length).put(iv).put(ct).array());
+            return PREFIX + Base64.getEncoder().encodeToString(ByteBuffer.allocate(IV_BYTES + ct.length).put(iv).put(ct).array());
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Could not encrypt the TOTP secret", e);
         }
