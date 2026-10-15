@@ -132,6 +132,7 @@ jobs:
       - run: bash deploy/backup/uploads_swap_test.sh
       - run: bash deploy/restore_flow_test.sh
       - run: bash deploy/restore_test.sh
+      - run: bash deploy/deploy_test.sh
 
   # Roadmap P3 (dependency governance): a software bill of materials for what ships, kept as a build artifact so a
   # newly published advisory can be matched against the exact versions of every release. The Flutter lock file
@@ -333,9 +334,10 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           # The server holds a deploy-only checkout at /srv/aiwa with its own deploy/.env.
-          # $SHA is meant to expand here, on the runner.
+          # RV-03: deploy.sh backs the database up first (no backup, no deploy) and records the release
+          # for "deploy.sh --rollback". $SHA is meant to expand here, on the runner.
           # shellcheck disable=SC2029
-          ssh "$USER_NAME@$HOST" "set -e; cd /srv/aiwa && git fetch --quiet origin && git checkout --quiet --detach $SHA && cd deploy && RELEASE_TAG=$SHA docker compose -f docker-compose.prod.yml up -d --build --remove-orphans"
+          ssh "$USER_NAME@$HOST" "set -e; cd /srv/aiwa && git fetch --quiet origin && git checkout --quiet --detach $SHA && bash deploy/deploy.sh"
       - name: Health check
         env:
           API_DOMAIN: ${{ vars.STAGING_API_DOMAIN }}
