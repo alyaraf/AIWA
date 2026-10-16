@@ -131,6 +131,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByRoleAndActive(UserRole role, boolean active);
     java.util.List<User> findByRoleAndActive(UserRole role, boolean active);
 
+    /** Keyset page of active user ids for one role, for fan-out notifications. */
+    @Query("SELECT u.id FROM User u WHERE u.role = :role AND u.active = true AND u.id > :after ORDER BY u.id")
+    java.util.List<Long> findActiveIdsByRole(@Param("role") UserRole role, @Param("after") long after, Pageable page);
+
     @Query("SELECT COUNT(u) FROM User u JOIN u.adminPermissions p " +
            "WHERE u.role = com.aiwa.enums.UserRole.ADMIN AND u.active = true " +
            "AND p = com.aiwa.enums.AdminPermission.SUPER_ADMIN")

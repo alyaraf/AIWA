@@ -36,6 +36,7 @@ public class TermsController {
     private final UserRepository userRepo;
     private final com.aiwa.service.impl.AuditService auditService;
     private final com.aiwa.service.impl.TermsAcceptanceService termsAcceptance;
+    private final com.aiwa.service.impl.NotificationServiceImpl notificationService;
 
     // ── Public ────────────────────────────────────────────────────────────────
 
@@ -134,6 +135,18 @@ public class TermsController {
                 .publishedBy(publisherName())
                 .active(true).build());
         auditService.record("POLICY_PUBLISHED", docType + " " + saved.getVersion());
+        // AU-19: only a role's main document asks for re-acceptance, so only that role is told.
+        UserRole audience = switch (docType) {
+            case "CUSTOMER_TERMS" -> UserRole.CUSTOMER;
+            case "PROVIDER_TERMS" -> UserRole.PROVIDER;
+            default -> null;
+        };
+        if (audience != null) {
+            notificationService.sendToRole(audience, com.aiwa.enums.NotificationType.TERMS_UPDATED,
+                    "Our terms have been updated", "تم تحديث الشروط",
+                    "Please review and accept the new terms to keep using AIWA.",
+                    "يرجى مراجعة الشروط الجديدة والموافقة عليها لمتابعة استخدام أيوه.");
+        }
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.Success.of("Version " + saved.getVersion()

@@ -121,6 +121,29 @@ public class NotificationServiceImpl {
         }
     }
 
+    /**
+     * One notification to every active user of a role. Runs on the push pool after
+     * commit, paging ids 500 at a time, so the caller never waits on the user count.
+     */
+    public void sendToRole(com.aiwa.enums.UserRole role, NotificationType type,
+                           String titleEn, String titleAr, String bodyEn, String bodyAr) {
+        afterCommit(() -> {
+            long after = 0;
+            java.util.List<Long> ids;
+            do {
+                ids = userRepo.findActiveIdsByRole(role, after, org.springframework.data.domain.PageRequest.of(0, 500));
+                for (Long id : ids) {
+                    try {
+                        send(id, type, titleEn, titleAr, bodyEn, bodyAr, null, null);
+                    } catch (RuntimeException e) {
+                        log.warn("{} notification to user {} failed: {}", type, id, e.getMessage());
+                    }
+                }
+                if (!ids.isEmpty()) after = ids.get(ids.size() - 1);
+            } while (ids.size() == 500);
+        });
+    }
+
     /** Whether a real-time push may be delivered to this user right now. */
     private boolean pushAllowed(User user) {
         if (user.isMuteAll() || !user.isNotifyPush()) return false;
