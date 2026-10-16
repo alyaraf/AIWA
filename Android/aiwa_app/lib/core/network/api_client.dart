@@ -427,6 +427,7 @@ class _ErrorInterceptor extends Interceptor {
         return ServerException(
           message: message ?? 'Something went wrong',
           statusCode: statusCode,
+          code: code,
         );
       default:
         // Dio's own err.message is English developer text; keep the mapped

@@ -62,7 +62,14 @@ class BookingError extends BookingState {
 
   /// Create failed because the slot was just taken (BOOK-13).
   final bool slotTaken;
-  const BookingError(this.message, {this.slotTaken = false});
+
+  /// Refused until the live terms are accepted (AU-19).
+  final bool termsOutdated;
+  const BookingError(
+    this.message, {
+    this.slotTaken = false,
+    this.termsOutdated = false,
+  });
   @override
-  List<Object?> get props => [message, slotTaken];
+  List<Object?> get props => [message, slotTaken, termsOutdated];
 }

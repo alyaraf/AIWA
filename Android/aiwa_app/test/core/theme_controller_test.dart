@@ -77,4 +77,20 @@ void main() {
     ThemeController.mode.removeListener(listener);
     expect(calls, 2);
   });
+
+  test('a palette picked in Personal info survives gender refreshes', () async {
+    await ThemeController.load();
+    ThemeController.pick(ThemeController.female);
+    await flush();
+
+    ThemeController.applyGender('MALE'); // every /auth/me refresh does this
+    expect(ThemeController.mode.value, ThemeController.female);
+
+    await ThemeController.load(); // next launch
+    ThemeController.applyGender('MALE');
+    expect(ThemeController.mode.value, ThemeController.female);
+
+    SharedPreferences.setMockInitialValues({});
+    await ThemeController.load(); // un-pick for other tests
+  });
 }

@@ -37,7 +37,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late final _phone = TextEditingController(text: _user?.phone);
   late final _email = TextEditingController(text: _user?.email);
   late String _theme = ThemeController.mode.value;
-  late bool _arabic = _wasArabic;
+  // What the app shows now (the Splash pick may differ from the account's).
+  late bool _arabic = LocaleController.locale.value.languageCode == 'ar';
   bool _dirty = false;
   bool _saving = false;
   String? _error;
@@ -227,8 +228,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       });
       return;
     }
-    ThemeController.set(_theme);
-    if (_arabic != _wasArabic) LocaleController.set(_arabic ? 'ar' : 'en');
+    if (_theme != ThemeController.mode.value) ThemeController.pick(_theme);
+    LocaleController.set(_arabic ? 'ar' : 'en');
     context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
     showAiwaToast(context, AppLocalizations.of(context).editProfileUpdated);
     context.pop();

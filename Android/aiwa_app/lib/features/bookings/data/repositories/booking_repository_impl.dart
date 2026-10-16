@@ -19,7 +19,9 @@ class BookingRepositoryImpl implements BookingRepository {
     try {
       return Right(await call());
     } on ServerException catch (e) {
-      return Left(ServerFailure(e.message, statusCode: e.statusCode));
+      return Left(
+        ServerFailure(e.message, statusCode: e.statusCode, code: e.code),
+      );
     } on NetworkException catch (e) {
       return Left(NetworkFailure(e.message));
     } on UnauthorizedException {
@@ -174,8 +176,7 @@ class BookingRepositoryImpl implements BookingRepository {
   Future<Either<Failure, List<ChatMessageEntity>>> getChat(
     String bookingId, {
     String? afterId,
-  }) =>
-      _guard(() => _remote.getChat(bookingId, afterId: afterId));
+  }) => _guard(() => _remote.getChat(bookingId, afterId: afterId));
 
   @override
   Future<Either<Failure, ChatMessageEntity>> sendChat(

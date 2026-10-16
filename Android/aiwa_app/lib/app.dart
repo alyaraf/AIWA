@@ -46,12 +46,10 @@ class AiwaApp extends StatelessWidget {
             if (s is AuthAuthenticated && s.user.gender != null) {
               ThemeController.applyGender(s.user.gender);
             }
-            // A newer policy went live since this user last accepted
-            // (GET /auth/me termsUpToDate): ask once, from anywhere. Users who
-            // never accepted are still in sign-up, which accepts on its own.
-            if (s is AuthAuthenticated &&
-                s.user.termsUpToDate == false &&
-                s.user.acceptedTermsVersion != null) {
+            // A newer policy went live since this user last accepted: ask
+            // once, from anywhere (sign-in and cold start land there through
+            // AppRoutes.landingFor).
+            if (s is AuthAuthenticated && s.user.needsTermsReaccept) {
               final path = router.routerDelegate.currentConfiguration.uri.path;
               if (path != AppRoutes.termsReaccept) {
                 router.push(AppRoutes.termsReaccept);
@@ -88,11 +86,22 @@ class _ThemedAppState extends State<_ThemedApp> {
   late final StreamSubscription<Map<String, String>> _pushTaps;
   late final StreamSubscription<String> _tokenRefresh;
 
+  /// Back from the background: refresh the profile so a policy published
+  /// meanwhile is asked for (and the rest of /auth/me is current).
+  late final AppLifecycleListener _lifecycle;
+
   @override
   void initState() {
     super.initState();
     ThemeController.mode.addListener(_onThemeChanged);
     LocaleController.locale.addListener(_onLocaleChanged);
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        if (mounted && context.read<AuthBloc>().state is AuthAuthenticated) {
+          context.read<AuthBloc>().add(AuthGetCurrentUserEvent());
+        }
+      },
+    );
     _authEvents = ApiClient.authEvents.stream.listen(_onAuthEvent);
     // FE-3: a tapped push opens its screen; a rotated FCM token is re-sent.
     _pushTaps = PushService.taps.stream.listen((data) {
@@ -117,6 +126,7 @@ class _ThemedAppState extends State<_ThemedApp> {
     _authEvents.cancel();
     _pushTaps.cancel();
     _tokenRefresh.cancel();
+    _lifecycle.dispose();
     super.dispose();
   }
 
@@ -174,7 +184,8 @@ Future<void> routeSessionEvent(
   required void Function(String) push,
   bool Function()? alive,
 }) async {
-  bool stillMine() => (alive?.call() ?? true) && SecureStorage.owns(event.owner);
+  bool stillMine() =>
+      (alive?.call() ?? true) && SecureStorage.owns(event.owner);
   if (!stillMine()) return;
   final path = currentPath();
   Future<void> signOutThen(String route) async {

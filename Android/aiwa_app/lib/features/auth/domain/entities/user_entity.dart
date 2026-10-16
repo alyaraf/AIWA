@@ -52,6 +52,12 @@ class UserEntity extends Equatable {
   bool get isProvider => role == 'PROVIDER';
   bool get isAdmin => role == 'ADMIN';
 
+  /// A newer policy went live since this user last accepted (GET /auth/me
+  /// termsUpToDate). Users who never accepted are still in sign-up, which
+  /// accepts on its own.
+  bool get needsTermsReaccept =>
+      termsUpToDate == false && acceptedTermsVersion != null;
+
   @override
   List<Object?> get props => [
     id,

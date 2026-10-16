@@ -13,6 +13,11 @@ class ThemeController {
   static const String male = 'male';
   static const String female = 'female';
   static const String _prefsKey = 'aiwa_theme';
+  static const String _pickedKey = 'aiwa_theme_picked';
+
+  /// True once the user chose a palette in Personal info; gender no longer
+  /// overrides it (every /auth/me refresh re-applies the gender otherwise).
+  static bool _picked = false;
 
   static final ValueNotifier<String> mode = ValueNotifier<String>(male);
 
@@ -20,6 +25,7 @@ class ThemeController {
   static Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      _picked = prefs.getBool(_pickedKey) ?? false;
       _apply(prefs.getString(_prefsKey) ?? male);
     } catch (_) {
       _apply(male);
@@ -28,7 +34,17 @@ class ThemeController {
 
   /// Maps a backend gender value (`MALE` / `FEMALE`) to a palette.
   static void applyGender(String? gender, {bool persist = true}) {
+    if (_picked) return;
     set(gender?.toUpperCase() == 'FEMALE' ? female : male, persist: persist);
+  }
+
+  /// The user's own choice: wins over [applyGender] from now on.
+  static void pick(String name) {
+    _picked = true;
+    SharedPreferences.getInstance()
+        .then((p) => p.setBool(_pickedKey, true))
+        .catchError((_) => false);
+    set(name);
   }
 
   static void set(String name, {bool persist = true}) {
