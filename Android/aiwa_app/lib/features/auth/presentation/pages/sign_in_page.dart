@@ -81,7 +81,9 @@ class _SignInPageState extends State<SignInPage> {
               context,
             ).authWelcomeBackName(state.user.fullName.trim().split(' ').first),
           );
-          if (widget.resume && !state.user.isProvider) {
+          if (widget.resume &&
+              !state.user.isProvider &&
+              !state.user.needsTermsReaccept) {
             context.pop(true);
           } else {
             context.go(AppRoutes.landingFor(state.user));

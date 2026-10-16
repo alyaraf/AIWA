@@ -10,7 +10,8 @@ abstract class Failure extends Equatable {
 
 class ServerFailure extends Failure {
   final int? statusCode;
-  const ServerFailure(super.message, {this.statusCode});
+  final String? code;
+  const ServerFailure(super.message, {this.statusCode, this.code});
 }
 
 class UnauthorizedFailure extends Failure {

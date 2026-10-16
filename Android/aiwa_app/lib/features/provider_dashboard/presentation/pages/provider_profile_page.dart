@@ -229,6 +229,12 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   ),
                 ],
                 const SizedBox(height: 12),
+                // Name, contact, theme and language.
+                SettingsRow(
+                  icon: LucideIcons.user,
+                  label: l.profPersonalInfo,
+                  onTap: () => context.push(AppRoutes.editProfile),
+                ),
                 SettingsRow(
                   icon: LucideIcons.briefcase,
                   label: l.ppBusinessInfo,

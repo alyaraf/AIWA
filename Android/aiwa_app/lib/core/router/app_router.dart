@@ -160,9 +160,14 @@ class AppRoutes {
     return resume;
   }
 
-  /// Where a signed-in user lands: providers wait on the pending gate until
-  /// their verification is approved.
-  static String landingFor(UserEntity u) => !u.isProvider
+  /// Where a signed-in user lands: the updated terms first, then providers
+  /// wait on the pending gate until their verification is approved.
+  ///
+  /// The terms check lives here because Splash and Sign-in `go()` here,
+  /// which replaces any terms screen pushed a moment earlier.
+  static String landingFor(UserEntity u) => u.needsTermsReaccept
+      ? termsReaccept
+      : !u.isProvider
       ? home
       : (u.providerProfile?.isApproved ?? false)
       ? providerDashboard
@@ -188,25 +193,14 @@ CustomTransitionPage<void> _tab(GoRouterState state, Widget child) =>
       },
     );
 
-/// Pushed screen: aiwa-slide-in, translateX(8%) -> 0 over 320ms soft.
+/// Pushed screen: same slide as [SoftDoorTransitionsBuilder].
 CustomTransitionPage<void> _slide(GoRouterState state, Widget child) =>
     CustomTransitionPage(
       key: state.pageKey,
       child: child,
       transitionDuration: AppTheme.dur3,
-      transitionsBuilder: (_, animation, _, child) {
-        final a = CurvedAnimation(parent: animation, curve: AppTheme.easeSoft);
-        return FadeTransition(
-          opacity: a,
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(.08, 0),
-              end: Offset.zero,
-            ).animate(a),
-            child: child,
-          ),
-        );
-      },
+      transitionsBuilder: (context, animation, _, child) =>
+          softSlide(context, animation, child),
     );
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(

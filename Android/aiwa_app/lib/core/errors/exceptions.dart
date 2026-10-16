@@ -1,7 +1,10 @@
 class ServerException implements Exception {
   final String message;
   final int? statusCode;
-  const ServerException({required this.message, this.statusCode});
+
+  /// The API's error code (`terms.error.not_accepted`, ...), when it sent one.
+  final String? code;
+  const ServerException({required this.message, this.statusCode, this.code});
 }
 
 class UnauthorizedException implements Exception {

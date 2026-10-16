@@ -245,6 +245,9 @@ class _BookingPageState extends State<BookingPage> {
             );
           } else if (state is BookingError && state.slotTaken && !_isNow) {
             _onSlotTaken();
+          } else if (state is BookingError && state.termsOutdated) {
+            // Accept on the re-accept screen, then come back and confirm again.
+            context.push(AppRoutes.termsReaccept);
           }
           // Other BookingErrors show inline above Confirm (_buildCtaBar).
         },

@@ -62,7 +62,14 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
       idempotencyKey: _attemptKey,
     );
     result.fold(
-      (f) => emit(BookingError(f.message, slotTaken: isSlotTaken(f))),
+      (f) => emit(
+        BookingError(
+          f.message,
+          slotTaken: isSlotTaken(f),
+          termsOutdated:
+              f is ServerFailure && f.code == 'terms.error.not_accepted',
+        ),
+      ),
       (booking) {
         _attempt = null;
         trackFunnel('book', bookingId: booking.id);

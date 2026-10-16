@@ -44,6 +44,7 @@ class AppTheme {
   static const Duration dur2 = Duration(milliseconds: 200);
   static const Duration dur3 = Duration(milliseconds: 320);
   static const Duration dur4 = Duration(milliseconds: 480);
+
   /// Half-cycle of the design's 1.1s `aiwa-pulse`, for `repeat(reverse: true)`.
   static const Duration durPulse = Duration(milliseconds: 550);
 
@@ -303,8 +304,11 @@ class AppTheme {
   }
 }
 
-/// Push = slide in from 8% (aiwa-slide-in); the page underneath eases to
-/// .98 and back up on pop (aiwa-fade-in). 320ms soft door both ways.
+/// Push = slide in from the reading-end edge; the page underneath eases to
+/// .98 and back up on pop. 320ms soft door both ways.
+///
+/// No opacity: fading a whole page renders it offscreen every frame, which
+/// janks on mid-range Android. Pages are opaque, so a slide alone reads clean.
 class SoftDoorTransitionsBuilder extends PageTransitionsBuilder {
   const SoftDoorTransitionsBuilder();
 
@@ -322,25 +326,25 @@ class SoftDoorTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final soft = CurvedAnimation(parent: animation, curve: AppTheme.easeSoft);
     return ScaleTransition(
       scale: Tween(begin: 1.0, end: .98).animate(
         CurvedAnimation(parent: secondaryAnimation, curve: AppTheme.easeSoft),
       ),
-      child: DualTransitionBuilder(
-        animation: animation,
-        forwardBuilder: (_, a, c) => SlideTransition(
-          position: Tween(
-            begin: const Offset(.08, 0),
-            end: Offset.zero,
-          ).animate(soft),
-          child: c,
-        ),
-        // The prototype drops the popped screen; fade it so it doesn't
-        // cover the one being revealed for 320ms.
-        reverseBuilder: (_, a, c) => FadeTransition(opacity: soft, child: c),
-        child: child,
-      ),
+      child: softSlide(context, animation, child),
     );
   }
 }
+
+/// Full-width slide from the trailing edge (mirrors in RTL).
+Widget softSlide(
+  BuildContext context,
+  Animation<double> animation,
+  Widget child,
+) => SlideTransition(
+  textDirection: Directionality.of(context),
+  position: Tween(
+    begin: const Offset(1, 0),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: animation, curve: AppTheme.easeSoft)),
+  child: child,
+);
