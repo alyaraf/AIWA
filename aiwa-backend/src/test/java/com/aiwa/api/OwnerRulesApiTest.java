@@ -579,4 +579,32 @@ class OwnerRulesApiTest {
         assertThat(after.getRejectionReason()).isNull();
         assertThat(booking(id).getStatus()).isEqualTo(BookingStatus.ACCEPTED);
     }
+
+    @Test
+    void publishingCustomerTermsNotifiesCustomersOnly() throws Exception {
+        User boss = userRepo.save(User.builder().fullName("boss").email("rules-boss" + SEQ.incrementAndGet() + "@test.aiwa")
+                .phone(TestPhones.next()).password(encoder.encode(PASSWORD)).role(UserRole.ADMIN).active(true)
+                .termsAccepted(true).adminPermissions(new java.util.HashSet<>(java.util.Set.of(
+                        com.aiwa.enums.AdminPermission.SUPER_ADMIN))).build());
+        String version = "notify-" + SEQ.incrementAndGet();
+        try {
+            mvc.perform(post("/terms").header("Authorization", login(boss))
+                            .param("version", version).param("type", "CUSTOMER_TERMS").param("contentEn", "New terms"))
+                    .andExpect(status().isCreated());
+
+            // The fan-out runs on the push pool after commit.
+            long deadline = System.currentTimeMillis() + 10_000;
+            while (termsNotices(customer) == 0 && System.currentTimeMillis() < deadline) Thread.sleep(50);
+            assertThat(termsNotices(customer)).isEqualTo(1);
+            assertThat(termsNotices(owner)).isZero();
+            assertThat(termsNotices(boss)).isZero();
+        } finally {
+            termsRepo.findByTypeAndVersion("CUSTOMER_TERMS", version).ifPresent(termsRepo::delete);
+        }
+    }
+
+    private long termsNotices(User u) {
+        return notificationRepo.findByUserIdOrderByCreatedAtDesc(u.getId(), org.springframework.data.domain.PageRequest.of(0, 50))
+                .stream().filter(n -> n.getType() == com.aiwa.enums.NotificationType.TERMS_UPDATED).count();
+    }
 }
