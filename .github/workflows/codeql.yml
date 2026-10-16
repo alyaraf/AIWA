@@ -42,9 +42,9 @@ jobs:
       - uses: github/codeql-action/analyze@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3
         with:
           category: "/language:${{ matrix.language }}"
-          # Code scanning (GitHub Code Security) is not enabled on this private repo, so the upload
-          # would fail. Keep the SARIF as an artifact and gate on it here instead.
-          upload: never
+          # Upload so Security -> Code scanning matches this run: alerts a later scan no longer finds
+          # are closed there. The SARIF is also kept as an artifact and gated on below.
+          upload: always
           output: sarif-results
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

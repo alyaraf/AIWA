@@ -1,5 +1,5 @@
-# Code scanning is not enabled on this private repo, so results cannot be dismissed on GitHub;
-# reviewed false positives are excluded here instead, each with its reason.
+# Reviewed false positives are excluded here, each with its reason, rather than dismissed one by
+# one on GitHub, so the CI gate (fail on any result) and Security -> Code scanning agree.
 name: AIWA CodeQL config
 
 paths-ignore:
