@@ -10,6 +10,31 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
+  # AQ-06: Redis at 170 MB of its 200 MB cap (85%) fires RedisMemoryHigh after 10 minutes; at 50 MB it stays quiet.
+  - interval: 1m
+    input_series:
+      - series: 'redis_memory_used_bytes{instance="redis-exporter:9121",job="redis"}'
+        values: '170e6x30'
+      - series: 'redis_memory_max_bytes{instance="redis-exporter:9121",job="redis"}'
+        values: '200e6x30'
+      - series: 'redis_memory_used_bytes{instance="quiet:9121",job="redis"}'
+        values: '50e6x30'
+      - series: 'redis_memory_max_bytes{instance="quiet:9121",job="redis"}'
+        values: '200e6x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: RedisMemoryHigh
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: RedisMemoryHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: "redis-exporter:9121"
+              job: redis
+            exp_annotations:
+              summary: "Redis is above 80% of its memory limit; at the limit it evicts short-lived keys such as rate-limit counters"
+
   # A root filesystem with 10 GB free of 100 GB (10%) fires HostDiskLow after 10 minutes.
   - interval: 1m
     input_series:

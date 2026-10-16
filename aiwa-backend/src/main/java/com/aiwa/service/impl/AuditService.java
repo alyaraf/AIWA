@@ -47,9 +47,20 @@ public class AuditService {
         }
     }
 
+    /** AQ-02: how the log names a user account, as actor or target: by id, never by name or contact. */
+    public static String userLabel(Long userId) {
+        return "user #" + userId;
+    }
+
     private String currentActor() {
         try {
             var auth = SecurityContextHolder.getContext().getAuthentication();
+            // AQ-02: a customer or provider is recorded by account id, not the email or phone they signed in
+            // with, so the log keeps no contact detail of theirs once the account is deleted.
+            if (auth != null && auth.getPrincipal() instanceof com.aiwa.security.AiwaUserDetails u && u.getUserId() != null
+                    && auth.getAuthorities().stream().noneMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()))) {
+                return userLabel(u.getUserId());
+            }
             if (auth != null && auth.getName() != null) return auth.getName();
         } catch (Exception ignored) { }
         return "system";

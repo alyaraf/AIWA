@@ -103,21 +103,25 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * Completes the enrollment exactly once: the confirmed secret replaces the old one, 2FA is
      * on, earlier sessions end and the enrollment closes. Returns 0 if it was already
      * completed, expired or cancelled in the meantime.
+     *
+     * <p>AQ-04: bumps the version, so a save of a User loaded before this (profile, language, terms) fails
+     * instead of writing back 2FA off and the old session cut-off.</p>
      */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional
     @Query("UPDATE User u SET u.totpSecret = :secret, u.totpPendingSecret = NULL, u.totpEnabled = true, " +
-           "u.tokensValidAfter = :cutoff, u.totpEnrollmentExpiresAt = NULL, u.totpEnrollmentAttempts = 0 " +
+           "u.tokensValidAfter = :cutoff, u.totpEnrollmentExpiresAt = NULL, u.totpEnrollmentAttempts = 0, " +
+           "u.version = u.version + 1 " +
            "WHERE u.id = :id AND u.totpPendingSecret IS NOT NULL AND u.totpEnrollmentExpiresAt > :now")
     int completeTotpEnrollment(@Param("id") Long id, @Param("secret") String secret,
                                @Param("cutoff") java.time.Instant cutoff, @Param("now") java.time.Instant now);
 
     /** Ends a pending enrollment: the pending secret is discarded, so setup must start again.
-     *  A confirmed secret, and 2FA, are untouched. */
+     *  A confirmed secret, and 2FA, are untouched. AQ-04: bumps the version, so a stale save can't reopen it. */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional(
             propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    @Query("UPDATE User u SET u.totpEnrollmentExpiresAt = NULL, u.totpPendingSecret = NULL WHERE u.id = :id")
+    @Query("UPDATE User u SET u.totpEnrollmentExpiresAt = NULL, u.totpPendingSecret = NULL, u.version = u.version + 1 WHERE u.id = :id")
     int closeTotpEnrollment(@Param("id") Long id);
 
     long countByRoleAndCreatedAtBetween(UserRole role, java.time.LocalDateTime from, java.time.LocalDateTime to);

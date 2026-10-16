@@ -5,7 +5,9 @@ password, 2FA secret, push devices, saved addresses (scrubbed), trusted contacts
 ID documents, selfie and gallery images, and upcoming bookings are cancelled.
 The visit address and coordinates on the customer's bookings, and a provider
 listing's address, coordinates and bio, are erased too (RV-02); the booking rows
-and the business name stay.
+and the business name stay. "Notify me when someone joins" waitlist entries
+(`provider_waitlist`, category and the point searched from) are deleted, and
+audit rows naming the user by their sign-in email or phone get "user #id" instead (AQ-02).
 The items below are **not** erased today. Each needs an owner decision, recorded in
 the privacy policy (`deploy/site/privacy.html`) once legal has reviewed it
 (Law 151/2020: keep personal data only as long as the purpose needs it).
@@ -16,7 +18,7 @@ the privacy policy (`deploy/site/privacy.html`) once legal has reviewed it
 | SOS events with location | `safety_events`, `sos_deliveries` | Safety incidents may involve the police | Keep 24 months; keep coordinates only for SOS events (not other safety events) |
 | Notification text | `notifications` | Inbox history; holds names and service names | Delete with the account; otherwise deleted after 180 days (`NOTIFICATION_RETENTION_DAYS`, 0 = keep) |
 | Bookings, reviews, commission ledger | `bookings`, `reviews`, `commission_ledger_entries` | Accounting and the other party's history; already shown as "Deleted user" | Keep, linked to the anonymised account, as long as tax rules require (usually 5 years) |
-| Audit log | `audit_log` | Who did what in the admin panel | Keep 24 months |
+| Audit log | `audit_log` | Who did what in the admin panel | Keep 24 months. Customers and providers appear as "user #id", as actor and as the subject of account actions (AQ-02); admins by sign-in email; settlement and commission rows name the business, which the listing keeps too. Rows written before AQ-02 can still hold a user's name in the target |
 | Backups | `deploy/backups`, off-site copy | Disaster recovery | 14 days on the server, 30 days off-site; a deleted account disappears from backups when they age out. Say so in the privacy policy |
 | Redis keys (OTP counters, rate limits, token blacklist) | Redis | Short-lived security state | Already expire on their own (minutes to 7 days) |
 | Files whose database row is gone | `uploads/` | Leftovers from before the R2-13 fix | One-off clean-up script after launch; new uploads no longer leave orphans |

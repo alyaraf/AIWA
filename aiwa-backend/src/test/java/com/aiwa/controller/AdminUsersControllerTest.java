@@ -284,7 +284,7 @@ class AdminUsersControllerTest {
         verify(sms).send(eq("+201000000009"), text.capture());
         assertThat(text.getValue()).containsPattern("Aiwa-[A-Za-z0-9]{8}");
         assertThat(customer.getPassword()).isEqualTo("newhash");
-        verify(auditService).record(eq("PASSWORD_RESET"), eq("Layla (sent by SMS)"));
+        verify(auditService).record(eq("PASSWORD_RESET"), eq("user #3 (sent by SMS)")); // AQ-02: by id, not name
     }
 
     @Test

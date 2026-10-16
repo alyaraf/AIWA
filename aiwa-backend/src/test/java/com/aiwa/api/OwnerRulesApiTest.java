@@ -87,6 +87,9 @@ class OwnerRulesApiTest {
     @Autowired PasswordEncoder encoder;
     @Autowired RedisRuntimeService redis;
     @Autowired com.aiwa.repository.ModerationCaseRepository moderationRepo;
+    @Autowired com.aiwa.repository.NotificationRepository notificationRepo;
+    @Autowired com.aiwa.repository.AuditLogRepository auditRepo;
+    @Autowired com.aiwa.repository.ProviderWaitlistRepository waitlistRepo;
 
     private User owner;
     private ProviderProfile profile;
@@ -461,5 +464,119 @@ class OwnerRulesApiTest {
                 .andExpect(jsonPath("$.code").value("admin.error.delete_live_visit"));
         assertThat(userRepo.findById(customer.getId()).orElseThrow().isActive()).isTrue();
         assertThat(booking(id).getStatus()).isEqualTo(BookingStatus.ON_THE_WAY);
+    }
+
+    private String supportAdminToken() throws Exception {
+        int n = SEQ.incrementAndGet();
+        User admin = userRepo.save(User.builder().fullName("support admin " + n).email("support-admin" + n + "@test.aiwa")
+                .phone(TestPhones.next()).password(encoder.encode(PASSWORD))
+                .role(UserRole.ADMIN).active(true).termsAccepted(true)
+                .adminPermissions(new java.util.HashSet<>(java.util.EnumSet.of(com.aiwa.enums.AdminPermission.SUPPORT)))
+                .build());
+        return login(admin);
+    }
+
+    private long bookOn(int daysAhead) throws Exception {
+        return json.readTree(mvc.perform(post("/bookings").header("Authorization", customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("providerId", profile.getId(), "serviceId", service.getId(),
+                                "bookingType", "SCHEDULED", "bookingDate", AiwaTime.today().plusDays(daysAhead).toString(),
+                                "startTime", "10:00", "homeService", false))))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString())
+                .get("data").get("id").asLong();
+    }
+
+    // AQ-01: suspending a customer left their bookings live; the provider could still accept, and backing out of an
+    // accepted one cost a strike and the cancellation penalty.
+    @Test
+    void suspendingACustomerCancelsTheirUpcomingBookingsAndTellsTheProviderWithoutPenalty() throws Exception {
+        long accepted = bookOn(3);
+        accept(accepted);
+        long pending = bookOn(4);
+
+        mvc.perform(patch("/admin/users/" + customer.getId() + "/deactivate").header("Authorization", supportAdminToken()))
+                .andExpect(status().isOk());
+
+        for (long id : new long[]{accepted, pending}) {
+            assertThat(booking(id).getStatus()).isEqualTo(BookingStatus.CANCELLED);
+            assertThat(booking(id).getCancelledBy()).isEqualTo("ADMIN");
+            assertThat(booking(id).isPenaltyApplied()).isFalse();
+            assertThat(ledgerRepo.findByBookingId(id)).isEmpty();
+        }
+        assertThat(notificationRepo.findByUserIdOrderByCreatedAtDesc(owner.getId(), org.springframework.data.domain.PageRequest.of(0, 50))
+                .stream().filter(n -> n.getType() == com.aiwa.enums.NotificationType.BOOKING_CANCELLED).count()).isEqualTo(2);
+        assertThat(providerRepo.findById(profile.getId()).orElseThrow().getCancellationStrikes()).isZero();
+    }
+
+    @Test
+    void aCustomerCannotBeSuspendedWhileAVisitIsOnTheWay() throws Exception {
+        long id = book(false, null);
+        set(id, b -> b.setStatus(BookingStatus.ON_THE_WAY));
+        mvc.perform(patch("/admin/users/" + customer.getId() + "/deactivate").header("Authorization", supportAdminToken()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("admin.error.delete_live_visit"));
+        assertThat(userRepo.findById(customer.getId()).orElseThrow().isActive()).isTrue();
+        assertThat(booking(id).getStatus()).isEqualTo(BookingStatus.ON_THE_WAY);
+    }
+
+    // AQ-02: deletion left the user's sign-in email as the actor of their audit rows, their name in support's
+    // USER_DELETED row, and their waitlist entry with where they searched from.
+    @Test
+    void deletingAnAccountLeavesNoEmailInTheAuditLogAndNoWaitlistEntry() throws Exception {
+        long id = book(false, null); // pending: the account can still be closed
+        long messageId = json.readTree(mvc.perform(post("/bookings/" + id + "/chat").header("Authorization", providerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"hello\"}"))
+                .andExpect(status().is2xxSuccessful()).andReturn().getResponse().getContentAsString())
+                .get("data").get("id").asLong();
+        mvc.perform(post("/bookings/" + id + "/chat/" + messageId + "/report").header("Authorization", customerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"rude\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/providers/waitlist").param("category", "HAIR").param("lat", "30.06").param("lng", "31.22")
+                .header("Authorization", customerToken)).andExpect(status().isOk());
+        String email = customer.getEmail();
+        // A row written before AQ-02, when the actor was the sign-in identifier.
+        auditRepo.save(com.aiwa.entity.AuditLogEntry.builder().actor(email).action("SOS_RAISED").target("booking #" + id).build());
+
+        mvc.perform(delete("/account").header("Authorization", customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("currentPassword", PASSWORD))))
+                .andExpect(status().isOk());
+
+        var audit = auditRepo.findAll();
+        assertThat(audit).noneMatch(a -> a.getActor().equalsIgnoreCase(email)
+                || (a.getTarget() != null && a.getTarget().contains(email)));
+        assertThat(audit).anyMatch(a -> "CHAT_MESSAGE_REPORTED".equals(a.getAction())
+                && a.getActor().equals("user #" + customer.getId()));
+        assertThat(waitlistRepo.findAll()).noneMatch(w -> w.getUser().getId().equals(customer.getId()));
+    }
+
+    @Test
+    void supportsDeletionLogsTheAccountByIdNotByName() throws Exception {
+        mvc.perform(delete("/admin/users/" + customer.getId()).header("Authorization", superAdminToken()))
+                .andExpect(status().isOk());
+        assertThat(auditRepo.findAll().stream().filter(a -> "USER_DELETED".equals(a.getAction()))
+                .map(com.aiwa.entity.AuditLogEntry::getTarget))
+                .contains("user #" + customer.getId())
+                .noneMatch(t -> t.contains(customer.getFullName() + " "));
+    }
+
+    // AQ-03: request-info and reject took an approved provider off the listing while its accepted bookings stayed live.
+    @Test
+    void anApprovedProviderCannotBeRejectedOrAskedForMoreInformation() throws Exception {
+        long id = book(false, null);
+        accept(id);
+        String support = supportAdminToken();
+        mvc.perform(post("/admin/verification/" + profile.getId() + "/request-info").header("Authorization", support)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"Re-upload your ID\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("verification.error.not_under_review"));
+        mvc.perform(post("/admin/verification/" + profile.getId() + "/reject").header("Authorization", support)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"Blurry ID\"}"))
+                .andExpect(status().isConflict());
+
+        ProviderProfile after = providerRepo.findById(profile.getId()).orElseThrow();
+        assertThat(after.getVerificationStatus()).isEqualTo(VerificationStatus.APPROVED);
+        assertThat(after.getRejectionReason()).isNull();
+        assertThat(booking(id).getStatus()).isEqualTo(BookingStatus.ACCEPTED);
     }
 }

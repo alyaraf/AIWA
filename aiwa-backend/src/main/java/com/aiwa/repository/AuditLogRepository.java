@@ -21,4 +21,12 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntry, Long> {
         ORDER BY a.createdAt DESC
         """)
     Page<AuditLogEntry> search(@Param("q") String q, Pageable pageable);
+
+    /**
+     * AQ-02: rows written before actors were logged by id name a customer or provider by the email or phone they
+     * signed in with. Account deletion replaces those ({@code identifiers} lower-case) with the account's id.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE AuditLogEntry a SET a.actor = :label WHERE lower(a.actor) IN :identifiers")
+    int replaceActor(@Param("identifiers") java.util.Collection<String> identifiers, @Param("label") String label);
 }

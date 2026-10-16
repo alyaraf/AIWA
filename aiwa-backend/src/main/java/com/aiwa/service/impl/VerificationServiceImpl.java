@@ -130,6 +130,18 @@ public class VerificationServiceImpl {
         );
     }
 
+    /**
+     * AQ-03: rejecting or asking for more information is a review decision. On an approved (or suspended) provider
+     * it took the listing down while its accepted bookings stayed live and every forward step answered 403.
+     * Suspend is the action for a listed provider.
+     */
+    private static void requireUnderReview(ProviderProfile profile) {
+        VerificationStatus status = profile.getVerificationStatus();
+        if (status != VerificationStatus.PENDING_VERIFICATION && status != VerificationStatus.REJECTED) {
+            throw new com.aiwa.exception.ConflictException("verification.error.not_under_review");
+        }
+    }
+
     /** Admin: reject a provider with reason (req 2) */
     @Transactional
     public void reject(Long providerId, String reason) {
@@ -138,6 +150,7 @@ public class VerificationServiceImpl {
         }
         ProviderProfile profile = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
+        requireUnderReview(profile);
 
         profile.setVerificationStatus(VerificationStatus.REJECTED);
         profile.setRejectionReason(reason);
@@ -163,6 +176,7 @@ public class VerificationServiceImpl {
         }
         ProviderProfile profile = providerRepo.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", providerId));
+        requireUnderReview(profile);
 
         // Keep the case in the pending queue; record the note without marking rejected.
         profile.setVerificationStatus(VerificationStatus.PENDING_VERIFICATION);

@@ -231,6 +231,10 @@ public class AdminUsersController {
             throw new BusinessException("Can't deactivate " + u.getFullName()
                     + " — they're the last active super admin");
         }
+        // AQ-01: as for support's deletion (SA-11), not while a visit with this customer is under way.
+        if (UserRole.CUSTOMER.equals(u.getRole())) {
+            accountDeletion.requireNoLiveVisit(u);
+        }
 
         u.setActive(false);
         // End every session now, not when the access token expires.
@@ -238,12 +242,16 @@ public class AdminUsersController {
         userRepo.save(u);
         // H-1: a deactivated provider's bookings that haven't started are
         // cancelled and the customers told, instead of waiting for a no-show.
+        // AQ-01: a suspended customer's too, and the providers are told.
         int cancelled = UserRole.PROVIDER.equals(u.getRole())
                 ? providerRepo.findByUserId(u.getId())
                         .map(p -> bookingService.cancelForSuspendedProvider(p.getId(), "Provider account deactivated"))
                         .orElse(0)
-                : 0;
-        auditService.record("USER_DEACTIVATED", u.getFullName()
+                : UserRole.CUSTOMER.equals(u.getRole())
+                        ? bookingService.cancelForSuspendedCustomer(u.getId(), "Customer account suspended")
+                        : 0;
+        // AQ-02: user subjects are logged by id; a name would outlive the account's deletion.
+        auditService.record("USER_DEACTIVATED", com.aiwa.service.impl.AuditService.userLabel(u.getId())
                 + (cancelled > 0 ? ", " + cancelled + " booking(s) cancelled" : ""));
         return ResponseEntity.ok(ApiResponse.Success.of(
                 "User deactivated" + (cancelled > 0 ? "; " + cancelled + " upcoming booking(s) cancelled" : ""), null));
@@ -262,7 +270,7 @@ public class AdminUsersController {
         }
         u.setActive(true);
         userRepo.save(u);
-        auditService.record("USER_REACTIVATED", u.getFullName());
+        auditService.record("USER_REACTIVATED", com.aiwa.service.impl.AuditService.userLabel(u.getId()));
         return ResponseEntity.ok(ApiResponse.Success.of("User reactivated", null));
     }
 
@@ -293,7 +301,6 @@ public class AdminUsersController {
             throw new BusinessException("Can't delete " + user.getFullName() + " — they're the last active super admin");
         }
 
-        String label = user.getFullName();
         if (UserRole.ADMIN.equals(user.getRole())) {
             try {
                 userRepo.delete(user);
@@ -306,7 +313,7 @@ public class AdminUsersController {
             accountDeletion.requireNoLiveVisit(user); // SA-11: not around a visit that is under way
             accountDeletion.delete(user);
         }
-        auditService.record("USER_DELETED", label + " (#" + id + ")");
+        auditService.record("USER_DELETED", com.aiwa.service.impl.AuditService.userLabel(id)); // AQ-02: no name
         return ResponseEntity.ok(ApiResponse.Success.of("User deleted", null));
     }
 
@@ -394,7 +401,7 @@ public class AdminUsersController {
             return ResponseEntity.ok(ApiResponse.Success.of("No changes", toDto(target)));
         }
         userRepo.save(target);
-        auditService.record("USER_DETAILS_UPDATED", target.getFullName() + " (" + String.join(", ", changed) + ")");
+        auditService.record("USER_DETAILS_UPDATED", com.aiwa.service.impl.AuditService.userLabel(target.getId()) + " (" + String.join(", ", changed) + ")");
         if (changed.contains("email") || changed.contains("phone")) {
             notifyContactChanged(target, oldEmail, changed.contains("email"), oldPhone, changed.contains("phone"));
         }
@@ -467,7 +474,7 @@ public class AdminUsersController {
         // could otherwise sign in as them. If it can't be delivered this throws and the whole
         // reset rolls back, so the user's old password keeps working.
         java.util.Map<String, String> delivered = deliverTemporaryPassword(target, temp);
-        auditService.record("PASSWORD_RESET", target.getFullName() + " (sent by " + delivered.get("delivery") + ")");
+        auditService.record("PASSWORD_RESET", com.aiwa.service.impl.AuditService.userLabel(target.getId()) + " (sent by " + delivered.get("delivery") + ")");
         notificationService.send(target.getId(), com.aiwa.enums.NotificationType.ACCOUNT_WARNING,
                 "Your password was reset", "تمت إعادة تعيين كلمة المرور الخاصة بك",
                 "An administrator reset your password. We sent a temporary password to your phone or email; sign in with it, then change it. If you did not ask for this, contact AIWA support.",

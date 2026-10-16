@@ -336,4 +336,21 @@ class TotpEnrollmentApiTest {
         }
         assertThat(users.findById(u.getId()).orElseThrow().isTotpEnabled()).isTrue();
     }
+
+    // AQ-04: the guarded UPDATE that turns 2FA on did not bump @Version, so saving a User loaded before it
+    // (profile, language, preferences, terms) wrote back 2FA off and the old session cut-off.
+    @Test
+    void aStaleSaveAfterTheEnrollmentCompletesFailsInsteadOfTurningTwoFactorOff() {
+        String secret = totp.generateSecret();
+        User u = user(false, secret, Instant.now().plusSeconds(600));
+        User stale = users.findById(u.getId()).orElseThrow();
+        assertThat(users.completeTotpEnrollment(u.getId(), secret, Instant.now(), Instant.now())).isEqualTo(1);
+
+        stale.setPreferredLanguage(com.aiwa.enums.Language.AR);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> users.save(stale))
+                .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
+        User now = users.findById(u.getId()).orElseThrow();
+        assertThat(now.isTotpEnabled()).isTrue();
+        assertThat(now.getTotpSecret()).isEqualTo(secret);
+    }
 }

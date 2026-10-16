@@ -24,8 +24,8 @@ import java.util.List;
  * down and cancels their open bookings. Erases saved addresses and their
  * coordinates (and the destination on their bookings), a provider's listing address,
  * coordinates and bio, trusted contacts, a provider's ID documents and selfie, gallery
- * photos and the avatar. Past bookings, reviews, chats and ledger rows stay
- * (disputes and accounting need them) under "Deleted user".
+ * photos and the avatar, waitlist entries, and the user's email or phone in the audit log (AQ-02). Past
+ * bookings, reviews, chats and ledger rows stay (disputes and accounting need them) under "Deleted user".
  */
 @Service
 @RequiredArgsConstructor
@@ -96,6 +96,12 @@ public class AccountDeletionService {
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.aiwa.repository.CommissionLedgerRepository ledgerRepo;
+
+    // AQ-02: null only when a unit test builds the service by hand.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.repository.AuditLogRepository auditRepo;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.aiwa.repository.ProviderWaitlistRepository waitlistRepo;
 
     @Transactional
     public void delete(User user) {
@@ -178,6 +184,13 @@ public class AccountDeletionService {
             addressRepo.save(a);
         });
         if (user.getProfileImageUrl() != null) publicFiles.add(user.getProfileImageUrl());
+
+        // AQ-02: older audit rows name the user by the email or phone they signed in with, and a waitlist
+        // entry keeps where they searched from.
+        List<String> identifiers = java.util.stream.Stream.of(user.getEmail(), user.getPhone())
+                .filter(java.util.Objects::nonNull).map(v -> v.toLowerCase(java.util.Locale.ROOT)).toList();
+        if (auditRepo != null && !identifiers.isEmpty()) auditRepo.replaceActor(identifiers, AuditService.userLabel(user.getId()));
+        if (waitlistRepo != null) waitlistRepo.deleteByUserId(user.getId());
 
         // Anonymize personal data and disable the account (soft-delete + GDPR-style scrub).
         user.setFullName("Deleted user");
