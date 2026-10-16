@@ -125,7 +125,7 @@ public class ComplaintController {
                 "You have received a warning: " + reason,
                 "لقد تلقيت تحذيراً: " + reason,
                 null, null);
-        auditService.record("USER_WARNED", target.getFullName());
+        auditService.record("USER_WARNED", com.aiwa.service.impl.AuditService.userLabel(target.getId())); // AQ-02: by id, not name
         return ResponseEntity.ok(ApiResponse.Success.of("Warning sent", null));
     }
 

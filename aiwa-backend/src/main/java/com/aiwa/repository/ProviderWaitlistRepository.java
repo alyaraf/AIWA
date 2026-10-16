@@ -21,4 +21,9 @@ public interface ProviderWaitlistRepository extends JpaRepository<ProviderWaitli
     boolean existsByUserIdAndCategoryAndNotifiedAtIsNull(Long userId, ServiceCategory category);
 
     boolean existsByUserIdAndCategoryIsNullAndNotifiedAtIsNull(Long userId);
+
+    /** AQ-02: account deletion; an entry keeps where the customer searched from. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM ProviderWaitlistEntry w WHERE w.user.id = :userId")
+    int deleteByUserId(@Param("userId") Long userId);
 }

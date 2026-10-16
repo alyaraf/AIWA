@@ -218,6 +218,15 @@ groups:
         annotations:
           summary: "No Redis metrics: redis-exporter is down, so a Redis outage would not alert"
 
+      # AQ-06: Redis is above 80% of its maxmemory (200 MB in docker-compose.prod.yml). At the limit it evicts the
+      # keys closest to expiry, such as rate-limit counters and OTP state, so find what is filling it.
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8 and redis_memory_max_bytes > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis is above 80% of its memory limit; at the limit it evicts short-lived keys such as rate-limit counters"
+
       # F-06: more than 20% of completed bookings in 6 h were closed by the provider as "cash not collected"
       # (no commission is charged for those). Needs at least 10 completions to avoid noise.
       - alert: CashNotCollectedRateHigh

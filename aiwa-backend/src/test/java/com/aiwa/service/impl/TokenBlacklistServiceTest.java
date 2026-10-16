@@ -99,4 +99,14 @@ class TokenBlacklistServiceTest {
         assertThat(service.claimStrict("r")).isTrue();
         assertThat(service.claimStrict("r")).isFalse();
     }
+
+    // AQ-06: the spent token's Redis copy had no reader and kept every refresh token in Redis for up to 7 days.
+    @Test
+    void spendingATokenWritesOnlyTheDatabase() {
+        when(jwtUtils.getRemainingValidityMillis("r")).thenReturn(60000L);
+        when(repo.saveAndFlush(any(RevokedToken.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.claimStrict("r")).isTrue();
+        verify(redis, never()).set(anyString(), anyString(), any());
+    }
 }

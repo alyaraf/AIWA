@@ -290,7 +290,10 @@ services:
     restart: unless-stopped
     mem_limit: 256m
     logging: *default-logging
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    # AQ-06: a cap under mem_limit, so a full Redis evicts the keys closest to expiry instead of being OOM-killed
+    # (every key here has a TTL). RedisMemoryHigh in monitoring/alerts.yml warns before it gets there.
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}",
+              "--maxmemory", "200mb", "--maxmemory-policy", "volatile-ttl"]
     volumes:
       - redisdata:/data
     healthcheck:

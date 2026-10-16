@@ -99,11 +99,8 @@ public class TokenBlacklistService {
                  | jakarta.persistence.EntityExistsException e) {
             return false;
         }
-        try {
-            redis.set(key(token), "1", Duration.ofMillis(ttlMillis));
-        } catch (RuntimeException e) {
-            log.debug("Redis copy of the spent token not written: {}", e.getMessage());
-        }
+        // AQ-06: no Redis copy. Refresh and MFA checks read only the database (isBlacklistedStrict), so the key
+        // had no reader and held every spent refresh token in Redis for up to 7 days.
         return true;
     }
 

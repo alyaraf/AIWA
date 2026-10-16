@@ -682,6 +682,37 @@ public class BookingServiceImpl {
         return live.size();
     }
 
+    /**
+     * AQ-01: a suspended customer's pending and accepted bookings are cancelled by ADMIN and each provider
+     * is told, so nobody accepts a booking whose customer can't come, or pays a strike and the penalty
+     * for backing out of one. The caller refuses while a visit is under way. Joins the caller's transaction.
+     *
+     * @return how many bookings were cancelled
+     */
+    @Transactional
+    public int cancelForSuspendedCustomer(Long customerId, String reason) {
+        int cancelled = 0;
+        LocalDateTime now = LocalDateTime.now();
+        for (BookingStatus status : List.of(BookingStatus.PENDING, BookingStatus.ACCEPTED)) {
+            for (Booking booking : bookingRepo.findByCustomerIdAndStatus(customerId, status)) {
+                booking.setStatus(BookingStatus.CANCELLED);
+                booking.setCancelledBy("ADMIN");
+                booking.setCancellationReason(trimReason(reason));
+                booking.setCancelledAt(now);
+                bookingRepo.save(booking);
+                notificationService.send(booking.getProvider().getUser().getId(), NotificationType.BOOKING_CANCELLED,
+                        "Booking cancelled", "تم إلغاء الحجز",
+                        "Booking #" + booking.getId() + " on " + booking.getBookingDate()
+                                + " was cancelled because the customer's account was suspended. No penalty applies.",
+                        "تم إلغاء الحجز رقم " + booking.getId() + " بتاريخ " + booking.getBookingDate()
+                                + " لأن حساب العميل موقوف. لا توجد غرامة.",
+                        booking.getId(), booking.getProvider().getId());
+                cancelled++;
+            }
+        }
+        return cancelled;
+    }
+
     /** How early before the appointment a provider may set off, start, or finish (R2-17). */
     static final int ON_THE_WAY_LEAD_MINUTES = 180;
     static final int START_LEAD_MINUTES = 60;
@@ -1656,7 +1687,12 @@ public class BookingServiceImpl {
                 || provider.getLatitude() == null || provider.getLongitude() == null) {
             return 30;
         }
-        double km = GeoUtils.distanceKm(provider.getLatitude(), provider.getLongitude(),
+        // AQ-05: the customer sees this before the booking is accepted, so a home-based provider's pin is
+        // the rounded one the public reads show (AU-18); the exact one made the ETA a distance oracle.
+        boolean home = provider.getProviderType() == ProviderType.INDIVIDUAL;
+        double km = GeoUtils.distanceKm(
+                home ? ProviderServiceImpl.coarse(provider.getLatitude()) : provider.getLatitude(),
+                home ? ProviderServiceImpl.coarse(provider.getLongitude()) : provider.getLongitude(),
                 address.getLatitude(), address.getLongitude());
         long minutes = Math.round(10 + km / 20.0 * 60);
         return (int) Math.max(15, Math.min(90, minutes));

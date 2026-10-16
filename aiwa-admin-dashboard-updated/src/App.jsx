@@ -1907,7 +1907,7 @@ export function Flags() {
       title: `Suspend ${flag.name}?`,
       body: isProvider
         ? "Their profile is hidden until an admin reactivates them. Their upcoming bookings that have not started are cancelled and the customers are notified."
-        : "They will lose access to the app until an admin reactivates the account.",
+        : "They will lose access to the app until an admin reactivates the account. Their upcoming bookings are cancelled and the providers are notified.",
       confirmLabel: "Suspend",
       tone: "danger",
       onConfirm: () => doSuspend(flag, isProvider)
@@ -2078,7 +2078,8 @@ function UsersPage({ currentUser }) {
     setConfirm({
       title: user.role === "ADMIN" ? "Deactivate admin?" : "Suspend account?",
       body: `${user.fullName} will be signed out and blocked until reactivated.`
-        + (user.role === "PROVIDER" ? " Their upcoming bookings that have not started are cancelled and the customers are notified." : ""),
+        + (user.role === "PROVIDER" ? " Their upcoming bookings that have not started are cancelled and the customers are notified."
+          : user.role === "CUSTOMER" ? " Their upcoming bookings are cancelled and the providers are notified." : ""),
       confirmLabel: user.role === "ADMIN" ? "Deactivate" : "Suspend",
       tone: "danger",
       onConfirm: () => doDeactivate(user)
@@ -2533,6 +2534,8 @@ export function ProfileView({ user: userProp, onBack, onStatusChange, onUserChan
       title: active ? `${user.role === "ADMIN" ? "Deactivate" : "Suspend"} ${user.fullName}'s account?` : `Reactivate ${user.fullName}'s account?`,
       body: active
         ? "They are signed out and can't use the app until reactivated. This is separate from provider verification and any settlement pause."
+          + (user.role === "PROVIDER" ? " Their upcoming bookings that have not started are cancelled and the customers are notified."
+            : user.role === "CUSTOMER" ? " Their upcoming bookings are cancelled and the providers are notified." : "")
         : "They regain full access to the app.",
       confirmLabel: active ? (user.role === "ADMIN" ? "Deactivate" : "Suspend") : "Reactivate",
       tone: active ? "danger" : "plum",
