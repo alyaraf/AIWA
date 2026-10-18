@@ -13,7 +13,7 @@ RUN case "$VITE_API_BASE_URL" in https://*) ;; *) echo "VITE_API_BASE_URL must b
 ENV VITE_USE_MOCKS=false
 RUN npm test && npm run build
 
-FROM nginxinc/nginx-unprivileged:1.30.5-alpine
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine
 COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 ENV API_ORIGIN=""
