@@ -235,6 +235,7 @@ jobs:
         working-directory: aiwa-backend
     env:
       NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+      REQUIRE_CVE_SCAN: ${{ vars.REQUIRE_CVE_SCAN }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
@@ -252,6 +253,10 @@ jobs:
         run: |
           if [ -z "$NVD_API_KEY" ]; then
             if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              # A24: when the scan is required for promotion, a missing key is a failure here, not just at the gate.
+              if [ "${REQUIRE_CVE_SCAN:-}" = true ]; then
+                echo "::error::REQUIRE_CVE_SCAN=true but NVD_API_KEY is not set: the backend CVE scan cannot run"; exit 1
+              fi
               echo "status=skipped" >> "$GITHUB_OUTPUT"
               echo "::warning::NVD_API_KEY is not set: the backend CVE scan was SKIPPED, not passed (see docs/release.md)"
               echo "### Backend CVE scan: SKIPPED (no NVD_API_KEY). This is not a passing scan." >> "$GITHUB_STEP_SUMMARY"
@@ -269,38 +274,46 @@ jobs:
           path: aiwa-backend/target/dependency-check-report.*
           if-no-files-found: ignore
 
-  # R4-08: the one gate every deployment / promotion waits for. It needs EVERY validation job (including the new
-  # recovery, monitoring, mobile and SBOM jobs) and requires each to have really succeeded: a failed, cancelled or
-  # skipped job fails the gate (needs.*.result). Run with always() so it reports instead of being silently skipped.
+  # A24-04: CodeQL and Trivy are reusable workflows called from HERE, so they run in this run, for this commit, and
+  # release-gate needs both. Before, they ran as separate workflows nothing waited for, so a push could deploy while a
+  # scan was still running or had failed. Pull requests run them too (same permissions as before; no secrets).
+  codeql:
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
+  trivy:
+    uses: ./.github/workflows/scan.yml
+    permissions:
+      contents: read
+
+  # R4-08: the one gate every deployment / promotion waits for. It needs EVERY validation job (including the
+  # recovery, monitoring, mobile, SBOM and, A24-04, CodeQL and Trivy jobs) and requires each to have really succeeded:
+  # a failed, cancelled or skipped job fails the gate (needs.*.result). CodeQL and Trivy must also report that the
+  # commit they scanned is this commit. Run with always() so it reports instead of being silently skipped.
+  # The decision is in .github/scripts/evaluate-release-gate.mjs, unit-tested in the ci-graph job.
   # The CVE scan reports whether it RAN; set the repository variable REQUIRE_CVE_SCAN=true to make a skipped scan
   # fail the gate (use it for production promotion). Checked by .github/scripts/check-ci-graph.mjs (job "ci-graph").
   release-gate:
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [ci-graph, backend, admin, monitoring-rules, backup-restore, sbom, flutter, android, dependency-scan]
+    needs: [ci-graph, backend, admin, monitoring-rules, backup-restore, sbom, flutter, android, dependency-scan, codeql, trivy]
     runs-on: ubuntu-latest
     outputs:
       security_scan: ${{ needs.dependency-scan.outputs.scan }}
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
       - name: Require every release check
         env:
           NEEDS: ${{ toJSON(needs) }}
           REQUIRE_CVE_SCAN: ${{ vars.REQUIRE_CVE_SCAN }}
-        run: |
-          failed=0
-          for job in ci-graph backend admin monitoring-rules backup-restore sbom flutter android dependency-scan; do
-            result=$(echo "$NEEDS" | jq -r --arg j "$job" '.[$j].result')
-            echo "$job: $result"
-            echo "| $job | $result |" >> "$GITHUB_STEP_SUMMARY"
-            [ "$result" = success ] || failed=1
-          done
-          scan=$(echo "$NEEDS" | jq -r '.["dependency-scan"].outputs.scan // "unknown"')
-          echo "backend CVE scan: $scan"
-          echo "| backend CVE scan | $scan |" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$scan" != ran ]; then
-            echo "::warning::the backend CVE scan did not run ($scan): this release has no vulnerability scan evidence"
-            if [ "$REQUIRE_CVE_SCAN" = true ]; then echo "::error::REQUIRE_CVE_SCAN=true and the scan did not run"; failed=1; fi
-          fi
-          [ "$failed" -eq 0 ]
+        run: node .github/scripts/evaluate-release-gate.mjs
 
   # R4-08: verifies this file's dependency graph (deploy-staging depends, transitively, on every required job).
   ci-graph:
@@ -311,6 +324,8 @@ jobs:
         with:
           node-version: "20"
       - run: node .github/scripts/check-ci-graph.mjs --self-test
+      # A24-04: the release decision itself (failed / cancelled / skipped / other-commit scans must refuse it).
+      - run: node --test .github/scripts/evaluate-release-gate.test.mjs
 
   # OPS-6: deploy main to staging once EVERY validation job is green (release-gate, R4-08). Inactive
   # until the repo has the variables STAGING_HOST, STAGING_USER, STAGING_API_DOMAIN

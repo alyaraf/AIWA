@@ -82,27 +82,41 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // ── 2FA enrollment (SEC-03) ──────────────────────────────────────────────
 
-    /** Opens a pending enrollment: a fresh guess budget and an expiry. Call after the new secret is saved. */
+    /**
+     * A24-02: opens a pending enrollment in ONE statement: the new secret, its identity ({@code enrollmentId}), a
+     * fresh guess budget and an expiry. Whatever enrollment was pending is replaced, so a confirmation that was
+     * read from it can no longer match. A confirmed secret and 2FA stay untouched; with no confirmed secret there
+     * is no code to guard, so the last-used step is cleared. Bumps the version (AQ-04).
+     */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional
-    @Query("UPDATE User u SET u.totpEnrollmentExpiresAt = :expiresAt, u.totpEnrollmentAttempts = 0 WHERE u.id = :id")
-    int openTotpEnrollment(@Param("id") Long id, @Param("expiresAt") java.time.Instant expiresAt);
+    @Query("UPDATE User u SET u.totpPendingSecret = :secret, u.totpEnrollmentId = :enrollmentId, " +
+           "u.totpEnrollmentExpiresAt = :expiresAt, u.totpEnrollmentAttempts = 0, " +
+           "u.totpLastUsedStep = CASE WHEN u.totpEnabled = true THEN u.totpLastUsedStep ELSE NULL END, " +
+           "u.version = u.version + 1 WHERE u.id = :id")
+    int openTotpEnrollment(@Param("id") Long id, @Param("secret") String secret,
+                           @Param("enrollmentId") String enrollmentId, @Param("expiresAt") java.time.Instant expiresAt);
 
     /**
-     * Takes one confirmation attempt from the pending enrollment, before the code is looked at.
-     * Returns 0 when there is no live enrollment or the budget is used up. Its own transaction: the attempt stays counted when the caller's rolls back.
+     * Takes one confirmation attempt from the pending enrollment {@code enrollmentId}, before the code is looked at.
+     * Returns 0 when that enrollment is no longer the live one (replaced, cancelled, completed, expired) or its
+     * budget is used up. A24-02: an obsolete enrollment can never spend the budget of its replacement.
+     * Its own transaction: the attempt stays counted when the caller's rolls back.
      */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional(
             propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     @Query("UPDATE User u SET u.totpEnrollmentAttempts = u.totpEnrollmentAttempts + 1 WHERE u.id = :id " +
+           "AND u.totpEnrollmentId = :enrollmentId " +
            "AND u.totpPendingSecret IS NOT NULL AND u.totpEnrollmentExpiresAt > :now AND u.totpEnrollmentAttempts < :max")
-    int claimTotpEnrollmentAttempt(@Param("id") Long id, @Param("max") int max, @Param("now") java.time.Instant now);
+    int claimTotpEnrollmentAttempt(@Param("id") Long id, @Param("enrollmentId") String enrollmentId,
+                                   @Param("max") int max, @Param("now") java.time.Instant now);
 
     /**
      * Completes the enrollment exactly once: the confirmed secret replaces the old one, 2FA is
      * on, earlier sessions end and the enrollment closes. Returns 0 if it was already
-     * completed, expired or cancelled in the meantime.
+     * completed, expired, cancelled or replaced by another setup in the meantime: it only ever completes
+     * the enrollment {@code enrollmentId} whose code was checked (A24-02).
      *
      * <p>AQ-04: bumps the version, so a save of a User loaded before this (profile, language, terms) fails
      * instead of writing back 2FA off and the old session cut-off.</p>
@@ -110,19 +124,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional
     @Query("UPDATE User u SET u.totpSecret = :secret, u.totpPendingSecret = NULL, u.totpEnabled = true, " +
-           "u.tokensValidAfter = :cutoff, u.totpEnrollmentExpiresAt = NULL, u.totpEnrollmentAttempts = 0, " +
-           "u.version = u.version + 1 " +
-           "WHERE u.id = :id AND u.totpPendingSecret IS NOT NULL AND u.totpEnrollmentExpiresAt > :now")
-    int completeTotpEnrollment(@Param("id") Long id, @Param("secret") String secret,
+           "u.tokensValidAfter = :cutoff, u.totpEnrollmentExpiresAt = NULL, u.totpEnrollmentId = NULL, " +
+           "u.totpEnrollmentAttempts = 0, u.version = u.version + 1 " +
+           "WHERE u.id = :id AND u.totpEnrollmentId = :enrollmentId " +
+           "AND u.totpPendingSecret IS NOT NULL AND u.totpEnrollmentExpiresAt > :now")
+    int completeTotpEnrollment(@Param("id") Long id, @Param("enrollmentId") String enrollmentId,
+                               @Param("secret") String secret,
                                @Param("cutoff") java.time.Instant cutoff, @Param("now") java.time.Instant now);
 
-    /** Ends a pending enrollment: the pending secret is discarded, so setup must start again.
-     *  A confirmed secret, and 2FA, are untouched. AQ-04: bumps the version, so a stale save can't reopen it. */
+    /** Ends the pending enrollment {@code enrollmentId}: the pending secret is discarded, so setup must start again.
+     *  Returns 0 when that enrollment is not the pending one any more, so an obsolete request cannot cancel its
+     *  replacement (A24-02). A confirmed secret, and 2FA, are untouched. AQ-04: bumps the version, so a stale save can't reopen it. */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional(
             propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    @Query("UPDATE User u SET u.totpEnrollmentExpiresAt = NULL, u.totpPendingSecret = NULL, u.version = u.version + 1 WHERE u.id = :id")
-    int closeTotpEnrollment(@Param("id") Long id);
+    @Query("UPDATE User u SET u.totpEnrollmentExpiresAt = NULL, u.totpEnrollmentId = NULL, u.totpPendingSecret = NULL, " +
+           "u.version = u.version + 1 WHERE u.id = :id AND u.totpEnrollmentId = :enrollmentId")
+    int closeTotpEnrollment(@Param("id") Long id, @Param("enrollmentId") String enrollmentId);
 
     long countByRoleAndCreatedAtBetween(UserRole role, java.time.LocalDateTime from, java.time.LocalDateTime to);
     boolean existsByEmail(String email);

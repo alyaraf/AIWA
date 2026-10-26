@@ -1,4 +1,36 @@
-# AIWA Handoff - security audit 2026-10-06 remediation (newest)
+# AIWA Handoff - audit 2026-10-24 remediation (newest)
+
+**2026-10-26, uncommitted in the tree (base `23f285f`). Read first: [remediation record](docs/audit/production-audit-2026-10-24/remediation.md).** All four findings are fixed and verified **locally**; nothing was committed, pushed, deployed or changed in cloud settings.
+
+- **A24-01** dashboard: vite 6.4.5, vitest/@vitest/mocker 4.1.12, undici 7.30.1. Clean `npm ci`, full `npm audit` 0 vulnerabilities, CI command (`--omit=dev --audit-level=high`) exit 0, 239 tests, build pass. Lockfile `resolved` hosts were restored from the internal Nexus mirror to registry.npmjs.org (19 entries): review the diff.
+- **A24-02** 2FA: per-enrollment identity (`totp_enrollment_id`, migration V38); attempt, cancel and complete are bound to it. Backend 566 tests pass (JDK 17, H2), 9 new in `TotpEnrollmentReplacementTest`. Enrollments pending before V38 must be restarted.
+- **A24-03** rollback: `deploy/backups/releases.good` records releases that actually started; `--rollback` picks the last good one that is not current, refuses (before any checkout) when none exists or the image is missing. `deploy_test.sh` 38 assertions. Hosts with only the old log need the sha for their first rollback.
+- **A24-04** CI: CodeQL and Trivy are reusable workflows called by ci.yml and required by `release-gate`, which now runs the tested `.github/scripts/evaluate-release-gate.mjs` (each scan must report the released commit). Graph self-test rejects 18 mutations; 18 decision tests pass. Not run on GitHub yet; branch-protection check names change to `codeql / ...` and `trivy / trivy`.
+- **Backend CVE scan**: repository side done (job also fails when `REQUIRE_CVE_SCAN=true` and no key). **Still external:** create secret `NVD_API_KEY`, set variable `REQUIRE_CVE_SCAN=true`, obtain one genuinely executed scan. No scan evidence exists yet.
+
+Other local results: deploy/backup/uploads-swap harnesses 38 / 47 / 83 passed; restore-flow result in the remediation record. Flutter not run (no mobile change). Open: CI run on the pushed commit, PostgreSQL 16 for V38, real-host rollback rehearsal, staging/production evidence, the 54 unsigned launch rows.
+
+---
+
+## Historical Handoff - post-change audit 2026-10-24 (superseded by the remediation above)
+
+Audited project: `D:/AIWA PROJECT/AIWA`, clean `main` at `23f285f10e49d5aca97025f3322fa844a04af6a5` before audit delivery.
+
+Read first: [post-change audit](docs/audit/production-audit-2026-10-24/audit.md) and its [validation evidence](docs/audit/production-audit-2026-10-24/validation/README.md).
+
+**Open findings: 1 High, 3 Medium.** A24-01: current lockfile advisories make CI's npm audit fail (Vite; full audit also flags dev Undici/Vitest). A24-02: an in-flight 2FA enable(A) can overwrite replacement setup(B), reproduced against the real auth service/H2. A24-03: two failed deploy(B) attempts cause automatic rollback to choose B again, reproduced with fake Git/Docker. A24-04: independent CodeQL/Trivy workflows are not prerequisites of staging deployment.
+
+**Fresh verification:** backend 557 tests pass; dashboard 239 tests / 35 files plus production build pass; Flutter analysis clean and all 279 tests pass. Deploy/backup/upload-swap/restore-flow harnesses pass 22/47/83/93 assertions. Both new defect probes reproduce their respective defects. Tracked-file credential pattern scan: 874 text files, no embedded credential confirmed.
+
+**CI evidence now exists:** the audited SHA's [October 16 push CI](https://github.com/alyaraf/AIWA/actions/runs/38944648556) passed, including PostgreSQL/migrations, container restore, monitoring, Android and Flutter. Staging was skipped. The [October 19 scheduled CI](https://github.com/alyaraf/AIWA/actions/runs/39227362954) failed because `NVD_API_KEY` was absent, so no backend CVE report was produced. CodeQL and Security scan passed October 19; today's npm advisories are newer evidence. Configure NVD and require actual scan execution before promotion.
+
+Earlier remediation is committed. The older claims below that changes are uncommitted or no CI/container/PostgreSQL evidence exists are historical and superseded. All 54 launch-signoff rows remain unsigned; the new report distinguishes actual CI evidence from remaining staging/device/cloud/offsite/owner evidence.
+
+Audit delivery changes documentation/fixtures only. No application fix, dependency update, deployment, live restore or external message was performed.
+
+---
+
+## Historical Handoff - security audit 2026-10-06 remediation
 
 Last updated: 2026-10-06, uncommitted in the tree. **Read first:** [docs/audit/security-audit-2026-10-06/remediation.md](docs/audit/security-audit-2026-10-06/remediation.md).
 SEC-01 (database settles every Redis miss), SEC-02 (logout 503 unless the revocation row is confirmed), SEC-03 (one-time, expiring, attempt-limited 2FA enrollment, migration V35, per-IP limit) and SEC-04 (request ownership checked before dispatch, explicit-credential flag for clean-up requests) are fixed on the host; Tomcat 10.1.60 and JJWT 0.13.0 are in; Spring Security stays 6.5.11 (DPoP advisory not reachable, fix enterprise-only).

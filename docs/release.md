@@ -80,8 +80,10 @@ git fetch origin && git checkout --detach <sha> && bash deploy/deploy.sh
 
 `deploy/deploy.sh` first takes a **pre-deploy backup** (`backup.sh once`: the same verified, encrypted dump and
 uploads tarball as the nightly one, in `deploy/backups/`). If the backup fails, the deploy is refused and nothing
-changes. It then appends `<utc time> <sha> <pre-deploy dump>` to `deploy/backups/releases.log`, and builds and
-starts images tagged with the sha (`aiwa-backend:<sha>`, …). Earlier releases' images stay on the host; that is
+changes. It then appends `<utc time> <sha> <pre-deploy dump>` to `deploy/backups/releases.log` (one line per deploy
+ATTEMPT, so a failed attempt stays on record), and builds and starts images tagged with the sha (`aiwa-backend:<sha>`, …).
+Once the release has started it also appends `<utc time> <sha>` to `deploy/backups/releases.good`: the only list a
+rollback target is taken from (A24-03). Earlier releases' images stay on the host; that is
 what makes a rollback quick, so don't `docker image prune -a` while you may still need to go back. Afterwards check
 `https://api.<domain>/api/actuator/health`.
 
@@ -96,9 +98,15 @@ git diff --name-only <previous-sha> <bad-sha> -- aiwa-backend/src/main/resources
 | none, or only additive: new tables, nullable columns or columns with a default, indexes | **Code only:** `bash deploy/deploy.sh --rollback`. The older image starts on the newer schema: Flyway skips migrations it doesn't know (`ignore-migration-patterns: "*:future"` in `application-prod.yml`) and Hibernate `validate` only checks the columns the old code maps. No data is lost. |
 | drops or renames a column or table, changes a type, adds `NOT NULL` without a default, or rewrites data | **Code and database:** `bash deploy/deploy.sh --rollback`, then from `deploy/` restore the database only, using the dump on the bad release's line in `backups/releases.log`: `./restore.sh backups/db/aiwa-<stamp>.dump.enc`. Everything written since the deploy is lost. `restore.sh` takes its own safety copy first and stops/starts the backend ([runbooks](runbooks.md), "Restore the database from a backup"). Leave out the uploads tarball: a deploy doesn't change the uploads. |
 
-`--rollback` goes to the release on the line before the last one, from the images on the host. It doesn't build,
-doesn't back up and doesn't touch the database. A second `--rollback` in a row is refused (it would step back to the
-bad release); to go further back give the target: `bash deploy/deploy.sh --rollback <sha>`. `ROLLBACK FAILED`
+`--rollback` goes to the most recent **known-good** release (`releases.good`) that is not the current one, from the
+images on the host. A release that failed to start is never a target, however many attempts at it were made: A deployed,
+B failed twice (or B then C failed), `--rollback` starts A. It doesn't build, doesn't back up and doesn't touch the
+database. It is refused, before the checkout changes, when no known-good release other than the current one is
+recorded, or when the target's images (`aiwa-backend:<sha>`, …) are not on the host. Hosts that deployed before
+`releases.good` existed have no record, and history in the old log alone is not trusted (an attempt line does not prove
+the release ran): the first automatic rollback there needs the sha. "Started" means `docker compose up` succeeded; check
+`/api/actuator/health` as before, and only deploy on from a release you have seen healthy. A second `--rollback` in a
+row is refused (it would step back to the bad release); to go further back give the target: `bash deploy/deploy.sh --rollback <sha>`. `ROLLBACK FAILED`
 means that release's images are gone (pruned, or a new host). In that case rebuild it with `git checkout --detach <sha> && bash deploy/deploy.sh`,
 which backs up first.
 

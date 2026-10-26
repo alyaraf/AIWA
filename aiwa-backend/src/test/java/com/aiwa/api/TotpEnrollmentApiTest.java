@@ -71,7 +71,7 @@ class TotpEnrollmentApiTest {
         return users.save(User.builder().fullName("totp enrol " + n).email("totp-enrol" + n + "@test.aiwa")
                 .phone(TestPhones.next()).password(encoder.encode(PASSWORD))
                 .role(UserRole.CUSTOMER).active(true).termsAccepted(true).totpEnabled(enabled).totpSecret(enabled ? secret : null).totpPendingSecret(enabled ? null : secret)
-                .totpEnrollmentExpiresAt(enrollmentExpires).build());
+                .totpEnrollmentExpiresAt(enrollmentExpires).totpEnrollmentId(enabled ? null : "enr-" + n).build());
     }
 
     private String access(User u) {
@@ -344,7 +344,7 @@ class TotpEnrollmentApiTest {
         String secret = totp.generateSecret();
         User u = user(false, secret, Instant.now().plusSeconds(600));
         User stale = users.findById(u.getId()).orElseThrow();
-        assertThat(users.completeTotpEnrollment(u.getId(), secret, Instant.now(), Instant.now())).isEqualTo(1);
+        assertThat(users.completeTotpEnrollment(u.getId(), u.getTotpEnrollmentId(), secret, Instant.now(), Instant.now())).isEqualTo(1);
 
         stale.setPreferredLanguage(com.aiwa.enums.Language.AR);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> users.save(stale))

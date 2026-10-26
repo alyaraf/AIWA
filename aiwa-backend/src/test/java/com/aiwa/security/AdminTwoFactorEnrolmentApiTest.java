@@ -67,7 +67,7 @@ class AdminTwoFactorEnrolmentApiTest {
         int n = SEQ.incrementAndGet();
         User u = userRepo.save(User.builder().fullName("enrol " + n).email("tfa-enrol" + n + "@test.aiwa")
                 .phone(TestPhones.next()).password(encoder.encode(PASSWORD))
-                .role(UserRole.ADMIN).active(true).termsAccepted(true).totpEnabled(false).totpPendingSecret(secret).totpEnrollmentExpiresAt(java.time.Instant.now().plusSeconds(600))
+                .role(UserRole.ADMIN).active(true).termsAccepted(true).totpEnabled(false).totpPendingSecret(secret).totpEnrollmentExpiresAt(java.time.Instant.now().plusSeconds(600)).totpEnrollmentId("enr-" + n)
                 .adminPermissions(new HashSet<>(EnumSet.of(AdminPermission.FINANCE))).build());
         var login = json.readTree(mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("identifier", u.getEmail(), "password", PASSWORD))))
