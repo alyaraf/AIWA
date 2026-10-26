@@ -174,6 +174,11 @@ public class User extends BaseEntity {
     // SEC-03: a pending enrollment expires and has its own guess budget. Written only by the
     // single-statement updates in UserRepository (updatable = false), like the sign-in count,
     // so a stale profile save can never rewind the counter.
+    /** A24-02: identity of the pending enrollment (random per setup). Every attempt, cancellation and completion is
+     *  bound to it, so a request read from an earlier setup cannot act on the one that replaced it. */
+    @Column(length = 64, updatable = false)
+    private String totpEnrollmentId;
+
     /** When the pending enrollment (secret waiting for its first code) stops being accepted. */
     @Column(updatable = false)
     private java.time.Instant totpEnrollmentExpiresAt;

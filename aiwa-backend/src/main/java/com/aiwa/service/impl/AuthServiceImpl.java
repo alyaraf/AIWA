@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -190,11 +191,10 @@ public class AuthServiceImpl {
         // only replaces it once enableTotp() gets a matching code: until then 2FA stays on with the
         // old secret, so the password alone can't sign in during a re-setup or after an abandoned one.
         String secret = totpService.generateSecret();
-        user.setTotpPendingSecret(secret);
-        if (!user.isTotpEnabled()) user.setTotpLastUsedStep(null); // no confirmed secret whose codes need guarding
-        userRepository.save(user);
         // SEC-03: the secret can be confirmed for a limited time and a limited number of tries.
-        userRepository.openTotpEnrollment(user.getId(), Instant.now().plus(totpEnrollTtl));
+        // A24-02: one statement installs secret, identity, budget and expiry, replacing any earlier pending setup.
+        userRepository.openTotpEnrollment(user.getId(), secret, UUID.randomUUID().toString(),
+                Instant.now().plus(totpEnrollTtl));
 
         String label = identifierOf(user);
         return ApiResponse.TwoFactorSetupDto.builder()
@@ -218,28 +218,37 @@ public class AuthServiceImpl {
     public ApiResponse.AuthResponse enableTotp(String identifier, String code) {
         User user = findUser(identifier);
         String pending = user.getTotpPendingSecret();
+        String enrollmentId = user.getTotpEnrollmentId();
 
         if (pending == null) {
             throw new BusinessException(user.isTotpEnabled()
                     ? "auth.error.totp_already_enabled" : "auth.error.totp_setup_not_started");
         }
         Instant now = Instant.now();
-        if (user.getTotpEnrollmentExpiresAt() == null || !user.getTotpEnrollmentExpiresAt().isAfter(now)) {
+        // An enrollment without an identity predates A24-02: it cannot be bound, so it must be started again.
+        if (enrollmentId == null || user.getTotpEnrollmentExpiresAt() == null
+                || !user.getTotpEnrollmentExpiresAt().isAfter(now)) {
             throw new BusinessException("auth.error.totp_enrollment_expired");
         }
-        if (userRepository.claimTotpEnrollmentAttempt(user.getId(), totpEnrollMaxAttempts, now) == 0) {
-            // Budget used up (or the enrollment closed in the meantime): this secret is dead.
-            userRepository.closeTotpEnrollment(user.getId());
+        if (userRepository.claimTotpEnrollmentAttempt(user.getId(), enrollmentId, totpEnrollMaxAttempts, now) == 0) {
+            // Either this enrollment's budget is used up (it is closed: the secret is dead) or it is no longer the
+            // live one (replaced, cancelled, completed): then closing it matches nothing and the newer one is untouched.
+            if (userRepository.closeTotpEnrollment(user.getId(), enrollmentId) == 0) {
+                throw new BusinessException("auth.error.totp_enrollment_expired");
+            }
             throw new TooManyRequestsException("auth.error.totp_enrollment_attempts");
         }
-        if (!acceptEnrollmentCode(user, pending, code)) {
+        Long matchedStep = totpService.matchingStep(pending, code);
+        if (matchedStep == null) {
             throw new BusinessException("auth.error.invalid_totp_code");
         }
         Instant cutoff = sessionCutoff();
-        if (userRepository.completeTotpEnrollment(user.getId(), pending, cutoff, Instant.now()) == 0) {
+        if (userRepository.completeTotpEnrollment(user.getId(), enrollmentId, pending, cutoff, Instant.now()) == 0) {
             // A parallel confirmation got there first, or the enrollment just ended.
             throw new BusinessException("auth.error.totp_enrollment_expired");
         }
+        // A24-02: only the confirmation that completed the enrollment records its step; an obsolete one touches nothing.
+        userRepository.recordTotpStep(user.getId(), matchedStep);
         user.setTotpSecret(pending);
         user.setTotpPendingSecret(null);
         user.setTotpEnabled(true);
@@ -499,18 +508,10 @@ public class AuthServiceImpl {
         return true;
     }
 
-    /**
-     * AP-03: the code that confirms a new secret. A re-setup starts with a code of the current secret, which spent
-     * this time step, so the new secret's code in the same 30 s was refused as a replay and cost an enrollment
-     * attempt. It is a different secret's code, and completeTotpEnrollment lets only one confirmation through. The
-     * step is still recorded (never lowered), so this code cannot also complete a sign-in.
-     */
-    private boolean acceptEnrollmentCode(User user, String pendingSecret, String code) {
-        Long step = totpService.matchingStep(pendingSecret, code);
-        if (step == null) return false;
-        userRepository.recordTotpStep(user.getId(), step);
-        return true;
-    }
+    // AP-03: the code that confirms a new secret is checked with matchingStep alone (not claimTotpStep): a re-setup starts
+    // with a code of the current secret that spent this time step, and the new secret's code in the same 30 s must not be
+    // refused as a replay. completeTotpEnrollment lets only one confirmation through; enableTotp then records the
+    // step (never lowered), so this code cannot also complete a sign-in.
 
     /** CR-01: a wrong code uses up one of the challenge's attempts; after the last one the challenge is spent. */
     private void countWrongCode(String mfaToken) {

@@ -1,14 +1,19 @@
-# F-18: static analysis of the backend (Java) and the admin panel (JavaScript) on every push, pull
-# request and weekly. Results appear under Security -> Code scanning. Add trivy/gitleaks as needed.
+# F-18: static analysis of the backend (Java) and the admin panel (JavaScript). Results appear under Security -> Code
+# scanning. Add trivy/gitleaks as needed.
+#
+# A24-04: this is a REUSABLE workflow, called by the "codeql" job of ci.yml and required by release-gate, so a deployment
+# waits for a successful analysis of the exact commit it deploys. It has no push / pull_request / schedule trigger of its
+# own: ci.yml already runs on push to main, on pull requests (diff-only results) and weekly, and calls it every time.
+# Run it by hand with workflow_dispatch (full scan of any branch).
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
-  pull_request: # diff-only: a PR run shows only results on changed lines
-  workflow_dispatch: # full scan of any branch
-  schedule:
-    - cron: "41 4 * * 1"
+  workflow_call:
+    outputs:
+      scanned_sha:
+        description: The commit that was checked out and analysed; release-gate compares it with the commit being released.
+        value: ${{ jobs.commit.outputs.sha }}
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,7 +21,23 @@ permissions:
   security-events: write
 
 jobs:
+  commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Record the analysed commit
+        id: commit
+        run: |
+          sha=$(git rev-parse HEAD)
+          if [ "$sha" != "$GITHUB_SHA" ]; then echo "::error::checked out $sha, expected $GITHUB_SHA"; exit 1; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
   analyze:
+    needs: [commit]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -1,12 +1,18 @@
 # F-18: secrets and known-vulnerability scan of the repository and the Docker images' base layers.
+#
+# A24-04: this is a REUSABLE workflow, called by the "trivy" job of ci.yml and required by release-gate, so a deployment
+# waits for a successful scan of the exact commit it deploys. It has no push / pull_request / schedule trigger of its own:
+# ci.yml already runs on push to main, on pull requests and weekly, and calls it every time (a second, independent run
+# would only create a result that nothing waits for). Run it by hand with workflow_dispatch.
 name: Security scan
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    - cron: "17 5 * * 1"
+  workflow_call:
+    outputs:
+      scanned_sha:
+        description: The commit that was checked out and scanned; release-gate compares it with the commit being released.
+        value: ${{ jobs.trivy.outputs.sha }}
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,8 +20,16 @@ permissions:
 jobs:
   trivy:
     runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Record the scanned commit
+        id: commit
+        run: |
+          sha=$(git rev-parse HEAD)
+          if [ "$sha" != "$GITHUB_SHA" ]; then echo "::error::checked out $sha, expected $GITHUB_SHA"; exit 1; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - name: Trivy filesystem scan (secrets and high/critical vulnerabilities with a fix)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
